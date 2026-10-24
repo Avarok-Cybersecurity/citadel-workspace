@@ -19,7 +19,7 @@
 import { AUTH_VERSION_KEYS } from "./auth-versions.mjs";
 import { COUPONS, entitlements, METERING, OVERAGE_EVENT, overageBilledOn, overageSoldWith } from "./plans.mjs";
 import { alarmsOf } from "./coupon-alarm.mjs";
-import { periodAt } from "./meter.mjs";
+import { periodAt, relayBytes } from "./meter.mjs";
 import { stripe } from "./stripe.mjs";
 
 /** Whole GB of metered usage beyond what the tier includes. */
@@ -55,7 +55,7 @@ async function monitorTenant(io, cfg, row) {
   if (row.grant_id !== null) await alarms(io, row, want, seen, counts);
   if (want.relay_unmetered) return;
   for (const period of seen.periods) {
-    const overage = overageGb(period.bytes_in, want.relay_gb_included);
+    const overage = overageGb(relayBytes(period), want.relay_gb_included);
     const sent = await io.usage.record(row.tenant_id, period, want.relay_gb_included, overage, io.now());
     if (sent.pending === null && overage <= sent.reported) continue;
     if (want.trial_clamped || (!overageSoldWith(row.tier, row.interval) && !(row.usage_subscription && overageBilledOn(row.tier)))) {

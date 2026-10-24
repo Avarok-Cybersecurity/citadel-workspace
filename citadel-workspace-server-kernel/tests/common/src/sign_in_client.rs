@@ -62,6 +62,7 @@ where
         handler: Mutex::new(Some(Box::new(move |remote| Box::pin(drive(remote))))),
     };
     let client = DefaultNodeBuilder::default()
+        .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()
         .build(kernel)

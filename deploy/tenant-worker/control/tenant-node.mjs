@@ -8,6 +8,9 @@ import { required } from "./http.mjs";
 import { enforcedEntitlements, METERING } from "./plans.mjs";
 import { limitOf } from "./entitlement-limits.mjs";
 import { ksfParams } from "./tenant-sign-in.mjs";
+import { linkQuotaHost } from "./tenant-links.mjs";
+import { pathPolicyOf } from "./path-policy.mjs";
+import { TURN_BYTES_PER_MEMBER_HOUR, TurnIntake } from "./turn-cap.mjs";
 
 // Wasm instances this isolate has created. Module state is per isolate, so objects that see the
 // same count ran in one isolate.
@@ -49,10 +52,13 @@ export function nodeStorage(storage, entitlements) {
 /**
  * Starts the node in `wasm` (the object's own instance) with the object's capabilities: `ice`
  * mints relay credentials, `signIn` is the object's TenantSignIn, `grants` the support-grant
- * mirror, `links` the secure-link limits (control/tenant-links.mjs); `onExit(outcome)` is told
- * how the node ended.
+ * mirror, `plan()` the tenant's enforced entitlements, `turnMeter()` the meter members' reported
+ * TURN bytes go to, through their hourly ceiling (control/turn-cap.mjs, server-wasm turn.rs);
+ * `onExit(outcome)` is told how the node ended. The plan gives the secure-link limits (control/tenant-links.mjs), read on each use, and
+ * the path policy (control/path-policy.mjs), read once here: a plan change reaches the path
+ * policy at the node's next start, not on a running node (v1).
  */
-export function startNode(wasm, env, { config, storage, ice, signIn, grants, links, onExit }) {
+export function startNode(wasm, env, { config, storage, ice, signIn, grants, plan, turnMeter, onExit }) {
   const argon = new wasm.ArgonCost(
     Number(required(env, "ARGON_LANES")),
     Number(required(env, "ARGON_MEM_KIB")),
@@ -60,5 +66,8 @@ export function startNode(wasm, env, { config, storage, ice, signIn, grants, lin
   );
   const ksf = ksfParams(env);
   const pq = new wasm.PqSignIn(signIn.takeSeed(), ksf.memKib, ksf.iterations, ksf.lanes);
-  return new wasm.TenantServer(config, storage, argon, ice, pq, signIn.host(), grants, links, required(env, "LOG_FILTER"), onExit);
+  const links = linkQuotaHost(plan);
+  const pathPolicy = JSON.stringify(pathPolicyOf(plan()));
+  const turnUsage = new TurnIntake(turnMeter, Date.now, TURN_BYTES_PER_MEMBER_HOUR);
+  return new wasm.TenantServer(config, storage, argon, ice, pq, signIn.host(), grants, links, turnUsage, required(env, "STUN_SERVERS"), pathPolicy, required(env, "LOG_FILTER"), onExit);
 }

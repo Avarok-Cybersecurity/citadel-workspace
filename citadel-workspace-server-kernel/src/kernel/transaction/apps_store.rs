@@ -123,7 +123,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         username: &str,
         apps: &UserApps,
     ) -> Result<(), NetworkError> {
-        if apps.disabled.is_empty() {
+        if *apps == UserApps::default() {
             return self.backend_delete(&user_key(username)).await;
         }
         self.backend_save(&user_key(username), apps).await

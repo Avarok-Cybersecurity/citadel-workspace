@@ -1,0 +1,23 @@
+# Signs a first-party app for an install through `ListingOffer::Signed`: the committed, unsigned
+# manifest gets the signer's public key, the module is checked against the manifest (its digest,
+# size and the ABI inspector's verdict), and the manifest bytes and `app.mldsa.sig` are written
+# out. The key is the 32-byte ML-DSA seed in CITADEL_APP_SIGNING_SEED_HEX: it is never read from
+# a file and never written anywhere. Tests make a fresh seed per run.
+[package]
+name = "first-party-signer"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "sign-first-party-app"
+path = "src/main.rs"
+
+[dependencies]
+citadel-app-signature = { path = "../../../citadel-internal-service/citadel-app-signature" }
+citadel-app-abi-inspect = { path = "../../../citadel-internal-service/citadel-app-abi-inspect" }
+citadel-app-sdk-types = { path = "../../../citadel-internal-service/citadel-app-sdk-types" }
+serde_json = "1"

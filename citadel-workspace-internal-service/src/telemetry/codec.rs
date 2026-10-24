@@ -3,6 +3,7 @@
 //! Frames are `WorkspaceProtocolPayload` as JSON, the encoding the server kernel reads on
 //! every C2S message (citadel-workspace-server-kernel/src/kernel/async_kernel.rs).
 
+use citadel_internal_service::telemetry::turn_ledger::{split_report, TurnBytes};
 use citadel_internal_service::telemetry::{
     ServerSignal, TelemetryCodec, TelemetryEntry as AgentEntry, TelemetryLevel as AgentLevel,
 };
@@ -10,6 +11,8 @@ use citadel_workspace_types::telemetry::{
     TelemetryBatch, TelemetryEntry, TelemetryLevel, TelemetryRequest, TelemetryResponse,
     MAX_TELEMETRY_BATCH_BYTES, MAX_TELEMETRY_BATCH_ENTRIES, TELEMETRY_BATCH_FORMAT_VERSION,
 };
+use citadel_workspace_types::telemetry_metric::TELEMETRY_METRIC_FORMAT_VERSION;
+use citadel_workspace_types::turn_usage::{TurnUsage, MAX_TURN_USAGE_REPORT_BYTES};
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
@@ -85,12 +88,14 @@ fn wire_entry(entry: AgentEntry) -> TelemetryEntry {
     TelemetryEntry {
         time_ms: entry.time_ms,
         level: match entry.level {
+            AgentLevel::Metric => TelemetryLevel::Metric,
             AgentLevel::Warn => TelemetryLevel::Warn,
             AgentLevel::Error => TelemetryLevel::Error,
         },
         target: entry.target,
         message: entry.message,
         peer_cid: entry.peer_cid,
+        metric: entry.metric.map(super::metric_wire::wire_metric),
     }
 }
 
@@ -103,6 +108,19 @@ impl TelemetryCodec for WorkspaceTelemetryCodec {
 
     fn upload_frames(&self, entries: Vec<AgentEntry>) -> Result<Vec<Vec<u8>>, String> {
         self.split(entries.into_iter().map(wire_entry).collect())
+    }
+
+    fn turn_usage_frames(&self, bytes: TurnBytes) -> Result<Vec<Vec<u8>>, String> {
+        split_report(bytes, MAX_TURN_USAGE_REPORT_BYTES)
+            .into_iter()
+            .map(|(tx_bytes, rx_bytes)| {
+                encode(WorkspaceProtocolRequest::Telemetry(
+                    TelemetryRequest::ReportTurnUsage {
+                        usage: TurnUsage { tx_bytes, rx_bytes },
+                    },
+                ))
+            })
+            .collect()
     }
 
     fn classify(&self, frame: &[u8]) -> ServerSignal {
@@ -119,6 +137,11 @@ impl TelemetryCodec for WorkspaceTelemetryCodec {
             WorkspaceProtocolResponse::Telemetry(TelemetryResponse::Consent(consent)) => {
                 ServerSignal::Consent {
                     uploads_allowed: consent.uploads_allowed,
+                    // A server built before metrics names no format and refuses a batch
+                    // carrying one, so its sessions capture none.
+                    takes_metrics: consent.metric_format == Some(TELEMETRY_METRIC_FORMAT_VERSION),
+                    // Absent from a server built before TURN reports existed: it meters none.
+                    meters_turn: consent.meters_turn == Some(true),
                 }
             }
             WorkspaceProtocolResponse::Telemetry(TelemetryResponse::Uploaded { .. }) => {
@@ -126,6 +149,12 @@ impl TelemetryCodec for WorkspaceTelemetryCodec {
             }
             WorkspaceProtocolResponse::Telemetry(TelemetryResponse::UploadRefused(_)) => {
                 ServerSignal::UploadRefused
+            }
+            WorkspaceProtocolResponse::Telemetry(TelemetryResponse::TurnUsageRecorded) => {
+                ServerSignal::TurnUsageRecorded
+            }
+            WorkspaceProtocolResponse::Telemetry(TelemetryResponse::TurnUsageRefused(refusal)) => {
+                ServerSignal::TurnUsageRefused(format!("{refusal:?}"))
             }
             _ => ServerSignal::Unrelated,
         }

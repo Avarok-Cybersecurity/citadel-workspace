@@ -11,7 +11,7 @@ use ts_rs::TS;
 /// diagnostic uploads pause until they do. tests/platform_terms_version.rs fails until a text
 /// change is matched by a bump here and a pin there.
 /// 2: diagnostic logs include the web app's browser console warnings and errors.
-pub const PLATFORM_TERMS_VERSION: u32 = 2;
+pub const PLATFORM_TERMS_VERSION: u32 = 3;
 /// Avarok's platform terms.
 pub const PLATFORM_TERMS_TEXT: &str = include_str!("platform_terms.md");
 /// Bump with every change to `CUSTOMER_TERMS_TEXT`; creating a workspace requires the current one.
@@ -65,4 +65,12 @@ pub struct MyConsent {
     pub telemetry_enabled: bool,
     /// `telemetry_enabled && terms_current`: whether an upload would be stored.
     pub uploads_allowed: bool,
+    /// The metric format this server stores (`TELEMETRY_METRIC_FORMAT_VERSION`). Absent from a
+    /// server built before metrics existed, which stores none: decoded as `None`, never assumed.
+    #[ts(optional)]
+    pub metric_format: Option<u32>,
+    /// Whether this server meters TURN bytes and takes `ReportTurnUsage`: a hosted server
+    /// whose host keeps a relay quota. Absent from a server built before the report existed.
+    #[ts(optional)]
+    pub meters_turn: Option<bool>,
 }

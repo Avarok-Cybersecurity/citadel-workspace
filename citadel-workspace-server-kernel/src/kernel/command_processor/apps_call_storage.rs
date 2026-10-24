@@ -38,7 +38,7 @@ pub(super) fn unavailable(what: &str) -> Vec<u8> {
     reply_refused(Refused::Unavailable(what.to_string()))
 }
 
-fn root_of(install: &AppInstall) -> Step<StorageRoot> {
+pub(super) fn root_of(install: &AppInstall) -> Step<StorageRoot> {
     let scope_key = install.scope.scope_key().ok_or(AppsRefusal::Unavailable)?;
     Ok(StorageRoot {
         app_id: install.app_id.clone(),
@@ -64,7 +64,7 @@ fn namespace_of(
 
 /// A namespace's cap: the platform's, or less where the app's manifest asks for less
 /// (`limits.storage_user_bytes`, `.storage_scope_bytes`), which is what its consent screen said.
-async fn quota_for<R: Ratchet + Send + Sync + 'static>(
+pub(super) async fn quota_for<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     install: &AppInstall,
     namespace: &Namespace,
@@ -145,6 +145,13 @@ pub(super) async fn serve_storage<R: Ratchet + Send + Sync + 'static>(
     let Some((namespace, needs)) = namespace_of(kv, caller) else {
         return Ok(unavailable("host_local"));
     };
+    if let Some(Err(why)) = writes
+        .iter()
+        .map(|(k, _)| check_app_write(k))
+        .find(Result::is_err)
+    {
+        return Ok(refused(why));
+    }
     if let Some(permission) = needs {
         if !holds_at(kernel, caller.user, target, permission).await? {
             return Ok(reply_refused(Refused::Policy("permission".to_string())));

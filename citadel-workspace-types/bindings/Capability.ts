@@ -3,4 +3,4 @@
 /**
  * One capability. Serialized as its manifest name (`"nodes.read"`).
  */
-export type Capability = "canvas" | "ui" | "events" | "navigate" | "log" | "nodes.read" | "nodes.write" | "md.edit" | "files.read" | "files.write" | "chat.read" | "chat.send" | "members.list" | "storage.user" | "storage.scope" | "storage.node" | "storage.blob" | "storage.files" | "storage.local" | "net.host" | "net.host.private" | "net.server" | "ihttp.serve" | "ihttp.call" | "clipboard.read" | "clipboard.write" | "notifications" | "documents";
+export type Capability = "canvas" | "ui" | "events" | "navigate" | "log" | "nodes.read" | "nodes.write" | "md.edit" | "files.read" | "files.write" | "chat.read" | "chat.send" | "members.list" | "storage.user" | "storage.scope" | "storage.node" | "storage.blob" | "storage.files" | "storage.local" | "net.host" | "net.host.private" | "net.server" | "ihttp.serve" | "ihttp.call" | "ihttp.p2p.serve" | "ihttp.p2p.call" | "clipboard.read" | "clipboard.write" | "notifications" | "documents" | "group.topic.subscribe" | "group.topic.publish";

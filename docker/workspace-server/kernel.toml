@@ -10,6 +10,9 @@ require_platform_terms = false
 # tenant reads these from its plan instead.
 secure_links_per_member = 50
 secure_links_pool = 0
+# The STUN servers the node learns its NAT mapping from. Required: at least three distinct
+# host:port endpoints, with no built-in list. A hosted tenant's host supplies its own instead.
+stun_servers = ["stun.cloudflare.com:3478", "stun1.l.google.com:19302", "stun4.l.google.com:19302"]
 # TLS certificate verification — set to true ONLY for local development with self-signed certs.
 dangerous_skip_cert_verification = false
 
@@ -86,6 +89,44 @@ admission = "none"
 # turnstile_hostnames = ["work.example.com"]  # hostnames the widget may be solved on
 # turnstile_cdata = "work-example"            # this server's identity: the widget's cData (A-Z a-z 0-9 _ -)
 # settings_file = "/data/server/sign-in/settings.json"  # where the admin's switch is kept
+
+# =============================================================================
+# Path policy (required): the network paths peer connections may take, in order of
+# precedence, each with its attempt timeout and the traffic classes it may carry.
+# No default: the server refuses to start without this section. Classes are Control,
+# Msg, File and Media; the server relay must carry Control. A hosted tenant's host
+# supplies its own from the tenant's plan (deploy/tenant-worker control/path-policy.mjs).
+# =============================================================================
+[path_policy]
+denied = []
+
+[[path_policy.rules]]
+kind = "Direct"
+enabled = true
+attempt_timeout_seconds = 30
+cost_weight = 0
+classes = ["Control", "Msg", "File", "Media"]
+
+[[path_policy.rules]]
+kind = "PeerRelay"
+enabled = true
+attempt_timeout_seconds = 30
+cost_weight = 1
+classes = ["Control", "Msg", "File", "Media"]
+
+[[path_policy.rules]]
+kind = "Turn"
+enabled = true
+attempt_timeout_seconds = 30
+cost_weight = 2
+classes = ["Control", "Msg", "File", "Media"]
+
+[[path_policy.rules]]
+kind = "ServerRelay"
+enabled = true
+attempt_timeout_seconds = 30
+cost_weight = 3
+classes = ["Control", "Msg", "File", "Media"]
 
 # =============================================================================
 # Documents (collaborative editing relay)

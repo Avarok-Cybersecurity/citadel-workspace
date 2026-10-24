@@ -23,9 +23,10 @@
 //! A release or artifact is deleted once no install (running, previous or pending) and no
 //! registry entry names it.
 
+use citadel_workspace_types::apps::peer::{PeerConsent, PeerForMe};
 use citadel_workspace_types::apps::AppAudience;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 const PREFIX: &str = "citadel_workspace.apps.";
 
@@ -136,6 +137,47 @@ pub struct PendingRelease {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserApps {
     pub disabled: BTreeSet<String>,
+    /// Install id to what this member allowed of its peer-to-peer and topic capabilities, and
+    /// whom they blocked. Absent from records written before it existed: nothing allowed.
+    #[serde(default)]
+    pub peer: BTreeMap<String, PeerSettings>,
+}
+
+/// One install's peer settings for one member.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PeerSettings {
+    pub consent: PeerConsent,
+    pub blocked: BTreeSet<String>,
+}
+
+impl UserApps {
+    /// What this member allowed for `install_id`: `PeerConsent::NONE` if they never said.
+    pub fn consent(&self, install_id: &str) -> PeerConsent {
+        self.peer
+            .get(install_id)
+            .map_or(PeerConsent::NONE, |p| p.consent)
+    }
+
+    pub fn blocked(&self, install_id: &str) -> BTreeSet<String> {
+        self.peer
+            .get(install_id)
+            .map(|p| p.blocked.clone())
+            .unwrap_or_default()
+    }
+
+    /// The settings as the member reads them back, for the installs in `ids`.
+    pub fn for_me<'a>(&self, ids: impl IntoIterator<Item = &'a str>) -> Vec<PeerForMe> {
+        ids.into_iter()
+            .filter_map(|id| {
+                let p = self.peer.get(id)?;
+                Some(PeerForMe {
+                    install_id: id.to_string(),
+                    consent: p.consent,
+                    blocked: p.blocked.iter().cloned().collect(),
+                })
+            })
+            .collect()
+    }
 }
 
 /// A stored artifact: `total_chunks` chunks of `chunk_bytes`, the last shorter.

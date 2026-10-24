@@ -189,7 +189,7 @@ pub(super) fn routes() -> Value {
             .map(|(lines, routes)| {
                 json!({
                     "routes": lines.clone(),
-                    "serve_args_hex": hex::encode(encode(&IhttpServe { routes })),
+                    "serve_args_hex": hex::encode(encode(&IhttpServe { routes, on: ServeOn { relay: true, p2p: false } })),
                     "digest": routes_digest(lines),
                 })
             })

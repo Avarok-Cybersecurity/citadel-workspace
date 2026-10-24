@@ -34,6 +34,9 @@ pub fn required_installer_permission(cap: Capability) -> Permission {
         NetServer => Permission::AppInstallAllowServerNetwork,
         IhttpServe => Permission::AppInstallAllowInternalServe,
         IhttpCall => Permission::AppInstallAllowInternalCall,
+        IhttpP2pServe => Permission::AppInstallAllowPeerServe,
+        IhttpP2pCall => Permission::AppInstallAllowPeerCall,
+        GroupTopicSubscribe | GroupTopicPublish => Permission::AppInstallAllowGroupTopics,
     }
 }
 
@@ -60,7 +63,8 @@ pub fn acting_user_requirement(cap: Capability) -> &'static [Permission] {
         ChatSend => &[Permission::SendMessages],
         MembersList => &[Permission::ViewMembers],
         ClipboardRead | ClipboardWrite | Notifications | NetHost | NetHostPrivate | NetServer
-        | IhttpServe | IhttpCall => &[],
+        | IhttpServe | IhttpCall | IhttpP2pServe | IhttpP2pCall | GroupTopicSubscribe
+        | GroupTopicPublish => &[],
     }
 }
 

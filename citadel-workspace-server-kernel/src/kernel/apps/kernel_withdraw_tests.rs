@@ -162,9 +162,13 @@ async fn an_uninstall_ends_the_installs_advertisements_and_streams() {
         "bob's end outlived the install"
     );
     drop(relay);
-    // Both ends were this install (it calls itself): nobody is left to tell.
-    assert!(
-        rx.try_recv().is_err(),
-        "an end of the removed install was told"
-    );
+    // Both ends were this install (it calls itself): nobody is left to tell. The other members'
+    // notice that the installs changed (apps_notice.rs) is not an end of a stream.
+    let told = std::iter::from_fn(|| rx.try_recv().ok()).filter(|m| {
+        !matches!(
+            m.response,
+            crate::WorkspaceProtocolResponse::Apps(AppsResponse::InstallsChanged)
+        )
+    });
+    assert_eq!(told.count(), 0, "an end of the removed install was told");
 }

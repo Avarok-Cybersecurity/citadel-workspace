@@ -13,14 +13,15 @@ fn listed(cap: Capability) -> bool {
         | FilesWrite | ChatRead | ChatSend | MembersList | StorageUser | StorageScope
         | StorageNode | StorageBlob | StorageFiles | StorageLocal | ClipboardRead
         | ClipboardWrite | Notifications | Documents | NetHost | NetHostPrivate | NetServer
-        | IhttpServe | IhttpCall => Capability::ALL.contains(&cap),
+        | IhttpServe | IhttpCall | IhttpP2pServe | IhttpP2pCall | GroupTopicSubscribe
+        | GroupTopicPublish => Capability::ALL.contains(&cap),
     }
 }
 
 #[test]
 fn every_capability_is_listed_once_with_its_manifest_name() {
     assert!(Capability::ALL.iter().copied().all(listed));
-    assert_eq!(Capability::ALL.len(), 28);
+    assert_eq!(Capability::ALL.len(), 32);
     let names: Vec<String> = Capability::ALL
         .iter()
         .map(|c| {
@@ -40,6 +41,8 @@ fn every_capability_is_listed_once_with_its_manifest_name() {
         (Capability::NodesRead, "nodes.read"),
         (Capability::NetHostPrivate, "net.host.private"),
         (Capability::IhttpCall, "ihttp.call"),
+        (Capability::IhttpP2pServe, "ihttp.p2p.serve"),
+        (Capability::GroupTopicPublish, "group.topic.publish"),
         (Capability::StorageScope, "storage.scope"),
     ] {
         assert_eq!(serde_json::to_value(cap).unwrap(), json!(name));

@@ -1,6 +1,6 @@
 /** The metering arithmetic (control/meter.mjs) and the overage rule (control/monitor.mjs): pure. */
 import { describe, expect, it } from "vitest";
-import { calendarMonth, Meter, periodAt } from "../control/meter.mjs";
+import { calendarMonth, Meter, periodAt, relayBytes, trafficGrowth } from "../control/meter.mjs";
 import { overageGb } from "../control/monitor.mjs";
 
 const T0 = Date.UTC(2026, 8, 22, 12, 0, 0); // ms
@@ -57,6 +57,58 @@ describe("meter", () => {
     m.connect(1, T0);
     m.inbound(1, 5);
     expect(m.snapshot(T0 + 2000)).toMatchObject({ bytes_in: 15, bytes_out: 20, frames_in: 4, active_seconds: 42, peak_connections: 5 });
+  });
+});
+
+describe("traffic split", () => {
+  const sample = (relayed, fanout) => ({ relayed_p2p_rx: relayed, relayed_p2p_tx: 1, group_broadcast_rx: 1, group_broadcast_tx: fanout, client_server_rx: 1, client_server_tx: 1 });
+
+  it("adds what the node's counters grew by since the last sample", () => {
+    const m = new Meter(period, null, T0);
+    m.traffic(null); // the node has not started
+    m.traffic(sample(100, 40));
+    m.traffic(sample(250, 40));
+    expect(m.snapshot(T0)).toMatchObject({ relayed_p2p_bytes: 250, group_fanout_bytes: 40 });
+  });
+
+  it("counts a node that started again from zero", () => {
+    expect(trafficGrowth({ relayed_p2p_rx: 500, group_broadcast_tx: 9 }, sample(30, 12))).toEqual({ relayed_p2p_rx: 30, group_broadcast_tx: 3 });
+  });
+
+  it("resumes the persisted split, and a new period counts only its own growth", () => {
+    const m = new Meter(period, { relayed_p2p_bytes: 7, group_fanout_bytes: 3 }, T0);
+    m.traffic(sample(10, 0));
+    expect(m.snapshot(T0)).toMatchObject({ relayed_p2p_bytes: 17, group_fanout_bytes: 3 });
+    m.adopt({ start: period.end, end: period.end + 3600, fallback: false }, T0);
+    m.traffic(sample(15, 2));
+    expect(m.snapshot(T0)).toMatchObject({ relayed_p2p_bytes: 5, group_fanout_bytes: 2 });
+  });
+
+  it("refuses a sample that is not a byte count", () => {
+    const m = new Meter(period, null, T0);
+    expect(() => m.traffic({ ...sample(1, 1), relayed_p2p_rx: undefined })).toThrow(/relayed_p2p_rx/);
+  });
+});
+
+describe("TURN usage", () => {
+  it("adds what members' agents report, persists it, and starts again with the next period", () => {
+    const m = new Meter(period, { turn_bytes: 5 }, T0);
+    m.turn(1000);
+    m.turn(0);
+    expect(m.snapshot(T0)).toMatchObject({ turn_bytes: 1005, bytes_in: 0 });
+    m.adopt({ start: period.end, end: period.end + 3600, fallback: false }, T0);
+    expect(m.snapshot(T0)).toMatchObject({ turn_bytes: 0 });
+  });
+
+  it("refuses a report that is not a byte count", () => {
+    const m = new Meter(period, null, T0);
+    for (const bad of [-1, 1.5, Number.NaN, "7", undefined]) expect(() => m.turn(bad)).toThrow(/TURN usage/);
+  });
+
+  it("counts against the same relay quota as the object's own bytes", () => {
+    expect(relayBytes({ bytes_in: 40e9, turn_bytes: 22.5e9 })).toBe(62.5e9);
+    expect(overageGb(relayBytes({ bytes_in: 40e9, turn_bytes: 22.5e9 }), 60)).toBe(overageGb(62.5e9, 60));
+    expect(() => relayBytes({ bytes_in: 1 })).toThrow(/turn_bytes/);
   });
 });
 

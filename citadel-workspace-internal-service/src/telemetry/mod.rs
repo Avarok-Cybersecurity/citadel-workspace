@@ -4,6 +4,7 @@
 //! (citadel-internal-service/src/telemetry).
 
 mod codec;
+mod metric_wire;
 
 pub use codec::WorkspaceTelemetryCodec;
 
@@ -57,3 +58,5 @@ pub fn build(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod turn_tests;

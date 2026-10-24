@@ -88,6 +88,7 @@ fn session(addr: SocketAddr, username: &'static str, reports: Reports) {
         }
     });
     let node = DefaultNodeBuilder::default()
+        .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()
         .build(kernel)

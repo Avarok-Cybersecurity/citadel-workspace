@@ -39,6 +39,8 @@ fn config_naming(structure_file: Option<&str>) -> ServerConfig {
         secure_links_pool: Some(0),
         sign_in: None,
         app_server_egress: None,
+        stun_servers: None,
+        path_policy: None,
     }
 }
 

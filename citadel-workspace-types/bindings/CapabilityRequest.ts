@@ -3,8 +3,9 @@ import type { Capability } from "./Capability";
 
 /**
  * One capability the app asks for, and why. `hosts` is present exactly for `net.host` and
- * `net.server`, `routes` for `ihttp.serve`, `targets` for `ihttp.call`; any other combination
- * is refused.
+ * `net.server`, `routes` for `ihttp.serve` and `ihttp.p2p.serve`, `targets` for `ihttp.call`
+ * and `ihttp.p2p.call`, `topics` for `group.topic.subscribe` and `.publish`; any other
+ * combination is refused.
  */
 export type CapabilityRequest = { cap: Capability, 
 /**
@@ -24,6 +25,11 @@ hosts?: Array<string>,
  */
 routes?: Array<string>, 
 /**
- * Other apps' ids the app may call; its own is implied.
+ * Other apps' ids the app may call; its own is implied. Empty for `ihttp.p2p.call`: peer
+ * to peer, an app calls only its own copies.
  */
-targets?: Array<string>, };
+targets?: Array<string>, 
+/**
+ * The app's topic names, 1 to `MAX_TOPICS` of `[a-z0-9-]{1,32}`.
+ */
+topics?: Array<string>, };

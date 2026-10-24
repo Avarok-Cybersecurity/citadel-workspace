@@ -16,7 +16,7 @@ import { dispatch, ioFor, tenantFor } from "./control/dispatch.mjs";
 import { config, isWebSocketUpgrade, json, turnConfig, upgradeRequired } from "./control/http.mjs";
 import { IceMinter } from "./control/ice.mjs";
 import { Provisioning } from "./control/provisioning.mjs";
-import { Meter, periodAt } from "./control/meter.mjs";
+import { Meter, periodAt, relayBytes } from "./control/meter.mjs";
 import { UsageTable } from "./control/usage-table.mjs";
 import { meterSocket } from "./control/sockets.mjs";
 import { enforcedEntitlements, METERING } from "./control/plans.mjs";
@@ -27,7 +27,7 @@ import { authVersions } from "./control/auth-versions.mjs";
 import { TenantSignIn } from "./control/tenant-sign-in.mjs";
 import { newInstance, nodeStorage, startNode } from "./control/tenant-node.mjs";
 import { nextAlarm, TenantTelemetry } from "./control/tenant-telemetry.mjs";
-import { linkQuotaHost, TenantLinks } from "./control/tenant-links.mjs";
+import { TenantLinks } from "./control/tenant-links.mjs";
 import { SupportStore } from "./control/support-store.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
@@ -57,12 +57,11 @@ export class WorkspaceServer extends DurableObject {
     this.meter = null;
     // Sign-in (control/tenant-sign-in.mjs): the OPRF seed, the sign-in settings, the admission check.
     this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, siteKey: () => config(env).turnstileSiteKey, io: { fetch: (u, i) => fetch(u, i) } });
-    // Relay credentials for the kernel's GetIceServers (control/ice.mjs), gated on this tenant's
-    // plan and this period's metered relay.
+    // Relay credentials for GetIceServers (control/ice.mjs), gated on the plan and this period's relay.
     this.ice = new IceMinter(turnConfig(env), { fetch: (url, init) => fetch(url, init), nowMs: Date.now }, () => {
       const now = Date.now();
       this.#roll(now);
-      return { limits: enforcedEntitlements(this.provisioning.summary().entitlements), bytesIn: this.meter.snapshot(now).bytes_in };
+      return { limits: enforcedEntitlements(this.provisioning.summary().entitlements), bytesIn: relayBytes(this.meter.snapshot(now)) };
     });
     // The purge alarm, support reads and the grant mirror (control/tenant-telemetry.mjs).
     this.telemetry = new TenantTelemetry(ctx.storage, {
@@ -163,11 +162,13 @@ export class WorkspaceServer extends DurableObject {
 
   /** Closes the metered period when the billing period has moved on, persisting its final totals. */
   #roll(now) {
+    this.meter.traffic(this.server?.traffic() ?? null);
     const closed = this.meter.adopt(periodAt(this.provisioning.summary().entitlements, now), now);
     if (closed) this.usageTable.save(closed, now);
   }
 
   #flush(now) {
+    this.meter.traffic(this.server?.traffic() ?? null);
     this.usageTable.save(this.meter.snapshot(now), now);
   }
 
@@ -180,7 +181,8 @@ export class WorkspaceServer extends DurableObject {
       ice: { mint: (memberId) => this.ice.mint(memberId) },
       signIn: this.signIn,
       grants: this.telemetry.grantHost(),
-      links: linkQuotaHost(() => enforcedEntitlements(this.provisioning.summary().entitlements)),
+      plan: () => enforcedEntitlements(this.provisioning.summary().entitlements),
+      turnMeter: () => (this.#roll(Date.now()), this.meter),
       onExit: (outcome) => {
         this.exit = outcome;
         console.error(`[tenant] node exited: ${outcome}`);

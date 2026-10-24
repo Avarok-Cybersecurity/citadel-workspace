@@ -1,17 +1,18 @@
 //! The Telemetry Service's decisions, with no I/O: what is valid, what is current, what is kept.
 
-use super::records::{ConsentRecord, StoredSegment, UserTelemetryIndex, WorkspaceTermsRecord};
+use super::records::{StoredSegment, UserTelemetryIndex, WorkspaceTermsRecord};
 use citadel_workspace_types::telemetry::{
     SupportAccess, TelemetryAccessLogEntry, TelemetryBatch, TelemetryEntry, TelemetryFilter,
-    TelemetryPage, TelemetryPolicy, TelemetryUploadRefusal, MAX_SUPPORT_ACCESS_GRANT_MS,
-    MAX_TELEMETRY_ACCESS_LOG_ENTRIES, MAX_TELEMETRY_BATCH_BYTES, MAX_TELEMETRY_BATCH_ENTRIES,
-    MAX_TELEMETRY_PAGE_RECORDS, MAX_TELEMETRY_PER_USER_BYTES, MAX_TELEMETRY_RETENTION_DAYS,
-    TELEMETRY_BATCH_FORMAT_VERSION,
+    TelemetryPage, TelemetryPolicy, MAX_SUPPORT_ACCESS_GRANT_MS, MAX_TELEMETRY_ACCESS_LOG_ENTRIES,
+    MAX_TELEMETRY_BATCH_BYTES, MAX_TELEMETRY_BATCH_ENTRIES, MAX_TELEMETRY_PAGE_RECORDS,
+    MAX_TELEMETRY_PER_USER_BYTES, MAX_TELEMETRY_RETENTION_DAYS, TELEMETRY_BATCH_FORMAT_VERSION,
 };
 use citadel_workspace_types::terms::{
-    CurrentTerms, MyConsent, TermsDocument, MAX_WORKSPACE_TERMS_CHARS, PLATFORM_TERMS_TEXT,
+    CurrentTerms, TermsDocument, MAX_WORKSPACE_TERMS_CHARS, PLATFORM_TERMS_TEXT,
     PLATFORM_TERMS_VERSION,
 };
+
+pub(crate) use super::consent_rules::{consent_view, terms_accepted, upload_refusal};
 
 const MS_PER_DAY: u64 = 24 * 60 * 60 * 1000;
 /// The version the first workspace terms an admin writes are given.
@@ -32,55 +33,6 @@ pub(crate) fn current_terms(workspace: Option<&WorkspaceTermsRecord>) -> Current
     }
 }
 
-/// Whether a user who accepted these versions has accepted what this server requires: the
-/// platform terms only where `require_platform` says its users were shown them.
-pub(crate) fn terms_accepted(
-    terms: &CurrentTerms,
-    require_platform: bool,
-    platform: Option<u32>,
-    workspace: Option<u32>,
-) -> bool {
-    let platform = if require_platform {
-        platform
-    } else {
-        Some(terms.platform.version)
-    };
-    terms.accepted_by(platform, workspace)
-}
-
-pub(crate) fn consent_view(
-    record: &ConsentRecord,
-    terms: &CurrentTerms,
-    require_platform: bool,
-) -> MyConsent {
-    let terms_current = terms_accepted(
-        terms,
-        require_platform,
-        record.accepted_platform_version,
-        record.accepted_workspace_version,
-    );
-    MyConsent {
-        accepted_platform_version: record.accepted_platform_version,
-        accepted_workspace_version: record.accepted_workspace_version,
-        required_platform_version: terms.platform.version,
-        required_workspace_version: terms.workspace.as_ref().map(|t| t.version),
-        terms_current,
-        telemetry_enabled: record.telemetry_enabled,
-        uploads_allowed: record.telemetry_enabled && terms_current,
-    }
-}
-
-/// Why an upload from a user in this state is not stored, or `None` when it is.
-pub(crate) fn upload_refusal(consent: &MyConsent) -> Option<TelemetryUploadRefusal> {
-    if !consent.telemetry_enabled {
-        Some(TelemetryUploadRefusal::ConsentOff)
-    } else if !consent.terms_current {
-        Some(TelemetryUploadRefusal::TermsOutdated)
-    } else {
-        None
-    }
-}
-
 pub(crate) fn validate_batch(batch: &TelemetryBatch) -> Result<(), String> {
     if batch.format_version != TELEMETRY_BATCH_FORMAT_VERSION {
         return Err(format!(
@@ -96,7 +48,7 @@ pub(crate) fn validate_batch(batch: &TelemetryBatch) -> Result<(), String> {
             "A telemetry batch carries at most {MAX_TELEMETRY_BATCH_ENTRIES} entries"
         ));
     }
-    Ok(())
+    super::entry_rules::validate_entries(&batch.entries)
 }
 
 /// The bytes a stored segment occupies, refused when one batch is over the batch cap.

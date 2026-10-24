@@ -6,7 +6,7 @@
 //! Reports `head=<status>`, then `stream=complete:<chunks>:<bytes>` at End, or
 //! `stream=failed:<answer>`.
 
-use citadel_app_sdk::ihttp::{Address, Client, ClientEvent, Outbound};
+use citadel_app_sdk::ihttp::{Address, Client, ClientEvent, Outbound, Transport};
 use citadel_app_sdk::types::calls::HttpMethod;
 use citadel_app_sdk::*;
 use fixture_report::{answer, report};
@@ -19,7 +19,7 @@ struct StreamClient {
 
 fn on(app: &mut StreamClient, event: ClientEvent) {
     match event {
-        ClientEvent::Head(h) => report("head", &h.status.to_string()),
+        ClientEvent::Head(h, _via) => report("head", &h.status.to_string()),
         ClientEvent::Body(b) => {
             app.chunks += 1;
             app.bytes += b.len();
@@ -42,7 +42,7 @@ impl App for StreamClient {
             headers: vec![],
             body: vec![],
         };
-        Client::new(to).call_stream(request, on);
+        let _call = Client::new(to, Transport::Relay).call_stream(request, on);
         Ok(StreamClient::default())
     }
 

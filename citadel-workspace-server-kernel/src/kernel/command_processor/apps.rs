@@ -26,6 +26,9 @@ use super::apps_install::install;
 use super::apps_lifecycle::{rollback, uninstall};
 use super::apps_listing::{get_listing, list_catalogue, publish};
 use super::apps_member::{fetch_artifact, get_release, list_audit, list_installs, set_disabled};
+use super::apps_notice::notice_for;
+use super::apps_peer::{authorize, set_blocked, set_consent};
+use super::apps_peer_topic::topic_group;
 use super::apps_update::{consent, update};
 use super::apps_upload::upload_chunk;
 use super::telemetry::now_ms;
@@ -99,7 +102,28 @@ pub(super) struct Caller<'a> {
     pub now: u64,
 }
 
+/// One apps request, answered; when the answer changed what the workspace's other members hold,
+/// they are told so (apps_notice.rs).
 pub(super) async fn process<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    actor_user_id: &str,
+    requester_cid: Option<u64>,
+    request: &AppsRequest,
+) -> Answer {
+    let answered = respond(kernel, actor_user_id, requester_cid, request).await;
+    if let Ok(WorkspaceProtocolResponse::Apps(response)) = &answered {
+        if let Some(notice) = notice_for(response) {
+            kernel.broadcast_to_workspace(
+                WorkspaceProtocolResponse::Apps(notice),
+                requester_cid,
+                crate::WORKSPACE_ROOT_ID.to_string(),
+            );
+        }
+    }
+    answered
+}
+
+async fn respond<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     actor_user_id: &str,
     requester_cid: Option<u64>,
@@ -139,6 +163,27 @@ pub(super) async fn process<R: Ratchet + Send + Sync + 'static>(
             install_id,
             disabled,
         } => set_disabled(kernel, &caller, install_id, *disabled).await,
+        AppsRequest::SetPeerConsentForMe {
+            install_id,
+            serve,
+            call,
+            topics,
+        } => set_consent(kernel, &caller, install_id, (*serve, *call, *topics)).await,
+        AppsRequest::SetPeerBlockedForMe {
+            install_id,
+            username,
+            blocked,
+        } => set_blocked(kernel, &caller, install_id, username, *blocked).await,
+        AppsRequest::AuthorizePeer {
+            install_id,
+            peer_cid,
+            direction,
+        } => authorize(kernel, &caller, install_id, *peer_cid, direction).await,
+        AppsRequest::TopicGroup {
+            install_id,
+            topic,
+            claim,
+        } => topic_group(kernel, &caller, install_id, topic, claim.as_deref()).await,
         AppsRequest::FetchArtifact { sha256, index } => {
             fetch_artifact(kernel, &caller, sha256, *index).await
         }

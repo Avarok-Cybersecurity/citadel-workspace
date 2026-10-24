@@ -5,6 +5,8 @@ use crate::apps_manifest::{AppLimits, ArtifactLocation, ArtifactRef, CapabilityR
 use crate::apps_manifest_check::{distinct, https_url, lower_hex, plain_text, ManifestRefusal};
 use citadel_app_id::validate_app_id;
 use citadel_app_net_policy::{Egress, NetGrant, METHODS};
+
+pub use crate::apps_manifest_check_peer::*;
 pub use citadel_app_sdk_types::abi::MAX_CLOSE_GRACE_MS;
 
 pub const MAX_WHY_CHARS: usize = 200;
@@ -68,11 +70,12 @@ pub(crate) fn check_capabilities(
             return refuse(format!("{cap:?}: why"));
         }
         if request.hosts.is_some() != crate::apps::takes_hosts(cap)
-            || request.routes.is_some() != (cap == Capability::IhttpServe)
-            || request.targets.is_some() != (cap == Capability::IhttpCall)
+            || request.routes.is_some() != takes_routes(cap)
+            || request.targets.is_some() != takes_targets(cap)
+            || request.topics.is_some() != takes_topics(cap)
         {
             return refuse(format!(
-                "{cap:?}: hosts, routes or targets where they do not belong"
+                "{cap:?}: hosts, routes, targets or topics where they do not belong"
             ));
         }
         if let Some(hosts) = &request.hosts {
@@ -105,10 +108,14 @@ pub(crate) fn check_capabilities(
     if has(Capability::NetHostPrivate) && !has(Capability::NetHost) {
         return refuse("net.host.private without net.host".to_string());
     }
-    Ok(())
+    check_peer_capabilities(requests)
 }
 
-pub(crate) fn check_limits(limits: &AppLimits) -> Result<(), ManifestRefusal> {
+pub(crate) fn check_limits(
+    limits: &AppLimits,
+    requests: &[CapabilityRequest],
+) -> Result<(), ManifestRefusal> {
+    check_peer_limits(limits, requests)?;
     let within = |value: u32, max: u32| (1..=max).contains(&value);
     let checks = [
         (

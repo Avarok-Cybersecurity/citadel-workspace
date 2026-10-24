@@ -74,7 +74,7 @@ impl TenantServer {
         })
     }
 
-    fn kernel(&self) -> Option<Kernel> {
+    pub(crate) fn kernel(&self) -> Option<Kernel> {
         self.kernel.borrow().clone()
     }
 

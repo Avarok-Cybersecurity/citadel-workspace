@@ -9,6 +9,9 @@ use custom_debug::Debug;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub use crate::telemetry_reads::*;
+pub use crate::turn_usage::{TurnUsage, TurnUsageRefusal};
+
 /// The `TelemetryBatch::format_version` this server reads. A batch naming another is refused.
 pub const TELEMETRY_BATCH_FORMAT_VERSION: u32 = 1;
 /// Largest serialised batch the server stores, in bytes. One batch is one stored segment.
@@ -36,15 +39,18 @@ pub const DEFAULT_TELEMETRY_POLICY: TelemetryPolicy = TelemetryPolicy {
     per_user_bytes: DEFAULT_TELEMETRY_PER_USER_BYTES,
 };
 
-/// Only warnings and errors are collected. Ordered, so `min_level` filters.
+/// Warnings, errors and metrics are collected. Ordered, so `min_level` filters: a metric is
+/// below every log level, so `Warn` and `Error` filters leave metrics out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum TelemetryLevel {
+    /// A measurement, in `TelemetryEntry::metric`, not a log line.
+    Metric,
     Warn,
     Error,
 }
 
-/// One log line, already redacted by the agent.
+/// One log line, already redacted by the agent, or one metric (`TelemetryLevel::Metric`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct TelemetryEntry {
@@ -58,6 +64,8 @@ pub struct TelemetryEntry {
     /// The peer this line concerns, kept so issues between peers can be traced.
     #[ts(type = "bigint | null")]
     pub peer_cid: Option<u64>,
+    /// Exactly when `level` is `Metric`: what was measured. Absent from older agents' entries.
+    pub metric: Option<crate::telemetry_metric::TelemetryMetric>,
 }
 
 // The signature custom_debug's `with` calls: the field's own type by reference.
@@ -76,97 +84,6 @@ pub struct TelemetryBatch {
     pub os: String,
     #[debug(with = entries_len_fmt)]
     pub entries: Vec<TelemetryEntry>,
-}
-
-/// A stored line as an admin reads it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct TelemetryRecord {
-    pub user_id: String,
-    /// When the server stored the batch, in Unix milliseconds. Retention counts from here.
-    #[ts(type = "bigint")]
-    pub received_at_ms: u64,
-    pub agent_version: String,
-    pub os: String,
-    pub entry: TelemetryEntry,
-}
-
-/// Every field narrows; `None` does not filter. Times compare against `TelemetryEntry::time_ms`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct TelemetryFilter {
-    pub user_id: Option<String>,
-    #[ts(type = "bigint | null")]
-    pub peer_cid: Option<u64>,
-    pub min_level: Option<TelemetryLevel>,
-    #[ts(type = "bigint | null")]
-    pub since_ms: Option<u64>,
-    #[ts(type = "bigint | null")]
-    pub until_ms: Option<u64>,
-}
-
-/// Newest first. `limit` is at most `MAX_TELEMETRY_PAGE_RECORDS`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct TelemetryPage {
-    pub offset: u32,
-    pub limit: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct TelemetryPageResult {
-    pub records: Vec<TelemetryRecord>,
-    pub has_more: bool,
-}
-
-/// How long and how much each user's telemetry is kept.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct TelemetryPolicy {
-    pub retention_days: u32,
-    #[ts(type = "bigint")]
-    pub per_user_bytes: u64,
-}
-
-/// Whether Avarok support may read this workspace's telemetry, and until when.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct SupportAccess {
-    pub enabled: bool,
-    /// Unix milliseconds. `Some` exactly when `enabled`.
-    #[ts(type = "bigint | null")]
-    pub until_ms: Option<u64>,
-}
-
-/// What the admin's Telemetry section shows.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct TelemetrySettings {
-    pub policy: TelemetryPolicy,
-    pub max_retention_days: u32,
-    #[ts(type = "bigint")]
-    pub max_per_user_bytes: u64,
-    pub support_access: SupportAccess,
-}
-
-/// Who read telemetry.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub enum TelemetryAccessor {
-    Member { user_id: String },
-    Support,
-}
-
-/// One read of this workspace's telemetry. Every read is recorded, by members and by support.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct TelemetryAccessLogEntry {
-    #[ts(type = "bigint")]
-    pub at_ms: u64,
-    pub accessor: TelemetryAccessor,
-    pub filter: TelemetryFilter,
-    pub returned: u32,
 }
 
 /// Why an upload was not stored. The agent pauses until the state changes.
@@ -226,6 +143,12 @@ pub enum TelemetryRequest {
     SetWorkspaceTerms {
         text: Option<String>,
     },
+    /// Any signed-in user's agent: the TURN bytes its peer connections moved since its last
+    /// report, for the host's relay quota. Metering, not diagnostics, so not consent-gated.
+    /// Sent only to a server whose consent answer says it meters TURN (`MyConsent::meters_turn`).
+    ReportTurnUsage {
+        usage: TurnUsage,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -239,4 +162,6 @@ pub enum TelemetryResponse {
     Deleted { segments: u32 },
     Settings(TelemetrySettings),
     AccessLog(Vec<TelemetryAccessLogEntry>),
+    TurnUsageRecorded,
+    TurnUsageRefused(TurnUsageRefusal),
 }

@@ -6,7 +6,11 @@
 use citadel_workspace_types::terms::{PLATFORM_TERMS_TEXT, PLATFORM_TERMS_VERSION};
 
 /// (version, FNV-1a 64 of that version's `platform_terms.md`), oldest first.
-const PINNED: &[(u32, u64)] = &[(1, 0x79c3_ab2f_f6e9_a7c7), (2, 0xc53f_c3f4_4696_3216)];
+const PINNED: &[(u32, u64)] = &[
+    (1, 0x79c3_ab2f_f6e9_a7c7),
+    (2, 0xc53f_c3f4_4696_3216),
+    (3, 0x2848_d1c1_6063_f8ff),
+];
 
 fn fnv1a(bytes: &[u8]) -> u64 {
     bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {

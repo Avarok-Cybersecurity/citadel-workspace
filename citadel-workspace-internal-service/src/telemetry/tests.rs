@@ -5,10 +5,12 @@
 use super::*;
 use crate::log_setup::{subscriber, SHIPPED_LOG_FILTER};
 use citadel_internal_service::telemetry::span::session_span;
+use citadel_internal_service::telemetry::ServerSignal;
 use citadel_internal_service::telemetry::{KnownValue, RedactionKind, SessionLink, TelemetryCodec};
 use citadel_workspace_types::telemetry::{
     TelemetryBatch, TelemetryRequest, TelemetryResponse, TelemetryUploadRefusal,
 };
+use citadel_workspace_types::telemetry_metric::TELEMETRY_METRIC_FORMAT_VERSION;
 use citadel_workspace_types::terms::MyConsent;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
@@ -51,6 +53,8 @@ fn consent(uploads_allowed: bool) -> Vec<u8> {
         terms_current: true,
         telemetry_enabled: uploads_allowed,
         uploads_allowed,
+        metric_format: Some(TELEMETRY_METRIC_FORMAT_VERSION),
+        meters_turn: Some(true),
     }))
 }
 
@@ -181,6 +185,7 @@ fn batches_split_at_the_entry_and_byte_limits() {
         target: "t".into(),
         message,
         peer_cid: None,
+        metric: None,
     };
     let many = codec
         .split(
@@ -212,3 +217,32 @@ fn batches_split_at_the_entry_and_byte_limits() {
 #[cfg(test)]
 #[path = "browser_tests.rs"]
 mod browser;
+
+/// A server built before metrics sends no `metric_format`; one that stores another format
+/// names it. Neither is sent metrics, and both still take the session's log lines.
+#[test]
+fn only_a_server_naming_this_metric_format_is_sent_metrics() {
+    let codec = WorkspaceTelemetryCodec::new("9.9.9", "testos");
+    let current = consent(true);
+    let mut older: serde_json::Value = serde_json::from_slice(&current).unwrap();
+    let removed = older["Response"]["Telemetry"]["Consent"]
+        .as_object_mut()
+        .unwrap()
+        .remove("metric_format");
+    assert!(removed.is_some(), "{older}");
+    let mut other = older.clone();
+    other["Response"]["Telemetry"]["Consent"]["metric_format"] =
+        (TELEMETRY_METRIC_FORMAT_VERSION + 1).into();
+    let signal = |frame: &serde_json::Value| codec.classify(&serde_json::to_vec(frame).unwrap());
+    let takes = |s: ServerSignal| match s {
+        ServerSignal::Consent {
+            uploads_allowed: true,
+            takes_metrics,
+            ..
+        } => takes_metrics,
+        _ => panic!("not an allowing consent answer"),
+    };
+    assert!(takes(codec.classify(&current)));
+    assert!(!takes(signal(&older)));
+    assert!(!takes(signal(&other)));
+}

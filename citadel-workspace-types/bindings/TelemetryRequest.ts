@@ -2,5 +2,6 @@
 import type { TelemetryBatch } from "./TelemetryBatch";
 import type { TelemetryFilter } from "./TelemetryFilter";
 import type { TelemetryPage } from "./TelemetryPage";
+import type { TurnUsage } from "./TurnUsage";
 
-export type TelemetryRequest = { "AcceptTerms": { platform_version: number, workspace_version: number | null, } } | "GetTerms" | "GetMyConsent" | { "SetTelemetryConsent": { enabled: boolean, } } | { "UploadTelemetry": { batch: TelemetryBatch, } } | { "ListTelemetry": { filter: TelemetryFilter, page: TelemetryPage, } } | "DeleteMyTelemetry" | "GetTelemetrySettings" | { "SetTelemetryPolicy": { retention_days: number, per_user_bytes: bigint, } } | { "SetSupportAccess": { enabled: boolean, until_ms: bigint | null, } } | "ListTelemetryAccessLog" | { "SetWorkspaceTerms": { text: string | null, } };
+export type TelemetryRequest = { "AcceptTerms": { platform_version: number, workspace_version: number | null, } } | "GetTerms" | "GetMyConsent" | { "SetTelemetryConsent": { enabled: boolean, } } | { "UploadTelemetry": { batch: TelemetryBatch, } } | { "ListTelemetry": { filter: TelemetryFilter, page: TelemetryPage, } } | "DeleteMyTelemetry" | "GetTelemetrySettings" | { "SetTelemetryPolicy": { retention_days: number, per_user_bytes: bigint, } } | { "SetSupportAccess": { enabled: boolean, until_ms: bigint | null, } } | "ListTelemetryAccessLog" | { "SetWorkspaceTerms": { text: string | null, } } | { "ReportTurnUsage": { usage: TurnUsage, } };

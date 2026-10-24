@@ -1,6 +1,6 @@
 # Citadel Workspace Privacy Notice
 
-**Effective October 21, 2026**
+**Effective October 23, 2026**
 
 This Privacy Notice explains how **Avarok Corp**, a Delaware corporation ("Avarok", "we", "us"), collects, uses, and shares personal information in connection with Citadel Workspace, including the web application, the Citadel Agent software, hosted workspace servers, and our websites (the "Service").
 
@@ -17,7 +17,9 @@ This Privacy Notice explains how **Avarok Corp**, a Delaware corporation ("Avaro
 
 **Content.** Messages and files exchanged directly between members' agents, including through relays we operate, are **encrypted end to end, and we cannot read them**. Content you post to shared workspace channels or storage is stored on the workspace server on the Workspace Owner's behalf.
 
-**Diagnostic logs (optional).** Only if you turn diagnostic logs on, your Citadel Agent sends warning and error log lines about your use of that workspace, plus the agent version and operating system. These include the warnings and errors the Citadel web app writes to your browser's console, which the web app passes to your Citadel Agent; lines raised by browser extensions are left out. Before sending, the agent removes usernames, names, file names and paths, network addresses, host names, and secrets from every line. Numeric peer identifiers are kept so connection problems can be diagnosed. Message content, file content, and encryption keys are never deliberately included, although an error message can occasionally quote text the app was handling when the error occurred.
+**Diagnostic logs (optional).** Only if you turn diagnostic logs on, your Citadel Agent sends warning and error log lines about your use of that workspace, plus the agent version and operating system. These include the warnings and errors the Citadel web app writes to your browser's console, which the web app passes to your Citadel Agent; lines raised by browser extensions are left out. Before sending, the agent removes usernames, names, file names and paths, network addresses, host names, and secrets from every line. Numeric peer identifiers are kept so connection problems can be diagnosed. Message content, file content, and encryption keys are never deliberately included, although an error message can occasionally quote text the app was handling when the error occurred. Diagnostic logs also include connection reports: the kind of connection used between you and another member (direct or relayed), how long each step took, why a step failed, and each side's type of network address translation, with no network addresses.
+
+**Connection information.** Whether or not diagnostic logs are on, the workspace server learns which members connect to each other, when, how much data passes, and which kind of connection is used, including for requests that apps you allowed exchange directly with other members' copies of the same app (not their content). We use this to route and meter connections.
 
 **Workspace creation and billing.** When you create a workspace, we collect the workspace name and address you choose, your plan, and the contact email you provide. Payments are handled by our payment processor, Stripe. We receive your billing contact details and the status of your subscription and payments, **not your full card number**.
 

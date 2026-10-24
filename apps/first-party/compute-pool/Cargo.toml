@@ -1,0 +1,29 @@
+# Compute Pool (net.avarok.compute-pool), a first-party demo of P2P internal HTTP and app topics.
+# Built for wasm32-unknown-unknown, deterministically, by scripts/build-first-party-apps.mjs into
+# wasm/ (committed; `--check` rebuilds and compares). `core` is the logic, tested natively;
+# `app` binds it to the SDK and is the module.
+[workspace]
+resolver = "2"
+members = ["core", "app"]
+exclude = ["sdk"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[workspace.dependencies]
+# Through sdk/'s symlinks, for the reason apps/sdk-fixtures/Cargo.toml gives: a path inside the
+# workspace root keeps the bytes independent of where the repository is checked out.
+citadel-app-sdk = { path = "sdk/citadel-app-sdk" }
+citadel-app-sdk-types = { path = "sdk/citadel-app-sdk-types" }
+compute-pool-core = { path = "core" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true

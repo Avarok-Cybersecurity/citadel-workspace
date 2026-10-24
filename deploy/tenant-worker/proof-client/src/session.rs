@@ -65,6 +65,9 @@ pub async fn start_client(
     };
     let node = DefaultNodeBuilder::default()
         .with_node_type(NodeType::Peer)
+        // Required by the SDK for every node, and only ever handed to a peer connection's ICE
+        // agent: a proof client dials its server and never a peer, so these are never contacted.
+        .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
         .with_client_config(WasmClientConfig {
             use_tls: false,

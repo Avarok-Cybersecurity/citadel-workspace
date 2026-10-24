@@ -4,9 +4,17 @@ import type { AppListing } from "./AppListing";
 import type { AppsAuditEntry } from "./AppsAuditEntry";
 import type { AppsRefusal } from "./AppsRefusal";
 import type { IhttpFrom } from "./IhttpFrom";
+import type { PeerConsent } from "./PeerConsent";
+import type { PeerDirection } from "./PeerDirection";
+import type { PeerForMe } from "./PeerForMe";
 
 export type AppsResponse = { "Catalogue": { listings: Array<AppListing>, } } | { "Listing": { listing: AppListing, } } | { "Installs": { installs: Array<AppInstall>, 
 /**
  * The ids among `installs` the caller hid for themselves.
  */
-disabled_for_me: Array<string>, } } | { "Release": { install_id: string, current: AppListing, waiting_on: AppListing | null, } } | { "Published": { entry_id: string, } } | { "ArtifactChunkStored": { sha256: string, index: number, } } | { "Installed": { install: AppInstall, } } | { "Uninstalled": { install_id: string, } } | { "Updated": { install: AppInstall, } } | { "UpToDate": { install_id: string, } } | { "RolledBack": { install: AppInstall, } } | { "Consented": { install: AppInstall, } } | { "DisabledForMe": { install_id: string, disabled: boolean, } } | { "ArtifactChunk": { sha256: string, index: number, total_chunks: number, bytes: Array<number>, } } | { "Audit": { entries: Array<AppsAuditEntry>, } } | "InstallRequested" | { "CallReply": { reply: Array<number>, } } | { "Advertised": { until_ms: bigint, } } | { "Withdrawn": { install_id: string, closed_streams: number, } } | "IhttpSent" | { "IhttpFrame": { from: IhttpFrom, to_install_id: string, frame: Array<number>, } } | { "Refused": AppsRefusal };
+disabled_for_me: Array<string>, 
+/**
+ * The caller's peer settings, for the installs among `installs` they ever set them on;
+ * any other install has `PeerConsent::NONE` and no blocks.
+ */
+peer_for_me: Array<PeerForMe>, } } | { "Release": { install_id: string, current: AppListing, waiting_on: AppListing | null, } } | { "Published": { entry_id: string, } } | { "ArtifactChunkStored": { sha256: string, index: number, } } | { "Installed": { install: AppInstall, } } | { "Uninstalled": { install_id: string, } } | { "Updated": { install: AppInstall, } } | { "UpToDate": { install_id: string, } } | { "RolledBack": { install: AppInstall, } } | { "Consented": { install: AppInstall, } } | { "DisabledForMe": { install_id: string, disabled: boolean, } } | { "PeerConsentForMe": { install_id: string, consent: PeerConsent, } } | { "PeerBlockedForMe": { install_id: string, username: string, blocked: boolean, } } | { "PeerAuthorized": { install_id: string, peer: IhttpFrom, direction: PeerDirection, until_ms: bigint, } } | { "TopicGroup": { install_id: string, topic: string, group_key: string | null, } } | { "ArtifactChunk": { sha256: string, index: number, total_chunks: number, bytes: Array<number>, } } | { "Audit": { entries: Array<AppsAuditEntry>, } } | "InstallRequested" | "InstallsChanged" | "PeerAnswersChanged" | { "CallReply": { reply: Array<number>, } } | { "Advertised": { until_ms: bigint, } } | { "Withdrawn": { install_id: string, closed_streams: number, } } | "IhttpSent" | { "IhttpFrame": { from: IhttpFrom, to_install_id: string, frame: Array<number>, } } | { "Refused": AppsRefusal };

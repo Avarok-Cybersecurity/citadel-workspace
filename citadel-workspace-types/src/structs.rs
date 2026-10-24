@@ -252,6 +252,12 @@ pub enum Permission {
     AppInstallAllowInternalServe,
     /// Grant an app `ihttp.call`: call other members' internal HTTP servers
     AppInstallAllowInternalCall,
+    /// Grant an app `ihttp.p2p.serve`: serve internal HTTP to other members directly, peer to peer
+    AppInstallAllowPeerServe,
+    /// Grant an app `ihttp.p2p.call`: call other members' copies of the app directly, peer to peer
+    AppInstallAllowPeerCall,
+    /// Grant an app `group.topic.subscribe` and `group.topic.publish`: the app's own channels
+    AppInstallAllowGroupTopics,
 }
 
 impl Permission {
@@ -262,7 +268,7 @@ impl Permission {
     /// when reporting a user's effective permissions. `exhaustiveness_guard`
     /// below stops compiling when a variant is added to the enum, which is what
     /// keeps this list honest.
-    pub const ALL_VARIANTS: [Permission; 49] = [
+    pub const ALL_VARIANTS: [Permission; 52] = [
         Self::All,
         Self::CreateNode,
         Self::DeleteNode,
@@ -312,6 +318,9 @@ impl Permission {
         Self::AppInstallAllowServerNetwork,
         Self::AppInstallAllowInternalServe,
         Self::AppInstallAllowInternalCall,
+        Self::AppInstallAllowPeerServe,
+        Self::AppInstallAllowPeerCall,
+        Self::AppInstallAllowGroupTopics,
     ];
 
     /// Not called at runtime. Adding a variant to `Permission` fails to compile
@@ -368,6 +377,9 @@ impl Permission {
             Self::AppInstallAllowServerNetwork => (),
             Self::AppInstallAllowInternalServe => (),
             Self::AppInstallAllowInternalCall => (),
+            Self::AppInstallAllowPeerServe => (),
+            Self::AppInstallAllowPeerCall => (),
+            Self::AppInstallAllowGroupTopics => (),
         }
     }
 
@@ -694,7 +706,10 @@ impl DomainPermissions {
             | Permission::AppInstallAllowPrivateNetwork
             | Permission::AppInstallAllowServerNetwork
             | Permission::AppInstallAllowInternalServe
-            | Permission::AppInstallAllowInternalCall => false,
+            | Permission::AppInstallAllowInternalCall
+            | Permission::AppInstallAllowPeerServe
+            | Permission::AppInstallAllowPeerCall
+            | Permission::AppInstallAllowGroupTopics => false,
         }
     }
 }

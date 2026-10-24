@@ -2159,6 +2159,696 @@
      ]
     }
    ]
+  },
+  {
+   "name": "ihttp.p2p.call with no targets, and limits.p2p",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.call",
+      "why": "x",
+      "optional": false,
+      "targets": []
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 65536
+     }
+    }
+   ]
+  },
+  {
+   "name": "ihttp.p2p.call with a target",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.call",
+      "why": "x",
+      "optional": false,
+      "targets": [
+       "com.acme.lint"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 65536
+     }
+    }
+   ]
+  },
+  {
+   "name": "ihttp.p2p.call without targets",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.call",
+      "why": "x",
+      "optional": false
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 65536
+     }
+    }
+   ]
+  },
+  {
+   "name": "ihttp.p2p.call without limits.p2p",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.call",
+      "why": "x",
+      "optional": false,
+      "targets": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.p2p without a P2P capability",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 65536
+     }
+    }
+   ]
+  },
+  {
+   "name": "ihttp.p2p.serve on a route ihttp.serve lists",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.serve",
+      "why": "x",
+      "optional": false,
+      "routes": [
+       "GET /cards/:id"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 65536
+     }
+    }
+   ]
+  },
+  {
+   "name": "ihttp.p2p.serve on a route ihttp.serve does not list",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.serve",
+      "why": "x",
+      "optional": false,
+      "routes": [
+       "GET /other"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 65536
+     }
+    }
+   ]
+  },
+  {
+   "name": "ihttp.p2p.serve without ihttp.serve",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      4
+     ],
+     "value": {
+      "cap": "ihttp.p2p.serve",
+      "why": "x",
+      "optional": false,
+      "routes": [
+       "GET /cards/:id"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 65536
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.p2p.max_fanout_concurrency 33",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.call",
+      "why": "x",
+      "optional": false,
+      "targets": []
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 33,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 65536
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.p2p.max_fanout_bytes 67108865",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.call",
+      "why": "x",
+      "optional": false,
+      "targets": []
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 67108865,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 65536
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.p2p.max_fanout_ms 300001",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.call",
+      "why": "x",
+      "optional": false,
+      "targets": []
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 300001,
+      "max_response_bytes": 65536
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.p2p.max_response_bytes 16777217",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.call",
+      "why": "x",
+      "optional": false,
+      "targets": []
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 16777217
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.p2p.max_response_bytes 0",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.call",
+      "why": "x",
+      "optional": false,
+      "targets": []
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 8,
+      "max_fanout_bytes": 4194304,
+      "max_fanout_ms": 20000,
+      "max_response_bytes": 0
+     }
+    }
+   ]
+  },
+  {
+   "name": "control: limits.p2p at every ceiling",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.p2p.call",
+      "why": "x",
+      "optional": false,
+      "targets": []
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "p2p"
+     ],
+     "value": {
+      "max_fanout_concurrency": 32,
+      "max_fanout_bytes": 67108864,
+      "max_fanout_ms": 300000,
+      "max_response_bytes": 16777216
+     }
+    }
+   ]
+  },
+  {
+   "name": "group.topic.subscribe on ['pool'], and limits.topics",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "group.topic.subscribe",
+      "why": "x",
+      "optional": false,
+      "topics": [
+       "pool"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "topics"
+     ],
+     "value": {
+      "max_msg_bytes": 4096,
+      "max_msgs_per_s": 2
+     }
+    }
+   ]
+  },
+  {
+   "name": "topics ['Pool']",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "group.topic.publish",
+      "why": "x",
+      "optional": false,
+      "topics": [
+       "Pool"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "topics"
+     ],
+     "value": {
+      "max_msg_bytes": 4096,
+      "max_msgs_per_s": 2
+     }
+    }
+   ]
+  },
+  {
+   "name": "topics []",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "group.topic.publish",
+      "why": "x",
+      "optional": false,
+      "topics": []
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "topics"
+     ],
+     "value": {
+      "max_msg_bytes": 4096,
+      "max_msgs_per_s": 2
+     }
+    }
+   ]
+  },
+  {
+   "name": "topics: five names",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "group.topic.publish",
+      "why": "x",
+      "optional": false,
+      "topics": [
+       "a",
+       "b",
+       "c",
+       "d",
+       "e"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "topics"
+     ],
+     "value": {
+      "max_msg_bytes": 4096,
+      "max_msgs_per_s": 2
+     }
+    }
+   ]
+  },
+  {
+   "name": "control: topics: four names",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "group.topic.publish",
+      "why": "x",
+      "optional": false,
+      "topics": [
+       "a",
+       "b",
+       "c",
+       "d"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "topics"
+     ],
+     "value": {
+      "max_msg_bytes": 4096,
+      "max_msgs_per_s": 2
+     }
+    }
+   ]
+  },
+  {
+   "name": "topics ['a', 'a']",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "group.topic.publish",
+      "why": "x",
+      "optional": false,
+      "topics": [
+       "a",
+       "a"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "topics"
+     ],
+     "value": {
+      "max_msg_bytes": 4096,
+      "max_msgs_per_s": 2
+     }
+    }
+   ]
+  },
+  {
+   "name": "topics on ihttp.call",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "ihttp.call",
+      "why": "x",
+      "optional": false,
+      "targets": [],
+      "topics": [
+       "pool"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "group.topic.publish without limits.topics",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "group.topic.publish",
+      "why": "x",
+      "optional": false,
+      "topics": [
+       "pool"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.topics.max_msgs_per_s 5",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "group.topic.publish",
+      "why": "x",
+      "optional": false,
+      "topics": [
+       "pool"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "topics"
+     ],
+     "value": {
+      "max_msg_bytes": 4096,
+      "max_msgs_per_s": 5
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.topics.max_msg_bytes 16385",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "group.topic.publish",
+      "why": "x",
+      "optional": false,
+      "topics": [
+       "pool"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "topics"
+     ],
+     "value": {
+      "max_msg_bytes": 16385,
+      "max_msgs_per_s": 2
+     }
+    }
+   ]
   }
  ]
 }

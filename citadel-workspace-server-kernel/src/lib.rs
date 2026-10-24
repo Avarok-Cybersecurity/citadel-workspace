@@ -13,6 +13,12 @@ use std::path::Path;
 
 pub mod handlers;
 pub mod kernel;
+pub mod network;
+#[cfg(test)]
+mod network_tests;
+pub mod path_policy;
+#[cfg(test)]
+mod path_policy_tests;
 mod platform;
 
 pub use citadel_workspace_types::WORKSPACE_ROOT_ID;
@@ -88,6 +94,15 @@ pub mod config {
         /// Apps' server egress (`net.server`). Absent: the server makes no request for any
         /// app, and every such call is answered unavailable. See `resolve_server_egress`.
         pub app_server_egress: Option<AppServerEgressConfig>,
+        /// STUN servers the node learns its NAT mapping from: at least three distinct
+        /// `host:port` endpoints. Required by the native server, with no default list; refused
+        /// by a hosted one, whose host supplies them. See `crate::network`.
+        pub stun_servers: Option<Vec<String>>,
+        /// `[path_policy]`: the network paths peer connections may take, in order, with each
+        /// one's attempt timeout and traffic classes. Required by the native server, with no
+        /// default; refused by a hosted one, whose host supplies it from the tenant's plan.
+        /// See `crate::path_policy`.
+        pub path_policy: Option<crate::path_policy::PathPolicyConfig>,
     }
 
     /// What server egress must know about the deployment it runs in: the host its pages are
@@ -131,6 +146,8 @@ pub mod config {
                 .field("secure_links_pool", &self.secure_links_pool)
                 .field("sign_in", &self.sign_in)
                 .field("app_server_egress", &self.app_server_egress)
+                .field("stun_servers", &self.stun_servers)
+                .field("path_policy", &self.path_policy)
                 .finish()
         }
     }
@@ -803,6 +820,7 @@ async fn workspace_kernel(
 /// `artifact_fetcher` fetches app artifacts by URL (`kernel::apps::fetcher`), or `None` for a
 /// host that has none, whose installs then take uploaded artifacts only. `server_egress` makes
 /// apps' `net.server` requests (`kernel::apps::egress`), or `None` for a host that has none.
+/// `network` is what the host says about the network: its STUN servers (`crate::network`).
 #[allow(clippy::too_many_arguments)]
 pub async fn run_server_on<T: PlatformOps>(
     config: ServerConfig,
@@ -815,8 +833,11 @@ pub async fn run_server_on<T: PlatformOps>(
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
     server_egress: kernel::apps::egress::ServerEgressHandle,
+    network: network::HostedNetwork,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
+    network::refuse_configured_stun_servers(config.stun_servers.as_deref())?;
+    path_policy::refuse_configured_path_policy(config.path_policy.as_ref())?;
     if config.sign_in.is_some() {
         return Err(NetworkError::msg(
             "[sign_in] is a native server's; a hosted server's host supplies its sign-in",
@@ -842,12 +863,15 @@ pub async fn run_server_on<T: PlatformOps>(
     )
     .await?;
     kernel.set_support_grant_observer(telemetry.support_grants);
+    kernel.set_turn_usage_sink(telemetry.turn_usage);
     (telemetry.kernel_ready)(kernel.clone());
 
     let node_type =
         NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;
     NodeBuilder::<StackedRatchet, T>::default()
         .with_node_type(node_type)
+        .with_stun_servers(network::builder_list(&network.stun_servers))
+        .with_path_policy(network.path_policy)
         .with_backend(backend)
         .with_server_argon_settings(server_argon_settings)
         // The same refusal of password-less transient accounts as the native server: a
@@ -969,9 +993,13 @@ pub async fn run_server_with_site_verify(
     let node_type =
         NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;
 
+    let stun_servers = network::native_stun_servers(config.stun_servers.as_deref())?;
+    let path_policy = path_policy::native_path_policy(config.path_policy.as_ref())?;
     let mut builder = NodeBuilder::default();
     builder
         .with_node_type(node_type)
+        .with_stun_servers(network::builder_list(&stun_servers))
+        .with_path_policy(path_policy)
         .with_backend(backend_type_for_node_builder)
         .with_server_misc_settings(ServerMiscSettings {
             pq_sign_in: sign_in.pq_sign_in,
@@ -1390,6 +1418,8 @@ mod server_config_debug_tests {
             secure_links_pool: Some(0),
             sign_in: None,
             app_server_egress: None,
+            stun_servers: None,
+            path_policy: None,
         }
     }
 

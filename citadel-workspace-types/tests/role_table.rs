@@ -69,6 +69,9 @@ fn the_seeds_are_the_roles_every_workspace_had() {
         AppInstallAllowServerNetwork,
         AppInstallAllowInternalServe,
         AppInstallAllowInternalCall,
+        AppInstallAllowPeerServe,
+        AppInstallAllowPeerCall,
+        AppInstallAllowGroupTopics,
     ]);
     let expected = [
         (OWNER_ROLE_ID, owner),

@@ -6,6 +6,7 @@
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::kernel::apps::audience::scope_reaches;
 use crate::kernel::apps::facts::{authority_node, GatheredFacts, PermissionSnapshot, ViewsNeeded};
+use crate::kernel::apps::peer_rules::with_consent;
 use crate::kernel::apps::rules::effective_capabilities;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::WORKSPACE_ROOT_ID;
@@ -125,8 +126,9 @@ pub(super) async fn gather<R: Ratchet + Send + Sync + 'static>(
 }
 
 /// What `install` may do now for `acting_user`: its grant, narrowed to what its installer may
-/// still grant on the scope's node, what the acting member holds on `target`, and nothing when
-/// the install does not reach the acting member. Read at the time of the call, so a role change
+/// still grant on the scope's node, what the acting member holds on `target`, nothing when the
+/// install does not reach the acting member, and no P2P or topic capability the member did not
+/// allow for themselves. Read at the time of the call, so a role change
 /// applies at the next one. The runtime's `Call` handler asks this.
 pub async fn effective_for<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
@@ -140,10 +142,21 @@ pub async fn effective_for<R: Ratchet + Send + Sync + 'static>(
     let mut needed = ViewsNeeded::default();
     needed.scope(&install.scope);
     let facts = gather(kernel, &[acting_user.to_string()], &needed).await?;
-    Ok(effective_capabilities(
+    let effective = effective_capabilities(
         &install.granted,
         &|p| installer.holds(p),
         &|p| acting.holds(p),
         scope_reaches(&install.scope, acting_user, &facts),
+    );
+    // The member's own say over the peer-to-peer and topic capabilities (F3).
+    let mine = kernel
+        .domain_operations
+        .backend_tx_manager
+        .user_apps(acting_user)
+        .await?;
+    Ok(with_consent(
+        effective,
+        &mine.consent(&install.id),
+        mine.disabled.contains(&install.id),
     ))
 }

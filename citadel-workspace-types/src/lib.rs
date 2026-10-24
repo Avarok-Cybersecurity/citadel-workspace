@@ -8,8 +8,12 @@ pub mod apps_manifest;
 pub mod apps_manifest_check;
 /// The manifest's capability, limit and artifact checks, and their limits.
 pub mod apps_manifest_check_parts;
+/// The manifest rules of the peer-to-peer and topic capabilities and their limits.
+pub mod apps_manifest_check_peer;
 /// A document's hidden required-apps header.
 pub mod apps_md_header;
+/// A member's own peer-to-peer and topic settings, and `AuthorizePeer`'s question.
+pub mod apps_peer;
 /// The apps requests.
 pub mod apps_protocol;
 /// The answers to apps requests, and the apps audit log.
@@ -45,7 +49,10 @@ pub mod structs;
 /// `include!`s this file and supplies the git calls.
 pub mod submodule_freshness;
 pub mod telemetry;
+pub mod telemetry_metric;
+pub mod telemetry_reads;
 pub mod terms;
+pub mod turn_usage;
 
 /// The id of the workspace every tree hangs from; the kernel and the UI read it from here.
 pub const WORKSPACE_ROOT_ID: &str = "workspace-root";

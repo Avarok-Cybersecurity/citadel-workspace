@@ -149,7 +149,7 @@ describe("static codes", () => {
 describe("the spend alarm", () => {
   const alarm = { relay_gb_per_period: 500, storage_gb: 100, members: 250 };
   it("raises each threshold reached, per period for relay, and none for a null threshold", () => {
-    const measured = { periods: [{ period_start: 10, bytes_in: 500 * GB }, { period_start: 5, bytes_in: 499.9 * GB }], storage_bytes: 100 * GB, members: 249 };
+    const measured = { periods: [{ period_start: 10, bytes_in: 400 * GB, turn_bytes: 100 * GB }, { period_start: 5, bytes_in: 499.9 * GB, turn_bytes: 0 }], storage_bytes: 100 * GB, members: 249 };
     expect(alarmsOf(alarm, measured, 10)).toEqual([
       { metric: "relay_gb_per_period", value: 500, threshold: 500, period_start: 10 },
       { metric: "storage_gb", value: 100, threshold: 100, period_start: 10 },

@@ -147,5 +147,15 @@ pub fn grant_details(manifest: &AppManifest, granted: &BTreeSet<Capability>) -> 
         server_network_hosts: listed(Capability::NetServer, |r| r.hosts.clone()),
         ihttp_routes: listed(Capability::IhttpServe, |r| r.routes.clone()),
         ihttp_call_targets: listed(Capability::IhttpCall, |r| r.targets.clone()),
+        ihttp_p2p_routes: listed(Capability::IhttpP2pServe, |r| r.routes.clone()),
+        topics: {
+            let mut topics = listed(Capability::GroupTopicSubscribe, |r| r.topics.clone());
+            for topic in listed(Capability::GroupTopicPublish, |r| r.topics.clone()) {
+                if !topics.contains(&topic) {
+                    topics.push(topic);
+                }
+            }
+            topics
+        },
     }
 }

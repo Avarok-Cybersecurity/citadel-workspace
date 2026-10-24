@@ -38,6 +38,8 @@ pub mod ihttp_relay_types;
 pub mod ihttp_routes;
 pub mod install;
 pub mod md_header;
+pub mod peer_limiter;
+pub mod peer_rules;
 pub mod records;
 pub mod rules;
 pub mod storage;
@@ -82,6 +84,10 @@ mod kernel_listing_tests;
 #[cfg(test)]
 mod kernel_member_tests;
 #[cfg(test)]
+mod kernel_notice_tests;
+#[cfg(test)]
+mod kernel_peer_tests;
+#[cfg(test)]
 mod kernel_purge_tests;
 #[cfg(test)]
 mod kernel_release_change_tests;
@@ -93,6 +99,8 @@ mod kernel_session_tests;
 mod kernel_withdraw_tests;
 #[cfg(test)]
 mod md_header_tests;
+#[cfg(test)]
+mod peer_rules_tests;
 #[cfg(test)]
 mod rules_tests;
 #[cfg(test)]

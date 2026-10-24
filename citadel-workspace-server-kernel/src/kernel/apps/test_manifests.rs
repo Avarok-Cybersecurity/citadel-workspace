@@ -27,6 +27,7 @@ pub(crate) struct Spec {
     pub version: &'static str,
     pub audience: Value,
     pub capabilities: Value,
+    pub limits: Value,
 }
 
 impl Spec {
@@ -40,6 +41,7 @@ impl Spec {
                 { "cap": "nodes.read", "why": "Lists cards", "optional": false },
                 { "cap": "storage.user", "why": "Remembers widths", "optional": true }
             ]),
+            limits: json!({ "memory_pages": 16, "max_call_rate_per_s": 20, "frame_budget_ms": 16, "storage_user_bytes": 1024, "storage_scope_bytes": 1024, "close_grace_ms": 500 }),
         }
     }
 }
@@ -63,7 +65,7 @@ pub(crate) fn manifest(spec: &Spec, key: &AppSigningKey, wasm: &[u8]) -> Vec<u8>
         "surfaces": ["canvas_pane"],
         "scopes": ["workspace", "node", "node_tree", "users", "self"],
         "capabilities": spec.capabilities,
-        "limits": { "memory_pages": 16, "max_call_rate_per_s": 20, "frame_budget_ms": 16, "storage_user_bytes": 1024, "storage_scope_bytes": 1024, "close_grace_ms": 500 },
+        "limits": spec.limits,
         "artifact": {
             "sha256": hex::encode(sha256(wasm)),
             "bytes": wasm.len(),

@@ -84,6 +84,7 @@ pub fn batch(tag: &str, count: usize, message_len: usize) -> TelemetryBatch {
                 target: "citadel_agent::session".to_string(),
                 message: format!("{tag}:{i}:{}", "x".repeat(message_len)),
                 peer_cid: Some(42),
+                metric: None,
             })
             .collect(),
     }

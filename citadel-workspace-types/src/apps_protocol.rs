@@ -3,6 +3,7 @@
 //! Every byte field prints only its length when a request is logged: manifests, artifacts,
 //! host calls and internal-HTTP frames are the app's data.
 
+use crate::apps::peer::PeerDirection;
 use crate::apps::{Capability, InstallScope};
 use citadel_internal_service_types::plaintext_debug_fmt;
 use custom_debug::Debug;
@@ -77,6 +78,37 @@ pub enum AppsRequest {
     },
     /// Hide (or show again) an install for the caller only. It is not uninstalled.
     SetDisabledForMe { install_id: String, disabled: bool },
+    /// What the caller allows of an install's peer-to-peer and topic capabilities, all three
+    /// said at once.
+    SetPeerConsentForMe {
+        install_id: String,
+        serve: bool,
+        call: bool,
+        topics: bool,
+    },
+    /// Stop (or let again) one member of this install reaching the caller peer to peer or
+    /// joining the caller's topic groups.
+    SetPeerBlockedForMe {
+        install_id: String,
+        username: String,
+        blocked: bool,
+    },
+    /// The serving or calling host asks whether the peer on the session `peer_cid` may reach it
+    /// (or be reached) for `install_id`, the asker's own install, which both ends share. One
+    /// refusal, `NoHost`, for every reason.
+    AuthorizePeer {
+        install_id: String,
+        #[ts(type = "bigint")]
+        peer_cid: u64,
+        direction: PeerDirection,
+    },
+    /// The Citadel group a topic of `install_id` rides: read it (`claim` None), or record the
+    /// one the caller's agent just created if none is recorded yet. Apps cannot write it.
+    TopicGroup {
+        install_id: String,
+        topic: String,
+        claim: Option<String>,
+    },
     /// One chunk of a stored artifact, by digest.
     FetchArtifact { sha256: String, index: u32 },
     /// The signed manifest of an install's running release, and of the one it waits on, so the
