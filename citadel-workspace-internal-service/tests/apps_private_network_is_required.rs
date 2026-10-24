@@ -1,9 +1,13 @@
 //! The shipped agent refuses to start until `apps.private_network` is configured, and reads
 //! it from its command line: no default reaches host egress.
 //!
-//! Runs the real binary with every other required setting given, so the only thing missing
-//! is the one under test. Both runs exit before anything listens; one that is still running
+//! Runs the real binary with exactly the arguments 0.10.6's launcher passed
+//! (packaging/linux/citadel-agent-launch.in at agent-v0.10.6): the command a tarball or
+//! hand-run agent relaunches with after a self-update, so the only thing missing is the one
+//! under test. Both runs exit before anything listens; one that is still running
 //! after `STARTUP_MS` started without the setting, and is killed and failed.
+mod support;
+
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
@@ -17,20 +21,10 @@ fn agent(extra: &[&str]) -> Output {
         extra.len()
     ));
     std::fs::create_dir_all(&tmp).unwrap();
-    let mut output = Command::new(env!("CARGO_BIN_EXE_citadel-workspace-internal-service"))
-        .args([
-            "--bind",
-            "127.0.0.1:0",
-            "--allowed-origins",
-            "http://localhost:5291",
-            "--stun-servers",
-            "stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302",
-        ])
+    let mut command = Command::new(env!("CARGO_BIN_EXE_citadel-workspace-internal-service"));
+    let mut output = support::without_agent_env(&mut command)
+        .args(support::launcher_0_10_6("127.0.0.1:0", &tmp.join("data")))
         .args(extra)
-        // CI exports these for the stack; this test decides them itself.
-        .env_remove("INTERNAL_SERVICE_APPS_PRIVATE_NETWORK")
-        .env_remove("INTERNAL_SERVICE_ALLOWED_ORIGINS")
-        .env_remove("INTERNAL_SERVICE_STUN_SERVERS")
         .env("TMPDIR", &tmp)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -52,14 +46,18 @@ fn agent(extra: &[&str]) -> Output {
 }
 
 #[test]
-fn an_agent_without_the_private_network_setting_refuses_to_start() {
+fn the_last_shipped_launchers_arguments_are_refused_naming_the_flag() {
     let output = agent(&[]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success());
-    assert!(
-        stderr.contains("apps.private_network is not configured"),
-        "{stderr}"
-    );
+    // The refusal is all a member who relaunched by hand sees: it must name what to add.
+    for named in [
+        "apps.private_network is not configured",
+        "--apps-private-network",
+        "INTERNAL_SERVICE_APPS_PRIVATE_NETWORK",
+    ] {
+        assert!(stderr.contains(named), "{named} missing from: {stderr}");
+    }
 }
 
 #[test]

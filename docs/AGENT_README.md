@@ -47,6 +47,10 @@ Every flag matters:
   the page asks; public hosts an app was granted are unaffected. There is no
   default, and the agent refuses to start without it;
   `INTERNAL_SERVICE_APPS_PRIVATE_NETWORK` does the same and takes precedence.
+- **Self-update stops until the command carries every required flag.** An update
+  restarts the agent with the command you started it with; a version that needs a
+  flag that command lacks refuses to start, and the previous agent is put back
+  (docs/UPGRADING.md).
 - **`--backend filesystem` persists your account.** The default backend is
   in-memory, which is right for tests and wrong for you: without this flag your
   account and message history are gone the next time the agent restarts. Data
