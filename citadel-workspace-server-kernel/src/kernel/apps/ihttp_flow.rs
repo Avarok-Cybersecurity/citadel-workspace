@@ -1,7 +1,7 @@
 //! One relayed internal-HTTP stream's flow (R4.4), pure: which frame each side may send next,
 //! body chunks only against credit the other side granted, bodies within their declared length
-//! and the caps, and when the stream is over. Credit is the receiver's buffer space, one chunk
-//! per unit, and may be granted before the response head.
+//! and the caps and, at `End`, all of a declared length, and when the stream is over. Credit is
+//! the receiver's buffer space, one chunk per unit, and may be granted before the response head.
 
 use citadel_ihttp_types::{
     IhttpFrameKind, INITIAL_CREDIT, MAX_REQUEST_BODY_BYTES, MAX_RESPONSE_BODY_BYTES,
@@ -25,6 +25,8 @@ pub enum FlowFault {
     NoCredit,
     /// More body than declared, or than the cap.
     TooLarge,
+    /// An `End` before the body reached the length its head declared.
+    ShortBody,
     /// Anything after this side's `End` but `Credit` for the other side, or a `Cancel`.
     AfterEnd,
 }
@@ -35,6 +37,7 @@ struct Flow {
     credit: u32,
     bytes: u64,
     cap: u64,
+    declared: Option<u64>,
     head: bool,
     ended: bool,
 }
@@ -45,6 +48,7 @@ impl Flow {
             credit: INITIAL_CREDIT,
             bytes: 0,
             cap: declared.map_or(cap, |d| d.min(cap)),
+            declared,
             head,
             ended: false,
         }
@@ -118,6 +122,9 @@ impl StreamFlow {
             IhttpFrameKind::End => {
                 if !own.head {
                     return Err(FlowFault::OutOfOrder);
+                }
+                if own.declared.is_some_and(|declared| own.bytes < declared) {
+                    return Err(FlowFault::ShortBody);
                 }
                 own.ended = true;
             }
