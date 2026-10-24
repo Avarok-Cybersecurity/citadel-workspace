@@ -752,6 +752,9 @@ pub enum GroupMessageType {
     Markdown,
     /// System message (user joined, settings changed, etc.)
     System,
+    /// Shares a live document in the channel (`chat_documents`); the message's `content` is its
+    /// title, so an edit of the message is the one way the title changes.
+    LiveDocument { document_id: String },
 }
 
 /// A message in a group chat channel

@@ -33,6 +33,7 @@
 /// Async command processor
 pub mod async_process_command;
 
+pub mod group_message_shape;
 /// ReactGroupMessage: reactions stored on a node channel's messages.
 pub mod group_reactions;
 /// MarkGroupRead: one read cursor per channel member.

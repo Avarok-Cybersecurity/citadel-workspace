@@ -793,6 +793,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 ));
             }
 
+            if let Some(refusal) = super::group_message_shape::refusal(message_type) {
+                return Ok(WorkspaceProtocolResponse::Error(refusal.to_string()));
+            }
             use citadel_workspace_types::GroupMessage;
             use uuid::Uuid;
 
