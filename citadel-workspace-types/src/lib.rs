@@ -29,6 +29,8 @@ pub mod document_refusal;
 pub mod documents;
 pub mod ice;
 pub mod messaging_trust;
+/// The metadata keys behind a node's tabs and time zone, and what each may hold.
+pub mod node_tabs;
 /// A workspace's role table and its built-ins.
 pub mod roles;
 /// Records written before the role table, read into it.
@@ -52,6 +54,8 @@ pub mod telemetry;
 pub mod telemetry_metric;
 pub mod telemetry_reads;
 pub mod terms;
+/// The IANA time-zone names a workspace or node may be set to.
+pub mod time_zones;
 pub mod turn_usage;
 
 /// The id of the workspace every tree hangs from; the kernel and the UI read it from here.
@@ -371,6 +375,21 @@ pub enum WorkspaceProtocolRequest {
         ///
         /// Exactly one node is the default, so setting it clears the others.
         is_default: Option<bool>,
+        /// A JSON object merged key by key into the node's metadata (`node_tabs`): `app_tabs`
+        /// and `time_zone` are checked, `null` under either removes it (the node then follows
+        /// the workspace), `citadel_app` may not change, any other key is kept as sent. Needs
+        /// `UpdateNodeSettings` on the node.
+        #[ts(optional)]
+        #[debug(with = bytes_opt_debug_fmt)]
+        metadata: Option<Vec<u8>>,
+    },
+
+    /// Set the app tabs a node shows when it has no list of its own (`node_tabs`): the root
+    /// workspace's `default_app_tabs`, at most eight distinct app ids, in order; empty means
+    /// none. Needs `EditWorkspaceConfig`, not the master password `UpdateWorkspace` demands.
+    /// Answered, and announced to the members, with the workspace.
+    SetDefaultAppTabs {
+        app_tabs: Vec<String>,
     },
 
     /// Switch "Members can see each other" on a node. Admin only.

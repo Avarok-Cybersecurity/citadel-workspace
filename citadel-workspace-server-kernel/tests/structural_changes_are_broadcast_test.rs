@@ -146,6 +146,7 @@ async fn renaming_a_node_is_broadcast_to_everyone_else() {
             rules: None,
             chat_enabled: None,
             is_default: None,
+            metadata: None,
         },
         TEST_ADMIN_USER_ID,
     )
@@ -196,6 +197,7 @@ async fn a_pure_content_save_does_not_also_broadcast_a_structural_update() {
             rules: None,
             chat_enabled: None,
             is_default: None,
+            metadata: None,
         },
         TEST_ADMIN_USER_ID,
     )

@@ -5,6 +5,7 @@ use crate::handlers::domain::async_ops::node_chat::set_chat_enabled;
 use crate::handlers::domain::async_ops::node_views::with_live_child_types;
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
+use crate::handlers::domain::server_ops::node_metadata_merge::merge_node_metadata;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{DomainNode, Permission};
 
@@ -20,6 +21,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         rules: Option<&str>,
         chat_enabled: Option<bool>,
         is_default: Option<bool>,
+        metadata: Option<&[u8]>,
     ) -> Result<DomainNode, NetworkError> {
         // Gate on what is actually being changed, at the node being changed.
         //
@@ -48,19 +50,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             is_default,
         );
 
-        let (required, label) = if changes_structure {
-            (Permission::EditTreeStructure, "EditTreeStructure")
-        } else {
-            (Permission::EditMdx, "EditMdx")
-        };
-
-        if !self
-            .check_entity_permission(user_id, node_id, required)
-            .await?
-        {
-            return Err(NetworkError::msg(format!(
-                "Permission denied: {label} required"
-            )));
+        let required = crate::handlers::domain::node_ops::update_requires(
+            changes_structure,
+            mdx_content.is_some(),
+            metadata.is_some(),
+        );
+        for (permission, label) in required {
+            if !self
+                .check_entity_permission(user_id, node_id, permission)
+                .await?
+            {
+                return Err(NetworkError::msg(format!(
+                    "Permission denied: {label} required"
+                )));
+            }
         }
 
         // A document's required-apps header is the kernel's to write (`kernel::apps::md_header`):
@@ -119,6 +122,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         }
         if let Some(new_rules) = rules {
             node.rules = Some(String::from(new_rules));
+        }
+        if let Some(patch) = metadata {
+            node.metadata =
+                merge_node_metadata(&node.metadata, patch).map_err(NetworkError::msg)?;
         }
         if let Some(new_chat_enabled) = chat_enabled {
             set_chat_enabled(&mut node, new_chat_enabled);
