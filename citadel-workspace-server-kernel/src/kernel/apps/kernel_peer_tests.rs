@@ -46,7 +46,7 @@ fn peer_spec() -> Spec {
 }
 
 /// The workspace install of the peer app, and bob's session attributed to `BOB`.
-async fn pool() -> (Kernel, String, CidAttribution) {
+pub(crate) async fn pool() -> (Kernel, String, CidAttribution) {
     let kernel = workspace_serving(wasm(1, 4096)).await;
     let (key, bytes, spec) = (publisher(1), wasm(1, 4096), peer_spec());
     let mut caps = vec![Capability::Canvas];
@@ -61,7 +61,7 @@ async fn pool() -> (Kernel, String, CidAttribution) {
     (kernel, id, bob)
 }
 
-async fn consent(kernel: &Kernel, who: &str, id: &str, all: bool) -> AppsResponse {
+pub(crate) async fn consent(kernel: &Kernel, who: &str, id: &str, all: bool) -> AppsResponse {
     let request = AppsRequest::SetPeerConsentForMe {
         install_id: id.into(),
         serve: all,

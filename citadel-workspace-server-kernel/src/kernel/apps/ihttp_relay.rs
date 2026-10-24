@@ -8,11 +8,15 @@
 //! (`ihttp_relay_end`).
 //!
 //! The relay renumbers streams: the serving session sees ids the relay allocated, unique on its
-//! connection and increasing, so two callers who both chose stream 1 never collide there.
+//! connection and increasing, so two callers who both chose stream 1 never collide there. A
+//! caller's own ids must increase too, per session and install, so an old id never names a new
+//! stream. A frame is checked against where it says it goes before the stream's state changes.
 
 use super::ihttp_adverts::Adverts;
 use super::ihttp_flow::{Side, StreamFlow};
-pub use super::ihttp_relay_types::{Endpoint, Forward, RelayFault, RelayHandle};
+pub use super::ihttp_relay_types::{
+    CloseReason, Endpoint, Forward, RelayFault, RelayHandle, RelayRecord,
+};
 use citadel_ihttp_types::{
     IhttpFrameKind, MAX_STREAMS_PER_CALLER, MAX_STREAMS_PER_SERVER, STREAMING_TIMEOUT_MS,
     STREAM_TIMEOUT_MS,
@@ -30,9 +34,9 @@ pub(super) struct RelayStream {
     pub(super) client: Endpoint,
     pub(super) client_stream: u64,
     pub(super) server: Endpoint,
-    opened_ms: u64,
-    deadline_ms: u64,
-    flow: StreamFlow,
+    pub(super) opened_ms: u64,
+    pub(super) deadline_ms: u64,
+    pub(super) flow: StreamFlow,
 }
 
 /// Caller's `(cid, install id, stream id)`.
@@ -43,10 +47,17 @@ pub struct IhttpRelay {
     pub(super) adverts: Adverts,
     /// Relay stream id (unique, increasing) to the stream.
     pub(super) streams: HashMap<u64, RelayStream>,
-    by_client: HashMap<ClientKey, u64>,
+    pub(super) by_client: HashMap<ClientKey, u64>,
+    /// The highest stream id each caller's `(cid, install id)` opened.
+    pub(super) last_client_stream: HashMap<(u64, String), u64>,
+    /// Streams opened and closed since the kernel last took them (`take_records`).
+    pub(super) records: Vec<RelayRecord>,
     next_id: u64,
     /// `AuthorizePeer` questions per session, beside the streams they guard.
     pub(crate) peer_checks: super::peer_limiter::PeerCheckLimiter,
+    /// `RequestHead`s and `AdvertiseService`s per session, refused before anything is read.
+    pub(crate) heads: super::peer_limiter::HeadLimiter,
+    pub(crate) adverts_asked: super::peer_limiter::AdvertLimiter,
 }
 
 impl IhttpRelay {
@@ -97,6 +108,14 @@ impl IhttpRelay {
         if self.by_client.contains_key(&key) {
             return Err(RelayFault::StreamInUse);
         }
+        let caller = (client.cid, client.install_id.clone());
+        if self
+            .last_client_stream
+            .get(&caller)
+            .is_some_and(|last| client_stream <= *last)
+        {
+            return Err(RelayFault::StreamId);
+        }
         let at_server = self.streams.values().filter(|s| s.server.cid == server.cid);
         let (mut pair, mut total) = (0u32, 0u32);
         for stream in at_server {
@@ -109,6 +128,7 @@ impl IhttpRelay {
         self.next_id += 1;
         let id = RELAY_STREAM_BIT | self.next_id;
         self.by_client.insert(key, id);
+        self.last_client_stream.insert(caller, client_stream);
         let stream = RelayStream {
             client,
             client_stream,
@@ -117,32 +137,36 @@ impl IhttpRelay {
             deadline_ms: now_ms + STREAM_TIMEOUT_MS,
             flow: StreamFlow::opened(body_len),
         };
+        self.record(id, &stream, None, now_ms);
         self.streams.insert(id, stream);
         Ok(id)
     }
 
-    /// A frame the caller sends on its stream `client_stream`.
+    /// A frame the caller sends on its stream `client_stream`, to where `addressed` admits.
     pub fn from_client(
         &mut self,
         cid: u64,
         install_id: &str,
         client_stream: u64,
         kind: &IhttpFrameKind,
+        addressed: impl Fn(&Endpoint) -> bool,
         now_ms: u64,
     ) -> Result<Forward, RelayFault> {
         self.expire(now_ms);
         let key = (cid, install_id.to_string(), client_stream);
         let id = *self.by_client.get(&key).ok_or(RelayFault::NoStream)?;
-        self.pass(id, Side::Client, kind, now_ms)
+        self.pass(id, Side::Client, kind, addressed, now_ms)
     }
 
-    /// A frame the serving session sends on the stream the relay numbered `id`.
+    /// A frame the serving session sends on the stream the relay numbered `id`, to where
+    /// `addressed` admits.
     pub fn from_server(
         &mut self,
         cid: u64,
         install_id: &str,
         id: u64,
         kind: &IhttpFrameKind,
+        addressed: impl Fn(&Endpoint) -> bool,
         now_ms: u64,
     ) -> Result<Forward, RelayFault> {
         self.expire(now_ms);
@@ -153,24 +177,19 @@ impl IhttpRelay {
         if !served {
             return Err(RelayFault::NoStream);
         }
-        self.pass(id, Side::Server, kind, now_ms)
+        self.pass(id, Side::Server, kind, addressed, now_ms)
     }
 
+    /// Checks where the frame goes before the stream's state changes at all.
     fn pass(
         &mut self,
         id: u64,
         side: Side,
         kind: &IhttpFrameKind,
+        addressed: impl Fn(&Endpoint) -> bool,
         now_ms: u64,
     ) -> Result<Forward, RelayFault> {
         let stream = self.streams.get_mut(&id).ok_or(RelayFault::NoStream)?;
-        stream.flow.admit(side, kind).map_err(RelayFault::Flow)?;
-        if matches!(kind, IhttpFrameKind::Credit { .. }) {
-            let streaming = stream.opened_ms + STREAMING_TIMEOUT_MS;
-            stream.deadline_ms = stream
-                .deadline_ms
-                .max((now_ms + STREAM_TIMEOUT_MS).min(streaming));
-        }
         let forward = match side {
             Side::Client => Forward {
                 from: stream.client.clone(),
@@ -183,32 +202,26 @@ impl IhttpRelay {
                 stream: stream.client_stream,
             },
         };
+        if !addressed(&forward.to) {
+            return Err(RelayFault::Misaddressed);
+        }
+        stream.flow.admit(side, kind).map_err(RelayFault::Flow)?;
+        if matches!(
+            kind,
+            IhttpFrameKind::Body { .. } | IhttpFrameKind::Credit { .. }
+        ) {
+            let streaming = stream.opened_ms + STREAMING_TIMEOUT_MS;
+            stream.deadline_ms = stream
+                .deadline_ms
+                .max((now_ms + STREAM_TIMEOUT_MS).min(streaming));
+        }
         if stream.flow.is_over() {
-            self.close(id);
+            let reason = match kind {
+                IhttpFrameKind::Cancel { reason } => CloseReason::Cancelled(*reason),
+                _ => CloseReason::Ended,
+            };
+            self.close(id, reason, now_ms);
         }
         Ok(forward)
-    }
-
-    pub(super) fn close(&mut self, id: u64) {
-        if let Some(stream) = self.streams.remove(&id) {
-            let key = (
-                stream.client.cid,
-                stream.client.install_id,
-                stream.client_stream,
-            );
-            self.by_client.remove(&key);
-        }
-    }
-
-    /// Drop advertisements and streams whose time is up.
-    pub fn expire(&mut self, now_ms: u64) {
-        self.adverts.expire(now_ms);
-        let over: Vec<u64> = self
-            .streams
-            .iter()
-            .filter(|(_, s)| s.deadline_ms <= now_ms)
-            .map(|(id, _)| *id)
-            .collect();
-        over.into_iter().for_each(|id| self.close(id));
     }
 }

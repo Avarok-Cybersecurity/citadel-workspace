@@ -5,6 +5,7 @@
 
 use super::apps::{finish, Answer, Caller, Halt, Step};
 use super::apps_gather::{gather, holds_at};
+use super::apps_ihttp_end::end_member_relay;
 use super::apps_offer::listing_of;
 use crate::kernel::apps::audience::scope_reaches;
 use crate::kernel::apps::facts::{GatheredFacts, ViewsNeeded};
@@ -113,6 +114,9 @@ pub(super) async fn set_disabled<R: Ratchet + Send + Sync + 'static>(
             apps.disabled.remove(&install.id);
         }
         backend.save_user_apps(caller.user, &apps).await?;
+        if disabled {
+            end_member_relay(kernel, &install.id, caller.user, caller.now);
+        }
         Ok::<_, Halt>(AppsResponse::DisabledForMe {
             install_id: install.id,
             disabled,

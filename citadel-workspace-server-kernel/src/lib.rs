@@ -759,6 +759,7 @@ async fn workspace_kernel(
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
     server_egress: kernel::apps::egress::ServerEgressHandle,
+    storage: kernel::apps::storage_entitlement::StorageEntitlement,
 ) -> Result<kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
     if first_connect_admin {
         citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
@@ -801,6 +802,10 @@ async fn workspace_kernel(
         info!(target: "citadel", "No server egress: apps' net.server calls are answered unavailable.");
     }
     kernel.set_server_egress(server_egress);
+    // Counted and logged, never billed: wiring app usage to a plan is the owner's decision.
+    let meter = kernel::apps::usage_meter::CountingMeter::default();
+    kernel.set_usage_meter(Some(std::sync::Arc::new(meter)));
+    kernel.set_storage_entitlement(Some(storage));
     Ok(kernel)
 }
 
@@ -860,6 +865,7 @@ pub async fn run_server_on<T: PlatformOps>(
         link_quota,
         artifact_fetcher,
         server_egress,
+        kernel::apps::storage_entitlement::StorageEntitlement::of(&backend),
     )
     .await?;
     kernel.set_support_grant_observer(telemetry.support_grants);
@@ -983,6 +989,7 @@ pub async fn run_server_with_site_verify(
             ),
         )),
         resolve_server_egress(&config),
+        kernel::apps::storage_entitlement::StorageEntitlement::of(&backend_type_for_node_builder),
     )
     .await?;
     spawn_link_purge(kernel.clone());

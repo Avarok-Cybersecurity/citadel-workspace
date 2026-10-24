@@ -162,9 +162,7 @@ impl ServerEgress {
                 if answer.body.len() as u64 > MAX_RESPONSE_BODY_BYTES {
                     return Err(Refused::Limit("response_bytes".to_string()));
                 }
-                // Metered as the server's `bytes_in`; logged for the operator until the
-                // host's meter takes it (see the module docs of `kernel::apps`).
-                info!(target: "citadel", "[APP-EGRESS] {install}: {} bytes in", answer.body.len());
+                // Metered by the caller, which knows the session (`usage_meter`).
                 return Ok(HttpResponse {
                     status: answer.status,
                     headers: answer.headers,

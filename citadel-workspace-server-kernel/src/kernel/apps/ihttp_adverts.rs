@@ -128,4 +128,14 @@ impl Adverts {
     pub fn forget_install(&mut self, install_id: &str) {
         self.by_install.remove(install_id);
     }
+
+    /// `username` may no longer serve `install_id`: none of their sessions advertises it.
+    pub fn forget_member(&mut self, install_id: &str, username: &str) {
+        if let Some(sessions) = self.by_install.get_mut(install_id) {
+            sessions.retain(|_, a| a.username != username);
+            if sessions.is_empty() {
+                self.by_install.remove(install_id);
+            }
+        }
+    }
 }

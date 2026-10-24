@@ -10,6 +10,11 @@ use citadel_ihttp_types::{
 
 const NOW: u64 = 1_000_000;
 
+/// A frame's destination as every test here names it: wherever its stream goes.
+fn any(_: &Endpoint) -> bool {
+    true
+}
+
 fn end(cid: u64, user: &str, install: &str) -> Endpoint {
     Endpoint {
         cid,
@@ -75,14 +80,14 @@ fn the_server_sees_relay_ids_and_the_caller_its_own() {
     let id = opened(&mut relay, 7, None);
     assert_ne!(id & RELAY_STREAM_BIT, 0);
     let back = relay
-        .from_server(2, "i1", id, &response_head(), NOW)
+        .from_server(2, "i1", id, &response_head(), any, NOW)
         .expect("head");
     assert_eq!(
         (back.to.cid, back.stream, back.from.username.as_str()),
         (1, 7, "bob")
     );
     let forth = relay
-        .from_client(1, "i1", 7, &credit(1), NOW)
+        .from_client(1, "i1", 7, &credit(1), any, NOW)
         .expect("credit");
     assert_eq!((forth.to.cid, forth.stream), (2, id));
     // Two callers choosing the same id get different ids at the server.
@@ -113,15 +118,15 @@ fn only_the_stream_s_own_ends_may_speak_on_it() {
     let mut relay = IhttpRelay::default();
     let id = opened(&mut relay, 1, None);
     assert_eq!(
-        relay.from_server(3, "i1", id, &response_head(), NOW),
+        relay.from_server(3, "i1", id, &response_head(), any, NOW),
         Err(RelayFault::NoStream)
     );
     assert_eq!(
-        relay.from_server(2, "i9", id, &response_head(), NOW),
+        relay.from_server(2, "i9", id, &response_head(), any, NOW),
         Err(RelayFault::NoStream)
     );
     assert_eq!(
-        relay.from_client(3, "i1", 1, &credit(1), NOW),
+        relay.from_client(3, "i1", 1, &credit(1), any, NOW),
         Err(RelayFault::NoStream)
     );
 }
@@ -151,15 +156,15 @@ fn bodies_need_credit_and_stay_within_their_declared_length() {
     opened(&mut relay, 1, Some(10));
     for _ in 0..INITIAL_CREDIT - 1 {
         relay
-            .from_client(1, "i1", 1, &body(1), NOW)
+            .from_client(1, "i1", 1, &body(1), any, NOW)
             .expect("credit");
     }
-    let past = relay.from_client(1, "i1", 1, &body(8), NOW);
+    let past = relay.from_client(1, "i1", 1, &body(8), any, NOW);
     assert_eq!(past, Err(RelayFault::Flow(FlowFault::TooLarge)));
     relay
-        .from_client(1, "i1", 1, &body(1), NOW)
+        .from_client(1, "i1", 1, &body(1), any, NOW)
         .expect("last credit");
-    let dry = relay.from_client(1, "i1", 1, &body(1), NOW);
+    let dry = relay.from_client(1, "i1", 1, &body(1), any, NOW);
     assert_eq!(dry, Err(RelayFault::Flow(FlowFault::NoCredit)));
 }
 
@@ -167,22 +172,24 @@ fn bodies_need_credit_and_stay_within_their_declared_length() {
 fn the_response_body_waits_for_its_head_and_the_stream_ends_with_both_ends() {
     let mut relay = IhttpRelay::default();
     let id = opened(&mut relay, 1, None);
-    let early = relay.from_server(2, "i1", id, &body(1), NOW);
+    let early = relay.from_server(2, "i1", id, &body(1), any, NOW);
     assert_eq!(early, Err(RelayFault::Flow(FlowFault::OutOfOrder)));
     relay
-        .from_client(1, "i1", 1, &IhttpFrameKind::End, NOW)
+        .from_client(1, "i1", 1, &IhttpFrameKind::End, any, NOW)
         .expect("end");
-    let after = relay.from_client(1, "i1", 1, &body(1), NOW);
+    let after = relay.from_client(1, "i1", 1, &body(1), any, NOW);
     assert_eq!(after, Err(RelayFault::Flow(FlowFault::AfterEnd)));
     relay
-        .from_server(2, "i1", id, &response_head(), NOW)
+        .from_server(2, "i1", id, &response_head(), any, NOW)
         .expect("head");
-    relay.from_server(2, "i1", id, &body(3), NOW).expect("body");
     relay
-        .from_server(2, "i1", id, &IhttpFrameKind::End, NOW)
+        .from_server(2, "i1", id, &body(3), any, NOW)
+        .expect("body");
+    relay
+        .from_server(2, "i1", id, &IhttpFrameKind::End, any, NOW)
         .expect("end");
     assert_eq!(
-        relay.from_server(2, "i1", id, &credit(1), NOW),
+        relay.from_server(2, "i1", id, &credit(1), any, NOW),
         Err(RelayFault::NoStream)
     );
 }
@@ -195,14 +202,14 @@ fn a_cancel_or_the_timeout_closes_the_stream() {
         reason: CancelReason::Caller,
     };
     relay
-        .from_client(1, "i1", 1, &cancel, NOW)
+        .from_client(1, "i1", 1, &cancel, any, NOW)
         .expect("cancel passes");
     assert_eq!(
-        relay.from_server(2, "i1", id, &response_head(), NOW),
+        relay.from_server(2, "i1", id, &response_head(), any, NOW),
         Err(RelayFault::NoStream)
     );
     opened(&mut relay, 2, None);
-    let late = relay.from_client(1, "i1", 2, &credit(1), NOW + STREAM_TIMEOUT_MS);
+    let late = relay.from_client(1, "i1", 2, &credit(1), any, NOW + STREAM_TIMEOUT_MS);
     assert_eq!(late, Err(RelayFault::NoStream));
 }
 
@@ -217,7 +224,7 @@ fn a_session_that_ends_takes_its_adverts_and_streams() {
     assert_eq!(relay.forget_session(2), 2);
     assert_eq!(relay.host("i1", None, NOW), None);
     assert_eq!(
-        relay.from_client(1, "i1", 1, &credit(1), NOW),
+        relay.from_client(1, "i1", 1, &credit(1), any, NOW),
         Err(RelayFault::NoStream)
     );
     assert_eq!(relay.forget_session(2), 0);

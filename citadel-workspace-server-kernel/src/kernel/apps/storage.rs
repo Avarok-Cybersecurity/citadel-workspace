@@ -164,14 +164,14 @@ impl KvIndex {
         Ok(next)
     }
 
-    /// One page of keys starting with `prefix`, after `cursor` if given, and the cursor of the
-    /// next page if there is one.
+    /// One page of an app's keys starting with `prefix`, after `cursor` if given, and the cursor
+    /// of the next page if there is one. The host's own keys are never listed.
     pub fn page(&self, prefix: &str, cursor: Option<&str>) -> (Vec<String>, Option<String>) {
         let after = |key: &&String| cursor.is_none_or(|c| key.as_str() > c);
         let mut matching = self
             .keys
             .keys()
-            .filter(|key| key.starts_with(prefix))
+            .filter(|key| key.starts_with(prefix) && super::storage_write::app_visible(key))
             .filter(after);
         let keys: Vec<String> = matching.by_ref().take(KV_LIST_PAGE).cloned().collect();
         let next = match matching.next() {

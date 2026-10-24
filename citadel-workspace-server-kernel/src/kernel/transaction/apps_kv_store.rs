@@ -1,5 +1,6 @@
 //! App storage at rest (`kernel::apps::storage`): KV values, each namespace's index, blobs in
-//! chunks, and each root's ledger. Nothing is decided here; the caller holds `APPS_LOCK`.
+//! chunks, each root's ledger, and which roots hold anything. Nothing is decided here; the
+//! caller holds `APPS_LOCK`.
 //!
 //! Values and chunks are stored as base64 text, as artifacts are (`apps_artifact_store`): a
 //! Durable Object value is at most 2 MB.
@@ -8,10 +9,12 @@ use super::BackendTransactionManager;
 use crate::kernel::apps::artifact::chunks;
 use crate::kernel::apps::records::*;
 use crate::kernel::apps::storage::{KvIndex, StorageLedger, StorageRoot};
+use crate::kernel::apps::storage_write::chunk_count;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::apps_protocol::ARTIFACT_CHUNK_BYTES;
+use std::collections::BTreeSet;
 
 fn decode(text: &str, key: &str) -> Result<Vec<u8>, NetworkError> {
     STANDARD
@@ -24,22 +27,57 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         &self,
         root: &StorageRoot,
     ) -> Result<StorageLedger, NetworkError> {
+        self.ledger_of(&root.id()).await
+    }
+
+    async fn ledger_of(&self, root_id: &str) -> Result<StorageLedger, NetworkError> {
         Ok(self
-            .backend_get(&ledger_key(&root.id()))
+            .backend_get(&ledger_key(root_id))
             .await?
             .unwrap_or_default())
     }
 
+    async fn storage_roots(&self) -> Result<BTreeSet<String>, NetworkError> {
+        Ok(self
+            .backend_get(&storage_roots_key())
+            .await?
+            .unwrap_or_default())
+    }
+
+    /// Save `root`'s ledger, and keep the set of roots holding anything in step with it: a
+    /// root is entered before its ledger first names bytes, and left once its ledger is empty.
     pub(crate) async fn save_app_ledger(
         &self,
         root: &StorageRoot,
         ledger: &StorageLedger,
     ) -> Result<(), NetworkError> {
-        let key = ledger_key(&root.id());
+        let (root_id, mut roots) = (root.id(), self.storage_roots().await?);
+        let key = ledger_key(&root_id);
         if ledger.is_empty() {
-            return self.backend_delete(&key).await;
+            self.backend_delete(&key).await?;
+            if roots.remove(&root_id) {
+                self.backend_save(&storage_roots_key(), &roots).await?;
+            }
+            return Ok(());
+        }
+        if roots.insert(root_id) {
+            self.backend_save(&storage_roots_key(), &roots).await?;
         }
         self.backend_save(&key, ledger).await
+    }
+
+    /// Bytes every root but `root` holds: the rest of the workspace's app storage.
+    pub(crate) async fn app_storage_besides(
+        &self,
+        root: &StorageRoot,
+    ) -> Result<u64, NetworkError> {
+        let own = root.id();
+        let mut total = 0u64;
+        for root_id in self.storage_roots().await?.iter().filter(|id| **id != own) {
+            let held = self.ledger_of(root_id).await?.total_bytes();
+            total = total.saturating_add(held);
+        }
+        Ok(total)
     }
 
     pub(crate) async fn kv_index(&self, namespace_id: &str) -> Result<KvIndex, NetworkError> {
@@ -130,19 +168,28 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(Some(bytes))
     }
 
-    /// The meta first, so a reader never finds a blob with chunks missing.
+    /// Whether a blob's meta landed, which `store_blob` writes after every chunk.
+    pub(crate) async fn blob_complete(
+        &self,
+        root: &StorageRoot,
+        sha256: &str,
+    ) -> Result<bool, NetworkError> {
+        let meta: Option<ArtifactMeta> = self.backend_get(&blob_key(&root.id(), sha256)).await?;
+        Ok(meta.is_some())
+    }
+
+    /// Delete a blob of `len` bytes, as its ledger records it: the meta first, so a reader never
+    /// finds a blob with chunks missing, then every chunk its length says it was stored in,
+    /// whether or not its meta ever landed.
     pub(crate) async fn delete_blob(
         &self,
         root: &StorageRoot,
         sha256: &str,
+        len: u64,
     ) -> Result<(), NetworkError> {
         let root_id = root.id();
-        let meta: Option<ArtifactMeta> = self.backend_get(&blob_key(&root_id, sha256)).await?;
-        let Some(meta) = meta else {
-            return Ok(());
-        };
         self.backend_delete(&blob_key(&root_id, sha256)).await?;
-        for index in 0..meta.total_chunks {
+        for index in 0..chunk_count(len) {
             self.backend_delete(&blob_chunk_key(&root_id, sha256, index))
                 .await?;
         }
@@ -162,8 +209,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             self.save_kv_index(namespace_id, &KvIndex::default())
                 .await?;
         }
-        for sha256 in ledger.blobs.keys() {
-            self.delete_blob(root, sha256).await?;
+        for (sha256, len) in &ledger.blobs {
+            self.delete_blob(root, sha256, *len).await?;
         }
         self.save_app_ledger(root, &StorageLedger::default())
             .await?;
