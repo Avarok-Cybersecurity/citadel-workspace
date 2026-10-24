@@ -23,10 +23,29 @@ describe("usage table", () => {
       sql.exec("INSERT INTO quota_usage VALUES (100, 200, 5, 6, 1, 2, 1, 0)");
       const table = new UsageTable(sql);
       new UsageTable(sql); // a second construction finds the columns and adds nothing
-      table.save({ period_start: 300, period_end: 400, bytes_in: 9, bytes_out: 9, frames_in: 1, active_seconds: 1, peak_connections: 1, relayed_p2p_bytes: 7, group_fanout_bytes: 3, turn_bytes: 11, turn_refused_bytes: 2 }, 1000);
+      table.save({ period_start: 300, period_end: 400, bytes_in: 9, bytes_out: 9, frames_in: 1, active_seconds: 1, peak_connections: 1, relayed_p2p_bytes: 7, group_fanout_bytes: 3, turn_bytes: 11, turn_refused_bytes: 2, app_egress_bytes: 0, app_relay_ihttp_bytes: 0 }, 1000);
       return { old: table.load(100), next: table.load(300) };
     });
     expect(row.old).toMatchObject({ bytes_in: 5, relayed_p2p_bytes: 0, group_fanout_bytes: 0, turn_bytes: 0, turn_refused_bytes: 0 });
     expect(row.next).toMatchObject({ bytes_in: 9, relayed_p2p_bytes: 7, group_fanout_bytes: 3, turn_bytes: 11, turn_refused_bytes: 2 });
+  });
+
+  it("adds the app columns to a table made before apps were metered: 0, not null, and they round-trip", async () => {
+    const { object } = await freeTenant("usage-apps");
+    const rows = await runInDurableObject(object, (_i, state) => {
+      const sql = state.storage.sql;
+      sql.exec("DROP TABLE IF EXISTS quota_usage");
+      sql.exec(LEGACY);
+      for (const c of ["relayed_p2p_bytes", "group_fanout_bytes", "turn_bytes", "turn_refused_bytes"]) {
+        sql.exec(`ALTER TABLE quota_usage ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
+      }
+      sql.exec("INSERT INTO quota_usage VALUES (100, 200, 5, 6, 1, 2, 1, 0, 0, 0, 4, 0)");
+      const table = new UsageTable(sql);
+      const base = { period_end: 400, bytes_in: 9, bytes_out: 9, frames_in: 1, active_seconds: 1, peak_connections: 1, relayed_p2p_bytes: 0, group_fanout_bytes: 0, turn_bytes: 0, turn_refused_bytes: 0 };
+      table.save({ ...base, period_start: 300, app_egress_bytes: 21, app_relay_ihttp_bytes: 34 }, 1000);
+      return { old: table.load(100), next: table.load(300) };
+    });
+    expect(rows.old).toMatchObject({ bytes_in: 5, turn_bytes: 4, app_egress_bytes: 0, app_relay_ihttp_bytes: 0 });
+    expect(rows.next).toMatchObject({ bytes_in: 9, app_egress_bytes: 21, app_relay_ihttp_bytes: 34 });
   });
 });

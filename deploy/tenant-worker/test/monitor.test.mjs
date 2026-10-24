@@ -4,7 +4,7 @@
  * Usage is put into an object's own meter, the counter its sockets feed: relaying 60 GB through
  * a test socket is not a unit test.
  */
-import { createScheduledController, env } from "cloudflare:test";
+import { createScheduledController, env, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import worker from "../worker.mjs";
 import {
@@ -27,6 +27,9 @@ async function activeTeam() {
 
 const meterEvents = (calls, tenantId) =>
   calls.filter((c) => c.url === "https://api.stripe.com/v1/billing/meter_events" && c.form.get("identifier").includes(tenantId));
+/** Apps' usage put into the object's meter, by kind, as its intake would count it (control/apps-usage.mjs). */
+const appUsage = (slug, kind, bytes) =>
+  runInDurableObject(tenantObject(slug), (instance) => (kind === "EgressIn" ? instance.meter.appEgress(bytes) : instance.meter.appRelay(bytes)));
 const usageRow = (tenantId, start) => env.CONTROL_DB.prepare("SELECT * FROM tenant_usage WHERE tenant_id = ? AND period_start = ?").bind(tenantId, start).first();
 
 describe("the webhook stores the billing period", () => {
@@ -74,6 +77,23 @@ describe("the monitor", () => {
     const events = meterEvents(calls, row.tenant_id);
     expect(events).toHaveLength(2);
     expect([events[1].form.get("payload[value]"), events[1].form.get("identifier")]).toEqual(["1", `relay-${row.tenant_id}-${period.start}-2-3`]);
+  });
+
+  it("bills apps' server egress past the included relay, once, and never a relayed iHTTP frame", async () => {
+    const egress = await activeTeam();
+    await appUsage(egress.row.slug, "EgressIn", 61.5e9);
+    const ihttp = await activeTeam();
+    await appUsage(ihttp.row.slug, "RelayIhttp", 61.5e9);
+    const { calls } = outbound();
+    await monitorOf(egress.row.slug, ihttp.row.slug)();
+    const [billed, ...more] = meterEvents(calls, egress.row.tenant_id);
+    expect(more).toEqual([]);
+    expect(billed.form.get("payload[value]")).toBe("1");
+    expect(billed.form.get("identifier")).toBe(`relay-${egress.row.tenant_id}-${egress.period.start}-0-1`);
+    expect(billed.headers["idempotency-key"]).toBe(billed.form.get("identifier"));
+    expect(await usageRow(egress.row.tenant_id, egress.period.start)).toMatchObject({ app_egress_bytes: 61.5e9, bytes_in: 0, overage_gb: 1, overage_gb_reported: 1 });
+    expect(meterEvents(calls, ihttp.row.tenant_id)).toEqual([]);
+    expect(await usageRow(ihttp.row.tenant_id, ihttp.period.start)).toMatchObject({ app_relay_ihttp_bytes: 61.5e9, overage_gb: 0, overage_gb_reported: 0 });
   });
 
   it("a report Stripe refused is not recorded, and the next run sends the identical one", async () => {

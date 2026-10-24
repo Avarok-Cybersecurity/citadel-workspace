@@ -18,7 +18,7 @@ const storage = ADDONS.find((a) => a.id === "storage");
 if (!storage) throw new Error("tiers.json has no storage add-on");
 const overage = (table.metered ?? []).find((m) => m.id === "relay-overage");
 if (!overage) throw new Error("tiers.json has no relay-overage metered price");
-/** How usage is metered (tiers.json `metering`): GB size, frame cap, flush interval. */
+/** How usage is metered (tiers.json `metering`): GB size, frame cap, flush interval, and the relay quota's fields (meter.mjs). */
 export const METERING = table.metering;
 for (const k of ["gb_bytes", "max_frame_bytes", "flush_seconds"]) {
   if (!Number.isInteger(METERING?.[k]) || METERING[k] <= 0) throw new Error(`tiers.json metering.${k} is a positive integer`);

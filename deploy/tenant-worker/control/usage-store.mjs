@@ -6,6 +6,7 @@
 const METRICS = [
   "period_end", "bytes_in", "bytes_out", "frames_in", "active_seconds", "peak_connections",
   "relayed_p2p_bytes", "group_fanout_bytes", "turn_bytes", "turn_refused_bytes",
+  "app_egress_bytes", "app_relay_ihttp_bytes",
 ];
 
 export class UsageStore {

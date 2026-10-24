@@ -182,7 +182,7 @@ export class WorkspaceServer extends DurableObject {
       signIn: this.signIn,
       grants: this.telemetry.grantHost(),
       plan: () => enforcedEntitlements(this.provisioning.summary().entitlements),
-      turnMeter: () => (this.#roll(Date.now()), this.meter),
+      meter: () => (this.#roll(Date.now()), this.meter),
       onExit: (outcome) => {
         this.exit = outcome;
         console.error(`[tenant] node exited: ${outcome}`);

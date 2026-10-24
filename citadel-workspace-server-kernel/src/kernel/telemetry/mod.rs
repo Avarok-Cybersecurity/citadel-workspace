@@ -50,12 +50,15 @@ pub trait TurnUsageSink: Send + Sync {
 /// The sink as the kernel holds it: absent unless the host passed one.
 pub type TurnUsageSinkHandle = Option<Arc<dyn TurnUsageSink>>;
 
-/// What a host that serves support reads gives the kernel: the grant observer, and a callback
-/// handed a clone of the kernel once it is built, for the host's alarm
+/// What a host that serves support reads gives the kernel: the grant observer, the meters it
+/// bills from, and a callback handed a clone of the kernel once it is built, for the host's alarm
 /// (`purge_expired_telemetry`) and verified support reads (`support_list_telemetry`).
+/// `usage_meter` is required: a hosted server's app usage is the host's to count and bill
+/// (`kernel::apps::usage_meter`), so there is no fallback meter.
 pub struct HostedTelemetry<R: Ratchet> {
     pub support_grants: SupportGrantObserverHandle,
     pub turn_usage: TurnUsageSinkHandle,
+    pub usage_meter: crate::kernel::apps::usage_meter::UsageMeterHandle,
     pub kernel_ready: Box<dyn FnOnce(AsyncWorkspaceServerKernel<R>)>,
 }
 

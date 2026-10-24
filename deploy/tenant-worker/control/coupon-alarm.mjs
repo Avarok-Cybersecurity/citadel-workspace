@@ -10,7 +10,7 @@ import { relayBytes } from "./meter.mjs";
  * `[{metric, value, threshold, period_start}]` for each threshold of `alarm` that `measured`
  * reaches (a null threshold is none): relay per billing period, and storage and members in
  * `periodStart`, the period the object meters now, so each is raised at most once per period.
- * `measured`: `{periods: [{period_start, bytes_in, turn_bytes}], storage_bytes, members}`.
+ * `measured`: `{periods: [{period_start, ...each relay quota field (meter.mjs)}], storage_bytes, members}`.
  */
 export function alarmsOf(alarm, measured, periodStart) {
   const out = [];

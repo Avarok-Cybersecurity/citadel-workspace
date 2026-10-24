@@ -106,8 +106,8 @@ describe("TURN usage", () => {
   });
 
   it("counts against the same relay quota as the object's own bytes", () => {
-    expect(relayBytes({ bytes_in: 40e9, turn_bytes: 22.5e9 })).toBe(62.5e9);
-    expect(overageGb(relayBytes({ bytes_in: 40e9, turn_bytes: 22.5e9 }), 60)).toBe(overageGb(62.5e9, 60));
+    expect(relayBytes({ bytes_in: 40e9, turn_bytes: 22.5e9, app_egress_bytes: 0 })).toBe(62.5e9);
+    expect(overageGb(relayBytes({ bytes_in: 40e9, turn_bytes: 22.5e9, app_egress_bytes: 0 }), 60)).toBe(overageGb(62.5e9, 60));
     expect(() => relayBytes({ bytes_in: 1 })).toThrow(/turn_bytes/);
   });
 });
