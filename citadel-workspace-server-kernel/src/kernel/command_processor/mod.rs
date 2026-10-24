@@ -48,6 +48,9 @@ pub(crate) mod workspace_record;
 /// "Members can see each other": SetMembersVisible, and the rule ListMembers reads.
 mod members_visibility;
 
+/// The app tabs every node without a list of its own shows.
+mod default_app_tabs;
+
 /// Terms, consent and the Telemetry Service.
 mod telemetry;
 

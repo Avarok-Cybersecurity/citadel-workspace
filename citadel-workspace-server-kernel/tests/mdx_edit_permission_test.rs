@@ -96,6 +96,7 @@ async fn a_user_granted_edit_mdx_can_save_a_document() {
             rules: None,
             chat_enabled: None,
             is_default: None,
+            metadata: None,
         },
         editor,
     )
@@ -124,6 +125,7 @@ async fn edit_mdx_does_not_confer_the_right_to_rename() {
             rules: None,
             chat_enabled: None,
             is_default: None,
+            metadata: None,
         },
         editor,
     )
@@ -153,6 +155,7 @@ async fn a_user_with_neither_permission_cannot_save() {
             rules: None,
             chat_enabled: None,
             is_default: None,
+            metadata: None,
         },
         outsider,
     )

@@ -856,6 +856,104 @@
    ]
   },
   {
+   "name": "a node tab",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "md_zone",
+      "node_tab"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a node tab from a self-only app",
+   "expect": "Scopes",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_tab"
+     ]
+    },
+    {
+     "path": [
+      "scopes"
+     ],
+     "value": [
+      "self"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a node tab from an app for named members",
+   "expect": "Scopes",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_tab"
+     ]
+    },
+    {
+     "path": [
+      "scopes"
+     ],
+     "value": [
+      "users",
+      "self"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "control: a node tab installed at one node",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_tab"
+     ]
+    },
+    {
+     "path": [
+      "scopes"
+     ],
+     "value": [
+      "node",
+      "self"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a repeated node tab",
+   "expect": "Surfaces",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_tab",
+      "node_tab"
+     ]
+    }
+   ]
+  },
+  {
    "name": "an unknown surface",
    "expect": "Json",
    "set": [

@@ -2,8 +2,8 @@
 
 use crate::apps::AppAudience;
 use crate::apps_manifest::{
-    AppIcon, AppManifest, Publisher, SdkRequirement, ABI_FIRST_PARTY_GLUE, ABI_V1, MANIFEST_FORMAT,
-    MAX_MANIFEST_BYTES,
+    AppIcon, AppManifest, AppSurface, Publisher, SdkRequirement, ABI_FIRST_PARTY_GLUE, ABI_V1,
+    MANIFEST_FORMAT, MAX_MANIFEST_BYTES,
 };
 use crate::apps_manifest_check_parts::{check_artifact, check_capabilities, check_limits};
 use base64::Engine;
@@ -143,6 +143,11 @@ impl AppManifest {
             return Err(ManifestRefusal::Surfaces);
         }
         if self.scopes.is_empty() || !distinct(&self.scopes) {
+            return Err(ManifestRefusal::Scopes);
+        }
+        if self.surfaces.contains(&AppSurface::NodeTab)
+            && !self.scopes.iter().any(|kind| kind.reaches_a_node())
+        {
             return Err(ManifestRefusal::Scopes);
         }
         check_capabilities(&self.id, &self.capabilities)?;

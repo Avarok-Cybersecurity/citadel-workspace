@@ -100,6 +100,7 @@ async fn test_office_operations() {
             rules: None,
             chat_enabled: None,
             is_default: None,
+            metadata: None,
         },
     )
     .await

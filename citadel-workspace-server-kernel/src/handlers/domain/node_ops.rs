@@ -16,7 +16,7 @@
 
 use async_trait::async_trait;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{DomainNode, NodeEntityType, TreeNode};
+use citadel_workspace_types::structs::{DomainNode, NodeEntityType, Permission, TreeNode};
 
 /// Whether an `UpdateNode` changes the tree's STRUCTURE rather than a document's
 /// content.
@@ -45,6 +45,34 @@ pub fn update_changes_structure(
         // Choosing where the workspace opens is a structural decision, and it
         // writes to every other node.
         || is_default.is_some()
+}
+
+/// Every permission an `UpdateNode` needs at its node, with the name a refusal gives.
+///
+/// Metadata carries the node's settings for everyone on it (its app tabs, its time zone), so it is
+/// gated as installing an app at the node for others is, on `UpdateNodeSettings`, and on that
+/// alone when nothing else changes: choosing a node's tabs is not editing its document.
+pub fn update_requires(
+    changes_structure: bool,
+    changes_content: bool,
+    changes_metadata: bool,
+) -> Vec<(Permission, &'static str)> {
+    let mut required = Vec::new();
+    if changes_structure {
+        required.push((Permission::EditTreeStructure, "EditTreeStructure"));
+    } else if changes_content || !changes_metadata {
+        required.push((Permission::EditMdx, "EditMdx"));
+    }
+    if changes_metadata {
+        required.push((Permission::UpdateNodeSettings, "UpdateNodeSettings"));
+    }
+    required
+}
+
+/// Whether the changed node is announced to everyone else on it: a structural edit, or a
+/// settings change, which everyone's pane shows (a new tab appears for every member).
+pub fn update_announces_the_node(changes_structure: bool, changes_metadata: bool) -> bool {
+    changes_structure || changes_metadata
 }
 
 /// Async operations for the generalized tree hierarchy
@@ -107,6 +135,7 @@ pub trait AsyncNodeOperations<R: Ratchet + Send + Sync + 'static>: Send + Sync {
         rules: Option<&str>,
         chat_enabled: Option<bool>,
         is_default: Option<bool>,
+        metadata: Option<&[u8]>,
     ) -> Result<DomainNode, NetworkError>;
 
     /// Delete a node from the tree.
