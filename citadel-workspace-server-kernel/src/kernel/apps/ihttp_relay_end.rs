@@ -44,13 +44,14 @@ impl IhttpRelay {
         self.end(picked, its, CloseReason::Closed, Some(now_ms))
     }
 
-    /// `username` may no longer use `install_id` (they disabled it for themselves, or it was
-    /// suspended): every stream on which one of their sessions is an end of it. The other end of
-    /// each is told; the member's own end is closed by their page.
+    /// `username` may no longer use `install_id` (they disabled it for themselves): what their
+    /// sessions advertised for it, and every stream on which one of them is an end of it. Both
+    /// ends are told: the member may have the app open in another window too.
     pub fn forget_member(&mut self, install_id: &str, username: &str, now_ms: u64) -> Ended {
+        self.adverts.forget_member(install_id, username);
         let theirs = |e: &Endpoint| e.install_id == install_id && e.username == username;
         let picked = |s: &RelayStream| theirs(&s.client) || theirs(&s.server);
-        self.end(picked, theirs, CloseReason::Closed, Some(now_ms))
+        self.end(picked, |_| false, CloseReason::Closed, Some(now_ms))
     }
 
     /// Close every stream whose deadline has passed, recorded as `Timeout`.

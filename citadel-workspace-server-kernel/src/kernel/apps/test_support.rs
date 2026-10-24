@@ -65,7 +65,11 @@ fn custom_roles() -> Vec<RoleDefinition> {
 /// boss: Admin. mgr: appadmin. inst: installer. ed: editor. alice, bob: Member. carol: blind,
 /// with `ViewContent` on `room` only. The tree is `office > room`.
 pub(crate) async fn workspace() -> Kernel {
-    let kernel = Kernel::new(None);
+    let mut kernel = Kernel::new(None);
+    // The tests' node runs in memory, which sets app storage no workspace-wide limit.
+    let in_memory = citadel_sdk::prelude::BackendType::InMemory;
+    let entitlement = crate::kernel::apps::storage_entitlement::StorageEntitlement::of(&in_memory);
+    kernel.set_storage_entitlement(Some(entitlement));
     let backend = &kernel.domain_operations.backend_tx_manager;
     backend.init().await.expect("init");
     kernel

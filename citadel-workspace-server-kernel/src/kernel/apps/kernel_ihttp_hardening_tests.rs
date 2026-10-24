@@ -1,6 +1,7 @@
 //! The kernel's relay, hardened (S4, S6, E2, E7): a session's heads and advertisements are
 //! limited before anything is read for them, a stream past its deadline is cancelled to both
-//! ends, and relay frames and egress bytes reach the usage meter.
+//! ends, a member who disables an install ends its relayed streams and adverts, and relay frames
+//! and egress bytes reach the usage meter.
 
 use super::egress_tests::{answer, RecordingHost};
 use super::kernel_call_tests::fetch;
@@ -14,7 +15,9 @@ use citadel_app_sdk_types::HostReply;
 use citadel_ihttp_types::{CancelReason, IhttpFrameKind, MAX_REQUESTS_PER_SECOND_PER_CALLER};
 use citadel_workspace_types::apps::{Capability, InstallScope};
 use citadel_workspace_types::apps_install::AppsRefusal;
+use citadel_workspace_types::apps_protocol::AppsRequest;
 use citadel_workspace_types::apps_responses::AppsResponse;
+use citadel_workspace_types::WorkspaceProtocolResponse;
 use std::sync::Arc;
 
 fn rate_limited() -> AppsRefusal {
@@ -150,5 +153,74 @@ async fn relayed_frames_and_egress_answers_reach_the_meter() {
         meter.total(Some(ALICE), Usage::RelayIhttp),
         sent,
         "a refused frame is not metered"
+    );
+}
+
+/// Every internal-HTTP frame pushed since `rx` was last read, by recipient.
+fn frames(
+    rx: &mut tokio::sync::broadcast::Receiver<crate::kernel::async_kernel::BroadcastMessage>,
+) -> Vec<(
+    crate::kernel::async_kernel::BroadcastAudience,
+    citadel_ihttp_types::IhttpFrame,
+)> {
+    std::iter::from_fn(|| rx.try_recv().ok())
+        .filter_map(|m| match m.response {
+            WorkspaceProtocolResponse::Apps(AppsResponse::IhttpFrame { frame, .. }) => Some((
+                m.audience,
+                citadel_ihttp_types::decode(&frame).expect("frame"),
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn disabling_an_install_ends_the_member_s_relayed_streams_and_adverts() {
+    use crate::kernel::async_kernel::BroadcastAudience::Session;
+    let kernel = workspace_serving(wasm(1, 4096)).await;
+    let id = install(&kernel, "boss", InstallScope::Workspace, BOTH).await;
+    advertise(&kernel, "bob", Some(BOB), &id).await;
+    let mut rx = kernel.subscribe_broadcast();
+    send(
+        &kernel,
+        "alice",
+        ALICE,
+        &id,
+        user("bob"),
+        head(1, "workspace"),
+    )
+    .await;
+    let (_, request) = frames(&mut rx).pop().expect("the head");
+    let disable = AppsRequest::SetDisabledForMe {
+        install_id: id.clone(),
+        disabled: true,
+    };
+    let off = ask_on(&kernel, "bob", Some(BOB), disable).await;
+    assert!(matches!(
+        off,
+        AppsResponse::DisabledForMe { disabled: true, .. }
+    ));
+    let closed = IhttpFrameKind::Cancel {
+        reason: CancelReason::Closed,
+    };
+    let mut told = frames(&mut rx);
+    told.sort_by_key(|(to, _)| format!("{to:?}"));
+    let expected = [(Session(ALICE), 1), (Session(BOB), request.stream)];
+    let got: Vec<_> = told.iter().map(|(to, f)| (to.clone(), f.stream)).collect();
+    assert_eq!(got, expected);
+    assert!(told.iter().all(|(_, f)| f.kind == closed));
+    let again = send(
+        &kernel,
+        "alice",
+        ALICE,
+        &id,
+        user("bob"),
+        head(2, "workspace"),
+    )
+    .await;
+    assert_eq!(
+        refusal(&again),
+        Some(&AppsRefusal::NoHost),
+        "bob's advert ended too"
     );
 }

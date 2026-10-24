@@ -196,6 +196,9 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// Where apps' egress and relay bytes are reported: the host's meter, or none, which meters
     /// none.
     usage_meter: Option<crate::kernel::apps::usage_meter::UsageMeterHandle>,
+    /// What app storage reads the tenant's entitlement from: the node's backend, or none, which
+    /// refuses every app storage write.
+    storage_entitlement: Option<crate::kernel::apps::storage_entitlement::StorageEntitlement>,
 }
 
 /// Ends a connection's relayed streams and advertisements with its attribution.
@@ -247,6 +250,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             server_egress: self.server_egress.clone(),
             apps_relay: self.apps_relay.clone(),
             usage_meter: self.usage_meter.clone(),
+            storage_entitlement: self.storage_entitlement.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -300,7 +304,22 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             server_egress: None,
             apps_relay: Default::default(),
             usage_meter: None,
+            storage_entitlement: None,
         }
+    }
+
+    /// Set by the server bootstrap from the node's backend (`StorageEntitlement::of`).
+    pub fn set_storage_entitlement(
+        &mut self,
+        entitlement: Option<crate::kernel::apps::storage_entitlement::StorageEntitlement>,
+    ) {
+        self.storage_entitlement = entitlement;
+    }
+
+    pub(crate) fn storage_entitlement(
+        &self,
+    ) -> Option<&crate::kernel::apps::storage_entitlement::StorageEntitlement> {
+        self.storage_entitlement.as_ref()
     }
 
     /// Set by the server bootstrap: the host's usage meter for apps, or none.

@@ -84,6 +84,12 @@ pub(crate) fn ledger_key(root_id: &str) -> String {
     format!("{PREFIX}ledger.{root_id}")
 }
 
+/// The ids of every storage root that holds anything, so the workspace's app storage can be
+/// summed from the roots' own ledgers.
+pub(crate) fn storage_roots_key() -> String {
+    format!("{PREFIX}storageroots")
+}
+
 pub(crate) fn kv_index_key(namespace_id: &str) -> String {
     format!("{PREFIX}kvindex.{namespace_id}")
 }

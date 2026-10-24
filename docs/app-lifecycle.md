@@ -182,7 +182,16 @@ the page going away.
   (`command_processor/apps_ihttp_end.rs`).
 - **When an install's release stops running**, its advertisements and relayed streams end, both
   ways, with the same cancel. That covers an uninstall, a rollback, an update that takes effect,
-  and a consent.
+  and a consent. It does not cover every exit: a release change is not the only way an install
+  stops reaching a member.
+- **When a member disables an install for themselves** (`SetDisabledForMe`), what their sessions
+  advertised for it ends, and every relayed stream one of their sessions is an end of is closed,
+  with `Cancel { Closed }` to both ends (`apps_ihttp_end.rs` `end_member_relay`). Enabling it again
+  ends nothing.
+- **Suspension has no server path yet.** No request sets an install `Suspended`; the relay refuses a
+  suspended caller's frames and finds no host for a suspended serving install, but nothing ends
+  streams already open at the moment one is suspended. Whatever adds the request must end its
+  relay state as an uninstall does (`end_install_relay`).
 - **An egress answer for an install that ended** while its request was out is withheld, with
   `{unavailable: "install_ended"}` (`command_processor/apps_call.rs`).
 - **A stream past its deadline** is closed at the next relay request after the deadline passes,
@@ -221,7 +230,8 @@ test went red, and the file was restored to its exact earlier bytes.
   `zone-close.test.ts`.
 - **Server:** `kernel_withdraw_tests.rs`, `ihttp_adverts_tests.rs`,
   `kernel_release_change_tests.rs`, `egress_in_flight_tests.rs`,
-  `ihttp_relay_hardening_tests.rs` and `kernel_ihttp_hardening_tests.rs`.
+  `ihttp_relay_hardening_tests.rs`, `kernel_ihttp_hardening_tests.rs` and, for a member
+  disabling an install, `kernel_storage_hardening_tests.rs`.
 - **Real browser:** `npm run check:app-zone`, lifecycle scenario. It checks:
   - scrolled away, it is suspended: no frame loop and no frames;
   - back in view, it runs;

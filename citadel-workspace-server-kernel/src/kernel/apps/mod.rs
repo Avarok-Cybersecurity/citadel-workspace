@@ -45,6 +45,8 @@ pub mod peer_rules;
 pub mod records;
 pub mod rules;
 pub mod storage;
+pub mod storage_entitlement;
+pub mod storage_write;
 pub mod update;
 pub mod usage_meter;
 
@@ -103,6 +105,8 @@ mod kernel_scope_tests;
 #[cfg(test)]
 mod kernel_session_tests;
 #[cfg(test)]
+mod kernel_storage_hardening_tests;
+#[cfg(test)]
 mod kernel_withdraw_tests;
 #[cfg(test)]
 mod md_header_tests;
@@ -120,6 +124,8 @@ mod runtime_wire_frames;
 mod runtime_wire_relay;
 #[cfg(test)]
 mod storage_tests;
+#[cfg(test)]
+mod storage_write_tests;
 #[cfg(test)]
 mod test_facts;
 #[cfg(test)]

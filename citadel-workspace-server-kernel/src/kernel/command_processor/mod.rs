@@ -76,6 +76,8 @@ mod apps_call;
 mod apps_call_blob;
 /// The storage backends `Call` serves.
 mod apps_call_storage;
+/// Storage writes, decided and made under `APPS_LOCK`.
+mod apps_call_storage_write;
 /// The reads the apps decisions need, made before they decide, and what an install may do now.
 pub mod apps_gather;
 /// The kernel's own writes to a document's required-apps header.

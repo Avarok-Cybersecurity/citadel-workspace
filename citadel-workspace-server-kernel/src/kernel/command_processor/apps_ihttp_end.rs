@@ -1,6 +1,7 @@
 //! Ending relayed internal HTTP (R4.4): `WithdrawService`, from an instance whose app closed,
-//! and the end of an install's relay state when its release stops being the one that runs
-//! (uninstall, rollback, an update taking effect). The surviving end of every stream that closed
+//! the end of an install's relay state when its release stops being the one that runs
+//! (uninstall, rollback, an update taking effect), and of a member's when they disable it for
+//! themselves (`SetDisabledForMe`). The surviving end of every stream that closed
 //! is sent `Cancel { Closed }` at once, as the relay would forward a cancel, rather than left to
 //! wait out the stream's deadline.
 //!
@@ -57,6 +58,20 @@ pub(super) fn end_install_relay<R: Ratchet + Send + Sync + 'static>(
     now_ms: u64,
 ) {
     let ended = with_relay(kernel, |relay| relay.forget_install(install_id, now_ms));
+    tell(kernel, ended.tell, CancelReason::Closed);
+}
+
+/// `username` no longer uses `install_id` (they disabled it for themselves): what their
+/// sessions advertised for it ends, and every stream one of them is an end of, both ends told.
+pub(super) fn end_member_relay<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    install_id: &str,
+    username: &str,
+    now_ms: u64,
+) {
+    let ended = with_relay(kernel, |relay| {
+        relay.forget_member(install_id, username, now_ms)
+    });
     tell(kernel, ended.tell, CancelReason::Closed);
 }
 
