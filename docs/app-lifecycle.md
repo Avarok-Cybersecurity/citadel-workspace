@@ -140,14 +140,17 @@ rejects. `runtime/zone-close.ts` does these steps in order:
 6. **Withdraw.** The renewal of the instance's advertisement stops. If it ever served, it is
    withdrawn (`WithdrawService`), including an advertisement that was still in flight.
 7. **Release the canvas.** The canvas element is removed from the page.
-8. **Drop ports.** Host egress streams are closed.
+8. **Drop ports.** Host egress streams are closed, and the instance lets go of its topics. A
+   topic's group is left only when no other instance of the install on the page still holds it
+   (`runtime/install-plane-registry.ts`), and the instance gives up its place on the page: if it
+   took the install's inbound requests, the next instance does.
 9. **Audit.** One audit line: app, install, zone, reason, how the close ended, the close result,
    the time it took, and the withdrawal.
 
 | exit path | reason | how it ends |
 |---|---|---|
 | zone unmounted (navigation, edit) | `unmount` | the steps above |
-| install removed, disabled for me, suspended | `uninstall` / `access_revoked` | the same, with the reason taken from the zone's next view (`app-zone/zone-close-reason.ts`) |
+| install removed, disabled for me, suspended | `uninstall` / `access_revoked` | the same, with the reason taken from the install list: the install absent is `uninstall`, present but no longer covering this person, disabled for them or suspended is `access_revoked` (`app-zone/zone-close-reason.ts`) |
 | a newer release or one waiting on consent | `version_update` | the same; the new release mounts in a fresh instance |
 | `pagehide`, not persisted | `host_shutdown` | best effort: the page may be gone before the grace runs out |
 | `pagehide`, persisted | none | suspended (`backgrounded`), resumed on `pageshow` |
@@ -156,9 +159,13 @@ rejects. `runtime/zone-close.ts` does these steps in order:
 | before `app_init` answered | as asked | ends as `not-started`, nothing to close |
 | already stopped | as asked | answers at once with `already-stopped` |
 
-The close reason is decided with no race, because of how React orders effects. `PlacedZone`
-records the view it is about to show in a layout effect. Layout effects run in a commit's
-layout phase. That is before the passive cleanup of the `RuntimeHost` the same commit removes
+The close reason is read from the install list, not from the view the zone shows next. With a
+second install of the same app covering the page, that view is the other install's, so an
+uninstall read from it was an unmount, or, with the other one disabled, a revoked access.
+
+It is decided with no race, because of how React orders effects. `PlacedZone` records the
+view it is about to show, and the facts it was decided from, in a layout effect. Layout effects
+run in a commit's layout phase. That is before the passive cleanup of the `RuntimeHost` the same commit removes
 or replaces, and that cleanup is where the close is sent.
 `app-zone/__tests__/zone-close-reason.test.tsx` proves this, and the test goes red when the
 layout effect is made passive.
