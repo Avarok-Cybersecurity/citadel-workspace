@@ -142,6 +142,8 @@ fn routes_and_targets() {
         "GET /cards/:id",
         "GET /static/*",
         "DELETE /a.b/c~d/e-f",
+        "GET /_citadelx/version",
+        "GET /a/_citadel",
     ] {
         assert!(is_route_pattern(route), "{route}");
     }
@@ -157,6 +159,9 @@ fn routes_and_targets() {
         "TRACE /",
         "GET /a b",
         "GET /a?b",
+        "GET /_citadel/version",
+        "GET /_citadel/*",
+        "GET /_citadel",
     ] {
         assert!(!is_route_pattern(route), "{route}");
     }

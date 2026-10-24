@@ -32,7 +32,11 @@ pub fn is_route_pattern(route: &str) -> bool {
     let Some((method, path)) = route.split_once(' ') else {
         return false;
     };
-    if route.len() > MAX_ROUTE_BYTES || !METHODS.contains(&method) || !path.starts_with('/') {
+    if route.len() > MAX_ROUTE_BYTES
+        || !METHODS.contains(&method)
+        || !path.starts_with('/')
+        || citadel_ihttp_types::is_reserved_path(path)
+    {
         return false;
     }
     if path == "/" {
