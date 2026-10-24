@@ -42,7 +42,7 @@ pub enum TabKeyRefusal {
     Repeated,
     /// An entry that is not an app id.
     NotAnAppId(String),
-    /// Not one of `time_zones::TIME_ZONE_NAMES`.
+    /// Not one of `time_zones::time_zone_names()`.
     UnknownTimeZone,
 }
 

@@ -29,5 +29,8 @@ base64 = "0.22"
 # Only the credential-mirror test needs this; it reads the SDK's own constants
 # rather than restating them, so the assertion cannot drift with the mirror.
 citadel_user = { workspace = true }
+# The time-zone table's test reads jiff's bundled tzdb, so the table is held to a real database
+# of names rather than to a copy of one (time_zones.rs).
+jiff = { version = "0.2.37", default-features = false, features = ["std", "tzdb-bundle-always"] }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
