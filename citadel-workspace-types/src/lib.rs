@@ -27,6 +27,10 @@ pub mod dependency_agreement;
 /// A document node's CRDT update log, its snapshot, and the awareness relay.
 pub mod document_refusal;
 pub mod documents;
+/// A node channel's reactions, read cursors and typing.
+pub mod group_chat;
+#[cfg(test)]
+mod group_chat_tests;
 pub mod ice;
 pub mod messaging_trust;
 /// A workspace's role table and its built-ins.
@@ -268,6 +272,25 @@ pub enum WorkspaceProtocolRequest {
         group_id: String,
         /// The parent message ID
         parent_message_id: String,
+    },
+
+    /// Add (`on`) or retract the requester's `emoji` on a message (one of `REACTION_EMOJIS`)
+    ReactGroupMessage {
+        group_id: String,
+        message_id: String,
+        emoji: String,
+        on: bool,
+    },
+
+    /// The requester has read every message up to and including `upto_message_id`
+    MarkGroupRead {
+        group_id: String,
+        upto_message_id: String,
+    },
+
+    /// The requester is typing in the channel; relayed to its readers, never stored
+    GroupTyping {
+        group_id: String,
     },
 
     // ========== Server Capabilities ==========
@@ -571,6 +594,29 @@ pub enum WorkspaceProtocolResponse {
         group_id: String,
         messages: Vec<GroupMessage>,
         has_more: bool,
+        /// How far each member has read, so ticks are right the moment the channel opens.
+        #[serde(default)]
+        read_cursors: Vec<group_chat::GroupReadCursor>,
+    },
+
+    /// A reaction changed on a stored message (broadcast to the channel's readers)
+    GroupMessageReacted {
+        group_id: String,
+        message_id: String,
+        /// The message's reactions after the change.
+        reactions: Vec<group_chat::GroupReaction>,
+    },
+
+    /// A member's read cursor moved (broadcast to the channel's readers)
+    GroupReadCursorMoved {
+        group_id: String,
+        cursor: group_chat::GroupReadCursor,
+    },
+
+    /// A member is typing (relayed to the channel's readers; never stored)
+    GroupTypingNotice {
+        group_id: String,
+        member: String,
     },
 
     /// Notification that a message was edited
@@ -729,6 +775,11 @@ pub struct GroupMessage {
     /// Unix timestamp of last edit (None if never edited)
     #[ts(type = "bigint | null")]
     pub edited_at: Option<u64>,
+    /// Reactions, retractions included. Absent on messages stored before reactions existed,
+    /// which is the same fact as an empty list: nobody has reacted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<group_chat::GroupReaction>>", optional)]
+    pub reactions: Vec<group_chat::GroupReaction>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

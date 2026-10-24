@@ -167,6 +167,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// per-connection - opening multiple connections from the same
     /// account no longer multiplies the budget.
     rate_limiter: RateLimiter,
+    /// How often read cursors and typing notices pass, shared across clones like the rate limiter.
+    pub(crate) group_chat_gates: crate::kernel::group_chat_gates::GroupChatGates,
     /// Which account each live connection belongs to, keyed by session CID.
     /// Shared across clones, like the rate limiter. See `cid_attribution`.
     pub(crate) connected_users: ConnectedAccounts,
@@ -255,6 +257,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
             rate_limiter: self.rate_limiter.clone(),
+            group_chat_gates: self.group_chat_gates.clone(),
             connected_users: self.connected_users.clone(),
         }
     }
@@ -293,6 +296,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
+            group_chat_gates: crate::kernel::group_chat_gates::GroupChatGates::default(),
             connected_users: ConnectedAccounts::default(),
             first_connect_admin: false,
             ice_servers: None,

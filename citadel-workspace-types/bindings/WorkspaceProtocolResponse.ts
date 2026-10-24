@@ -4,6 +4,8 @@ import type { CustomNodeType } from "./CustomNodeType";
 import type { DocumentsResponse } from "./DocumentsResponse";
 import type { DomainNode } from "./DomainNode";
 import type { GroupMessage } from "./GroupMessage";
+import type { GroupReaction } from "./GroupReaction";
+import type { GroupReadCursor } from "./GroupReadCursor";
 import type { IceServer } from "./IceServer";
 import type { MessagingTrustResponse } from "./MessagingTrustResponse";
 import type { Permission } from "./Permission";
@@ -59,7 +61,15 @@ role_id: string | null, } } | { "UserProfileUpdated": User } | { "NodeContentUpd
  * server predates the field would be the same defect wearing the fix's
  * clothes.
  */
-mdx_content_hash: string | null, updated_by: string, timestamp: bigint, } } | { "GroupMessageNotification": { group_id: string, message: GroupMessage, } } | { "GroupMessages": { group_id: string, messages: Array<GroupMessage>, has_more: boolean, } } | { "GroupMessageEdited": { group_id: string, message_id: string, new_content: string, edited_at: bigint, } } | { "GroupMessageDeleted": { group_id: string, message_id: string, deleted_by: string, } } | { "GroupMessage": GroupMessage } | { "ServerCapabilities": { 
+mdx_content_hash: string | null, updated_by: string, timestamp: bigint, } } | { "GroupMessageNotification": { group_id: string, message: GroupMessage, } } | { "GroupMessages": { group_id: string, messages: Array<GroupMessage>, has_more: boolean, 
+/**
+ * How far each member has read, so ticks are right the moment the channel opens.
+ */
+read_cursors: Array<GroupReadCursor>, } } | { "GroupMessageReacted": { group_id: string, message_id: string, 
+/**
+ * The message's reactions after the change.
+ */
+reactions: Array<GroupReaction>, } } | { "GroupReadCursorMoved": { group_id: string, cursor: GroupReadCursor, } } | { "GroupTypingNotice": { group_id: string, member: string, } } | { "GroupMessageEdited": { group_id: string, message_id: string, new_content: string, edited_at: bigint, } } | { "GroupMessageDeleted": { group_id: string, message_id: string, deleted_by: string, } } | { "GroupMessage": GroupMessage } | { "ServerCapabilities": { 
 /**
  * Whether server-mediated file transfers are enabled
  */

@@ -24,6 +24,8 @@ pub mod backend_ops_simple;
 pub(crate) mod documents_store;
 #[cfg(test)]
 mod documents_store_tests;
+mod group_chat_store;
+pub use group_chat_store::ReactionWrite;
 mod group_message_pages;
 mod records;
 mod roles_store;
@@ -1166,6 +1168,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         }
         self.backend_delete(&group_message_pages::index_key(group_id))
             .await?;
+        // Who had read how far goes with the history it measured.
+        self.backend_delete(&group_message_pages::read_cursors_key(group_id))
+            .await?;
         self.backend_delete(&group_message_pages::legacy_key(group_id))
             .await
     }
@@ -1410,6 +1415,7 @@ mod group_message_tests {
             reply_count: 0,
             mentions: vec![],
             edited_at: None,
+            reactions: Vec::new(),
         }
     }
 
@@ -2006,6 +2012,7 @@ mod group_paging_tests {
             message_type: GroupMessageType::Text,
             timestamp: 0,
             edited_at: None,
+            reactions: Vec::new(),
             reply_to: None,
             reply_count: 0,
             mentions: vec![],

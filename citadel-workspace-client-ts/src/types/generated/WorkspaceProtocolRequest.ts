@@ -106,7 +106,7 @@ limit: number | null, } } | { "GetThreadMessages": { group_id: string,
 /**
  * The parent message ID
  */
-parent_message_id: string, } } | "GetServerCapabilities" | "GetIceServers" | "GetSignInSettings" | { "UpdateSignInSettings": { settings: SignInSettings, } } | { "CreateNode": { parent_id: string | null, entity_type: NodeEntityType, name: string, description: string, 
+parent_message_id: string, } } | { "ReactGroupMessage": { group_id: string, message_id: string, emoji: string, on: boolean, } } | { "MarkGroupRead": { group_id: string, upto_message_id: string, } } | { "GroupTyping": { group_id: string, } } | "GetServerCapabilities" | "GetIceServers" | "GetSignInSettings" | { "UpdateSignInSettings": { settings: SignInSettings, } } | { "CreateNode": { parent_id: string | null, entity_type: NodeEntityType, name: string, description: string, 
 /**
  * The node's metadata document: a JSON object whose top-level keys belong to
  * independent features (the Citadel App a document opens in is one). The client

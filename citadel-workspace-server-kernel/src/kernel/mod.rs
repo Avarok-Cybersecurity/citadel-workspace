@@ -20,6 +20,7 @@ pub mod display_name;
 /// The Documents relay: configuration and the log's rules.
 pub mod documents;
 pub mod group_access;
+pub mod group_chat_gates;
 pub mod ice_servers;
 /// A usage limit as the host states it: a count, or explicitly none.
 pub mod limit;

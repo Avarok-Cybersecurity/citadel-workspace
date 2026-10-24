@@ -31,7 +31,7 @@ pub const GROUP_ACCESS_DENIED: &str = "Permission denied: not a member of this c
 ///
 /// Returns the owning node id on success so callers can log or scope further
 /// work against it.
-async fn authorize_group<R: Ratchet>(
+pub async fn authorize_group<R: Ratchet>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     user_id: &str,
     group_id: &str,

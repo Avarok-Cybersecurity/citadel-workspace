@@ -33,6 +33,13 @@
 /// Async command processor
 pub mod async_process_command;
 
+/// ReactGroupMessage: reactions stored on a node channel's messages.
+pub mod group_reactions;
+/// MarkGroupRead: one read cursor per channel member.
+pub mod group_read_cursors;
+/// GroupTyping: relayed to the channel, never stored.
+pub mod group_typing;
+
 /// What a failed workspace lookup means, decided from facts rather than prose.
 pub mod workspace_lookup;
 

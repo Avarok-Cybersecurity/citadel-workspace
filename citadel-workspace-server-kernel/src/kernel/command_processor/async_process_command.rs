@@ -823,6 +823,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 reply_count: 0,
                 mentions: mentions.clone().unwrap_or_default(),
                 edited_at: None,
+                reactions: Vec::new(),
             };
 
             // Store the message
@@ -1032,22 +1033,65 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
             let limit = limit.unwrap_or(50).min(100); // Default 50, max 100
 
-            match kernel
-                .domain_operations
-                .backend_tx_manager
+            let backend = &kernel.domain_operations.backend_tx_manager;
+            let read = match backend
                 .get_group_messages_paginated(group_id, *before_timestamp, limit)
                 .await
             {
-                Ok((messages, has_more)) => Ok(WorkspaceProtocolResponse::GroupMessages {
-                    group_id: group_id.clone(),
-                    messages,
-                    has_more,
-                }),
+                Ok(page) => backend
+                    .group_read_cursors(group_id)
+                    .await
+                    .map(|cursors| (page, cursors)),
+                Err(e) => Err(e),
+            };
+            match read {
+                Ok(((messages, has_more), read_cursors)) => {
+                    Ok(WorkspaceProtocolResponse::GroupMessages {
+                        group_id: group_id.clone(),
+                        messages,
+                        has_more,
+                        read_cursors,
+                    })
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to get messages: {}",
                     e
                 ))),
             }
+        }
+
+        WorkspaceProtocolRequest::ReactGroupMessage {
+            group_id,
+            message_id,
+            emoji,
+            on,
+        } => {
+            super::group_reactions::react(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                group_id,
+                message_id,
+                emoji,
+                *on,
+            )
+            .await
+        }
+        WorkspaceProtocolRequest::MarkGroupRead {
+            group_id,
+            upto_message_id,
+        } => {
+            super::group_read_cursors::mark_read(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                group_id,
+                upto_message_id,
+            )
+            .await
+        }
+        WorkspaceProtocolRequest::GroupTyping { group_id } => {
+            super::group_typing::typing(kernel, actor_user_id, requester_cid, group_id).await
         }
 
         WorkspaceProtocolRequest::GetThreadMessages {
@@ -1074,6 +1118,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     group_id: group_id.clone(),
                     messages,
                     has_more: false, // Thread messages are always returned fully
+                    // A thread is a filter of the channel; who has read how far is a fact of the
+                    // channel, and a thread view does not show ticks.
+                    read_cursors: Vec::new(),
                 }),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to get thread messages: {}",
