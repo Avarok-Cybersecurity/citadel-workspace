@@ -4,7 +4,7 @@
 
 const INTERVALS = ['month', 'year'];
 const ID = /^[a-z0-9][a-z0-9-]{0,47}$/;
-const TRIAL_CAP_FIELDS = ['max_days', 'members', 'storage_gb', 'connections', 'relay_gb', 'secure_links_per_member', 'secure_links_pool'];
+const TRIAL_CAP_FIELDS = ['max_days', 'members', 'storage_gb', 'connections', 'relay_gb', 'secure_links_per_member', 'secure_links_pool', 'chat_documents'];
 const ALARM_FIELDS = ['relay_gb_per_period', 'storage_gb', 'members'];
 /** Stripe's own bound on a trial, and the design's hard cap on a trial template. */
 const HARD_MAX_TRIAL_DAYS = 30;

@@ -1,12 +1,16 @@
 //! Documents shared in a node's chat, driven through the real command processor against the room
 //! `group_channel_test_utils` writes, on a kernel with the shipped documents limits.
 
+use crate::documents_test_utils::shipped_documents_config;
 pub use crate::documents_test_utils::{documents_kernel, drain, Replica};
 pub use crate::group_channel_test_utils::{
     add_room_with_chat, add_user_with_role, CHANNEL, ROOM_ID,
 };
-use crate::member_test_utils::GateKernel;
+pub use crate::member_test_utils::GateKernel;
+use crate::workspace_test_utils::create_configured_test_kernel;
+use citadel_workspace_server_kernel::kernel::chat_document_limit::FixedChatDocumentLimit;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user_and_cid;
+use citadel_workspace_server_kernel::kernel::documents::DocumentsRelay;
 use citadel_workspace_types::chat_documents::{ChatDocumentsRequest, ChatDocumentsResponse};
 use citadel_workspace_types::documents::{DocumentRefusal, DocumentsRequest, DocumentsResponse};
 use citadel_workspace_types::structs::UserRole;
@@ -25,9 +29,32 @@ pub const GUEST_CID: u64 = 202;
 pub const OUTSIDER: &str = "not_in_this_room";
 pub const OUTSIDER_CID: u64 = 303;
 
-/// A documents kernel with the room, a member and a guest in it, and an account outside it.
+/// The shipped kernel.toml's chat-document limit, so a test cannot pass under a limit no server
+/// runs with.
+pub fn shipped_chat_document_limit() -> u32 {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../docker/workspace-server/kernel.toml");
+    let raw = std::fs::read_to_string(&path).expect("the shipped kernel.toml");
+    let config: citadel_workspace_server_kernel::config::ServerConfig =
+        toml::from_str(&raw).expect("the shipped kernel.toml parses");
+    citadel_workspace_server_kernel::resolve_chat_document_limit(&config)
+        .expect("the shipped kernel.toml sets chat_documents_limit")
+}
+
+/// A documents kernel with the room, a member and a guest in it, and an account outside it,
+/// under the shipped chat-document limit.
 pub async fn room() -> Arc<GateKernel> {
-    let kernel = documents_kernel().await;
+    room_with_limit(shipped_chat_document_limit()).await
+}
+
+/// `room()`, with a chat-document limit small enough for a test to reach.
+pub async fn room_with_limit(limit: u32) -> Arc<GateKernel> {
+    let relay = DocumentsRelay::new(shipped_documents_config()).expect("valid limits");
+    let kernel = create_configured_test_kernel(|kernel| {
+        kernel.set_documents_relay(relay);
+        kernel.set_chat_document_limit_source(Some(Arc::new(FixedChatDocumentLimit(limit))));
+    })
+    .await;
     add_user_with_role(&kernel, MEMBER, UserRole::Member).await;
     add_user_with_role(&kernel, GUEST, UserRole::Guest).await;
     add_user_with_role(&kernel, OUTSIDER, UserRole::Member).await;

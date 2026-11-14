@@ -189,6 +189,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     turn_usage: crate::kernel::telemetry::TurnUsageSinkHandle,
     /// How many secure links members may hold: the host's answer, or none, which makes none.
     link_quota: crate::kernel::secure_links::quota::LinkQuotaSourceHandle,
+    /// How many chat documents the workspace may hold: the host's answer, or none, which makes none.
+    chat_document_limit: crate::kernel::chat_document_limit::ChatDocumentLimitSourceHandle,
     /// What fetches app artifacts by URL: the host's, or none, which fetches nothing.
     artifact_fetcher: crate::kernel::apps::fetcher::ArtifactFetcherHandle,
     /// Apps' server egress (`net.server`): the host's fetcher, or none, which reaches nothing.
@@ -248,6 +250,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             support_grants: self.support_grants.clone(),
             turn_usage: self.turn_usage.clone(),
             link_quota: self.link_quota.clone(),
+            chat_document_limit: self.chat_document_limit.clone(),
             artifact_fetcher: self.artifact_fetcher.clone(),
             server_egress: self.server_egress.clone(),
             apps_relay: self.apps_relay.clone(),
@@ -304,6 +307,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             support_grants: None,
             turn_usage: None,
             link_quota: None,
+            chat_document_limit: None,
             artifact_fetcher: None,
             server_egress: None,
             apps_relay: Default::default(),
@@ -383,6 +387,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     pub fn link_quota_source(&self) -> &crate::kernel::secure_links::quota::LinkQuotaSourceHandle {
         &self.link_quota
+    }
+
+    /// Set by the server bootstrap: the host's chat-document limit, or none, in which case no
+    /// new chat document can be made.
+    pub fn set_chat_document_limit_source(
+        &mut self,
+        source: crate::kernel::chat_document_limit::ChatDocumentLimitSourceHandle,
+    ) {
+        self.chat_document_limit = source;
+    }
+
+    pub fn chat_document_limit_source(
+        &self,
+    ) -> &crate::kernel::chat_document_limit::ChatDocumentLimitSourceHandle {
+        &self.chat_document_limit
     }
 
     /// Set by the server bootstrap: what to tell when the support grant changes, or none.

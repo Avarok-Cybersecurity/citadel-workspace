@@ -28,6 +28,8 @@ export const PRICES = {
   "citadel-storage-year": "price_storage_y",
   "citadel-secure-links-month": "price_links_m",
   "citadel-secure-links-year": "price_links_y",
+  "citadel-chat-documents-month": "price_chat_docs_m",
+  "citadel-chat-documents-year": "price_chat_docs_y",
   "citadel-relay-overage": "price_relay_overage",
 };
 

@@ -1,6 +1,7 @@
 /**
- * The tenant object's side of secure links: the kernel's link limits, from the tenant's plan, and
- * the hourly purge of expired links (server-wasm `links.rs`).
+ * The tenant object's side of secure links: the kernel's link limits (and its chat-document limit,
+ * on the same host object), from the tenant's plan, and the hourly purge of expired links
+ * (server-wasm `links.rs`).
  *
  * The limits are the entitlements the control plane stored (control/plans.mjs
  * `enforcedEntitlements`): `secure_links_per_member` and `secure_links_pool`. There is no default:
@@ -28,9 +29,23 @@ export function linkQuota(entitlements) {
   return quota;
 }
 
-/** The kernel's LinkQuotaHost: asked on every create and list, so a plan change applies at once. */
+/**
+ * `{limit}`: how many documents shared in chats the whole workspace may hold (`chat_documents`,
+ * the tier's count plus 5000 per pack; null for an unlimited grant). Throws when the stored
+ * entitlements carry no usable count, and the kernel then makes no new chat document.
+ */
+export function chatDocumentLimit(entitlements) {
+  const limit = limitOf(entitlements, "chat_documents");
+  if (limit !== null && limit > 0xffffffff) throw new Error(`the tenant's entitlements carry no usable chat_documents (${limit})`);
+  return { limit };
+}
+
+/**
+ * The kernel's LinkQuotaHost, which carries every plan limit the kernel asks for: asked on each
+ * link create and list and each new chat document, so a plan change applies at once.
+ */
 export function linkQuotaHost(entitlements) {
-  return { quota: () => linkQuota(entitlements()) };
+  return { quota: () => linkQuota(entitlements()), chatDocuments: () => chatDocumentLimit(entitlements()) };
 }
 
 export class TenantLinks {

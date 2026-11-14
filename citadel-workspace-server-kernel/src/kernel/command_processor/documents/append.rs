@@ -86,7 +86,9 @@ pub(super) async fn append<R: Ratchet + Send + Sync + 'static>(
     // A chat document's first update makes its log: it is listed first, so the node's delete
     // finds every log there is (`chat_documents_store`).
     if current.latest_seq == 0 && doc.chat_doc.is_some() {
-        backend.list_chat_document(doc).await?;
+        if let Some(refusal) = super::chat_limit::list_new(kernel, doc).await? {
+            return target.refused(refusal);
+        }
     }
     // The update before the head that counts it: a failure between the two leaves an update
     // nobody was told of, which the next append overwrites, never a head naming a missing one.

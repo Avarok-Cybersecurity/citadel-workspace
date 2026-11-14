@@ -18,6 +18,7 @@
 
 mod append;
 mod chat_gate;
+mod chat_limit;
 mod commit;
 mod compact;
 mod reads;

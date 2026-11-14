@@ -37,6 +37,7 @@ fn config_naming(structure_file: Option<&str>) -> ServerConfig {
         documents: None,
         secure_links_per_member: Some(5),
         secure_links_pool: Some(0),
+        chat_documents_limit: Some(0),
         sign_in: None,
         app_server_egress: None,
         stun_servers: None,

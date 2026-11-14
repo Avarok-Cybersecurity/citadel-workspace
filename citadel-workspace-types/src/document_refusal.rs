@@ -113,4 +113,11 @@ pub enum DocumentRefusal {
         node_id: String,
         permission: Permission,
     },
+    /// The workspace holds as many chat documents as its plan allows (`limit`, counted across
+    /// every node), so a new one was not made. An admin can add packs (Business), or a document
+    /// can go with its node. Documents already made keep working.
+    ChatDocumentLimitReached { node_id: String, limit: u32 },
+    /// The server could not learn the workspace's chat-document limit, so it made no new chat
+    /// document rather than guess one.
+    ChatDocumentLimitUnavailable { node_id: String },
 }

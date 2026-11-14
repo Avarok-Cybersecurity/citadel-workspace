@@ -125,7 +125,9 @@ impl TenantServer {
         };
         let backend = BackendType::HostSql(storage::backend_handle(storage));
         let ice_servers = Some(ice::source(ice));
-        let link_quota = Some(links::source(links));
+        let plan_limits = links::sources(links);
+        let link_quota = Some(plan_limits.links);
+        let chat_document_limit = Some(plan_limits.chat_documents);
         let (settings, admission) = sign_in::host_capabilities(sign_in);
         let sign_in = HostedSignIn {
             pq_sign_in: Some(pq.into_settings()),
@@ -151,6 +153,7 @@ impl TenantServer {
                 sign_in,
                 telemetry,
                 link_quota,
+                chat_document_limit,
                 None,
                 // Server egress for apps: none yet. A Worker's `fetch` resolves names itself and
                 // cannot be pinned to the addresses the policy checked, so an `EgressFetcher`

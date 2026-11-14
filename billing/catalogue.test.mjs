@@ -16,11 +16,13 @@ test('the approved prices are what the table says', () => {
     'citadel-storage-year': 2000,
     'citadel-secure-links-month': 200,
     'citadel-secure-links-year': 2000,
+    'citadel-chat-documents-month': 500,
+    'citadel-chat-documents-year': 5000,
   });
 });
 
 test('Free sells nothing, so it creates no Stripe product', () => {
-  assert.deepEqual(deriveCatalogue(table).map((p) => p.tier), ['team', 'business', 'storage', 'secure-links']);
+  assert.deepEqual(deriveCatalogue(table).map((p) => p.tier), ['team', 'business', 'storage', 'secure-links', 'chat-documents']);
 });
 
 test('every paid price is per seat', () => {
@@ -72,6 +74,20 @@ test('secure links are their own product, per 50-link pack at $2/month or $20/ye
     ['citadel-secure-links-month', 200, 'month', 'licensed'],
     ['citadel-secure-links-year', 2000, 'year', 'licensed'],
   ]);
+});
+
+test('chat documents are their own product, per 5000-document pack at $5/month or $50/year, on Business only', () => {
+  const docs = deriveCatalogue(table).find((p) => p.tier === 'chat-documents');
+  assert.equal(docs.product.name, 'Citadel Workspace Chat Document Pack');
+  assert.equal(docs.product.description, '5,000 chat documents per pack, on business');
+  assert.deepEqual(docs.prices.map((p) => [p.lookup_key, p.unit_amount, p.interval, p.usage_type]), [
+    ['citadel-chat-documents-month', 500, 'month', 'licensed'],
+    ['citadel-chat-documents-year', 5000, 'year', 'licensed'],
+  ]);
+});
+
+test('every tier states how many chat documents the workspace may hold', () => {
+  assert.deepEqual(Object.fromEntries(table.tiers.map((t) => [t.id, t.limits.chat_documents])), { free: 50, team: 1000, business: 10000 });
 });
 
 test('an add-on granting something the catalogue cannot describe is refused', () => {

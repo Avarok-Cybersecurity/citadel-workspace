@@ -90,6 +90,11 @@ pub mod config {
         /// Live secure links the whole workspace shares beyond each member's own. Required
         /// alongside `secure_links_per_member`; 0 is allowed.
         pub secure_links_pool: Option<u32>,
+        /// How many documents shared in chats the whole workspace may hold, counted across every
+        /// node. Required by the native server, which has no plan to read it from; 0 is allowed.
+        /// See `resolve_chat_document_limit`. A hosted tenant's comes from its plan instead
+        /// (`ChatDocumentLimitSource`).
+        pub chat_documents_limit: Option<u32>,
         /// How people sign in: the OPRF seed file, the Argon2id cost and the admission check.
         /// Required by the native server and refused by a hosted one, whose host supplies it.
         /// See `kernel::sign_in::config`.
@@ -147,6 +152,7 @@ pub mod config {
                 .field("documents", &self.documents)
                 .field("secure_links_per_member", &self.secure_links_per_member)
                 .field("secure_links_pool", &self.secure_links_pool)
+                .field("chat_documents_limit", &self.chat_documents_limit)
                 .field("sign_in", &self.sign_in)
                 .field("app_server_egress", &self.app_server_egress)
                 .field("stun_servers", &self.stun_servers)
@@ -600,6 +606,17 @@ pub fn resolve_secure_link_quota(
     }
 }
 
+/// The chat-document limit `config` sets. Required: a native server has no plan to read it from,
+/// and a default would be a limit nobody chose.
+pub fn resolve_chat_document_limit(config: &ServerConfig) -> Result<u32, NetworkError> {
+    config.chat_documents_limit.ok_or_else(|| {
+        NetworkError::msg(
+            "chat_documents_limit must be set in kernel.toml: how many documents shared in chats \
+             the whole workspace may hold (0 is allowed)",
+        )
+    })
+}
+
 /// The root workspace name `config` asks for, trimmed; `None` when it names none.
 ///
 /// A name that cannot be shown is a configuration error, not something to fall back from: a
@@ -760,6 +777,7 @@ async fn workspace_kernel(
     ice_servers: kernel::ice_servers::IceServerSourceHandle,
     sign_in_settings: kernel::sign_in::SignInSettingsHandle,
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
+    chat_document_limit: kernel::chat_document_limit::ChatDocumentLimitSourceHandle,
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
     server_egress: kernel::apps::egress::ServerEgressHandle,
     storage: kernel::apps::storage_entitlement::StorageEntitlement,
@@ -798,6 +816,7 @@ async fn workspace_kernel(
     kernel.set_ice_server_source(ice_servers);
     kernel.set_sign_in_settings(sign_in_settings);
     kernel.set_link_quota_source(link_quota);
+    kernel.set_chat_document_limit_source(chat_document_limit);
     if artifact_fetcher.is_none() {
         info!(target: "citadel", "No artifact fetcher: apps install only from artifacts uploaded to this server.");
     }
@@ -823,7 +842,8 @@ async fn workspace_kernel(
 /// sign-in: the post-quantum settings and the workspace's sign-in settings store. `telemetry` is
 /// the host's support-grant mirror, its TURN and app usage meters, and the callback that
 /// receives the built kernel (`hosted_kernel`).
-/// `link_quota` is the host's secure-link limits (its plan); the host also runs the purge
+/// `link_quota` is the host's secure-link limits (its plan), `chat_document_limit` its limit on
+/// chat documents (the plan's too); the host also runs the purge
 /// (`purge_expired_links`), through the kernel `telemetry.kernel_ready` hands it.
 /// `artifact_fetcher` fetches app artifacts by URL (`kernel::apps::fetcher`), or `None` for a
 /// host that has none, whose installs then take uploaded artifacts only. `server_egress` makes
@@ -839,6 +859,7 @@ pub async fn run_server_on<T: PlatformOps>(
     sign_in: kernel::sign_in::HostedSignIn,
     telemetry: kernel::telemetry::HostedTelemetry<StackedRatchet>,
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
+    chat_document_limit: kernel::chat_document_limit::ChatDocumentLimitSourceHandle,
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
     server_egress: kernel::apps::egress::ServerEgressHandle,
     network: network::HostedNetwork,
@@ -864,6 +885,7 @@ pub async fn run_server_on<T: PlatformOps>(
         sign_in.settings,
         telemetry,
         link_quota,
+        chat_document_limit,
         artifact_fetcher,
         server_egress,
     )
@@ -965,6 +987,7 @@ pub async fn run_server_with_site_verify(
     // sign-in settings cannot require a human check: a switch nothing enforces would claim a
     // protection that is not there.
     let link_quota = resolve_secure_link_quota(&config)?;
+    let chat_document_limit = resolve_chat_document_limit(&config)?;
     let sign_in = kernel::sign_in::native::native_sign_in(
         config.sign_in.as_ref(),
         &|name| std::env::var(name).ok(),
@@ -979,6 +1002,9 @@ pub async fn run_server_with_site_verify(
         sign_in.settings,
         Some(std::sync::Arc::new(
             kernel::secure_links::quota::FixedLinkQuota(link_quota),
+        )),
+        Some(std::sync::Arc::new(
+            kernel::chat_document_limit::FixedChatDocumentLimit(chat_document_limit),
         )),
         Some(std::sync::Arc::new(
             kernel::apps::fetcher_native::NativeArtifactFetcher::new(
@@ -1422,6 +1448,7 @@ mod server_config_debug_tests {
             documents: None,
             secure_links_per_member: Some(5),
             secure_links_pool: Some(0),
+            chat_documents_limit: Some(0),
             sign_in: None,
             app_server_egress: None,
             stun_servers: None,

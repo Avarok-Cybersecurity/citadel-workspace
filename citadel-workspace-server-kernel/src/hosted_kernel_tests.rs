@@ -57,6 +57,7 @@ async fn hosted_with(meter: Arc<dyn UsageMeter>) -> Slot {
         None,
         None,
         None,
+        None,
     )
     .await
     .expect("the hosted kernel builds");

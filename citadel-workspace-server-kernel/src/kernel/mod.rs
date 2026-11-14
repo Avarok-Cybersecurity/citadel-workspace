@@ -13,6 +13,7 @@
 pub mod apps;
 /// Whether a session may be sent a broadcast.
 mod broadcast_scope;
+pub mod chat_document_limit;
 /// Which account each live connection belongs to.
 mod cid_attribution;
 pub mod command_processor;

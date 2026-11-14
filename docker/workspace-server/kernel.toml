@@ -10,6 +10,9 @@ require_platform_terms = false
 # tenant reads these from its plan instead.
 secure_links_per_member = 50
 secure_links_pool = 0
+# How many documents shared in chats the whole workspace may hold, every node's together.
+# Required; 0 is allowed. A hosted tenant reads it from its plan instead.
+chat_documents_limit = 1000
 # The STUN servers the node learns its NAT mapping from. Required: at least three distinct
 # host:port endpoints, with no built-in list. A hosted tenant's host supplies its own instead.
 stun_servers = ["stun.cloudflare.com:3478", "stun1.l.google.com:19302", "stun4.l.google.com:19302"]
