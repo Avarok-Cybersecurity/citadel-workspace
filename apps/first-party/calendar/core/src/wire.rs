@@ -90,3 +90,21 @@ pub struct IcsFile {
     /// The ids of events no ICS date can hold.
     pub unwritten: Vec<String>,
 }
+
+/// The propagation bounds (owner decision 5), for the page's walks of the tree.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct PropagationBounds {
+    pub fan_out: u32,
+    pub up_pull: u32,
+}
+
+impl PropagationBounds {
+    pub fn of_core() -> Self {
+        let bound = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+        PropagationBounds {
+            fan_out: bound(crate::propagation::MAX_FAN_OUT),
+            up_pull: bound(crate::propagation::MAX_UP_PULL),
+        }
+    }
+}

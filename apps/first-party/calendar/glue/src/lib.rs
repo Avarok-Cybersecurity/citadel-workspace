@@ -18,7 +18,7 @@ use calendar_core::refusal::Refusal;
 use calendar_core::slots::{self, Interval};
 use calendar_core::tz::{self, TimeZonePort, Zone};
 use calendar_core::tz_offsets::ByOffsets;
-use calendar_core::wire::{HostCount, IcsFile, OriginRead, SlotRequest, UpPull};
+use calendar_core::wire::{HostCount, IcsFile, OriginRead, PropagationBounds, SlotRequest, UpPull};
 use calendar_core::{codec, hosts, ics_export, ics_import, rrule, topic};
 use offsets::JsOffsets;
 use values::{from_js, refused, to_js};
@@ -148,6 +148,18 @@ pub fn up_pull_targets(descendants: JsValue) -> Answer {
         targets: targets.to_vec(),
         truncated,
     })
+}
+
+/// What a descendant holds of `event`, by the allow-list; refused for a private event.
+#[wasm_bindgen]
+pub fn project(event: JsValue) -> Answer {
+    to_js(&propagation::project(&from_js::<Event>(event)?).map_err(refused)?)
+}
+
+/// How far a fan-out writes and an up-pull reads.
+#[wasm_bindgen(js_name = propagationBounds)]
+pub fn propagation_bounds() -> Answer {
+    to_js(&PropagationBounds::of_core())
 }
 
 /// What a reader does with a projection, given what it can read of its origin.
