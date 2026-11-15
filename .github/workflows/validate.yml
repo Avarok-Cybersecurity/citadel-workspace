@@ -39,8 +39,8 @@ jobs:
   # Jobs whose runs-on is the long `vars.CITADEL_MAC_RUNNER` expression may run on
   # the self-hosted Apple Silicon runners (`apple-48gb-metal`, two slots). They are
   # the ones needing neither Docker nor Linux; everything that brings up
-  # `docker compose` stays on ubuntu-latest. Unset, the org variable sends every one
-  # of them back to ubuntu-latest, which is the escape hatch when the Mac is down.
+  # `docker compose` stays on ubuntu-24.04. Unset, the org variable sends every one
+  # of them back to ubuntu-24.04, which is the escape hatch when the Mac is down.
   # The same-repo clause is not optional: this repository is public, and a fork's
   # pull request must never execute on that machine.
   # scripts/check-mac-runner-is-fork-safe.mjs refuses any other spelling.
@@ -54,7 +54,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,7 +73,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -101,7 +101,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -130,7 +130,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -154,7 +154,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -176,7 +176,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -242,7 +242,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -329,7 +329,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -346,6 +346,8 @@ jobs:
         run: node scripts/check-crate-coverage.mjs
       - name: No fork's pull request can reach the self-hosted Mac
         run: node scripts/check-mac-runner-is-fork-safe.mjs
+      - name: Every hosted Linux runner names its release
+        run: node scripts/check-runner-images-are-pinned.mjs
       - name: The Mac fork guard refuses every unguarded shape
         run: node --test scripts/lib/mac-runner-routing.test.mjs
       - name: Publish skips re-validation only on proof that this tree passed
@@ -909,7 +911,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -942,7 +944,7 @@ jobs:
     # timeouts, reply budgets), and the Mac is shared with other jobs and other organisations.
     # A 1.4 s test hit its 5 s timeout there at load 76 (2026-10-16). Owner: "anything perf
     # sensitive should be on a github runner".
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -982,7 +984,7 @@ jobs:
     # timeouts, reply budgets), and the Mac is shared with other jobs and other organisations.
     # A 1.4 s test hit its 5 s timeout there at load 76 (2026-10-16). Owner: "anything perf
     # sensitive should be on a github runner".
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -1036,7 +1038,7 @@ jobs:
     # timeouts, reply budgets), and the Mac is shared with other jobs and other organisations.
     # A 1.4 s test hit its 5 s timeout there at load 76 (2026-10-16). Owner: "anything perf
     # sensitive should be on a github runner".
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1086,7 +1088,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -1151,7 +1153,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -1537,7 +1539,7 @@ jobs:
     # The slowest leg is the agent's release compile: 16m43s inside a build that shared four
     # cores with the server's (run 38056778313). This bounds a hang, not performance.
     timeout-minutes: 45
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -1598,7 +1600,7 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
     timeout-minutes: 55
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -1921,7 +1923,7 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 41m; this is generous headroom over it, not a target.
     timeout-minutes: 80
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -2121,7 +2123,7 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 9m; this is generous headroom over it, not a target.
     timeout-minutes: 40
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -2379,7 +2381,7 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
     timeout-minutes: 55
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -2776,7 +2778,7 @@ jobs:
     # measure the same bytes. Setup ~2 minutes, the install ~30 s warm, the gates ~6.
     needs: production-build
     timeout-minutes: 20
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -2891,7 +2893,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - name: Every validation job succeeded
         env:

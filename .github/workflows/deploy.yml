@@ -43,7 +43,7 @@ jobs:
   # acquisitions in a row (~30 s of work behind ~10 min of queue in a saturated pool).
   plan:
     name: Plan (is the agent released?)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write # the agent-v* tag, created only when the plan says a release is due
@@ -121,7 +121,7 @@ jobs:
     if: >-
       always() && needs.plan.result == 'success' &&
       (needs.release.result == 'success' || (needs.release.result == 'skipped' && needs.plan.outputs.state == 'released'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: production
     steps:
@@ -183,7 +183,7 @@ jobs:
     # `release` is skipped on every deploy whose agent is already out. Without this the run
     # reported success while this check never ran (run 36304511815).
     if: always() && needs.deploy.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: The latest release is this commit's agent, and its downloads resolve
