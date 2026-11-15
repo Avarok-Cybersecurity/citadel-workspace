@@ -17,6 +17,7 @@ use calendar_core::model_booking::{Availability, Booking, EventType};
 use calendar_core::poll::{Poll, PollVote};
 use calendar_core::propagation::{self, Projection};
 use calendar_core::refusal::Refusal;
+use calendar_core::reminder::ReminderPlan;
 use calendar_core::routing::RoutingForm;
 use calendar_core::slots::{self, Interval};
 use calendar_core::tz::{self, TimeZonePort, Zone};
@@ -217,6 +218,7 @@ stored! {
     RoutingForm: encode_routing_form = "encodeRoutingForm", decode_routing_form = "decodeRoutingForm";
     Poll: encode_poll = "encodePoll", decode_poll = "decodePoll";
     PollVote: encode_poll_vote = "encodePollVote", decode_poll_vote = "decodePollVote";
+    ReminderPlan: encode_reminder_plan = "encodeReminderPlan", decode_reminder_plan = "decodeReminderPlan";
 }
 
 /// A `cal` topic message: `{ node, key }` and nothing else.

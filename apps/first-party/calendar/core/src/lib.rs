@@ -21,6 +21,7 @@ pub mod nav;
 pub mod poll;
 pub mod propagation;
 pub mod refusal;
+pub mod reminder;
 pub mod routing;
 pub mod rrule;
 pub mod slots;
