@@ -9,12 +9,15 @@
 
 mod nav;
 mod offsets;
+mod team;
 mod values;
 
 use calendar_core::model::Event;
 use calendar_core::model_booking::{Availability, Booking, EventType};
+use calendar_core::poll::{Poll, PollVote};
 use calendar_core::propagation::{self, Projection};
 use calendar_core::refusal::Refusal;
+use calendar_core::routing::RoutingForm;
 use calendar_core::slots::{self, Interval};
 use calendar_core::tz::{self, TimeZonePort, Zone};
 use calendar_core::tz_offsets::ByOffsets;
@@ -211,6 +214,9 @@ stored! {
     EventType: encode_event_type = "encodeEventType", decode_event_type = "decodeEventType";
     Booking: encode_booking = "encodeBooking", decode_booking = "decodeBooking";
     Projection: encode_projection = "encodeProjection", decode_projection = "decodeProjection";
+    RoutingForm: encode_routing_form = "encodeRoutingForm", decode_routing_form = "decodeRoutingForm";
+    Poll: encode_poll = "encodePoll", decode_poll = "decodePoll";
+    PollVote: encode_poll_vote = "encodePollVote", decode_poll_vote = "decodePollVote";
 }
 
 /// A `cal` topic message: `{ node, key }` and nothing else.

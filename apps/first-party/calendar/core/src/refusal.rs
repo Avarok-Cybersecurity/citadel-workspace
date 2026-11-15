@@ -3,9 +3,12 @@
 
 use crate::codec::CodecError;
 use crate::ics_import::ImportError;
+use crate::poll::PollError;
 use crate::propagation::PropagationError;
+use crate::routing::RoutingError;
 use crate::rrule::ExpandError;
 use crate::slots::SlotError;
+use crate::team::TeamError;
 use crate::topic::TopicError;
 use crate::tz::TzError;
 use alloc::format;
@@ -32,6 +35,13 @@ pub enum RefusalCode {
     Malformed,
     UnknownVersion,
     Refused,
+    Unanswered,
+    NotAnOption,
+    BadForm,
+    BadProposals,
+    BadVote,
+    NotOpen,
+    BadHosts,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -123,5 +133,33 @@ impl From<TopicError> for Refusal {
             TopicError::TooLarge => RefusalCode::TooLarge,
             TopicError::Refused => RefusalCode::Refused,
         })
+    }
+}
+
+impl From<RoutingError> for Refusal {
+    fn from(e: RoutingError) -> Self {
+        match e {
+            RoutingError::Unanswered(id) => Refusal::new(RefusalCode::Unanswered, Some(id)),
+            RoutingError::NotAnOption(id) => Refusal::new(RefusalCode::NotAnOption, Some(id)),
+            RoutingError::BadForm(why) => Refusal::new(RefusalCode::BadForm, Some(why.to_string())),
+        }
+    }
+}
+
+impl From<PollError> for Refusal {
+    fn from(e: PollError) -> Self {
+        Refusal::bare(match e {
+            PollError::BadProposals => RefusalCode::BadProposals,
+            PollError::BadVote => RefusalCode::BadVote,
+            PollError::NotOpen => RefusalCode::NotOpen,
+        })
+    }
+}
+
+impl From<TeamError> for Refusal {
+    fn from(e: TeamError) -> Self {
+        match e {
+            TeamError::BadHosts => Refusal::bare(RefusalCode::BadHosts),
+        }
     }
 }
