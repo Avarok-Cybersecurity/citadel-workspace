@@ -35,7 +35,7 @@ export function contentSecurityPolicy(loopbackAgent) {
     "default-src 'self'",
     `script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' ${TURNSTILE_ORIGIN} ${WEB_ANALYTICS_SCRIPT_ORIGIN}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
+    "img-src 'self' data: blob:",
     "font-src 'self' data:",
     `connect-src ${connect}`,
     `frame-src ${TURNSTILE_ORIGIN}`,
