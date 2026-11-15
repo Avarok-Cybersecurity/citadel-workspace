@@ -117,6 +117,10 @@ async fn a_first_party_release_is_installed_once_for_the_workspace() {
     assert_eq!(install.pinned_publisher_key, signed.key);
     assert!(install.granted.contains(&Capability::StorageNodeAuthored));
     assert!(
+        install.granted.contains(&Capability::Notifications),
+        "reminders reach the member only through the notifications grant"
+    );
+    assert!(
         !install.granted.contains(&Capability::Documents),
         "optional: an admin grants it"
     );
