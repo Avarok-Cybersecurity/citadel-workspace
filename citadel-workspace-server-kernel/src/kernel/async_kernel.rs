@@ -191,8 +191,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     link_quota: crate::kernel::secure_links::quota::LinkQuotaSourceHandle,
     /// How many chat documents the workspace may hold: the host's answer, or none, which makes none.
     chat_document_limit: crate::kernel::chat_document_limit::ChatDocumentLimitSourceHandle,
-    /// The largest file a node's chat keeps: the host's setting, or none, which keeps none.
-    chat_attachment_max_bytes: Option<u64>,
+    /// What a node's chat keeps: the host's settings, or none, which keeps no file.
+    chat_attachment_limits: Option<crate::kernel::chat_attachments::ChatAttachmentLimits>,
     /// What fetches app artifacts by URL: the host's, or none, which fetches nothing.
     artifact_fetcher: crate::kernel::apps::fetcher::ArtifactFetcherHandle,
     /// Apps' server egress (`net.server`): the host's fetcher, or none, which reaches nothing.
@@ -253,7 +253,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             turn_usage: self.turn_usage.clone(),
             link_quota: self.link_quota.clone(),
             chat_document_limit: self.chat_document_limit.clone(),
-            chat_attachment_max_bytes: self.chat_attachment_max_bytes,
+            chat_attachment_limits: self.chat_attachment_limits,
             artifact_fetcher: self.artifact_fetcher.clone(),
             server_egress: self.server_egress.clone(),
             apps_relay: self.apps_relay.clone(),
@@ -311,7 +311,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             turn_usage: None,
             link_quota: None,
             chat_document_limit: None,
-            chat_attachment_max_bytes: None,
+            chat_attachment_limits: None,
             artifact_fetcher: None,
             server_egress: None,
             apps_relay: Default::default(),
@@ -408,14 +408,19 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         &self.chat_document_limit
     }
 
-    /// Set by the server bootstrap: the largest file a node's chat keeps, or none, in which case
-    /// no chat file is kept. There is no default size.
-    pub fn set_chat_attachment_max_bytes(&mut self, max_bytes: Option<u64>) {
-        self.chat_attachment_max_bytes = max_bytes;
+    /// Set by the server bootstrap: what a node's chat keeps, or none, in which case no chat file
+    /// is kept. There are no default limits.
+    pub fn set_chat_attachment_limits(
+        &mut self,
+        limits: Option<crate::kernel::chat_attachments::ChatAttachmentLimits>,
+    ) {
+        self.chat_attachment_limits = limits;
     }
 
-    pub fn chat_attachment_max_bytes(&self) -> Option<u64> {
-        self.chat_attachment_max_bytes
+    pub fn chat_attachment_limits(
+        &self,
+    ) -> Option<crate::kernel::chat_attachments::ChatAttachmentLimits> {
+        self.chat_attachment_limits
     }
 
     /// Set by the server bootstrap: what to tell when the support grant changes, or none.

@@ -97,8 +97,11 @@ pub mod config {
         pub chat_documents_limit: Option<u32>,
         /// The largest file a node's chat keeps on the server, in bytes. Required, native and
         /// hosted alike (a hosted tenant's kernel.toml is written by its control plane): a default
-        /// would be a size nobody chose. See `resolve_chat_attachment_max_bytes`.
+        /// would be a size nobody chose. See `resolve_chat_attachment_limits`.
         pub chat_attachment_max_bytes: Option<u64>,
+        /// The most files one node's chat keeps on the server. Required alongside
+        /// `chat_attachment_max_bytes`, for the same reason. See `resolve_chat_attachment_limits`.
+        pub chat_attachment_max_files_per_node: Option<u32>,
         /// How people sign in: the OPRF seed file, the Argon2id cost and the admission check.
         /// Required by the native server and refused by a hosted one, whose host supplies it.
         /// See `kernel::sign_in::config`.
@@ -158,6 +161,10 @@ pub mod config {
                 .field("secure_links_pool", &self.secure_links_pool)
                 .field("chat_documents_limit", &self.chat_documents_limit)
                 .field("chat_attachment_max_bytes", &self.chat_attachment_max_bytes)
+                .field(
+                    "chat_attachment_max_files_per_node",
+                    &self.chat_attachment_max_files_per_node,
+                )
                 .field("sign_in", &self.sign_in)
                 .field("app_server_egress", &self.app_server_egress)
                 .field("stun_servers", &self.stun_servers)
@@ -622,14 +629,27 @@ pub fn resolve_chat_document_limit(config: &ServerConfig) -> Result<u32, Network
     })
 }
 
-/// The largest chat file `config` lets a node keep. Required; 0 keeps none.
-pub fn resolve_chat_attachment_max_bytes(config: &ServerConfig) -> Result<u64, NetworkError> {
-    config.chat_attachment_max_bytes.ok_or_else(|| {
-        NetworkError::msg(
-            "chat_attachment_max_bytes must be set in kernel.toml: the largest file, in bytes, a \
-             node's chat keeps on the server (0 keeps none)",
-        )
-    })
+/// What `config` lets a node's chat keep: its largest file and how many files. Both required;
+/// a size of 0 keeps none.
+pub fn resolve_chat_attachment_limits(
+    config: &ServerConfig,
+) -> Result<kernel::chat_attachments::ChatAttachmentLimits, NetworkError> {
+    match (
+        config.chat_attachment_max_bytes,
+        config.chat_attachment_max_files_per_node,
+    ) {
+        (Some(max_bytes), Some(max_files_per_node)) => {
+            Ok(kernel::chat_attachments::ChatAttachmentLimits {
+                max_bytes,
+                max_files_per_node,
+            })
+        }
+        _ => Err(NetworkError::msg(
+            "chat_attachment_max_bytes and chat_attachment_max_files_per_node must both be set in \
+             kernel.toml: the largest file, in bytes, a node's chat keeps on the server (0 keeps \
+             none), and how many files one node keeps",
+        )),
+    }
 }
 
 /// The root workspace name `config` asks for, trimmed; `None` when it names none.
@@ -832,7 +852,7 @@ async fn workspace_kernel(
     kernel.set_sign_in_settings(sign_in_settings);
     kernel.set_link_quota_source(link_quota);
     kernel.set_chat_document_limit_source(chat_document_limit);
-    kernel.set_chat_attachment_max_bytes(Some(resolve_chat_attachment_max_bytes(config)?));
+    kernel.set_chat_attachment_limits(Some(resolve_chat_attachment_limits(config)?));
     if artifact_fetcher.is_none() {
         info!(target: "citadel", "No artifact fetcher: apps install only from artifacts uploaded to this server.");
     }
@@ -1033,7 +1053,7 @@ pub async fn run_server_with_site_verify(
         std::sync::Arc::new(kernel::apps::usage_meter::CountingMeter::default()),
     )
     .await?;
-    spawn_link_purge(kernel.clone());
+    spawn_purges(kernel.clone());
 
     // `NodeType::server` and `NodeBuilder::build` now return `anyhow::Error`
     // (newer citadel_sdk); map into this fn's `NetworkError`, which no longer
@@ -1104,16 +1124,47 @@ pub async fn run_server_with_site_verify(
     Ok(())
 }
 
-/// Purge expired secure links hourly, for as long as the process runs. A pass that leaves some
-/// behind is followed by another straight away, each bounded by `PURGE_BATCH`. Nothing is purged
-/// before the node has started: until then the kernel's backend is not the server's storage.
 #[cfg(not(target_family = "wasm"))]
-fn spawn_link_purge(kernel: kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>) {
+type NativeKernel = kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>;
+
+/// The native server's timed purges, for as long as the process runs: expired secure links
+/// (`purge_expired_links`) and node chat files nobody needs (`sweep_chat_attachments`), the
+/// work a hosted tenant's Durable Object alarm does.
+#[cfg(not(target_family = "wasm"))]
+fn spawn_purges(kernel: NativeKernel) {
+    use kernel::chat_attachment_sweep::{SWEEP_BATCH, SWEEP_INTERVAL_MS};
     use kernel::secure_links::{PURGE_BATCH, PURGE_INTERVAL_MS};
+    spawn_bounded_purge(
+        kernel.clone(),
+        PURGE_INTERVAL_MS,
+        "Secure-link purge",
+        |kernel, now_ms| async move { kernel.purge_expired_links(now_ms, PURGE_BATCH).await },
+    );
+    spawn_bounded_purge(
+        kernel,
+        SWEEP_INTERVAL_MS,
+        "Chat-file sweep",
+        |kernel, now_ms| async move { kernel.sweep_chat_attachments(now_ms, SWEEP_BATCH).await },
+    );
+}
+
+/// Runs `pass` every `interval_ms`. A pass answers how much it left for another, and one that
+/// leaves some is followed by another straight away, each bounded by the pass itself. Nothing
+/// runs before the node has started: until then the kernel's backend is not the server's storage.
+#[cfg(not(target_family = "wasm"))]
+fn spawn_bounded_purge<Pass, Done>(
+    kernel: NativeKernel,
+    interval_ms: u64,
+    what: &'static str,
+    pass: Pass,
+) where
+    Pass: Fn(NativeKernel, u64) -> Done + Send + 'static,
+    Done: std::future::Future<Output = Result<u32, NetworkError>> + Send,
+{
     tokio::spawn(async move {
-        let mut hourly = tokio::time::interval(std::time::Duration::from_millis(PURGE_INTERVAL_MS));
+        let mut every = tokio::time::interval(std::time::Duration::from_millis(interval_ms));
         loop {
-            hourly.tick().await;
+            every.tick().await;
             if kernel.node_remote.read().is_none() {
                 continue;
             }
@@ -1123,17 +1174,17 @@ fn spawn_link_purge(kernel: kernel::async_kernel::AsyncWorkspaceServerKernel<Sta
                 {
                     Ok(elapsed) => elapsed.as_millis() as u64,
                     Err(e) => {
-                        warn!(target: "citadel", "Secure-link purge skipped: the clock is before the epoch: {e}");
+                        warn!(target: "citadel", "{what} skipped: the clock is before the epoch: {e}");
                         break;
                     }
                 };
-                match kernel.purge_expired_links(now_ms, PURGE_BATCH).await {
+                match pass(kernel.clone(), now_ms).await {
                     Ok(0) => break,
                     Ok(remaining) => {
-                        info!(target: "citadel", "Secure-link purge: {remaining} expired link(s) left for the next pass");
+                        info!(target: "citadel", "{what}: {remaining} left for the next pass");
                     }
                     Err(e) => {
-                        warn!(target: "citadel", "Secure-link purge failed: {e:?}");
+                        warn!(target: "citadel", "{what} failed: {e:?}");
                         break;
                     }
                 }
@@ -1466,6 +1517,7 @@ mod server_config_debug_tests {
             secure_links_pool: Some(0),
             chat_documents_limit: Some(0),
             chat_attachment_max_bytes: Some(0),
+            chat_attachment_max_files_per_node: Some(0),
             sign_in: None,
             app_server_egress: None,
             stun_servers: None,

@@ -10,9 +10,11 @@
 //! new (so whether the node already holds those bytes is not told by the quota), and stored. All
 //! of that is under `APPS_LOCK`, which every storage root's ledger is written under and which a
 //! node delete holds across its purge, so the gate is asked again once the lock is held: a file
-//! is never stored for a node already deleted.
+//! is never stored for a node already deleted. From its first chunk until it is kept or dropped,
+//! the upload in progress reserves its size toward the workspace's storage
+//! (`chat_attachment_keep::reserve`), so staged bytes are counted like stored ones.
 
-use super::apps_call_storage_write::{storage_admission, StorageAdmission};
+use super::chat_attachment_keep::{keep, reserve};
 use crate::kernel::apps::records::UploadSlot;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::chat_attachments::root_of;
@@ -90,11 +92,13 @@ async fn upload<R: Ratchet + Send + Sync + 'static>(
     if gate().await?.is_none() {
         return Ok(Err(Refusal::Denied));
     }
-    let Some(max_bytes) = kernel.chat_attachment_max_bytes() else {
+    let Some(limits) = kernel.chat_attachment_limits() else {
         return Ok(Err(Refusal::Unavailable));
     };
-    if chunk.size_bytes > max_bytes {
-        return Ok(Err(Refusal::TooLarge { max_bytes }));
+    if chunk.size_bytes > limits.max_bytes {
+        return Ok(Err(Refusal::TooLarge {
+            max_bytes: limits.max_bytes,
+        }));
     }
     let Chunk {
         sha256,
@@ -113,12 +117,18 @@ async fn upload<R: Ratchet + Send + Sync + 'static>(
         return Ok(Err(Refusal::Denied));
     }
     let slot = UploadSlot::ChatAttachment(actor);
+    if let Err(refusal) = reserve(kernel, actor, sha256, total_chunks, size_bytes).await? {
+        return Ok(Err(refusal));
+    }
     let whole = match backend
         .stage_upload_chunk(slot, sha256, index, total_chunks, chunk.bytes)
         .await?
     {
         Staged::Partial => return Ok(Ok(stored(chunk, false))),
-        Staged::Mismatch => return Ok(Err(Refusal::Mismatch)),
+        Staged::Mismatch => {
+            backend.reserve_chat_staging(actor, None).await?;
+            return Ok(Err(Refusal::Mismatch));
+        }
         Staged::Complete { whole: Some(whole) } => whole,
         Staged::Complete { whole: None } => {
             let staging = backend.app_upload(slot).await?;
@@ -130,7 +140,17 @@ async fn upload<R: Ratchet + Send + Sync + 'static>(
         }
     };
     // Kept or refused, the slot is done with: a refused file is uploaded again from the start.
-    let kept = keep(kernel, actor, chunk.node_id, sha256, &whole).await;
+    // Its reservation goes first, so the file is not counted twice when `keep` admits it.
+    backend.reserve_chat_staging(actor, None).await?;
+    let kept = keep(
+        kernel,
+        actor,
+        chunk.node_id,
+        sha256,
+        &whole,
+        limits.max_files_per_node,
+    )
+    .await;
     backend.drop_app_upload(slot).await?;
     Ok(kept?.map(|()| stored(chunk, true)))
 }
@@ -142,45 +162,6 @@ fn stored(chunk: &Chunk<'_>, stored: bool) -> Response {
         index: chunk.index,
         stored,
     }
-}
-
-/// With `APPS_LOCK` held: drops the node's stale uploads, then keeps `whole` as `id`, uploaded
-/// by `actor`, within the node's file limit and the workspace's storage.
-async fn keep<R: Ratchet + Send + Sync + 'static>(
-    kernel: &AsyncWorkspaceServerKernel<R>,
-    actor: &str,
-    node_id: &str,
-    id: &str,
-    whole: &[u8],
-) -> Result<Result<(), Refusal>, NetworkError> {
-    let backend = &kernel.domain_operations.backend_tx_manager;
-    let now_ms = crate::platform::SystemTime::now()
-        .duration_since(crate::platform::UNIX_EPOCH)
-        .map_err(|e| NetworkError::msg(format!("the clock is before 1970: {e}")))?
-        .as_millis() as u64;
-    let mut index = backend.chat_attachment_index(node_id).await?;
-    let stale = index.stale(now_ms);
-    if !stale.is_empty() {
-        backend.drop_chat_attachments(node_id, &stale).await?;
-        for (stale_id, _) in &stale {
-            index.files.remove(stale_id);
-        }
-        backend.save_chat_attachment_index(node_id, &index).await?;
-    }
-    if let Err(refusal) = index.record_upload(id, whole.len() as u64, actor, now_ms) {
-        return Ok(Err(refusal));
-    }
-    let root = root_of(node_id);
-    let current = backend.app_ledger(&root).await?.total_bytes();
-    let next = current.saturating_add(whole.len() as u64);
-    match storage_admission(kernel, &root, current, next).await? {
-        StorageAdmission::Fits => {}
-        StorageAdmission::Over(_) => return Ok(Err(Refusal::StorageFull)),
-        StorageAdmission::Unknown => return Ok(Err(Refusal::Unavailable)),
-    }
-    backend.store_chat_attachment(node_id, id, whole).await?;
-    backend.save_chat_attachment_index(node_id, &index).await?;
-    Ok(Ok(()))
 }
 
 async fn read<R: Ratchet + Send + Sync + 'static>(

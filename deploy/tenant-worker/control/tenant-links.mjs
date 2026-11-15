@@ -1,7 +1,7 @@
 /**
  * The tenant object's side of secure links: the kernel's link limits (and its chat-document limit,
  * on the same host object), from the tenant's plan, and the hourly purge of expired links
- * (server-wasm `links.rs`).
+ * (server-wasm `links.rs`), which also sweeps node chat files nobody needs (`chat_files.rs`).
  *
  * The limits are the entitlements the control plane stored (control/plans.mjs
  * `enforcedEntitlements`): `secure_links_per_member` and `secure_links_pool`. There is no default:
@@ -15,7 +15,11 @@ export const LINKS_PURGE_INTERVAL_MS = 60 * 60 * 1000;
 /** When a pass left expired links behind (each pass is bounded), how soon the next one runs. */
 export const LINKS_PURGE_SOON_MS = 60 * 1000;
 
-/** One key-value entry: `{ due_ms, last: { at_ms, remaining } | { at_ms, error } | null }`. */
+/**
+ * One key-value entry: `{ due_ms, last: { at_ms, remaining | error, chat_files: { remaining } |
+ * { error } } | null }`. The chat-file sweep shares this hourly entry rather than taking its own
+ * slot on the object's one alarm: both are hourly, bounded and run on the node's storage.
+ */
 const KEY = "links_purge";
 
 /** `{per_member, pool}` from `entitlements` (null: no limit); throws when either is missing or not a count. */
@@ -67,17 +71,28 @@ export class TenantLinks {
     return this.record.due_ms;
   }
 
-  /** Purges one bounded pass if due at `nowMs`, sooner again when it left some behind. Never throws. */
+  /**
+   * Runs the hourly passes if due at `nowMs`: expired links, then node chat files nobody needs
+   * (server-wasm `chat_files.rs`), each bounded and each failing on its own. Sooner again when
+   * either left some behind. Never throws.
+   */
   async purgeIfDue(nowMs, provisioned) {
     const due = await this.purgeDue(provisioned, nowMs);
     if (due === null || due > nowMs) return;
+    const links = await this.#pass("secure-link purge", (server) => server.purge_expired_links(nowMs));
+    const chatFiles = await this.#pass("chat-file sweep", (server) => server.sweep_chat_attachments(nowMs));
+    const again = links.remaining > 0 || chatFiles.remaining > 0;
+    const next = again ? LINKS_PURGE_SOON_MS : LINKS_PURGE_INTERVAL_MS;
+    await this.#save({ due_ms: nowMs + next, last: { at_ms: nowMs, ...links, chat_files: chatFiles } });
+  }
+
+  /** `{ remaining }` from one bounded pass, or `{ error }`. */
+  async #pass(what, run) {
     try {
-      const remaining = await (await this.ready()).purge_expired_links(nowMs);
-      const next = remaining > 0 ? LINKS_PURGE_SOON_MS : LINKS_PURGE_INTERVAL_MS;
-      await this.#save({ due_ms: nowMs + next, last: { at_ms: nowMs, remaining } });
+      return { remaining: await run(await this.ready()) };
     } catch (e) {
-      console.error(`[tenant] secure-link purge failed: ${e?.stack ?? e}`);
-      await this.#save({ due_ms: nowMs + LINKS_PURGE_INTERVAL_MS, last: { at_ms: nowMs, error: String(e?.message ?? e) } });
+      console.error(`[tenant] ${what} failed: ${e?.stack ?? e}`);
+      return { error: String(e?.message ?? e) };
     }
   }
 

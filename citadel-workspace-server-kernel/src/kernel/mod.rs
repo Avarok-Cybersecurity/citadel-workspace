@@ -13,6 +13,8 @@
 pub mod apps;
 /// Whether a session may be sent a broadcast.
 mod broadcast_scope;
+/// Reclaiming the space node chat files no longer need, on upload and on the host's timer.
+pub mod chat_attachment_sweep;
 pub mod chat_attachments;
 #[cfg(test)]
 mod chat_attachments_tests;

@@ -90,7 +90,7 @@ pub async fn start_native_server(
     let addr = free_addr();
     // The shipped `[documents]` limits, after `extra_toml`: a table takes every key after it.
     let config: ServerConfig = toml::from_str(&format!(
-        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\nchat_attachment_max_bytes = 0\n{}\n{tail}\n{}\n{}",
+        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\nchat_attachment_max_bytes = 0\nchat_attachment_max_files_per_node = 0\n{}\n{tail}\n{}\n{}",
         test_stun_servers_toml(),
         crate::documents_test_utils::shipped_documents_section(),
         test_path_policy_toml()

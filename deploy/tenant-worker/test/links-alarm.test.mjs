@@ -45,7 +45,7 @@ describe("the links purge", () => {
     expect(await alarmOf(object)).toBe(links_purge.due_ms);
   });
 
-  it("purges when due: asks the kernel, records what remains, and re-arms an hour later", async () => {
+  it("purges when due: asks the kernel for links and chat files, records what remains, and re-arms an hour later", async () => {
     const { slug, object } = await freeTenant("lp");
     await runInDurableObject(object, async (instance, state) => {
       await state.storage.put("links_purge", { due_ms: Date.now() - 1, last: null });
@@ -55,7 +55,7 @@ describe("the links purge", () => {
     expect(await runDurableObjectAlarm(object)).toBe(true);
     const stats = await objectStats(slug);
     expect(stats.running).toBe(true);
-    expect(stats.links_purge.last).toMatchObject({ remaining: 0 });
+    expect(stats.links_purge.last).toMatchObject({ remaining: 0, chat_files: { remaining: 0 } });
     expect(stats.links_purge.last.at_ms).toBeGreaterThanOrEqual(before);
     expect(stats.links_purge.due_ms).toBe(stats.links_purge.last.at_ms + LINKS_PURGE_INTERVAL_MS);
     expect(await alarmOf(object)).toBe(stats.links_purge.due_ms);

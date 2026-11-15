@@ -1,7 +1,9 @@
 //! What a `FileShare` message does to the node's files (`kernel::chat_attachments`): sending one
 //! records the share, and is refused unless the sender uploaded that file at this channel's node,
 //! at the size the message says; deleting one forgets it, and the last share's delete deletes
-//! the file. Both under `APPS_LOCK`, which the node's files are written under.
+//! the file; a share whose message then fails to store is taken back (`unclaim`), so it holds
+//! the file no longer than the upload's grace. All under `APPS_LOCK`, which the node's files
+//! are written under.
 
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::transaction::apps_store::APPS_LOCK;
@@ -37,6 +39,25 @@ pub(super) async fn claim<R: Ratchet + Send + Sync + 'static>(
     }
     backend.save_chat_attachment_index(node_id, &files).await?;
     Ok(None)
+}
+
+/// After message `message_id`, whose share `claim` recorded, failed to store at `node_id`: takes
+/// that share back. The file stays its uploader's, unshared, so the member may send it again;
+/// unsent, the grace sweep reclaims it.
+pub(super) async fn unclaim<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    node_id: &str,
+    message_type: &GroupMessageType,
+    message_id: &str,
+) -> Result<(), NetworkError> {
+    let GroupMessageType::FileShare { attachment_id, .. } = message_type else {
+        return Ok(());
+    };
+    let backend = &kernel.domain_operations.backend_tx_manager;
+    let _guard = APPS_LOCK.lock().await;
+    let mut files = backend.chat_attachment_index(node_id).await?;
+    files.unclaim(attachment_id, message_id);
+    backend.save_chat_attachment_index(node_id, &files).await
 }
 
 /// After message `message_id` was deleted at `node_id`: forgets the share it made, if any, and

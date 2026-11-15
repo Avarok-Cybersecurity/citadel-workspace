@@ -58,9 +58,11 @@ describe("the workspace's name", () => {
     expect((await kernelConfig(object)).split("\n")).toContain('workspace_name = "Admin Lab"');
   });
 
-  it("travels with the largest chat file the kernel keeps, which the kernel requires", async () => {
+  it("travels with the chat file limits the kernel keeps to, which the kernel requires", async () => {
     const { object } = await namedTenant("wa", "Files Lab");
-    expect((await kernelConfig(object)).split("\n")).toContain("chat_attachment_max_bytes = 26214400");
+    const lines = (await kernelConfig(object)).split("\n");
+    expect(lines).toContain("chat_attachment_max_bytes = 26214400");
+    expect(lines).toContain("chat_attachment_max_files_per_node = 2048");
   });
 
   it("is what the node seeds the root workspace with", async () => {

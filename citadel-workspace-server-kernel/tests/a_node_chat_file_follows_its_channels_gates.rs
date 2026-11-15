@@ -3,6 +3,7 @@
 //! and nobody else learns it exists. A share names only a file its sender uploaded to that node.
 
 use citadel_sdk::prelude::StorageQuota;
+use citadel_workspace_server_kernel::kernel::chat_attachments::ChatAttachmentLimits;
 use citadel_workspace_types::chat_attachments::ChatAttachmentRefusal;
 use common::chat_attachment_test_utils::*;
 
@@ -116,11 +117,31 @@ async fn bytes_that_are_not_their_id_are_not_kept() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_file_over_the_configured_size_is_refused_before_a_chunk_is_kept() {
     let kernel = rooms(StorageQuota::Unlimited).await;
-    let max_bytes = shipped_max_bytes();
+    let max_bytes = shipped_limits().max_bytes;
     let whole = file(max_bytes as usize + 1, 9);
     let answer = chunk(&kernel, MEMBER_, ROOM_ID, &id_of(&whole), &whole, 0).await;
     assert_eq!(
         refusal(answer),
         ChatAttachmentRefusal::TooLarge { max_bytes }
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_node_keeps_no_more_files_than_the_server_is_configured_for() {
+    let limits = ChatAttachmentLimits {
+        max_files_per_node: 1,
+        ..shipped_limits()
+    };
+    let kernel = rooms_with(StorageQuota::Unlimited, limits).await;
+    assert!(is_stored(
+        &upload(&kernel, MEMBER_, ROOM_ID, &file(100, 1)).await
+    ));
+    assert_eq!(
+        refusal(upload(&kernel, MEMBER_, ROOM_ID, &file(100, 2)).await),
+        ChatAttachmentRefusal::NodeFull { max_files: 1 }
+    );
+    assert!(
+        is_stored(&upload(&kernel, MEMBER_, OTHER_ROOM, &file(100, 2)).await),
+        "the limit is per node"
     );
 }

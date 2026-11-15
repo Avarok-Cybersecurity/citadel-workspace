@@ -119,13 +119,27 @@ async fn a_hosted_kernel_keeps_chat_files_only_as_large_as_its_config_says() {
     let kernel = built(hosted_config())
         .await
         .expect("the shipped config builds");
-    assert_eq!(kernel.chat_attachment_max_bytes(), Some(25 * 1024 * 1024));
-
-    let mut unsaid = hosted_config();
-    unsaid.chat_attachment_max_bytes = None;
-    let error = format!(
-        "{:?}",
-        built(unsaid).await.err().expect("built without a size")
+    assert_eq!(
+        kernel.chat_attachment_limits(),
+        Some(crate::kernel::chat_attachments::ChatAttachmentLimits {
+            max_bytes: 25 * 1024 * 1024,
+            max_files_per_node: 2048,
+        })
     );
-    assert!(error.contains("chat_attachment_max_bytes"), "{error}");
+
+    for (unset, key) in [
+        (
+            (|c: &mut ServerConfig| c.chat_attachment_max_bytes = None) as fn(&mut ServerConfig),
+            "chat_attachment_max_bytes",
+        ),
+        (
+            |c: &mut ServerConfig| c.chat_attachment_max_files_per_node = None,
+            "chat_attachment_max_files_per_node",
+        ),
+    ] {
+        let mut unsaid = hosted_config();
+        unset(&mut unsaid);
+        let error = format!("{:?}", built(unsaid).await.err().expect("built without it"));
+        assert!(error.contains(key), "{error}");
+    }
 }

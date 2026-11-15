@@ -149,4 +149,4 @@ mod test_manifests;
 #[cfg(test)]
 mod test_runtime;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;

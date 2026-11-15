@@ -15,6 +15,9 @@ secure_links_pool = 0
 chat_documents_limit = 1000
 # The largest file, in bytes, a node's chat keeps on the server (25 MiB). Required; 0 keeps none.
 chat_attachment_max_bytes = 26214400
+# How many files one node's chat keeps. Required. Each node's index of its files is one record
+# (at most 2 MB in a hosted tenant's storage); 2048 entries stay well under that.
+chat_attachment_max_files_per_node = 2048
 # The STUN servers the node learns its NAT mapping from. Required: at least three distinct
 # host:port endpoints, with no built-in list. A hosted tenant's host supplies its own instead.
 stun_servers = ["stun.cloudflare.com:3478", "stun1.l.google.com:19302", "stun4.l.google.com:19302"]

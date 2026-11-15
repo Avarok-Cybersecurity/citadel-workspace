@@ -7,6 +7,7 @@
 
 mod admin;
 mod auth_versions;
+mod chat_files;
 mod host_promise;
 mod ice;
 mod links;

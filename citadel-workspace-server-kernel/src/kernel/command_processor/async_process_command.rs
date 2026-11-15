@@ -860,10 +860,19 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     );
                     Ok(notification)
                 }
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to send message: {}",
-                    e
-                ))),
+                Err(e) => {
+                    super::chat_attachment_shares::unclaim(
+                        kernel,
+                        &node_id,
+                        message_type,
+                        &message.id,
+                    )
+                    .await?;
+                    Ok(WorkspaceProtocolResponse::Error(format!(
+                        "Failed to send message: {}",
+                        e
+                    )))
+                }
             }
         }
 

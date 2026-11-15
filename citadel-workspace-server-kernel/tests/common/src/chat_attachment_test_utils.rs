@@ -14,6 +14,7 @@ use crate::workspace_test_utils::create_configured_test_kernel;
 use async_trait::async_trait;
 use citadel_sdk::prelude::{SqlHost, SqlRow, SqlStatement, StorageQuota};
 use citadel_workspace_server_kernel::kernel::apps::storage_entitlement::StorageEntitlement;
+use citadel_workspace_server_kernel::kernel::chat_attachments::ChatAttachmentLimits;
 use citadel_workspace_types::chat_attachments::{
     ChatAttachmentRefusal, ChatAttachmentsRequest, ChatAttachmentsResponse,
     CHAT_ATTACHMENT_CHUNK_BYTES,
@@ -46,21 +47,26 @@ impl SqlHost for PlanHost {
     }
 }
 
-/// The shipped kernel.toml's chat file size, so a test cannot pass under a size no server runs.
-pub fn shipped_max_bytes() -> u64 {
+/// The shipped kernel.toml's chat file limits, so a test cannot pass under limits no server runs.
+pub fn shipped_limits() -> ChatAttachmentLimits {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../../docker/workspace-server/kernel.toml");
     let raw = std::fs::read_to_string(&path).expect("the shipped kernel.toml");
     let config: citadel_workspace_server_kernel::config::ServerConfig =
         toml::from_str(&raw).expect("the shipped kernel.toml parses");
-    citadel_workspace_server_kernel::resolve_chat_attachment_max_bytes(&config).expect("set")
+    citadel_workspace_server_kernel::resolve_chat_attachment_limits(&config).expect("set")
 }
 
 /// Two chat rooms, the member, a second member and the guest in both, and an outsider in
 /// neither, with `quota` for the workspace's storage.
 pub async fn rooms(quota: StorageQuota) -> Arc<GateKernel> {
+    rooms_with(quota, shipped_limits()).await
+}
+
+/// `rooms`, under chat file `limits` other than the shipped ones.
+pub async fn rooms_with(quota: StorageQuota, limits: ChatAttachmentLimits) -> Arc<GateKernel> {
     let kernel = create_configured_test_kernel(|kernel| {
-        kernel.set_chat_attachment_max_bytes(Some(shipped_max_bytes()));
+        kernel.set_chat_attachment_limits(Some(limits));
         kernel.set_storage_entitlement(Some(StorageEntitlement::Host(Arc::new(PlanHost(quota)))));
     })
     .await;

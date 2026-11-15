@@ -33,6 +33,7 @@
 /// Async command processor
 pub mod async_process_command;
 
+mod chat_attachment_keep;
 mod chat_attachment_shares;
 mod chat_attachments;
 pub mod group_message_shape;
