@@ -171,7 +171,7 @@ nor Linux or Windows rendering; scenarios that pin a motion tier keep it.
 |---|---|
 | `check-a-promise-is-not-a-boolean.mjs` | No declared type unions a boolean with a Promise. |
 | `check-accessibility.mjs` | axe against the screens a visitor meets before they have an account. |
-| `check-account-switch-geometry.mjs` | The top bar's switcher row for an account the agent no longer holds, and the sign-in it opens, measured at 375px as well as the harness's 390px and desktop, under Full and Lite motion as well as reduced: the menu and the sign-in animate in. |
+| `check-account-switch-geometry.mjs` | The top bar's switcher row for an account the agent no longer holds, the sign-in it opens, and that sign-in scoped to its server (the scope, no saved account there, another server's username, server-named rows), measured at 375px as well as the harness's 390px and desktop, under Full and Lite motion as well as reduced: the menu and the sign-in animate in. |
 | `check-agent-down.mjs` | What a first-run user sees before they have started the agent. |
 | `check-already-registered-is-not-a-failure.mjs` | Every consumer of `PeerRegisterFailure` must treat "already registered" as success. |
 | `check-app-zone-geometry.mjs` | An installed app running in its page zone, measured in a real browser on the shipped runtime (lib/app-zone-harness: AppZone, zone-runtime.ts, the app worker, OffscreenCanvas and the SDK's hello-canvas fixture). |
