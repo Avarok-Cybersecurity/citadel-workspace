@@ -192,6 +192,12 @@ cd deploy/tenant-worker
 CITADEL_CF_TOKEN_FILE=~/cf-token.txt CITADEL_STRIPE_KEY_FILE=~/stripe.citadel.test.rk.txt ./deploy.sh
 ```
 
+A real deploy also needs `CITADEL_FIRST_PARTY_SIGNED_DIR`: the apps every workspace is provisioned
+with (the Calendar), signed by `node scripts/build-first-party-apps.mjs --sign <dir>` with the
+first-party seed in `CITADEL_APP_SIGNING_SEED_HEX`. The seed is the org secret only the Deploy
+workflow's signing step reads, so a deploy is that workflow's; `deploy.sh` refuses to build without
+the directory. `--dry-run` builds without it, provisioning no first-party app.
+
 `deploy.sh`, in order, stopping at the first failure:
 
 1. `npm ci`; `build.sh` (the server wasm); `build-ui.sh` (the UI into `ui-dist/`, which it checks

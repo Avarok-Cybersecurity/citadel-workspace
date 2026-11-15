@@ -50,6 +50,9 @@ mod members_visibility;
 
 /// The app tabs every node without a list of its own shows.
 mod default_app_tabs;
+/// Installing the first-party apps every workspace is provisioned with.
+mod first_party_provisioning;
+pub use first_party_provisioning::PROVISIONING_INSTALLER;
 
 /// Terms, consent and the Telemetry Service.
 mod telemetry;

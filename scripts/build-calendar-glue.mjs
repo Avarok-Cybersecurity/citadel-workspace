@@ -3,7 +3,8 @@
  * Builds the Calendar's glue (apps/first-party/calendar/glue, Calendar design 3.2) for the page and
  * vendors it into the UI as Citadel Docs is vendored: the module and its types under
  * citadel-workspaces/vendor/calendar/, the binary at its stable URL under public/calendar/, and
- * PROVENANCE.json with each file's sha256. It also copies calendar-core's TypeScript bindings
+ * PROVENANCE.json with each file's sha256, and the binary's sha256 and size into the app's
+ * manifest.json (what the deploy signs and provisioning installs). It also copies calendar-core's TypeScript bindings
  * (written by `cargo test -p calendar-core --features ts`) to src/lib/calendar/generated/.
  *
  *   node scripts/build-calendar-glue.mjs            rebuild; write the vendored files and bindings
@@ -20,6 +21,7 @@ import { createHash } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withArtifact } from './lib/first-party-manifest.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const APP = join(ROOT, 'apps', 'first-party', 'calendar');
@@ -87,6 +89,8 @@ try {
     dts_sha256: sha(files[join(VENDOR, `${NAME}.d.ts`)]),
   };
   files[join(VENDOR, 'PROVENANCE.json')] = Buffer.from(`${JSON.stringify(provenance, null, 2)}\n`);
+  const manifestPath = join(APP, 'manifest.json');
+  files[manifestPath] = Buffer.from(withArtifact(readFileSync(manifestPath, 'utf8'), provenance.wasm_sha256, provenance.wasm_bytes));
 
   if (!existsSync(BINDINGS)) fail(`${BINDINGS} is missing: run cargo test -p calendar-core --features ts in ${APP}.`);
   const bindings = readdirSync(BINDINGS).filter((f) => f.endsWith('.ts')).sort();

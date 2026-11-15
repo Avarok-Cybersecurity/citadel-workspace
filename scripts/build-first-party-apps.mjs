@@ -7,6 +7,10 @@
  *
  *   node scripts/build-first-party-apps.mjs            rebuild; write wasm/ and the manifest's artifact
  *   node scripts/build-first-party-apps.mjs --check    rebuild and compare; write nothing
+ *   node scripts/build-first-party-apps.mjs --sign <out> [--throwaway-key]
+ *        sign the apps every workspace is provisioned with into <out> (lib/sign-first-party-apps.mjs),
+ *        with the seed in CITADEL_APP_SIGNING_SEED_HEX; --throwaway-key for a seed that is not
+ *        first-party (PR CI). Builds nothing: it signs the committed manifests and modules.
  *
  * The reproducibility rules are build-app-fixtures.mjs's, for the same reason (committed bytes
  * are trustworthy only if anyone can rebuild them): the compiler is pinned by each app's
@@ -14,20 +18,38 @@
  * the SDK is reached through the app's sdk/ symlinks inside its workspace root, and each app
  * builds in its own target directory under target/.
  *
- * The manifest is committed unsigned: its publisher key is a placeholder. Signing is a separate
- * step (apps/first-party/signer) with a key that never enters the repository.
+ * The manifest is committed unsigned: its publisher key is a placeholder. Signing is `--sign`, the
+ * deploy's step (apps/first-party/signer), with a key that never enters the repository.
  */
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withArtifact } from './lib/first-party-manifest.mjs';
+import { PROVISIONED_APPS, signFirstPartyApps } from './lib/sign-first-party-apps.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const APPS = join(ROOT, 'apps', 'first-party');
 const TARGET = 'wasm32-unknown-unknown';
 const check = process.argv.includes('--check');
+
+const signAt = process.argv.indexOf('--sign');
+if (signAt !== -1) {
+  const out = process.argv[signAt + 1];
+  if (!out || out.startsWith('--')) {
+    console.error('build-first-party-apps: --sign takes the directory to write the signed apps to.');
+    process.exit(1);
+  }
+  const problems = signFirstPartyApps(ROOT, resolve(out), { throwaway: process.argv.includes('--throwaway-key') });
+  if (problems.length) {
+    console.error(`build-first-party-apps: not signed:\n  ${problems.join('\n  ')}`);
+    process.exit(1);
+  }
+  console.log(`build-first-party-apps: signed ${PROVISIONED_APPS.length} provisioned app(s) into ${out}.`);
+  process.exit(0);
+}
 
 const apps = readdirSync(APPS, { withFileTypes: true })
   .filter((d) => d.isDirectory() && existsSync(join(APPS, d.name, 'app', 'Cargo.toml')))
@@ -53,14 +75,6 @@ function crateName(dir) {
   const name = /^\s*name\s*=\s*"([^"]+)"/m.exec(toml)?.[1];
   if (!name) throw new Error(`${dir}/app/Cargo.toml names no package`);
   return name;
-}
-
-/** The manifest text with `artifact.sha256` and `.bytes` set; every other byte as it was. */
-function withArtifact(text, digest, bytes) {
-  const manifest = JSON.parse(text);
-  manifest.artifact.sha256 = digest;
-  manifest.artifact.bytes = bytes;
-  return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
 const problems = [];

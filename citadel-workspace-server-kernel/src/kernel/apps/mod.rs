@@ -32,6 +32,9 @@ pub mod facts;
 pub mod fetcher;
 #[cfg(not(target_family = "wasm"))]
 pub mod fetcher_native;
+/// The apps every workspace is provisioned with, and the releases this server embeds for it.
+pub mod first_party;
+pub mod first_party_bundles;
 pub mod host_net;
 pub mod ihttp_adverts;
 pub mod ihttp_audit;
@@ -66,6 +69,8 @@ mod egress_in_flight_tests;
 mod egress_native_tests;
 #[cfg(test)]
 mod egress_tests;
+#[cfg(test)]
+mod first_party_key_tests;
 #[cfg(test)]
 mod ihttp_adverts_tests;
 #[cfg(test)]

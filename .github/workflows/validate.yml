@@ -245,6 +245,16 @@ jobs:
           cargo +1.99.0 fmt --check
           cargo +1.99.0 clippy --locked --all-targets -- -D warnings
           cargo +1.99.0 test --locked
+      # The deploy's signing step, as far as a PR can run it: no secret here (forks get none), so a
+      # seed made for this step, which the script must find NOT first-party. The deploy runs the
+      # same command with the real seed, where the key must be first-party.
+      - name: First-party apps - the signing step signs with a throwaway seed
+        run: |
+          set -euo pipefail
+          node --test scripts/lib/sign-first-party-apps.test.mjs
+          CITADEL_APP_SIGNING_SEED_HEX="$(openssl rand -hex 32)" \
+            node scripts/build-first-party-apps.mjs --sign "$RUNNER_TEMP/first-party-signed" --throwaway-key
+          test -s "$RUNNER_TEMP/first-party-signed/calendar/app.mldsa.sig"
       - name: Reference host - fmt, clippy, every fixture judged and run as fixtures.json says
         working-directory: apps/sdk-fixtures/harness
         run: |

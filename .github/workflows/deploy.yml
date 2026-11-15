@@ -160,6 +160,22 @@ jobs:
       - name: UI dependencies
         timeout-minutes: 15
         run: npm ci --no-audit --no-fund
+      # The apps every workspace is provisioned with (the Calendar), signed with the first-party
+      # key: the one step the seed is in. Only the signer reads it, from its environment, and prints
+      # the key's fingerprint, never the key or the seed. The script refuses a key the kernel does
+      # not list as first-party. deploy.sh refuses to build without what this writes.
+      - name: Sign the provisioned first-party apps
+        timeout-minutes: 15
+        env:
+          CITADEL_APP_SIGNING_SEED_HEX: ${{ secrets.CITADEL_APP_SIGNING_SEED_HEX }}
+        run: |
+          set -euo pipefail
+          [ -n "$CITADEL_APP_SIGNING_SEED_HEX" ] || { echo "::error::the CITADEL_APP_SIGNING_SEED_HEX secret is not set"; exit 1; }
+          pin="$(sed -n 's/^channel = "\(.*\)"$/\1/p' apps/first-party/compute-pool/rust-toolchain.toml)"
+          test -n "$pin" || { echo "::error::no channel in apps/first-party/compute-pool/rust-toolchain.toml"; exit 1; }
+          rustup toolchain install "$pin" --profile minimal
+          node scripts/build-first-party-apps.mjs --sign "$RUNNER_TEMP/first-party-signed"
+          echo "CITADEL_FIRST_PARTY_SIGNED_DIR=$RUNNER_TEMP/first-party-signed" >> "$GITHUB_ENV"
       - name: deploy.sh
         env:
           CF_TOKEN: ${{ secrets.CITADEL_CF_DEPLOY_TOKEN }}

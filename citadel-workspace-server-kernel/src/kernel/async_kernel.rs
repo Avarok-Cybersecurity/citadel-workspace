@@ -875,7 +875,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             info!(target: "citadel", "Root workspace created successfully (awaiting first admin)");
         }
 
-        self.provision_default_app_tabs().await
+        self.provision_default_app_tabs().await?;
+        self.provision_first_party_apps(
+            crate::kernel::apps::first_party_bundles::EMBEDDED,
+            crate::kernel::apps::install::FIRST_PARTY_PUBLISHER_KEYS,
+        )
+        .await
     }
 
     /// Gives an existing root workspace the configured name, if it still has the default one.
