@@ -98,6 +98,14 @@ impl CalendarEngine {
         self.zoned(|p| request.with_query(|q| slots::offers(p, q, slot)))
     }
 
+    /// The span a round robin's `Equal` counts bookings over for a slot at `atMs`: the calendar
+    /// month in the type's locked zone (`zoneLock`, or null for UTC).
+    #[wasm_bindgen(js_name = equalPeriod)]
+    pub fn equal_period(&self, zone_lock: JsValue, at_ms: JsValue) -> Answer {
+        let (zone_lock, at_ms) = (from_js::<Option<Zone>>(zone_lock)?, from_js::<i64>(at_ms)?);
+        self.zoned(|p| hosts::equal_period(p, zone_lock.as_ref(), at_ms))
+    }
+
     /// The VEVENTs of an ICS file as drafts, floating times read in `floating`.
     #[wasm_bindgen(js_name = importIcs)]
     pub fn import_ics(&self, text: String, floating: JsValue) -> Answer {

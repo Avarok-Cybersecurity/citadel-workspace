@@ -95,3 +95,30 @@ fn a_collective_offers_only_what_every_host_has_free() {
         "no hosts offer nothing"
     );
 }
+
+fn at(iso: &str) -> i64 {
+    iso.parse::<jiff::Timestamp>().unwrap().as_millisecond()
+}
+
+#[test]
+fn equal_counts_over_the_calendar_month_in_the_types_zone_or_utc_when_it_locks_none() {
+    use crate::test_tz::Jiff;
+    use crate::tz::Zone;
+    // 22:00 on 29 February in New York is already 1 March in UTC.
+    let slot = at("2024-03-01T03:00:00Z");
+    let new_york = Zone::new("America/New_York").unwrap();
+    assert_eq!(
+        equal_period(&Jiff, Some(&new_york), slot).unwrap(),
+        Interval {
+            start_ms: at("2024-02-01T05:00:00Z"),
+            end_ms: at("2024-03-01T05:00:00Z")
+        }
+    );
+    assert_eq!(
+        equal_period(&Jiff, None, slot).unwrap(),
+        Interval {
+            start_ms: at("2024-03-01T00:00:00Z"),
+            end_ms: at("2024-04-01T00:00:00Z")
+        }
+    );
+}

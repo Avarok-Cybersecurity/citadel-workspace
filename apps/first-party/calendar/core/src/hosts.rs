@@ -2,17 +2,47 @@
 //! instance verifies at claim, and when that host is offline the booker tries the next in order.
 //!
 //! - Round robin answers the free hosts in the order to try: `Equal` fewest confirmed bookings in
-//!   the period first, `Priority` highest weight first, `Availability` as listed; ties by name.
+//!   its period (`equal_period`) first, `Priority` highest weight first, `Availability` as listed; ties by name.
 //! - Collective offers only the slots every host has free.
 
+use crate::civil::{CivilDate, CivilDateTime};
 use crate::model::Username;
 use crate::model_booking::Strategy;
+use crate::nav::add_months;
 use crate::slots::Interval;
+use crate::tz::{civil_of, instant_of, TimeZonePort, TzError, Zone};
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 
+/// The zone `Equal`'s period is read in when the type locks none.
+pub const EQUAL_PERIOD_ZONE: &str = "UTC";
+
+/// The span `Equal` counts each host's confirmed bookings over: the calendar month holding
+/// `at_ms`, in the type's locked zone, or in UTC when it locks none. It depends on the type and the
+/// slot alone, never on who asks: two bookers in different zones, or a type inherited by nodes
+/// with different zones, rank the same hosts the same way.
+pub fn equal_period(
+    port: &dyn TimeZonePort,
+    zone_lock: Option<&Zone>,
+    at_ms: i64,
+) -> Result<Interval, TzError> {
+    let utc = Zone::new(EQUAL_PERIOD_ZONE).ok_or(TzError::OutOfRange)?;
+    let zone = zone_lock.unwrap_or(&utc);
+    let day = civil_of(port, zone, at_ms)?.date();
+    let first = CivilDate::new(day.year(), day.month(), 1).ok_or(TzError::OutOfRange)?;
+    let next = add_months(first, 1).ok_or(TzError::OutOfRange)?;
+    let start_of = |date: CivilDate| -> Result<i64, TzError> {
+        instant_of(port, zone, CivilDateTime::new(date, 0).ok_or(TzError::OutOfRange)?)
+    };
+    Ok(Interval {
+        start_ms: start_of(first)?,
+        end_ms: start_of(next)?,
+    })
+}
+
 /// The free hosts of `hosts`, in the order a booking tries them. `confirmed` counts each host's
-/// confirmed bookings in the strategy's period; a host it does not name has none.
+/// confirmed bookings in the strategy's period (`equal_period` for `Equal`); a host it does not
+/// name has none.
 pub fn rank_hosts(
     strategy: &Strategy,
     hosts: &[Username],
