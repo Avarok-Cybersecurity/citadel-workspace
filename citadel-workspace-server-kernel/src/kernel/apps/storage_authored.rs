@@ -16,9 +16,11 @@ use super::storage::{KvIndex, Namespace, StorageRefusal, KV_LIST_PAGE};
 use super::storage_write::app_visible;
 use citadel_app_sdk_types::calls::{AuthoredKey, AuthoredPage};
 
-/// Bytes one author may hold on one node, per app and scope (owner decision 5's 2048 keys come
-/// from `KV_MAX_KEYS`).
-pub const NODE_AUTHORED_KV_QUOTA: u64 = 256 * 1024;
+/// Bytes one author may hold on one node, per app and scope: the manifest rules' ceiling, so the
+/// most a manifest may declare and the cap the kernel holds are one number (owner decision 5's
+/// 2048 keys come from `KV_MAX_KEYS`).
+pub const NODE_AUTHORED_KV_QUOTA: u64 =
+    citadel_workspace_types::apps_manifest_check_parts::MAX_STORAGE_NODE_AUTHORED_BYTES as u64;
 
 /// Whether an op reads a namespace or writes to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

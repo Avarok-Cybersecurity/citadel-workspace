@@ -87,7 +87,8 @@ fn namespace_of(
 }
 
 /// A namespace's cap: the platform's, or less where the app's manifest asks for less
-/// (`limits.storage_user_bytes`, `.storage_scope_bytes`), which is what its consent screen said.
+/// (`limits.storage_user_bytes`, `.storage_scope_bytes`, `.storage_node_authored_bytes`), which
+/// is what its consent screen said.
 pub(super) async fn quota_for<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     install: &AppInstall,
@@ -104,7 +105,8 @@ pub(super) async fn quota_for<R: Ratchet + Send + Sync + 'static>(
     let declared = match namespace {
         Namespace::User(_) => Some(manifest.limits.storage_user_bytes),
         Namespace::Scope => Some(manifest.limits.storage_scope_bytes),
-        Namespace::Node(_) | Namespace::NodeAuthored { .. } => None,
+        Namespace::NodeAuthored { .. } => manifest.limits.storage_node_authored_bytes,
+        Namespace::Node(_) => None,
     };
     let platform = quota_of(namespace);
     Ok(declared.map_or(platform, |bytes| platform.min(u64::from(bytes))))

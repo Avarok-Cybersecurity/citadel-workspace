@@ -87,6 +87,8 @@ mod kernel_advertise_tests;
 #[cfg(test)]
 mod kernel_artifact_tests;
 #[cfg(test)]
+mod kernel_authored_quota_tests;
+#[cfg(test)]
 mod kernel_authored_tests;
 #[cfg(test)]
 mod kernel_call_backend_tests;
