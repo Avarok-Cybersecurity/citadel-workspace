@@ -153,7 +153,7 @@ nor Linux or Windows rendering; scenarios that pin a motion tier keep it.
 | `check-token-contrast.mjs` | Every semantic foreground must clear WCAG AA on the surface it names. |
 | `check-transfer-cap-parity.mjs` | The inline-upload byte cap is declared in two languages and nothing bound them. |
 | `check-ui-builds-see-the-catalogue.mjs` | Every container that runs the UI's vite config can read the app catalogue. |
-| `check-ui-mounts-serve-cdoc.mjs` | Every file the Citadel Docs runtime loads is inside a directory the dev UI container mounts. |
+| `check-ui-mounts-serve-cdoc.mjs` | Every file the Citadel Docs runtime and the Calendar load is inside a directory the dev UI container mounts. |
 | `check-ui-typechecks-against-its-ci-parent.mjs` | A pushed UI commit typechecks against the parent revision UI CI will actually resolve. |
 | `check-validation-aggregate-is-complete.mjs` | The "Validation passed" job must depend on every other job in validate.yml, and must run even when one of them fails. |
 | `check-wasm-matches-its-source.mjs` | The committed WASM binary must have been built from the committed source. |
@@ -177,7 +177,7 @@ nor Linux or Windows rendering; scenarios that pin a motion tier keep it.
 | `check-baselines-are-committed.mjs` | A gate that rewrites its own baseline, left uncommitted, stops being a gate. |
 | `check-browser-installs-use-the-script.mjs` | Every browser install in CI goes through the install-chromium action, which runs scripts/ci/install-chromium.sh with the browser and apt packages cached. |
 | `check-bundle-budget.mjs` | Fails the build if the landing route's critical path grows past its budget. |
-| `check-calendar-grid-keyboard.mjs` | The Calendar's grids and views in a real browser engine (design §3.10): every day reachable by keyboard through one roving tab stop, each view laid out at 375px and on a desktop with 44px targets and no sideways scroll, and axe clean at rest; and the tab mounted whole, with each panel it opens (the event editor, a member's booking page and its setup), held to the same. |
+| `check-calendar-grid-keyboard.mjs` | The Calendar's grids and views in a real browser engine (design §3.10): every day reachable by keyboard through one roving tab stop, each view laid out at 375px and on a desktop with 44px targets and no sideways scroll, and axe clean at rest; and the tab mounted whole, with each panel it opens (the event editor, a member's booking page and its setup), held to the same; and an event's details with its Edit and Cancel controls held to the same, where cancelling one of the node's own events takes it off the page below and the host's Cancel cancels their booking. |
 | `check-captured-is-not-failed.mjs` | What a spec CAPTURES from the console is not what it counts as a FAILURE. |
 | `check-cdoc-paint-perf.mjs` | Prints the Citadel Docs paint-path numbers on the 100-page golden: decode, first-page paint, atlas hit rate. |
 | `check-cdoc-scroll-perf.mjs` | Scrolling a long Citadel Docs document never drops frames, measured in a real browser. |
