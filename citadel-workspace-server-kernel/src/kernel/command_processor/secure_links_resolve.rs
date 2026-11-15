@@ -11,11 +11,12 @@
 
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
-use crate::kernel::secure_links::records::LinkRecord;
+use crate::kernel::secure_links::records::{GuestGrant, LinkRecord};
 use crate::kernel::secure_links::rules::{decide_resolve, granted_nodes, ResolveDecision, Visitor};
 use crate::kernel::secure_links::token::digest_of;
 use crate::kernel::transaction::secure_links_store::LINKS_LOCK;
 use crate::{WorkspaceProtocolResponse, WORKSPACE_ROOT_ID};
+use citadel_logging::info;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::secure_links::SecureLinksResponse;
 use citadel_workspace_types::structs::Permission;
@@ -43,8 +44,11 @@ pub(super) async fn resolve<R: Ratchet + Send + Sync + 'static>(
             };
             let before = record.clone();
             if let Some(node) = guest {
-                let grant = backend.grant_guest_view(actor, &node, &record.id).await?;
-                record.guests.push(grant);
+                info!(target: "citadel", "Secure link {} admitted {actor} as a booking guest of node {node}", record.id);
+                record.guests.push(GuestGrant {
+                    user: actor.to_string(),
+                    node,
+                });
             }
             if burn {
                 backend.remove_link(&record).await?;

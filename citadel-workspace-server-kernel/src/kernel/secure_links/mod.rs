@@ -20,6 +20,8 @@ pub mod token;
 #[cfg(test)]
 mod bucket_tests;
 #[cfg(test)]
+mod guest_store_tests;
+#[cfg(test)]
 mod guests_tests;
 #[cfg(test)]
 mod store_tests;

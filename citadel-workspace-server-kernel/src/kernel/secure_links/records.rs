@@ -17,6 +17,10 @@ const PREFIX: &str = "citadel_workspace.links.";
 
 pub(crate) const EXPIRY_HOURS_KEY: &str = "citadel_workspace.links.expiry_hours";
 pub(crate) const POOL_KEY: &str = "citadel_workspace.links.pool";
+/// The digests of the links that carry a booking-guest grant: which records to read when asking
+/// who is a guest. Only a list of where to look; who the guests are, and until when, is the
+/// records'.
+pub(crate) const BOOKING_LINKS_KEY: &str = "citadel_workspace.links.booking";
 
 const HOUR_MS: u64 = 60 * 60 * 1000;
 
@@ -60,19 +64,26 @@ pub struct LinkRecord {
     pub guests: Vec<GuestGrant>,
 }
 
-/// One account a link admitted as a guest, and whether the link gave it `ViewContent` on `node`
-/// (false when the account held that grant already, so taking the link away leaves it alone).
+/// One account a link admitted as a guest of `node`. It is the whole grant: while the link is live
+/// the account may view `node` (`check_entity_permission` asks), and nothing is written to the
+/// account, so the link expiring or going ends it at once.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GuestGrant {
     pub user: String,
     pub node: String,
-    pub granted: bool,
 }
 
 impl LinkRecord {
     /// Live at `now_ms`: expiry is checked on every read, the purge only reclaims space.
     pub fn live_at(&self, now_ms: u64) -> bool {
         self.expires_ms > now_ms
+    }
+
+    /// Whether it carries a booking-guest grant, and so belongs in `BOOKING_LINKS_KEY`.
+    pub fn admits_guests(&self) -> bool {
+        self.grants
+            .iter()
+            .any(|g| matches!(g, LinkGrant::BookingGuest { .. }))
     }
 
     pub fn info(&self) -> SecureLinkInfo {

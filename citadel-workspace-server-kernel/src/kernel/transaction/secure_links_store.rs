@@ -137,6 +137,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         index.push(record.index_entry());
         self.save_link_index(&record.owner, &index).await?;
         self.add_to_bucket(record.expiry_entry()).await?;
+        self.remember_booking_link(record).await?;
         if record.from_pool {
             let mut pool = self.link_pool().await?;
             pool.insert(record.pool_entry());
@@ -178,6 +179,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         index.retain(|entry| entry.digest != record.digest);
         self.save_link_index(&record.owner, &index).await?;
         self.remove_from_bucket(&record.expiry_entry()).await?;
+        self.forget_booking_links([record.digest.as_str()]).await?;
         if record.from_pool {
             let mut pool = self.link_pool().await?;
             if pool.remove(&record.pool_entry()) {
@@ -187,8 +189,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(())
     }
 
-    /// Remove up to `max_entries` links expired at `now_ms`, oldest bucket first, taking back
-    /// what each gave its booking guests. Returns how many expired links remain for a later pass.
+    /// Remove up to `max_entries` links expired at `now_ms`, oldest bucket first. Returns how many
+    /// expired links remain for a later pass. A booking guest's access ended at expiry already
+    /// (it is read from the live record); this reclaims the record and its listing.
     pub(crate) async fn purge_expired_links(
         &self,
         now_ms: u64,
@@ -217,9 +220,6 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             }
             budget -= taken;
             for entry in &expired[..taken] {
-                if let Some(record) = self.link_by_digest(&entry.digest).await? {
-                    self.revoke_guest_views(&record.guests, &record.id).await?;
-                }
                 self.backend_delete(&record_key(&entry.digest)).await?;
                 bucket.remove(entry);
             }
@@ -233,6 +233,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
                 .or_default()
                 .insert(&entry.digest);
         }
+        self.forget_booking_links(purged.iter().map(|entry| entry.digest.as_str()))
+            .await?;
         for (owner, digests) in &by_owner {
             let mut index = self.link_index(owner).await?;
             index.retain(|entry| !digests.contains(entry.digest.as_str()));

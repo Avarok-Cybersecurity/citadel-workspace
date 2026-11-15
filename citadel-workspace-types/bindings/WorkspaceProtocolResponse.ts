@@ -26,7 +26,13 @@ export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspac
  * node directly. `serde(default)` so a reply from a server that
  * predates the field still decodes, as a list of direct members.
  */
-inherited_from: { [key in string]?: string }, } } | { "MembersHidden": { domain_id: string, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, 
+inherited_from: { [key in string]?: string }, 
+/**
+ * The listed members a live booking link names as guests (Calendar design §3.6.4),
+ * derived from the link records on each call. Sent to callers holding ManageRoles only;
+ * empty for everyone else, and from a server that predates the field.
+ */
+guests: Array<string>, } } | { "MembersHidden": { domain_id: string, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, 
 /**
  * The legacy enum, for clients that predate the role table.
  */

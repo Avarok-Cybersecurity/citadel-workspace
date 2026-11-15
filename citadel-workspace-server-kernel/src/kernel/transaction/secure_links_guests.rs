@@ -1,73 +1,98 @@
-//! The booking-guest grants' I/O (Calendar design §3.6.4): giving a guest `ViewContent` on one
-//! node, as a direct grant on their account (`User.permissions`, read by
-//! `check_entity_permission`), and taking back what a link gave when the link goes. What is
-//! granted and to whom is decided in `kernel::secure_links::guests`; this only writes it.
+//! The booking-guest reads (Calendar design §3.6.4): which live links name an account as a guest,
+//! and who the guests are. A guest's access is the link record itself (`LinkRecord.guests`), so
+//! these read records and decide nothing (`kernel::secure_links::guests` decides).
 //!
-//! Each write is made under `lock_workspaces`, as every other write to an account is. The caller
-//! holds `LINKS_LOCK`, which is always taken first.
+//! `BOOKING_LINKS_KEY` lists the digests of the links that carry a booking grant, so a question
+//! about guests reads those records and not every link. It is written with the links, under
+//! `LINKS_LOCK`; reads take no lock, as a token's read does not, because each record is read whole.
 
 use super::BackendTransactionManager;
-use crate::kernel::secure_links::guests::grants_to_revoke;
-use crate::kernel::secure_links::records::GuestGrant;
-use citadel_logging::info;
+use crate::kernel::secure_links::guests::{guest_nodes, live_guests};
+use crate::kernel::secure_links::records::{LinkRecord, BOOKING_LINKS_KEY};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::Permission;
+use std::collections::BTreeSet;
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
-    /// Gives `user` `ViewContent` on `node`, recorded as the link's grant; or, when they hold it
-    /// directly already, records that the link gave nothing.
-    pub(crate) async fn grant_guest_view(
-        &self,
-        user_id: &str,
-        node: &str,
-        link_id: &str,
-    ) -> Result<GuestGrant, NetworkError> {
-        let _workspaces = self.lock_workspaces().await;
-        let Some(mut user) = self.get_user(user_id).await? else {
-            return Err(NetworkError::msg("A booking guest has no account"));
-        };
-        let granted = user
-            .permissions
-            .entry(node.to_string())
-            .or_default()
-            .insert(Permission::ViewContent);
-        if granted {
-            self.insert_user(user_id.to_string(), user).await?;
-        }
-        info!(target: "citadel", "Secure link {link_id} admitted {user_id} as a booking guest of node {node} (granted: {granted})");
-        Ok(GuestGrant {
-            user: user_id.to_string(),
-            node: node.to_string(),
-            granted,
-        })
+    pub(crate) async fn booking_link_digests(&self) -> Result<BTreeSet<String>, NetworkError> {
+        let stored: Option<Vec<String>> = self.backend_get(BOOKING_LINKS_KEY).await?;
+        Ok(stored.unwrap_or_default().into_iter().collect())
     }
 
-    /// Takes back the `ViewContent` grants a link gave its guests. An account since removed has
-    /// nothing to take back.
-    pub(crate) async fn revoke_guest_views(
+    async fn save_booking_link_digests(
         &self,
-        guests: &[GuestGrant],
-        link_id: &str,
+        digests: &BTreeSet<String>,
     ) -> Result<(), NetworkError> {
-        let revoking = grants_to_revoke(guests);
-        if revoking.is_empty() {
+        if digests.is_empty() {
+            return self.backend_delete(BOOKING_LINKS_KEY).await;
+        }
+        let ordered: Vec<&String> = digests.iter().collect();
+        self.backend_save(BOOKING_LINKS_KEY, &ordered).await
+    }
+
+    /// Lists a new link that carries a booking grant. The caller holds `LINKS_LOCK`.
+    pub(crate) async fn remember_booking_link(
+        &self,
+        record: &LinkRecord,
+    ) -> Result<(), NetworkError> {
+        if !record.admits_guests() {
             return Ok(());
         }
-        let _workspaces = self.lock_workspaces().await;
-        for (user_id, node) in revoking {
-            let Some(mut user) = self.get_user(user_id).await? else {
-                continue;
-            };
-            let Some(held) = user.permissions.get_mut(node) else {
-                continue;
-            };
-            held.remove(&Permission::ViewContent);
-            if held.is_empty() {
-                user.permissions.remove(node);
-            }
-            self.insert_user(user_id.to_string(), user).await?;
-            info!(target: "citadel", "Secure link {link_id} went: {user_id} is no longer a booking guest of node {node}");
+        let mut digests = self.booking_link_digests().await?;
+        if digests.insert(record.digest.clone()) {
+            self.save_booking_link_digests(&digests).await?;
         }
         Ok(())
+    }
+
+    /// Unlists links that went. The caller holds `LINKS_LOCK`.
+    pub(crate) async fn forget_booking_links<'a>(
+        &self,
+        gone: impl IntoIterator<Item = &'a str>,
+    ) -> Result<(), NetworkError> {
+        let mut digests = self.booking_link_digests().await?;
+        let before = digests.len();
+        for digest in gone {
+            digests.remove(digest);
+        }
+        if digests.len() != before {
+            self.save_booking_link_digests(&digests).await?;
+        }
+        Ok(())
+    }
+
+    /// Every stored link with a booking grant, live or not yet purged.
+    async fn booking_links(&self) -> Result<Vec<LinkRecord>, NetworkError> {
+        let mut links = Vec::new();
+        for digest in self.booking_link_digests().await? {
+            if let Some(record) = self.link_by_digest(&digest).await? {
+                links.push(record);
+            }
+        }
+        Ok(links)
+    }
+
+    /// The nodes `user_id` is a guest of at `now_ms`.
+    pub(crate) async fn live_guest_nodes(
+        &self,
+        user_id: &str,
+        now_ms: u64,
+    ) -> Result<BTreeSet<String>, NetworkError> {
+        let links = self.booking_links().await?;
+        Ok(guest_nodes(&links, user_id, now_ms)
+            .into_iter()
+            .map(str::to_string)
+            .collect())
+    }
+
+    /// Every account a live link names as a guest at `now_ms`.
+    pub(crate) async fn live_guest_users(
+        &self,
+        now_ms: u64,
+    ) -> Result<BTreeSet<String>, NetworkError> {
+        let links = self.booking_links().await?;
+        Ok(live_guests(&links, now_ms)
+            .into_iter()
+            .map(str::to_string)
+            .collect())
     }
 }

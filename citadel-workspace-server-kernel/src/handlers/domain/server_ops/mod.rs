@@ -1,4 +1,6 @@
 pub mod async_domain_server_ops;
+/// Past a direct grant: the role in the workspace, and a booking guest's live link.
+pub mod guest_access;
 /// The role an account joining on its own is given: the table's default.
 pub mod joiner_role;
 pub mod metadata_merge;
