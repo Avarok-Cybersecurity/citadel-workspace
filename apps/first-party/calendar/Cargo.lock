@@ -91,6 +91,7 @@ name = "calendar-glue"
 version = "0.1.0"
 dependencies = [
  "calendar-core",
+ "citadel-app-sdk-types",
  "js-sys",
  "serde",
  "serde-wasm-bindgen",
@@ -148,10 +149,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel-app-sdk"
+version = "0.1.0"
+dependencies = [
+ "citadel-app-sdk-types",
+ "serde",
+]
+
+[[package]]
 name = "citadel-app-sdk-types"
 version = "0.1.0"
 dependencies = [
  "ciborium",
+ "serde",
+]
+
+[[package]]
+name = "citadel-calendar-sdk"
+version = "0.1.0"
+dependencies = [
+ "calendar-core",
+ "citadel-app-sdk",
+ "citadel-app-sdk-types",
  "serde",
 ]
 

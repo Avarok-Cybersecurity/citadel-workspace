@@ -4,7 +4,7 @@
 # as every first-party app is (apps/first-party/compute-pool).
 [workspace]
 resolver = "2"
-members = ["core", "glue"]
+members = ["core", "glue", "sdk-client"]
 exclude = ["sdk"]
 
 [workspace.package]
@@ -16,6 +16,7 @@ publish = false
 [workspace.dependencies]
 # Through sdk/'s symlinks, for the reason apps/sdk-fixtures/Cargo.toml gives: a path inside the
 # workspace root keeps the bytes independent of where the repository is checked out.
+citadel-app-sdk = { path = "sdk/citadel-app-sdk" }
 citadel-app-sdk-types = { path = "sdk/citadel-app-sdk-types" }
 calendar-core = { path = "core" }
 

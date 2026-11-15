@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 calendar-core.workspace = true
+citadel-app-sdk-types.workspace = true
 # Exactly the version of the wasm-bindgen CLI that scripts/build-calendar-glue.mjs runs (it reads
 # this from the lockfile and refuses any other): the glue and the binary are one build.
 wasm-bindgen = "=0.2.129"

@@ -24,6 +24,12 @@ pub mod refusal;
 pub mod reminder;
 pub mod routing;
 pub mod rrule;
+pub mod sdk;
+pub mod sdk_gate;
+pub mod sdk_query;
+pub mod sdk_refusal;
+pub mod sdk_rules;
+pub mod sdk_views;
 pub mod slots;
 pub mod team;
 pub mod topic;
@@ -49,6 +55,12 @@ mod propagation_tests;
 mod routing_tests;
 #[cfg(test)]
 mod rrule_tests;
+#[cfg(test)]
+mod sdk_gate_tests;
+#[cfg(test)]
+mod sdk_rules_tests;
+#[cfg(test)]
+mod sdk_tests;
 #[cfg(test)]
 mod slots_tests;
 #[cfg(test)]

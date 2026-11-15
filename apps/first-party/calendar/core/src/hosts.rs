@@ -32,7 +32,11 @@ pub fn equal_period(
     let first = CivilDate::new(day.year(), day.month(), 1).ok_or(TzError::OutOfRange)?;
     let next = add_months(first, 1).ok_or(TzError::OutOfRange)?;
     let start_of = |date: CivilDate| -> Result<i64, TzError> {
-        instant_of(port, zone, CivilDateTime::new(date, 0).ok_or(TzError::OutOfRange)?)
+        instant_of(
+            port,
+            zone,
+            CivilDateTime::new(date, 0).ok_or(TzError::OutOfRange)?,
+        )
     };
     Ok(Interval {
         start_ms: start_of(first)?,

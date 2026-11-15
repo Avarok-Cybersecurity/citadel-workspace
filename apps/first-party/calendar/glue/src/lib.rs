@@ -7,8 +7,11 @@
 //! Values cross in the shapes of calendar-core's TypeScript bindings (`values`). A refusal is
 //! thrown as the core's `Refusal`.
 
+#[macro_use]
+mod stored;
 mod nav;
 mod offsets;
+mod sdk;
 mod team;
 mod values;
 
@@ -202,20 +205,6 @@ pub fn encode_event(event: JsValue) -> Result<Vec<u8>, JsValue> {
 #[wasm_bindgen(js_name = decodeEvent)]
 pub fn decode_event(bytes: &[u8]) -> Answer {
     to_js(&codec::from_bytes::<Event>(bytes).map_err(refused)?)
-}
-
-macro_rules! stored {
-    ($($t:ty: $encode:ident = $js_encode:literal, $decode:ident = $js_decode:literal;)*) => {$(
-        #[wasm_bindgen(js_name = $js_encode)]
-        pub fn $encode(value: JsValue) -> Result<Vec<u8>, JsValue> {
-            Ok(codec::to_bytes(&from_js::<$t>(value)?))
-        }
-
-        #[wasm_bindgen(js_name = $js_decode)]
-        pub fn $decode(bytes: &[u8]) -> Answer {
-            to_js(&codec::from_bytes::<$t>(bytes).map_err(refused)?)
-        }
-    )*};
 }
 
 stored! {
