@@ -18,6 +18,10 @@ pub mod apps_peer;
 pub mod apps_protocol;
 /// The answers to apps requests, and the apps audit log.
 pub mod apps_responses;
+/// Files shared in a node's chat, kept on the workspace server; see `chat_attachments`.
+pub mod chat_attachments;
+#[cfg(test)]
+mod chat_attachments_tests;
 /// Documents shared in a node's chat, on the page's relay; see `chat_documents`.
 pub mod chat_documents;
 #[cfg(test)]
@@ -496,6 +500,8 @@ pub enum WorkspaceProtocolRequest {
     Documents(documents::DocumentsRequest),
     /// A document shared in a node's chat; see `chat_documents`.
     ChatDocuments(chat_documents::ChatDocumentsRequest),
+    /// A file shared in a node's chat; see `chat_attachments`.
+    ChatAttachments(chat_attachments::ChatAttachmentsRequest),
     /// Secure links; see `secure_links`.
     SecureLinks(secure_links::SecureLinksRequest),
     /// Citadel Apps: listings, installs and their artifacts; see `apps_protocol`.
@@ -738,6 +744,7 @@ pub enum WorkspaceProtocolResponse {
 
     Documents(documents::DocumentsResponse),
     ChatDocuments(chat_documents::ChatDocumentsResponse),
+    ChatAttachments(chat_attachments::ChatAttachmentsResponse),
     SecureLinks(secure_links::SecureLinksResponse),
     Apps(apps_responses::AppsResponse),
 }
@@ -755,6 +762,16 @@ pub enum GroupMessageType {
     /// Shares a live document in the channel (`chat_documents`); the message's `content` is its
     /// title, so an edit of the message is the one way the title changes.
     LiveDocument { document_id: String },
+    /// Shares a file kept on the workspace server under the node (`chat_attachments`). The
+    /// server stores it only when the sender uploaded `attachment_id` at this channel's node and
+    /// `size_bytes` is its size; `name` and `mime` are the sender's, shown and checked for shape.
+    FileShare {
+        attachment_id: String,
+        name: String,
+        #[ts(type = "bigint")]
+        size_bytes: u64,
+        mime: String,
+    },
 }
 
 /// A message in a group chat channel

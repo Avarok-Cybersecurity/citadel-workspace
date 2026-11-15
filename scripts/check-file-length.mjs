@@ -89,7 +89,9 @@ const SKIP = new Map([
   // Two data-testid attributes, so the integration suite's readiness probe can
   // stop keying on button copy — see ROBUSTNESS round 168.
   ['types/messaging-layer.ts', 438],
-  ['types/workspace-protocol.ts', 281],
+  // 282, up one from 281: `ChatAttachments`, the request a node channel's files travel in. Each
+  // request variant is one line of this hand-kept mirror of the generated union.
+  ['types/workspace-protocol.ts', 282],
   // Not written here: a byte-for-byte copy of citadel-app-sdk-types' generated ABI
   // constants (every op's arguments and reply), held to its source by the UI's
   // generated-drift test. Splitting it would break that equality; it changes only

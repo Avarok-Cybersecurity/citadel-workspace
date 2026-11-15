@@ -3,6 +3,7 @@
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
 use crate::handlers::domain::tree_validator::{NodeMutation, TreeValidator};
+use crate::kernel::transaction::apps_store::APPS_LOCK;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::Permission;
 
@@ -34,6 +35,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         // both load the prior map and the second save silently drops the
         // other's node. The per-mutator lock does not cover this path because
         // the cycle spans our own awaits, not one mutator's.
+        // Before the nodes lock, the order the apps code takes the two in: the nodes' chat files
+        // are purged under it below, and holding it until this returns means an upload that
+        // waited for it finds the node gone (`command_processor::chat_attachments`).
+        let _files_guard = APPS_LOCK.lock().await;
         let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
         let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
 
@@ -121,6 +126,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         let _document_guards = self.backend_tx_manager.lock_documents(&deleted_ids).await;
         for id in &deleted_ids {
             self.backend_tx_manager.delete_document_log(id).await?;
+            // And the files shared in their chats, which also frees the storage they counted.
+            self.backend_tx_manager.purge_chat_attachments(id).await?;
         }
 
         // Remove all deleted nodes

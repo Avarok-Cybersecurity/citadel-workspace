@@ -12,7 +12,7 @@ use super::apps_call::reply_refused;
 use super::apps_call_storage::{quota_for, refused, root_of, unavailable};
 use super::apps_gather::{effective_for, holds_at};
 use super::apps_lifecycle::reread;
-use crate::kernel::apps::storage::{key_id, Namespace, StorageRoot};
+use crate::kernel::apps::storage::{key_id, Namespace, StorageRefusal, StorageRoot};
 use crate::kernel::apps::storage_write::{staged, within_entitlement};
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::transaction::apps_store::APPS_LOCK;
@@ -61,6 +61,44 @@ pub(super) async fn recheck<R: Ratchet + Send + Sync + 'static>(
     Ok(Ok(install))
 }
 
+/// What the tenant's entitlement says of taking one root from `current` to `next` bytes.
+pub(crate) enum StorageAdmission {
+    Fits,
+    Over(StorageRefusal),
+    /// The host could not say; nothing that grows storage is written.
+    Unknown,
+}
+
+/// Whether taking `root` from `current` to `next` bytes stays within the tenant's entitlement,
+/// counted over every root: every app's and every node's chat files. A write that does not grow
+/// storage always fits. The caller holds `APPS_LOCK`.
+pub(crate) async fn storage_admission<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    root: &StorageRoot,
+    current: u64,
+    next: u64,
+) -> Result<StorageAdmission, citadel_sdk::prelude::NetworkError> {
+    if next <= current {
+        return Ok(StorageAdmission::Fits);
+    }
+    let Some(entitlement) = kernel.storage_entitlement() else {
+        return Ok(StorageAdmission::Unknown);
+    };
+    let quota = match entitlement.quota() {
+        Ok(quota) => quota,
+        Err(why) => {
+            warn!(target: "citadel", "[STORAGE] A storage write was refused: {why}");
+            return Ok(StorageAdmission::Unknown);
+        }
+    };
+    let backend = &kernel.domain_operations.backend_tx_manager;
+    let others = backend.app_storage_besides(root).await?;
+    Ok(match within_entitlement(others, current, next, quota) {
+        Ok(()) => StorageAdmission::Fits,
+        Err(why) => StorageAdmission::Over(why),
+    })
+}
+
 /// Whether taking `root` from `current` to `next` bytes stays within the tenant's entitlement;
 /// `Some` is the refusal. A write that does not grow storage is never refused here.
 pub(super) async fn entitled<R: Ratchet + Send + Sync + 'static>(
@@ -69,24 +107,13 @@ pub(super) async fn entitled<R: Ratchet + Send + Sync + 'static>(
     current: u64,
     next: u64,
 ) -> Step<Option<Vec<u8>>> {
-    if next <= current {
-        return Ok(None);
-    }
-    let Some(entitlement) = kernel.storage_entitlement() else {
-        return Ok(Some(unavailable(NO_ENTITLEMENT)));
-    };
-    let quota = match entitlement.quota() {
-        Ok(quota) => quota,
-        Err(why) => {
-            warn!(target: "citadel", "[APPS] An app storage write was refused: {why}");
-            return Ok(Some(unavailable(NO_ENTITLEMENT)));
-        }
-    };
-    let backend = &kernel.domain_operations.backend_tx_manager;
-    let others = backend.app_storage_besides(root).await?;
-    Ok(within_entitlement(others, current, next, quota)
-        .err()
-        .map(refused))
+    Ok(
+        match storage_admission(kernel, root, current, next).await? {
+            StorageAdmission::Fits => None,
+            StorageAdmission::Over(why) => Some(refused(why)),
+            StorageAdmission::Unknown => Some(unavailable(NO_ENTITLEMENT)),
+        },
+    )
 }
 
 /// One KV write of `writes` (a value, or `None` to delete) to `namespace`, under `APPS_LOCK`.

@@ -229,7 +229,7 @@ fn kernel_toml_sign_in_is_read_into_the_config() {
 async fn startup_fails_without_the_section() {
     let config: ServerConfig = toml::from_str(
         "bind_addr = \"127.0.0.1:0\"\nworkspace_master_password = \"a-test-master-password\"\n\
-         require_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\n",
+         require_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\nchat_attachment_max_bytes = 0\n",
     )
     .expect("config");
     let refused = tokio::time::timeout(

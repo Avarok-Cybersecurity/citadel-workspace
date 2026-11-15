@@ -93,3 +93,39 @@ async fn a_counting_meter_passed_in_is_the_one_that_counts() {
     meter_through(&slot, Usage::EgressIn, 9);
     assert_eq!(meter.total(Some(7), Usage::EgressIn), 9);
 }
+
+#[tokio::test]
+async fn a_hosted_kernel_keeps_chat_files_only_as_large_as_its_config_says() {
+    let built = |config: ServerConfig| async move {
+        let telemetry = HostedTelemetry {
+            support_grants: None,
+            turn_usage: None,
+            usage_meter: Arc::new(CountingMeter::default()),
+            kernel_ready: Box::new(|_| {}),
+        };
+        hosted_kernel(
+            &config,
+            &BackendType::InMemory,
+            None,
+            None,
+            telemetry,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+    };
+    let kernel = built(hosted_config())
+        .await
+        .expect("the shipped config builds");
+    assert_eq!(kernel.chat_attachment_max_bytes(), Some(25 * 1024 * 1024));
+
+    let mut unsaid = hosted_config();
+    unsaid.chat_attachment_max_bytes = None;
+    let error = format!(
+        "{:?}",
+        built(unsaid).await.err().expect("built without a size")
+    );
+    assert!(error.contains("chat_attachment_max_bytes"), "{error}");
+}

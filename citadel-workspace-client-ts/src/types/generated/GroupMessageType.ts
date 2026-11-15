@@ -3,4 +3,4 @@
 /**
  * Type of group message
  */
-export type GroupMessageType = "Text" | "Markdown" | "System" | { "LiveDocument": { document_id: string, } };
+export type GroupMessageType = "Text" | "Markdown" | "System" | { "LiveDocument": { document_id: string, } } | { "FileShare": { attachment_id: string, name: string, size_bytes: bigint, mime: string, } };

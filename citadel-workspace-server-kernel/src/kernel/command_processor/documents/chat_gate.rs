@@ -9,7 +9,7 @@
 
 use super::target::Target;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
-use crate::kernel::group_access::authorize_group;
+use crate::kernel::group_access::authorize_node_channel;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::chat_documents::{is_chat_document_id, required_channel_permission};
 use citadel_workspace_types::documents::{DocumentRefusal, DocumentsRequest};
@@ -32,20 +32,8 @@ pub(super) async fn admit<R: Ratchet + Send + Sync + 'static>(
         node_id: node_id.to_string(),
         permission,
     };
-    let nodes = kernel
-        .domain_operations
-        .backend_tx_manager
-        .get_all_nodes_shared()
-        .await?;
-    let Some(channel) = nodes
-        .get(node_id)
-        .filter(|node| node.chat_enabled)
-        .and_then(|node| node.chat_channel_id.clone())
-    else {
-        return Ok(Err(denied()));
-    };
-    match authorize_group(kernel, actor_user_id, &channel, permission).await {
-        Some(owner) if owner == node_id => Ok(Ok(Target::chat(node_id, chat_doc, channel))),
-        _ => Ok(Err(denied())),
+    match authorize_node_channel(kernel, actor_user_id, node_id, permission).await? {
+        Some(channel) => Ok(Ok(Target::chat(node_id, chat_doc, channel))),
+        None => Ok(Err(denied())),
     }
 }

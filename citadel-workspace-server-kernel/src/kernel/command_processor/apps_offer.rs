@@ -9,7 +9,7 @@ use crate::kernel::apps::audience::audience_admits;
 use crate::kernel::apps::facts::ViewsNeeded;
 use crate::kernel::apps::fetcher::{admit_url, location_url, MAX_FETCH_BYTES};
 use crate::kernel::apps::install::verify_listing;
-use crate::kernel::apps::records::{RegistryEntry, StoredRelease};
+use crate::kernel::apps::records::{RegistryEntry, StoredRelease, UploadSlot};
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_app_signature::sha256;
 use citadel_logging::warn;
@@ -111,10 +111,13 @@ pub(super) async fn obtain_artifact<R: Ratchet + Send + Sync + 'static>(
     if backend.artifact_meta(&artifact.sha256).await?.is_some() {
         return Ok(Artifact::Stored);
     }
-    if let Some(staging) = backend.app_upload(caller.user).await? {
+    if let Some(staging) = backend
+        .app_upload(UploadSlot::Artifact(caller.user))
+        .await?
+    {
         if staging.complete && staging.sha256 == artifact.sha256 {
             let bytes = backend
-                .assemble_app_upload(caller.user, &staging)
+                .assemble_app_upload(UploadSlot::Artifact(caller.user), &staging)
                 .await?
                 .ok_or(AppsRefusal::ArtifactMismatch)?;
             check_artifact_bytes(artifact, &bytes)?;
@@ -166,7 +169,9 @@ pub(super) async fn commit_artifact<R: Ratchet + Send + Sync + 'static>(
         backend.store_artifact(sha256, &bytes).await?;
     }
     if from_upload {
-        backend.drop_app_upload(caller.user).await?;
+        backend
+            .drop_app_upload(UploadSlot::Artifact(caller.user))
+            .await?;
     }
     Ok(())
 }

@@ -95,6 +95,10 @@ pub mod config {
         /// See `resolve_chat_document_limit`. A hosted tenant's comes from its plan instead
         /// (`ChatDocumentLimitSource`).
         pub chat_documents_limit: Option<u32>,
+        /// The largest file a node's chat keeps on the server, in bytes. Required, native and
+        /// hosted alike (a hosted tenant's kernel.toml is written by its control plane): a default
+        /// would be a size nobody chose. See `resolve_chat_attachment_max_bytes`.
+        pub chat_attachment_max_bytes: Option<u64>,
         /// How people sign in: the OPRF seed file, the Argon2id cost and the admission check.
         /// Required by the native server and refused by a hosted one, whose host supplies it.
         /// See `kernel::sign_in::config`.
@@ -153,6 +157,7 @@ pub mod config {
                 .field("secure_links_per_member", &self.secure_links_per_member)
                 .field("secure_links_pool", &self.secure_links_pool)
                 .field("chat_documents_limit", &self.chat_documents_limit)
+                .field("chat_attachment_max_bytes", &self.chat_attachment_max_bytes)
                 .field("sign_in", &self.sign_in)
                 .field("app_server_egress", &self.app_server_egress)
                 .field("stun_servers", &self.stun_servers)
@@ -617,6 +622,16 @@ pub fn resolve_chat_document_limit(config: &ServerConfig) -> Result<u32, Network
     })
 }
 
+/// The largest chat file `config` lets a node keep. Required; 0 keeps none.
+pub fn resolve_chat_attachment_max_bytes(config: &ServerConfig) -> Result<u64, NetworkError> {
+    config.chat_attachment_max_bytes.ok_or_else(|| {
+        NetworkError::msg(
+            "chat_attachment_max_bytes must be set in kernel.toml: the largest file, in bytes, a \
+             node's chat keeps on the server (0 keeps none)",
+        )
+    })
+}
+
 /// The root workspace name `config` asks for, trimmed; `None` when it names none.
 ///
 /// A name that cannot be shown is a configuration error, not something to fall back from: a
@@ -817,6 +832,7 @@ async fn workspace_kernel(
     kernel.set_sign_in_settings(sign_in_settings);
     kernel.set_link_quota_source(link_quota);
     kernel.set_chat_document_limit_source(chat_document_limit);
+    kernel.set_chat_attachment_max_bytes(Some(resolve_chat_attachment_max_bytes(config)?));
     if artifact_fetcher.is_none() {
         info!(target: "citadel", "No artifact fetcher: apps install only from artifacts uploaded to this server.");
     }
@@ -1449,6 +1465,7 @@ mod server_config_debug_tests {
             secure_links_per_member: Some(5),
             secure_links_pool: Some(0),
             chat_documents_limit: Some(0),
+            chat_attachment_max_bytes: Some(0),
             sign_in: None,
             app_server_egress: None,
             stun_servers: None,

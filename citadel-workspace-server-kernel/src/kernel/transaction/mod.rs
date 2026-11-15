@@ -21,6 +21,7 @@ mod apps_artifact_store;
 mod apps_kv_store;
 pub(crate) mod apps_store;
 pub mod backend_ops_simple;
+pub(crate) mod chat_attachments_store;
 pub(crate) mod chat_documents_store;
 pub(crate) mod documents_store;
 #[cfg(test)]
@@ -33,6 +34,7 @@ mod roles_store;
 #[cfg(test)]
 mod roles_upgrade_tests;
 pub(crate) mod secure_links_store;
+pub(crate) mod upload_staging;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
 /// How many message locks exist, total.

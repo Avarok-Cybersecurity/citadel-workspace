@@ -26,7 +26,7 @@ async fn startup_fails_without_them() {
     // Every other required key present, so the refusal can only be the missing list.
     let config: ServerConfig = toml::from_str(&format!(
         "bind_addr = \"127.0.0.1:0\"\nworkspace_master_password = \"a-test-master-password\"\n\
-         require_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\n\
+         require_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\nchat_attachment_max_bytes = 0\n\
          {}\n{}\n{}",
         sign_in_without_admission(&sign_in_dir()),
         shipped_documents_section(),

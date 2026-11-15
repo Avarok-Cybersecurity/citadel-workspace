@@ -33,6 +33,8 @@
 /// Async command processor
 pub mod async_process_command;
 
+mod chat_attachment_shares;
+mod chat_attachments;
 pub mod group_message_shape;
 /// ReactGroupMessage: reactions stored on a node channel's messages.
 pub mod group_reactions;

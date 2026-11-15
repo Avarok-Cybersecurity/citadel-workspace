@@ -784,20 +784,29 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             mentions,
         } => {
             use crate::kernel::group_access::{authorize_group_write, GROUP_ACCESS_DENIED};
-            if authorize_group_write(kernel, actor_user_id, group_id)
-                .await
-                .is_none()
-            {
+            let Some(node_id) = authorize_group_write(kernel, actor_user_id, group_id).await else {
                 return Ok(WorkspaceProtocolResponse::Error(
                     GROUP_ACCESS_DENIED.to_string(),
                 ));
-            }
+            };
 
             if let Some(refusal) = super::group_message_shape::refusal(message_type) {
                 return Ok(WorkspaceProtocolResponse::Error(refusal.to_string()));
             }
             use citadel_workspace_types::GroupMessage;
             use uuid::Uuid;
+            let message_id = Uuid::new_v4().to_string();
+            if let Some(refusal) = super::chat_attachment_shares::claim(
+                kernel,
+                &node_id,
+                actor_user_id,
+                message_type,
+                &message_id,
+            )
+            .await?
+            {
+                return Ok(WorkspaceProtocolResponse::Error(refusal.to_string()));
+            }
 
             // Get sender name from user
             let sender_name = match kernel
@@ -812,7 +821,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
             // Create the message
             let message = GroupMessage {
-                id: Uuid::new_v4().to_string(),
+                id: message_id,
                 group_id: group_id.clone(),
                 sender_id: actor_user_id.to_string(),
                 sender_name,
@@ -949,14 +958,11 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             message_id,
         } => {
             use crate::kernel::group_access::{authorize_group_write, GROUP_ACCESS_DENIED};
-            if authorize_group_write(kernel, actor_user_id, group_id)
-                .await
-                .is_none()
-            {
+            let Some(node_id) = authorize_group_write(kernel, actor_user_id, group_id).await else {
                 return Ok(WorkspaceProtocolResponse::Error(
                     GROUP_ACCESS_DENIED.to_string(),
                 ));
-            }
+            };
 
             // Get the original message to verify ownership
             match kernel
@@ -987,6 +993,13 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         .await
                     {
                         Ok(Some(_)) => {
+                            super::chat_attachment_shares::release(
+                                kernel,
+                                &node_id,
+                                &msg.message_type,
+                                message_id,
+                            )
+                            .await?;
                             let notification = WorkspaceProtocolResponse::GroupMessageDeleted {
                                 group_id: group_id.clone(),
                                 message_id: message_id.clone(),
@@ -1352,6 +1365,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
         WorkspaceProtocolRequest::ChatDocuments(request) => {
             super::documents::process_chat(kernel, actor_user_id, requester_cid, request).await
+        }
+
+        WorkspaceProtocolRequest::ChatAttachments(request) => {
+            super::chat_attachments::process(kernel, actor_user_id, request).await
         }
 
         WorkspaceProtocolRequest::SecureLinks(request) => {
