@@ -54,6 +54,19 @@ pub struct LinkRecord {
     /// Drawn from the workspace's shared pool, because its owner had used their own allowance
     /// when it was made. Fixed for the link's life: an own link expiring does not move it.
     pub from_pool: bool,
+    /// The accounts a booking-guest grant admitted, in the order they came (Calendar design
+    /// §3.6.4). `serde(default)`: a record written before guests existed has none.
+    #[serde(default)]
+    pub guests: Vec<GuestGrant>,
+}
+
+/// One account a link admitted as a guest, and whether the link gave it `ViewContent` on `node`
+/// (false when the account held that grant already, so taking the link away leaves it alone).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GuestGrant {
+    pub user: String,
+    pub node: String,
+    pub granted: bool,
 }
 
 impl LinkRecord {

@@ -187,8 +187,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(())
     }
 
-    /// Remove up to `max_entries` links expired at `now_ms`, oldest bucket first. Returns how
-    /// many expired links remain for a later pass.
+    /// Remove up to `max_entries` links expired at `now_ms`, oldest bucket first, taking back
+    /// what each gave its booking guests. Returns how many expired links remain for a later pass.
     pub(crate) async fn purge_expired_links(
         &self,
         now_ms: u64,
@@ -217,6 +217,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             }
             budget -= taken;
             for entry in &expired[..taken] {
+                if let Some(record) = self.link_by_digest(&entry.digest).await? {
+                    self.revoke_guest_views(&record.guests, &record.id).await?;
+                }
                 self.backend_delete(&record_key(&entry.digest)).await?;
                 bucket.remove(entry);
             }

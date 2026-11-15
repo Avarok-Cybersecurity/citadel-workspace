@@ -82,6 +82,9 @@ pub(super) async fn delete<R: Ratchet + Send + Sync + 'static>(
     };
     let backend = &kernel.domain_operations.backend_tx_manager;
     backend.remove_link(&record).await?;
+    backend
+        .revoke_guest_views(&record.guests, &record.id)
+        .await?;
     answer(SecureLinksResponse::Deleted { id: record.id })
 }
 

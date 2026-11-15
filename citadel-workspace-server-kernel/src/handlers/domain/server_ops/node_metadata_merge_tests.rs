@@ -117,7 +117,7 @@ fn provisioning_adds_the_default_tabs_once_and_never_over_a_choice() {
         json!(PROVISIONED_DEFAULT_APP_TABS)
     );
     assert_eq!(fresh["initialized"], json!(true));
-    assert_eq!(provisioned_default_app_tabs(b"").unwrap().is_some(), true);
+    assert!(provisioned_default_app_tabs(b"").unwrap().is_some());
     assert_eq!(
         provisioned_default_app_tabs(br#"{"default_app_tabs":[]}"#).unwrap(),
         None

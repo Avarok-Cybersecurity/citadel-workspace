@@ -10,6 +10,7 @@
 //! `command_processor::secure_links`. Below are the host's entry points: the purge, for a
 //! Durable Object alarm or a native timer.
 
+pub mod guests;
 pub mod quota;
 pub mod records;
 pub mod rules;
@@ -18,6 +19,8 @@ pub mod token;
 
 #[cfg(test)]
 mod bucket_tests;
+#[cfg(test)]
+mod guests_tests;
 #[cfg(test)]
 mod store_tests;
 #[cfg(test)]

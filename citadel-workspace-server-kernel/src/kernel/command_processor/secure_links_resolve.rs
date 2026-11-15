@@ -37,10 +37,15 @@ pub(super) async fn resolve<R: Ratchet + Send + Sync + 'static>(
     }
     let response = match decide_resolve(record.as_ref(), &digest, &visitor, now) {
         ResolveDecision::Unavailable => SecureLinksResponse::LinkUnavailable,
-        ResolveDecision::Admit { burn } => {
-            let Some(record) = record else {
+        ResolveDecision::Admit { burn, guest } => {
+            let Some(mut record) = record else {
                 return Err(NetworkError::msg("A link was admitted with no record"));
             };
+            let before = record.clone();
+            if let Some(node) = guest {
+                let grant = backend.grant_guest_view(actor, &node, &record.id).await?;
+                record.guests.push(grant);
+            }
             if burn {
                 backend.remove_link(&record).await?;
             } else {
@@ -49,7 +54,7 @@ pub(super) async fn resolve<R: Ratchet + Send + Sync + 'static>(
                     last_used_ms: Some(now),
                     ..record.clone()
                 };
-                backend.update_link(&record, &used).await?;
+                backend.update_link(&before, &used).await?;
             }
             SecureLinksResponse::Resolved {
                 target: record.target,
@@ -69,7 +74,9 @@ async fn standing_of<R: Ratchet + Send + Sync + 'static>(
     let member = ops
         .holds_workspace_permission(actor, Permission::ViewContent)
         .await?;
-    let role_id = match ops.backend_tx_manager.get_user(actor).await? {
+    let user = ops.backend_tx_manager.get_user(actor).await?;
+    let known_in_good_standing = user.as_ref().is_some_and(|u| !u.is_banned());
+    let role_id = match user {
         Some(user) => ops
             .role_of(WORKSPACE_ROOT_ID, &user)
             .await?
@@ -81,6 +88,7 @@ async fn standing_of<R: Ratchet + Send + Sync + 'static>(
         member,
         role_id,
         node_views: HashMap::new(),
+        guest_eligible: !member && known_in_good_standing,
     })
 }
 
