@@ -13,7 +13,8 @@
 //! - `citadel_workspace.apps.artifact.<sha256>` and `.artifact_chunk.<sha256>.<n>`: a wasm
 //!   module, content-addressed, in chunks a Durable Object's value limit admits.
 //! - `citadel_workspace.apps.upload.<username>` and `.upload_chunk.<n>.<username>`: the one
-//!   artifact a member is uploading.
+//!   artifact a member is uploading; `.chat_upload.<username>` and `.chat_upload_chunk.<n>.<username>`
+//!   the one chat file (`UploadSlot`).
 //! - `citadel_workspace.apps.audit`: the audit log, at most `MAX_AUDIT_ENTRIES`.
 //! - `citadel_workspace.apps.ledger.<root>`: what one app holds at one scope
 //!   (`storage::StorageLedger`); `.kvindex.<namespace>` one KV's keys, `.kv.<namespace>.<key>`
@@ -71,13 +72,32 @@ pub(crate) fn artifact_chunk_key(sha256: &str, index: u32) -> String {
     format!("{PREFIX}artifact_chunk.{sha256}.{index}")
 }
 
-pub(crate) fn upload_key(username: &str) -> String {
-    format!("{PREFIX}upload.{username}")
+/// Whose upload a staging area holds: the one app artifact a member is uploading, or the one file
+/// they are uploading to a node's chat (`chat_attachments`). Each is one per member, and the two
+/// never share keys.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum UploadSlot<'a> {
+    Artifact(&'a str),
+    ChatAttachment(&'a str),
 }
 
-/// Index first: a username may hold dots, a number does not.
-pub(crate) fn upload_chunk_key(username: &str, index: u32) -> String {
-    format!("{PREFIX}upload_chunk.{index}.{username}")
+impl UploadSlot<'_> {
+    pub(crate) fn key(self) -> String {
+        match self {
+            Self::Artifact(username) => format!("{PREFIX}upload.{username}"),
+            Self::ChatAttachment(username) => format!("{PREFIX}chat_upload.{username}"),
+        }
+    }
+
+    /// Index first: a username may hold dots, a number does not.
+    pub(crate) fn chunk_key(self, index: u32) -> String {
+        match self {
+            Self::Artifact(username) => format!("{PREFIX}upload_chunk.{index}.{username}"),
+            Self::ChatAttachment(username) => {
+                format!("{PREFIX}chat_upload_chunk.{index}.{username}")
+            }
+        }
+    }
 }
 
 pub(crate) fn ledger_key(root_id: &str) -> String {

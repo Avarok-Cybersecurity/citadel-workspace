@@ -167,6 +167,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// per-connection - opening multiple connections from the same
     /// account no longer multiplies the budget.
     rate_limiter: RateLimiter,
+    /// How often read cursors and typing notices pass, shared across clones like the rate limiter.
+    pub(crate) group_chat_gates: crate::kernel::group_chat_gates::GroupChatGates,
     /// Which account each live connection belongs to, keyed by session CID.
     /// Shared across clones, like the rate limiter. See `cid_attribution`.
     pub(crate) connected_users: ConnectedAccounts,
@@ -187,6 +189,10 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     turn_usage: crate::kernel::telemetry::TurnUsageSinkHandle,
     /// How many secure links members may hold: the host's answer, or none, which makes none.
     link_quota: crate::kernel::secure_links::quota::LinkQuotaSourceHandle,
+    /// How many chat documents the workspace may hold: the host's answer, or none, which makes none.
+    chat_document_limit: crate::kernel::chat_document_limit::ChatDocumentLimitSourceHandle,
+    /// What a node's chat keeps: the host's settings, or none, which keeps no file.
+    chat_attachment_limits: Option<crate::kernel::chat_attachments::ChatAttachmentLimits>,
     /// What fetches app artifacts by URL: the host's, or none, which fetches nothing.
     artifact_fetcher: crate::kernel::apps::fetcher::ArtifactFetcherHandle,
     /// Apps' server egress (`net.server`): the host's fetcher, or none, which reaches nothing.
@@ -246,6 +252,8 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             support_grants: self.support_grants.clone(),
             turn_usage: self.turn_usage.clone(),
             link_quota: self.link_quota.clone(),
+            chat_document_limit: self.chat_document_limit.clone(),
+            chat_attachment_limits: self.chat_attachment_limits,
             artifact_fetcher: self.artifact_fetcher.clone(),
             server_egress: self.server_egress.clone(),
             apps_relay: self.apps_relay.clone(),
@@ -255,6 +263,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
             rate_limiter: self.rate_limiter.clone(),
+            group_chat_gates: self.group_chat_gates.clone(),
             connected_users: self.connected_users.clone(),
         }
     }
@@ -293,6 +302,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
+            group_chat_gates: crate::kernel::group_chat_gates::GroupChatGates::default(),
             connected_users: ConnectedAccounts::default(),
             first_connect_admin: false,
             ice_servers: None,
@@ -300,6 +310,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             support_grants: None,
             turn_usage: None,
             link_quota: None,
+            chat_document_limit: None,
+            chat_attachment_limits: None,
             artifact_fetcher: None,
             server_egress: None,
             apps_relay: Default::default(),
@@ -379,6 +391,36 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     pub fn link_quota_source(&self) -> &crate::kernel::secure_links::quota::LinkQuotaSourceHandle {
         &self.link_quota
+    }
+
+    /// Set by the server bootstrap: the host's chat-document limit, or none, in which case no
+    /// new chat document can be made.
+    pub fn set_chat_document_limit_source(
+        &mut self,
+        source: crate::kernel::chat_document_limit::ChatDocumentLimitSourceHandle,
+    ) {
+        self.chat_document_limit = source;
+    }
+
+    pub fn chat_document_limit_source(
+        &self,
+    ) -> &crate::kernel::chat_document_limit::ChatDocumentLimitSourceHandle {
+        &self.chat_document_limit
+    }
+
+    /// Set by the server bootstrap: what a node's chat keeps, or none, in which case no chat file
+    /// is kept. There are no default limits.
+    pub fn set_chat_attachment_limits(
+        &mut self,
+        limits: Option<crate::kernel::chat_attachments::ChatAttachmentLimits>,
+    ) {
+        self.chat_attachment_limits = limits;
+    }
+
+    pub fn chat_attachment_limits(
+        &self,
+    ) -> Option<crate::kernel::chat_attachments::ChatAttachmentLimits> {
+        self.chat_attachment_limits
     }
 
     /// Set by the server bootstrap: what to tell when the support grant changes, or none.

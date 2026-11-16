@@ -57,6 +57,7 @@ async fn hosted_with(meter: Arc<dyn UsageMeter>) -> Slot {
         None,
         None,
         None,
+        None,
     )
     .await
     .expect("the hosted kernel builds");
@@ -91,4 +92,54 @@ async fn a_counting_meter_passed_in_is_the_one_that_counts() {
     let slot = hosted_with(meter.clone()).await;
     meter_through(&slot, Usage::EgressIn, 9);
     assert_eq!(meter.total(Some(7), Usage::EgressIn), 9);
+}
+
+#[tokio::test]
+async fn a_hosted_kernel_keeps_chat_files_only_as_large_as_its_config_says() {
+    let built = |config: ServerConfig| async move {
+        let telemetry = HostedTelemetry {
+            support_grants: None,
+            turn_usage: None,
+            usage_meter: Arc::new(CountingMeter::default()),
+            kernel_ready: Box::new(|_| {}),
+        };
+        hosted_kernel(
+            &config,
+            &BackendType::InMemory,
+            None,
+            None,
+            telemetry,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+    };
+    let kernel = built(hosted_config())
+        .await
+        .expect("the shipped config builds");
+    assert_eq!(
+        kernel.chat_attachment_limits(),
+        Some(crate::kernel::chat_attachments::ChatAttachmentLimits {
+            max_bytes: 25 * 1024 * 1024,
+            max_files_per_node: 2048,
+        })
+    );
+
+    for (unset, key) in [
+        (
+            (|c: &mut ServerConfig| c.chat_attachment_max_bytes = None) as fn(&mut ServerConfig),
+            "chat_attachment_max_bytes",
+        ),
+        (
+            |c: &mut ServerConfig| c.chat_attachment_max_files_per_node = None,
+            "chat_attachment_max_files_per_node",
+        ),
+    ] {
+        let mut unsaid = hosted_config();
+        unset(&mut unsaid);
+        let error = format!("{:?}", built(unsaid).await.err().expect("built without it"));
+        assert!(error.contains(key), "{error}");
+    }
 }

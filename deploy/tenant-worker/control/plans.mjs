@@ -9,7 +9,7 @@ import { couponCatalogue } from "../../../billing/coupons-catalogue.mjs";
 import { addonsOf, noAddons } from "./addons.mjs";
 import { clampToTrial, UNLIMITED_LIMITS } from "./entitlement-limits.mjs";
 
-export { MAX_LINK_PACKS, MAX_STORAGE_BLOCKS } from "./addons.mjs";
+export { MAX_CHAT_DOCUMENT_PACKS, MAX_LINK_PACKS, MAX_STORAGE_BLOCKS } from "./addons.mjs";
 
 const tiers = new Map(table.tiers.map((t) => [t.id, t]));
 /** Every add-on a paid plan may buy (control/addons.mjs). */
@@ -64,12 +64,14 @@ export const overageSoldWith = (tier, interval) => overageBilledOn(tier) && inte
 export const needsUsageSubscription = (tier, interval) => overageBilledOn(tier) && interval !== null && interval !== overage.prices[0].interval;
 
 /**
- * What each add-on grant adds to, before any add-on: the tier's own storage, and a shared
- * secure-link pool that only packs fill. A grant with no base here is refused when this loads.
+ * What each add-on grant adds to, before any add-on: the tier's own storage, a shared
+ * secure-link pool that only packs fill, and the tier's own count of chat documents. A grant
+ * with no base here is refused when this loads.
  */
 const grantBases = (limits, seats, paid) => ({
   storage_gb: paid ? limits.storage_gb_per_seat * seats : limits.storage_gb_total,
   secure_links_pool: 0,
+  chat_documents: limits.chat_documents,
 });
 for (const a of ADDONS) {
   for (const grant of Object.keys(a.grants)) {
@@ -116,7 +118,9 @@ export function entitlements(plan) {
     quantities[a.quantityField] = paid ? n : 0;
     for (const [g, per] of Object.entries(a.grants)) granted[g] += per * quantities[a.quantityField];
   }
-  if (!Number.isInteger(limits.secure_links_per_member)) throw new Error(`tiers.json ${tier} has no secure_links_per_member`);
+  for (const k of ["secure_links_per_member", "chat_documents"]) {
+    if (!Number.isInteger(limits[k])) throw new Error(`tiers.json ${tier} has no ${k}`);
+  }
   const usage = {
     members_max: paid ? Math.min(seats, limits.members) : limits.members,
     storage_gb: grant === null ? granted.storage_gb : grant.storage_gb,
@@ -124,6 +128,7 @@ export function entitlements(plan) {
     relay_gb_included: paid ? limits.relay_gb_per_seat * seats : limits.relay_gb_total,
     secure_links_per_member: limits.secure_links_per_member,
     secure_links_pool: granted.secure_links_pool,
+    chat_documents: granted.chat_documents,
   };
   const unlimited = plan.grant_unlimited === 1;
   const trial = plan.trial_end !== null && plan.stripe_status !== "active";
@@ -165,7 +170,7 @@ export function enforcedEntitlements(stored) {
 
 /**
  * The plan a subscription's items describe, by the lookup keys of their prices:
- * `{tier, interval, seats, storage_blocks, link_packs}`, or `{error}` for items this catalogue did not sell.
+ * `{tier, interval, seats, ...add-on quantities}`, or `{error}` for items this catalogue did not sell.
  */
 
 export function planOfItems(items) {

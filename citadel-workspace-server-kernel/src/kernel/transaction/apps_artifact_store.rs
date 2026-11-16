@@ -73,38 +73,38 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     pub(crate) async fn app_upload(
         &self,
-        username: &str,
+        slot: UploadSlot<'_>,
     ) -> Result<Option<UploadStaging>, NetworkError> {
-        self.backend_get(&upload_key(username)).await
+        self.backend_get(&slot.key()).await
     }
 
     pub(crate) async fn save_app_upload(
         &self,
-        username: &str,
+        slot: UploadSlot<'_>,
         staging: &UploadStaging,
     ) -> Result<(), NetworkError> {
-        self.backend_save(&upload_key(username), staging).await
+        self.backend_save(&slot.key(), staging).await
     }
 
     pub(crate) async fn save_app_upload_chunk(
         &self,
-        username: &str,
+        slot: UploadSlot<'_>,
         index: u32,
         bytes: &[u8],
     ) -> Result<(), NetworkError> {
-        self.backend_save(&upload_chunk_key(username, index), &STANDARD.encode(bytes))
+        self.backend_save(&slot.chunk_key(index), &STANDARD.encode(bytes))
             .await
     }
 
     /// The uploaded chunks in order, or `None` if one is missing.
     pub(crate) async fn assemble_app_upload(
         &self,
-        username: &str,
+        slot: UploadSlot<'_>,
         staging: &UploadStaging,
     ) -> Result<Option<Vec<u8>>, NetworkError> {
         let mut bytes = Vec::new();
         for index in 0..staging.total_chunks {
-            let key = upload_chunk_key(username, index);
+            let key = slot.chunk_key(index);
             let Some(text) = self.backend_get::<String>(&key).await? else {
                 return Ok(None);
             };
@@ -113,16 +113,15 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(Some(bytes))
     }
 
-    /// Forget `username`'s upload and every chunk it may hold.
-    pub(crate) async fn drop_app_upload(&self, username: &str) -> Result<(), NetworkError> {
-        let Some(staging) = self.app_upload(username).await? else {
+    /// Forget the upload in `slot` and every chunk it may hold.
+    pub(crate) async fn drop_app_upload(&self, slot: UploadSlot<'_>) -> Result<(), NetworkError> {
+        let Some(staging) = self.app_upload(slot).await? else {
             return Ok(());
         };
         for index in 0..staging.total_chunks {
-            self.backend_delete(&upload_chunk_key(username, index))
-                .await?;
+            self.backend_delete(&slot.chunk_key(index)).await?;
         }
-        self.backend_delete(&upload_key(username)).await
+        self.backend_delete(&slot.key()).await
     }
 
     /// Delete those of `manifests` and `artifacts` that no install (running, previous or

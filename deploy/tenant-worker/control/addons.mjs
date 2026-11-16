@@ -10,6 +10,8 @@ import { lookupKey } from "../../../billing/catalogue.mjs";
 export const MAX_STORAGE_BLOCKS = 1000;
 /** Input bound, not a business rule: no workspace needs more packs than a request may ask for. */
 export const MAX_LINK_PACKS = 1000;
+/** Input bound, not a business rule: 1000 packs is five million documents. */
+export const MAX_CHAT_DOCUMENT_PACKS = 1000;
 
 /**
  * What the control plane calls each add-on's quantity -- its request field, D1 column and
@@ -19,6 +21,7 @@ export const MAX_LINK_PACKS = 1000;
 const QUANTITY = {
   storage: { field: "storage_blocks", max: MAX_STORAGE_BLOCKS },
   "secure-links": { field: "link_packs", max: MAX_LINK_PACKS },
+  "chat-documents": { field: "chat_document_packs", max: MAX_CHAT_DOCUMENT_PACKS },
 };
 
 /**
@@ -47,5 +50,5 @@ export function addonsOf(table) {
   });
 }
 
-/** `{storage_blocks: 0, link_packs: 0}`: a plan that bought no add-on. */
+/** `{storage_blocks: 0, link_packs: 0, chat_document_packs: 0}`: a plan that bought no add-on. */
 export const noAddons = (addons) => Object.fromEntries(addons.map((a) => [a.quantityField, 0]));

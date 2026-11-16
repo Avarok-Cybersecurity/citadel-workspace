@@ -1178,6 +1178,7 @@ dependencies = [
 name = "citadel-workspace-server-kernel-test-common"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "cdoc-crdt",
  "citadel-internal-service",
  "citadel-internal-service-connector",
@@ -1188,7 +1189,9 @@ dependencies = [
  "citadel_logging 0.14.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=38fd3ddb)",
  "citadel_sdk",
  "futures",
+ "hex",
  "serde_json",
+ "sha2",
  "tempfile",
  "tokio 1.49.0",
  "toml",

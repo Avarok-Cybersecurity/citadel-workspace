@@ -77,9 +77,16 @@ const SCOPED = new Map([
   ['GroupMessageNotification', 'broadcast_to_group'],
   ['GroupMessageEdited', 'broadcast_to_group'],
   ['GroupMessageDeleted', 'broadcast_to_group'],
+  // A channel's reactions, read cursors and typing say who is in it and what they read.
+  ['GroupMessageReacted', 'broadcast_to_group'],
+  ['GroupReadCursorMoved', 'broadcast_to_group'],
+  ['GroupTypingNotice', 'broadcast_to_group'],
   // A document's CRDT updates and its readers' cursors: the update IS the document, so it
   // reaches exactly the sessions a Pull would answer.
   ['Documents', 'broadcast_to_node'],
+  // A document shared in a node's chat is chat content: it reaches the channel's readers,
+  // exactly the sessions its Pull and the channel's GetGroupMessages answer.
+  ['ChatDocuments', 'broadcast_to_group'],
 ]);
 
 /**
@@ -115,6 +122,7 @@ const UNSCOPED = new Map([
   ['SecureLinks', 'only ever the answer to the requesting member: a link, its token and its target are never fanned out'],
   ['Apps', 'only ever the answer to the requesting member: listings, installs, artifacts and the audit log are never fanned out (a header the kernel writes goes out as NodeContentUpdated through broadcast_to_node)'],
   ['MessagingTrust', 'only ever the answer to the requesting member (never fanned out); a policy change reaches members as the Workspace record mutate_workspace announces'],
+  ['ChatAttachments', "only ever the answer to the requesting member: a chunk stored, a chunk of a file they may read, or a refusal; a share reaches the channel as the GroupMessageNotification broadcast_to_group sends"],
 ]);
 
 /**

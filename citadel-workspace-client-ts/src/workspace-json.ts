@@ -64,6 +64,7 @@ export const WORKSPACE_BIGINT_FIELDS: ReadonlySet<string> = new Set([
   'pending',
   'pending_bytes',
   'per_user_bytes',
+  'reactorCid',
   'received_at_ms',
   'revfs_storage_quota_mb',
   'rx_bytes',

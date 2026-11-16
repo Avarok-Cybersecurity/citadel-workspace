@@ -13,6 +13,7 @@ export const UNLIMITED_LIMITS = Object.freeze({
   relay_gb_included: null,
   secure_links_per_member: null,
   secure_links_pool: null,
+  chat_documents: null,
 });
 
 /** Which `trial_caps` entry bounds each limit while a trial is clamped. */
@@ -23,6 +24,7 @@ const TRIAL_CAP_OF = {
   relay_gb_included: "relay_gb",
   secure_links_per_member: "secure_links_per_member",
   secure_links_pool: "secure_links_pool",
+  chat_documents: "chat_documents",
 };
 
 /** `limits` with each one no larger than its trial cap. */

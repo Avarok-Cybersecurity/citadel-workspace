@@ -17,6 +17,7 @@
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_sdk::prelude::Ratchet;
+use citadel_workspace_types::chat_documents::{CHANNEL_READ, CHANNEL_WRITE};
 use citadel_workspace_types::structs::Permission;
 
 /// The message returned for every denial.
@@ -31,7 +32,7 @@ pub const GROUP_ACCESS_DENIED: &str = "Permission denied: not a member of this c
 ///
 /// Returns the owning node id on success so callers can log or scope further
 /// work against it.
-async fn authorize_group<R: Ratchet>(
+pub async fn authorize_group<R: Ratchet>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     user_id: &str,
     group_id: &str,
@@ -46,6 +47,32 @@ async fn authorize_group<R: Ratchet>(
     allowed.then_some(node_id)
 }
 
+/// The channel of the node `node_id`, when the node exists, its chat is on, and `user_id` holds
+/// `permission` on that channel. What a node's chat files and documents ask before anything
+/// else; every way of failing is the same `None`, so the answer says nothing about which nodes
+/// exist.
+pub async fn authorize_node_channel<R: Ratchet>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    user_id: &str,
+    node_id: &str,
+    permission: Permission,
+) -> Result<Option<String>, citadel_sdk::prelude::NetworkError> {
+    let nodes = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_all_nodes_shared()
+        .await?;
+    let Some(channel) = nodes
+        .get(node_id)
+        .filter(|node| node.chat_enabled)
+        .and_then(|node| node.chat_channel_id.clone())
+    else {
+        return Ok(None);
+    };
+    let owner = authorize_group(kernel, user_id, &channel, permission).await;
+    Ok((owner.as_deref() == Some(node_id)).then_some(channel))
+}
+
 /// May this account SEE this channel's messages?
 ///
 /// `ViewContent`, which is what a Guest holds. Reading is the whole of what a
@@ -55,7 +82,7 @@ pub async fn authorize_group_read<R: Ratchet>(
     user_id: &str,
     group_id: &str,
 ) -> Option<String> {
-    authorize_group(kernel, user_id, group_id, Permission::ViewContent).await
+    authorize_group(kernel, user_id, group_id, CHANNEL_READ).await
 }
 
 /// May this account WRITE to this channel — send, edit or delete?
@@ -74,7 +101,7 @@ pub async fn authorize_group_write<R: Ratchet>(
     user_id: &str,
     group_id: &str,
 ) -> Option<String> {
-    authorize_group(kernel, user_id, group_id, Permission::SendMessages).await
+    authorize_group(kernel, user_id, group_id, CHANNEL_WRITE).await
 }
 
 /// The node whose `chat_channel_id` is `group_id`, if any.

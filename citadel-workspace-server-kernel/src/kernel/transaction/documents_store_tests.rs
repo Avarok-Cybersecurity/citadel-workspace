@@ -7,6 +7,7 @@
 use crate::handlers::domain::node_ops::AsyncNodeOperations;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::command_processor::async_process_command::process_command_with_user_and_cid;
+use crate::kernel::documents::address::DocAddress;
 use crate::kernel::documents::{DocumentsConfig, DocumentsRelay};
 use crate::kernel::transaction::documents_store::SnapshotAuthor;
 use cdoc_crdt::{blank, ClientId};
@@ -178,7 +179,7 @@ async fn a_stored_snapshot_records_who_stored_it_and_when() {
     let stored = kernel
         .domain_operations
         .backend_tx_manager
-        .document_snapshot(NODE)
+        .document_snapshot(&DocAddress::page(NODE))
         .await
         .expect("read")
         .expect("a snapshot");

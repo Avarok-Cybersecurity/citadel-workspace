@@ -4,6 +4,7 @@
 //! window dropped.
 
 use super::node_exists;
+use super::target::Target;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::documents::coverage::{coverage, covering};
 use crate::kernel::documents::crdt::{first_uncovered, Clocks};
@@ -25,12 +26,14 @@ pub(super) fn now_ms() -> Result<u64, NetworkError> {
 pub(super) async fn commit<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     relay: &DocumentsRelay,
-    node_id: &str,
+    target: &Target,
     stored: StoredSnapshot,
     held: &Clocks,
     upto_seq: u64,
 ) -> Result<Result<(), DocumentRefusal>, NetworkError> {
     let config = &relay.config;
+    let node_id = target.node_id();
+    let doc = target.doc();
     let backend = &kernel.domain_operations.backend_tx_manager;
     let _log = backend.lock_document(node_id).await;
     if !node_exists(kernel, node_id).await? {
@@ -38,7 +41,7 @@ pub(super) async fn commit<R: Ratchet + Send + Sync + 'static>(
             node_id: node_id.to_string(),
         }));
     }
-    let head = backend.document_head(node_id).await?;
+    let head = backend.document_head(doc).await?;
     match check_snapshot(&head, upto_seq) {
         Ok(()) => {}
         Err(SnapshotConflict::Ahead { latest_seq }) => {
@@ -57,7 +60,7 @@ pub(super) async fn commit<R: Ratchet + Send + Sync + 'static>(
         }
     }
     let tail = backend
-        .document_updates(node_id, head.snapshot_upto + 1..=head.latest_seq)
+        .document_updates(doc, head.snapshot_upto + 1..=head.latest_seq)
         .await?;
     let needs = coverage(&head, upto_seq, &tail).map_err(NetworkError::msg)?;
     if let Some((crdt_client, needed_clock, held_clock)) = first_uncovered(&needs.needed, held) {
@@ -74,9 +77,9 @@ pub(super) async fn commit<R: Ratchet + Send + Sync + 'static>(
     // Snapshot, then the head that says it covers `upto_seq`, then the drop. Stopped after the
     // first, a reader gets the new snapshot and updates it already holds, which merge as no-ops;
     // after the second, the head still names the undropped updates, so nothing is leaked.
-    backend.save_document_snapshot(node_id, &stored).await?;
-    backend.save_document_head(node_id, &covering).await?;
-    backend.drop_document_updates(node_id, dropped).await?;
-    backend.save_document_head(node_id, &compacted).await?;
+    backend.save_document_snapshot(doc, &stored).await?;
+    backend.save_document_head(doc, &covering).await?;
+    backend.drop_document_updates(doc, dropped).await?;
+    backend.save_document_head(doc, &compacted).await?;
     Ok(Ok(()))
 }

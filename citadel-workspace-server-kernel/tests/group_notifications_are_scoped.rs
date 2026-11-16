@@ -25,6 +25,37 @@ const GROUP_NOTIFICATIONS: &[&str] = &[
     "GroupMessageDeleted",
 ];
 
+/// The reaction, read-cursor and typing notices, each built in its own handler.
+const SIGNAL_NOTIFICATIONS: &[(&str, &str)] = &[
+    (
+        "src/kernel/command_processor/group_reactions.rs",
+        "GroupMessageReacted",
+    ),
+    (
+        "src/kernel/command_processor/group_read_cursors.rs",
+        "GroupReadCursorMoved",
+    ),
+    (
+        "src/kernel/command_processor/group_typing.rs",
+        "GroupTypingNotice",
+    ),
+];
+
+#[test]
+fn every_channel_signal_is_broadcast_to_the_group() {
+    for (file, notification) in SIGNAL_NOTIFICATIONS {
+        let source = fs::read_to_string(file).unwrap_or_else(|e| panic!("cannot read {file}: {e}"));
+        let start = source
+            .find(notification)
+            .unwrap_or_else(|| panic!("{notification} is not built in {file}"));
+        let after = &source[start..];
+        assert!(
+            after.contains("broadcast_to_group") && !after.contains("kernel.broadcast("),
+            "{notification} in {file} is not broadcast with broadcast_to_group: it would reach sessions outside the channel"
+        );
+    }
+}
+
 #[test]
 fn every_group_notification_is_broadcast_to_the_group() {
     let path = Path::new("src/kernel/command_processor/async_process_command.rs");

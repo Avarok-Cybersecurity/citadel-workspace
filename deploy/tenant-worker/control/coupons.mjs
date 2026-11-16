@@ -2,7 +2,7 @@
  * Coupons at the door: judging a code for a plan (creation and preview share it), and the preview
  * route the plan step calls before anything is created.
  *
- *   POST /api/coupons/preview {code, tier, interval, seats, storage_blocks, link_packs}
+ *   POST /api/coupons/preview {code, tier, interval, seats, ...add-on quantities}
  *     200 {applies: true, kind: "discount" | "trial" | "comp", ...}   (control/coupon-rules.mjs offerOf)
  *     400 coupon-unavailable, the same bytes for every reason a code does not apply
  *     429 coupon-rate-limited, past MAX_PREVIEWS_PER_HOUR from one address
@@ -12,14 +12,14 @@
  * and re-judges the code itself: a preview is never a promise.
  */
 import { json, refuse } from "./http.mjs";
-import { isPaid, tierIds } from "./plans.mjs";
+import { ADDONS, isPaid, tierIds } from "./plans.mjs";
 import { codeHash, MAX_PREVIEWS_PER_HOUR, normaliseCode, offerOf, pick, redeemable, staticCoupons } from "./coupon-rules.mjs";
 import { malformed, readPaidPlan } from "./plan-request.mjs";
 import { sha256Hex } from "./secrets.mjs";
 
 export const couponUnavailable = () => refuse("coupon-unavailable", "that code cannot be applied to this plan", 400);
 const rateLimited = () => refuse("coupon-rate-limited", "Too many attempts. Try again in an hour.", 429);
-const PREVIEW_FIELDS = new Set(["code", "tier", "interval", "seats", "storage_blocks", "link_packs"]);
+const PREVIEW_FIELDS = new Set(["code", "tier", "interval", "seats", ...ADDONS.map((a) => a.quantityField)]);
 /** The label an address is hashed under, so its hash matches no other table's. */
 const ATTEMPT_LABEL = "citadel-coupon-attempt-v1\0";
 

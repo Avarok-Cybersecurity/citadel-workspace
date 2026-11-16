@@ -149,7 +149,7 @@ describe("the last redemption", () => {
       const now = io.now();
       const row = {
         slug: freshSlug("tb"), tenant_id: crypto.randomUUID().replaceAll("-", ""), display_name: "x", tier: "team", interval: "month", seats: 1,
-        storage_blocks: 0, link_packs: 0, expires_at: now + 3600, claim_hash: "h", reservation_hash: null, customer_terms_version: 1,
+        storage_blocks: 0, link_packs: 0, chat_document_packs: 0, expires_at: now + 3600, claim_hash: "h", reservation_hash: null, customer_terms_version: 1,
         coupon_hash: coupon.code_hash, grant_id: null, grant_unlimited: 0, trial_end: null, stripe_status: null,
       };
       return io.store.reserve(row, now, io.coupons.reservation({ coupon, row, nowSec: now, nowMs: Date.now(), replacing: null }));

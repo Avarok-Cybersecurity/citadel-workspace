@@ -8,7 +8,7 @@ import { createBody, deliver, freshSlug, item, objectStats, outbound, post, subs
 
 const noPeriod = { period_start: null, period_end: null };
 // No coupon: a plan states it, as it states its billing period (entitlements v2).
-const plan = (extra) => ({ status: "active", storage_blocks: 0, link_packs: 0, ...noPeriod, grant_id: null, grant_unlimited: 0, trial_end: null, stripe_status: null, ...extra });
+const plan = (extra) => ({ status: "active", storage_blocks: 0, link_packs: 0, chat_document_packs: 0, ...noPeriod, grant_id: null, grant_unlimited: 0, trial_end: null, stripe_status: null, ...extra });
 
 describe("link-pack entitlements", () => {
   it("give each member the tier's own allowance and the workspace 50 shared links per pack", () => {
@@ -42,10 +42,10 @@ describe("link-pack entitlements", () => {
 describe("a subscription's pack items", () => {
   it("are read as the pack count, beside storage", () => {
     expect(planOfItems([item("citadel-team-month", 3), item("citadel-secure-links-month", 4)])).toEqual({
-      tier: "team", interval: "month", seats: 3, storage_blocks: 0, link_packs: 4,
+      tier: "team", interval: "month", seats: 3, storage_blocks: 0, link_packs: 4, chat_document_packs: 0,
     });
     expect(planOfItems([item("citadel-business-year", 2), item("citadel-storage-year", 1), item("citadel-secure-links-year", 2)])).toEqual({
-      tier: "business", interval: "year", seats: 2, storage_blocks: 1, link_packs: 2,
+      tier: "business", interval: "year", seats: 2, storage_blocks: 1, link_packs: 2, chat_document_packs: 0,
     });
   });
   it("on another interval than the tier are refused", () => {

@@ -21,15 +21,22 @@ mod apps_artifact_store;
 mod apps_kv_store;
 pub(crate) mod apps_store;
 pub mod backend_ops_simple;
+pub(crate) mod chat_attachments_store;
+#[cfg(test)]
+mod chat_attachments_store_tests;
+pub(crate) mod chat_documents_store;
 pub(crate) mod documents_store;
 #[cfg(test)]
 mod documents_store_tests;
+mod group_chat_store;
+pub use group_chat_store::ReactionWrite;
 mod group_message_pages;
 mod records;
 mod roles_store;
 #[cfg(test)]
 mod roles_upgrade_tests;
 pub(crate) mod secure_links_store;
+pub(crate) mod upload_staging;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
 /// How many message locks exist, total.
@@ -1166,6 +1173,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         }
         self.backend_delete(&group_message_pages::index_key(group_id))
             .await?;
+        // Who had read how far goes with the history it measured.
+        self.backend_delete(&group_message_pages::read_cursors_key(group_id))
+            .await?;
         self.backend_delete(&group_message_pages::legacy_key(group_id))
             .await
     }
@@ -1410,6 +1420,7 @@ mod group_message_tests {
             reply_count: 0,
             mentions: vec![],
             edited_at: None,
+            reactions: Vec::new(),
         }
     }
 
@@ -2006,6 +2017,7 @@ mod group_paging_tests {
             message_type: GroupMessageType::Text,
             timestamp: 0,
             edited_at: None,
+            reactions: Vec::new(),
             reply_to: None,
             reply_count: 0,
             mentions: vec![],

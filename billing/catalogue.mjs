@@ -15,6 +15,7 @@ export function describeLimits(limits) {
 const GRANT_PHRASES = {
   storage_gb: (n) => `${n} GB`,
   secure_links_pool: (n) => `${n} secure links`,
+  chat_documents: (n) => `${n.toLocaleString('en-US')} chat documents`,
 };
 
 /** "10 GB" for the storage add-on; a grant with no phrase is refused, not described blank. */

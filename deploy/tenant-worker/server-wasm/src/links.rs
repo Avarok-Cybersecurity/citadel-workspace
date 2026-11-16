@@ -1,13 +1,19 @@
-//! Secure links: the object's link limits, and its purge alarm's entry into the kernel.
+//! Secure links: the object's link limits, and its purge alarm's entry into the kernel. The same
+//! host object also answers the plan's chat-document limit (`chatDocuments()`), so one handle
+//! carries the plan's limits.
 //!
 //! The object passes an object whose `quota()` returns `{per_member, pool}` from the tenant's
-//! entitlements, or throws when it cannot (control/tenant-links.mjs). Each is a count, or `null`
+//! entitlements, and whose `chatDocuments()` returns `{limit}`, or throws when it cannot
+//! (control/tenant-links.mjs). Each is a count, or `null`
 //! for no limit (an unlimited tenant, entitlements v2); a field missing or anything else makes the
 //! answer unreadable, and the kernel then makes no links (kernel `limit::Limit`). The kernel asks
 //! on every create and list, so a plan change applies at once.
 
 use crate::support::millis;
 use crate::TenantServer;
+use citadel_workspace_server_kernel::kernel::chat_document_limit::{
+    ChatDocumentLimitSource, ChatDocumentLimitUnavailable,
+};
 use citadel_workspace_server_kernel::kernel::secure_links::quota::{
     Limit, LinkQuota, LinkQuotaSource, LinkQuotaUnavailable,
 };
@@ -24,6 +30,15 @@ extern "C" {
 
     #[wasm_bindgen(method, catch)]
     fn quota(this: &LinkQuotaHost) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(method, catch, js_name = chatDocuments)]
+    fn chat_documents(this: &LinkQuotaHost) -> Result<JsValue, JsValue>;
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HostChatDocuments {
+    limit: Limit,
 }
 
 #[derive(Deserialize)]
@@ -40,9 +55,19 @@ struct DurableObjectLinkQuota(LinkQuotaHost);
 unsafe impl Send for DurableObjectLinkQuota {}
 unsafe impl Sync for DurableObjectLinkQuota {}
 
-/// The kernel's link-limit source over `host`.
-pub fn source(host: LinkQuotaHost) -> std::sync::Arc<dyn LinkQuotaSource> {
-    std::sync::Arc::new(DurableObjectLinkQuota(host))
+/// The plan's limits as the kernel takes them, both over the one `host`.
+pub struct PlanLimits {
+    pub links: std::sync::Arc<dyn LinkQuotaSource>,
+    pub chat_documents: std::sync::Arc<dyn ChatDocumentLimitSource>,
+}
+
+/// The kernel's link-limit and chat-document-limit sources over `host`.
+pub fn sources(host: LinkQuotaHost) -> PlanLimits {
+    let host = std::sync::Arc::new(DurableObjectLinkQuota(host));
+    PlanLimits {
+        links: host.clone(),
+        chat_documents: host,
+    }
 }
 
 impl LinkQuotaSource for DurableObjectLinkQuota {
@@ -54,6 +79,18 @@ impl LinkQuotaSource for DurableObjectLinkQuota {
         let HostQuota { per_member, pool } =
             crate::host_promise::parse(&value).map_err(LinkQuotaUnavailable)?;
         Ok(LinkQuota { per_member, pool })
+    }
+}
+
+impl ChatDocumentLimitSource for DurableObjectLinkQuota {
+    fn limit(&self) -> Result<Limit, ChatDocumentLimitUnavailable> {
+        let value = self
+            .0
+            .chat_documents()
+            .map_err(|e| ChatDocumentLimitUnavailable(format!("{e:?}")))?;
+        let HostChatDocuments { limit } =
+            crate::host_promise::parse(&value).map_err(ChatDocumentLimitUnavailable)?;
+        Ok(limit)
     }
 }
 

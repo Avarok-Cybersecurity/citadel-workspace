@@ -17,6 +17,7 @@ pub(crate) async fn hosted_kernel(
     sign_in_settings: kernel::sign_in::SignInSettingsHandle,
     telemetry: kernel::telemetry::HostedTelemetry<StackedRatchet>,
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
+    chat_document_limit: kernel::chat_document_limit::ChatDocumentLimitSourceHandle,
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
     server_egress: kernel::apps::egress::ServerEgressHandle,
 ) -> Result<AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
@@ -30,6 +31,7 @@ pub(crate) async fn hosted_kernel(
         ice_servers,
         sign_in_settings,
         link_quota,
+        chat_document_limit,
         artifact_fetcher,
         server_egress,
         kernel::apps::storage_entitlement::StorageEntitlement::of(backend),

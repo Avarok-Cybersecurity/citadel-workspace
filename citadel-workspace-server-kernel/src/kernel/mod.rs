@@ -13,6 +13,12 @@
 pub mod apps;
 /// Whether a session may be sent a broadcast.
 mod broadcast_scope;
+/// Reclaiming the space node chat files no longer need, on upload and on the host's timer.
+pub mod chat_attachment_sweep;
+pub mod chat_attachments;
+#[cfg(test)]
+mod chat_attachments_tests;
+pub mod chat_document_limit;
 /// Which account each live connection belongs to.
 mod cid_attribution;
 pub mod command_processor;
@@ -20,6 +26,7 @@ pub mod display_name;
 /// The Documents relay: configuration and the log's rules.
 pub mod documents;
 pub mod group_access;
+pub mod group_chat_gates;
 pub mod ice_servers;
 /// A usage limit as the host states it: a count, or explicitly none.
 pub mod limit;

@@ -14,7 +14,7 @@ import tiers from "../../../billing/tiers.json";
 
 const GB = 1e9;
 const none = { period_start: null, period_end: null, grant_id: null, grant_unlimited: 0, trial_end: null, stripe_status: null };
-const team = { status: "active", tier: "team", interval: "month", seats: 3, storage_blocks: 0, link_packs: 0, ...none };
+const team = { status: "active", tier: "team", interval: "month", seats: 3, storage_blocks: 0, link_packs: 0, chat_document_packs: 0, ...none };
 /** A record as objects stored it before coupons: every limit a count, no v, no unlimited. */
 const V1 = {
   status: "active", tier: "team", interval: "month", seats: 3, storage_blocks: 0, link_packs: 0, members_max: 3, storage_gb: 30, workspaces_max: 1,
@@ -44,7 +44,7 @@ describe("a v1 record (before coupons)", () => {
 describe("entitlements v2", () => {
   it("is versioned, and a plain plan's limits are what they were", () => {
     expect(ENTITLEMENTS_VERSION).toBe(2);
-    expect(entitlements(team)).toEqual({ ...V1, v: 2, unlimited: false, relay_unmetered: false, trial_clamped: false });
+    expect(entitlements(team)).toEqual({ ...V1, chat_document_packs: 0, chat_documents: 1000, v: 2, unlimited: false, relay_unmetered: false, trial_clamped: false });
   });
 
   it("an unlimited grant lifts every usage limit to null, and each reader takes null as no limit", () => {
@@ -82,7 +82,7 @@ describe("entitlements v2", () => {
     for (const stripe_status of [null, "trialing", "past_due"]) {
       expect(entitlements({ ...team, trial_end: 1, stripe_status })).toMatchObject({
         trial_clamped: true, members_max: Math.min(3, caps.members), storage_gb: caps.storage_gb, connections_max: Math.min(9, caps.connections),
-        relay_gb_included: caps.relay_gb, secure_links_per_member: caps.secure_links_per_member, secure_links_pool: caps.secure_links_pool,
+        relay_gb_included: caps.relay_gb, secure_links_per_member: caps.secure_links_per_member, secure_links_pool: caps.secure_links_pool, chat_documents: caps.chat_documents,
       });
     }
     expect(entitlements({ ...team, trial_end: 1, stripe_status: "active" })).toMatchObject({ trial_clamped: false, storage_gb: 30, relay_gb_included: 60 });

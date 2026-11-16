@@ -7,6 +7,7 @@
 //! kernel built without them refuses every documents request (`DocumentRefusal::NotConfigured`)
 //! rather than guess.
 
+pub(crate) mod address;
 pub(crate) mod admission;
 mod config;
 pub(crate) mod coverage;
