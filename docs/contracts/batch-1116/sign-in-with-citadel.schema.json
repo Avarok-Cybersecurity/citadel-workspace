@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avarok.net/contracts/batch-1116/sign-in-with-citadel.schema.json",
+  "title": "Sign in with Citadel (D-B)",
+  "description": "The exchanges of sign-in-with-citadel.md. Fixtures live in subdirectories named after these definitions.",
+  "$defs": {
+    "SignInLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "client": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,62}[a-z0-9])?$",
+          "description": "a registered client id from the allowlist (sw-mcp, synchronized.work)"
+        },
+        "challenge": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "minLength": 43,
+          "maxLength": 43
+        },
+        "state": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "minLength": 22,
+          "maxLength": 43
+        },
+        "return": {
+          "type": "string",
+          "pattern": "^https://[a-z0-9.-]+(?::[1-9][0-9]{0,4})?/[A-Za-z0-9._~/-]*$",
+          "maxLength": 512,
+          "description": "https, exact origin+path, no query, no fragment, no wildcard, no userinfo"
+        }
+      },
+      "required": [
+        "client",
+        "challenge",
+        "state",
+        "return"
+      ],
+      "description": "the query parameters of https://work.avarok.net/sign-in — exactly these four"
+    },
+    "ReturnAllowlist": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "clients": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,62}[a-z0-9])?$",
+            "description": "a registered client id from the allowlist (sw-mcp, synchronized.work)"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "display_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "aud": {
+                "type": "string",
+                "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,62}[a-z0-9])?$",
+                "description": "a registered client id from the allowlist (sw-mcp, synchronized.work)"
+              },
+              "returns": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 8,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^https://[a-z0-9.-]+(?::[1-9][0-9]{0,4})?/[A-Za-z0-9._~/-]*$",
+                  "maxLength": 512,
+                  "description": "https, exact origin+path, no query, no fragment, no wildcard, no userinfo"
+                }
+              }
+            },
+            "required": [
+              "display_name",
+              "aud",
+              "returns"
+            ]
+          }
+        }
+      },
+      "required": [
+        "v",
+        "clients"
+      ]
+    },
+    "ReturnPost": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[0-9ABCDEFGHJKMNPQRSTVWXYZ]{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{4}$",
+          "description": "8 symbols of the 32-symbol alphabet (no I, L, O, U), shown as XXXX-XXXX; single use; 600 s TTL"
+        },
+        "state": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "minLength": 22,
+          "maxLength": 43
+        }
+      },
+      "required": [
+        "code",
+        "state"
+      ],
+      "description": "the application/x-www-form-urlencoded body work.avarok.net POSTs to the allowlisted return URL"
+    },
+    "SignInCompleteRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "client": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,62}[a-z0-9])?$",
+          "description": "a registered client id from the allowlist (sw-mcp, synchronized.work)"
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[0-9ABCDEFGHJKMNPQRSTVWXYZ]{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{4}$",
+          "description": "8 symbols of the 32-symbol alphabet (no I, L, O, U), shown as XXXX-XXXX; single use; 600 s TTL"
+        },
+        "verifier": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "minLength": 43,
+          "maxLength": 43
+        },
+        "device": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?#[A-Za-z0-9_-]{43}$",
+          "maxLength": 255,
+          "description": "<device slug>#<base64url(SHA3-256(device ML-DSA-65 signing pk))>"
+        }
+      },
+      "required": [
+        "v",
+        "client",
+        "code",
+        "verifier",
+        "device"
+      ]
+    },
+    "SignInCompleteResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "issuer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 190,
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62})(?:\\.[a-z0-9](?:[a-z0-9-]{0,62}))*(?::[1-9][0-9]{0,4})?(?:/[a-z0-9._~-]+)*$",
+          "description": "A canonical domain (identity-api.md §3): equal to its own canonical_domain(); port kept unless 443; path kept."
+        },
+        "assertion": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "minLength": 7030,
+          "maxLength": 7726,
+          "description": "base64url of the assertion blob (identity-api.md §7): 0x01 ‖ str16(aud) ‖ str16(device) ‖ u64 exp ‖ nonce[32] ‖ pk[1952] ‖ sig[3309]"
+        }
+      },
+      "required": [
+        "v",
+        "issuer",
+        "assertion"
+      ]
+    }
+  }
+}

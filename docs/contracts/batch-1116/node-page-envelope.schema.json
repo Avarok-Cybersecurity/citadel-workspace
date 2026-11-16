@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avarok.net/contracts/batch-1116/node-page-envelope.schema.json",
+  "title": "citadel_app node metadata envelope",
+  "description": "The value under the citadel_app key of a node's metadata document (node-page-abi.md). v1 (shipped) names a first-party document app; v2 (CW-2) names any installed app with the node_page surface. Anything else is a refusal shown to the user, never a default.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "kind": {
+          "const": "citadel-app"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "app": {
+              "enum": [
+                "docs",
+                "pdf",
+                "latex"
+              ]
+            }
+          },
+          "required": [
+            "app"
+          ]
+        }
+      },
+      "required": [
+        "v",
+        "kind",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 2
+        },
+        "kind": {
+          "const": "citadel-app"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "app": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9-]*(?:\\.[a-z0-9][a-z0-9-]*)+$",
+              "description": "an installed app id (citadel-app-id grammar)"
+            },
+            "install_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "opaque; minted by the kernel"
+            }
+          },
+          "required": [
+            "app",
+            "install_id"
+          ]
+        }
+      },
+      "required": [
+        "v",
+        "kind",
+        "payload"
+      ]
+    }
+  ]
+}

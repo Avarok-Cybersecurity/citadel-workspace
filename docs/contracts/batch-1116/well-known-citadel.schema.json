@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avarok.net/contracts/batch-1116/well-known-citadel.schema.json",
+  "title": "/.well-known/citadel",
+  "description": "The server identity document (plan §5.2, identity-api.md §6). deny_unknown_fields at every level. The signature covers the RFC 8949 deterministic CBOR of every field but sig under domain citadel-well-known-v1 ‖ 0x00.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "canonical_domain": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 190,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62})(?:\\.[a-z0-9](?:[a-z0-9-]{0,62}))*(?::[1-9][0-9]{0,4})?(?:/[a-z0-9._~-]+)*$",
+      "description": "A canonical domain (identity-api.md §3): equal to its own canonical_domain(); port kept unless 443; path kept."
+    },
+    "citadel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wss": {
+          "type": "string",
+          "pattern": "^wss://[a-z0-9.:/_~-]+$",
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "wss"
+      ]
+    },
+    "server_key": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "alg": {
+          "const": "ML-DSA-65"
+        },
+        "pk": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "minLength": 2603,
+          "maxLength": 2603
+        }
+      },
+      "required": [
+        "alg",
+        "pk"
+      ]
+    },
+    "former_domains": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 190,
+        "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62})(?:\\.[a-z0-9](?:[a-z0-9-]{0,62}))*(?::[1-9][0-9]{0,4})?(?:/[a-z0-9._~-]+)*$",
+        "description": "A canonical domain (identity-api.md §3): equal to its own canonical_domain(); port kept unless 443; path kept."
+      },
+      "uniqueItems": true,
+      "maxItems": 16
+    },
+    "issued_at": {
+      "type": "integer",
+      "minimum": 1700000000,
+      "maximum": 4102444800
+    },
+    "sig": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "minLength": 4412,
+      "maxLength": 4412
+    }
+  },
+  "required": [
+    "v",
+    "canonical_domain",
+    "citadel",
+    "server_key",
+    "former_domains",
+    "issued_at",
+    "sig"
+  ]
+}

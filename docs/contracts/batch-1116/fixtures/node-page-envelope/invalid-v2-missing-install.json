@@ -1,0 +1,7 @@
+{
+  "v": 2,
+  "kind": "citadel-app",
+  "payload": {
+    "app": "work.synchronized.app"
+  }
+}

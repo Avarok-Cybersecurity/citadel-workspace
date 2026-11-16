@@ -1,0 +1,25 @@
+{
+  "name": "invalid-nonshortest-int",
+  "typ": 1,
+  "notes": "uint 1 written with a one-byte argument (0x18 0x01): RFC 8949 §4.2.1 requires the shortest head",
+  "cbor_hex": "a2011802a1706f7374656e73696f6e5f6b696e6401",
+  "model": {
+    "$map": [
+      [
+        1,
+        1
+      ],
+      [
+        2,
+        {
+          "$map": [
+            [
+              "protocol_version",
+              1
+            ]
+          ]
+        }
+      ]
+    ]
+  }
+}

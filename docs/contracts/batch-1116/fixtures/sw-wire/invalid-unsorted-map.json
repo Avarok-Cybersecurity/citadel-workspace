@@ -1,0 +1,25 @@
+{
+  "name": "invalid-unsorted-map",
+  "typ": 1,
+  "notes": "keys 2 then 1: map keys must sort by their encoded bytes",
+  "cbor_hex": "a202a170636c6965656e745f6275696c646201",
+  "model": {
+    "$map": [
+      [
+        2,
+        {
+          "$map": [
+            [
+              "client_build",
+              "x"
+            ]
+          ]
+        }
+      ],
+      [
+        1,
+        1
+      ]
+    ]
+  }
+}

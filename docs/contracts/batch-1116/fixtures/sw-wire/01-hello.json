@@ -1,0 +1,33 @@
+{
+  "cbor_hex": "a2010102a36c636c69656e745f6275696c646c73772d6d637020302e312e306d656e64706f696e745f6b696e64666465766963657070726f746f636f6c5f76657273696f6e01",
+  "model": {
+    "$map": [
+      [
+        1,
+        1
+      ],
+      [
+        2,
+        {
+          "$map": [
+            [
+              "client_build",
+              "sw-mcp 0.1.0"
+            ],
+            [
+              "endpoint_kind",
+              "device"
+            ],
+            [
+              "protocol_version",
+              1
+            ]
+          ]
+        }
+      ]
+    ]
+  },
+  "name": "01-hello",
+  "signed": false,
+  "typ": 1
+}

@@ -785,6 +785,8 @@ jobs:
         run: node scripts/check-already-registered-predicate-matches-the-agent.mjs
       - name: Every document in docs/ is reachable from its index
         run: node scripts/check-docs-are-listed-in-the-index.mjs
+      - name: The batch-1116 contract fixtures agree with their schemas and known answers
+        run: node scripts/check-batch-contracts.mjs
       - name: The UI recognises the agent's duplicate-connect refusal
         run: node scripts/check-connect-in-progress-matches-the-agent.mjs
       - name: Submodule work is committed, not just pointed at
