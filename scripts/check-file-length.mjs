@@ -85,7 +85,7 @@ const SKIP = new Map([
   ['lib/revfs/revfs-retry.ts', 254],
 
   ['components/ui/sidebar.tsx', 487],
-  ['lib/file-transfer/service.ts', 276],
+  ['lib/file-transfer/service.ts', 273],
   // Two data-testid attributes, so the integration suite's readiness probe can
   // stop keying on button copy — see ROBUSTNESS round 168.
   ['types/messaging-layer.ts', 438],
