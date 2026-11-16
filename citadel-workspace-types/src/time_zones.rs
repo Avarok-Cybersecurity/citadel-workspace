@@ -160,7 +160,10 @@ mod tests {
 
     #[test]
     fn every_name_jiff_lists_is_accepted_and_every_accepted_name_loads() {
-        let db = jiff::tz::db();
+        // The bundled database, by name: `jiff::tz::db()` reads the system's zoneinfo whenever any
+        // crate in the build turns that feature on (sigstore-tsa does, for the agent), and macOS's
+        // holds `posixrules`, a file and no zone.
+        let db = jiff::tz::TimeZoneDatabase::bundled();
         let unlisted: Vec<String> = db
             .available()
             .map(|n| n.to_string())
