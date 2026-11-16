@@ -1705,6 +1705,8 @@ jobs:
             artifact: reconnect-c2s
           - test: test:reconnect-p2p-only
             artifact: reconnect-p2p-only
+          - test: test:reconnect-chat-level
+            artifact: reconnect-chat-level
           - test: test:reconnect-one-c2s
             artifact: reconnect-one-c2s
           - test: test:reconnect-both-c2s

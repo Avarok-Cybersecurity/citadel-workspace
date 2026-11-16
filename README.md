@@ -168,7 +168,7 @@ cargo test -p citadel-workspace-types -p citadel-workspace-server-kernel
 # End to end — these share ONE backend, so never run two at once.
 #
 # The suite has TWO runners, and `npx playwright test` is only one of them:
-# verify: count citadel-workspaces/integration-tests/src/tests-pw .spec.ts == 32
+# verify: count citadel-workspaces/integration-tests/src/tests-pw .spec.ts == 33
 # verify: count citadel-workspaces/integration-tests/src/tests .test.ts == 43
 # its testDir is ./src/tests-pw (32 specs). The rest are driven by npm scripts,
 # which is what CI runs -- 43 at the top level of src/tests, plus more under
