@@ -6,6 +6,7 @@ use crate::apps::peer::{PeerConsent, PeerDirection, PeerForMe};
 use crate::apps::{Capability, InstallScope};
 use crate::apps_install::{AppInstall, AppsRefusal, HostNetGrant, ListingSource};
 use crate::apps_protocol::IhttpFrom;
+pub use citadel_app_sdk_types::calls::StorageBackend;
 use citadel_internal_service_types::plaintext_debug_fmt;
 use custom_debug::Debug;
 use serde::{Deserialize, Serialize};
@@ -178,6 +179,15 @@ pub enum AppsResponse {
     /// Pushed to the workspace's other members when one changed their own answers for an install
     /// (consent, blocks, turned off for me): what `AuthorizePeer` says may have changed. Content-free.
     PeerAnswersChanged,
+    /// Pushed to the members who may view a node when an app wrote there (`storage.node`,
+    /// `storage.node.authored`): which install, which store and which keys, never a value. A
+    /// page tells that install's running instances (`AppEvent::StorageChanged`), which read the
+    /// keys again with their own rights.
+    StorageChanged {
+        install_id: String,
+        backend: StorageBackend,
+        keys: Vec<String>,
+    },
     /// CBOR of the SDK's `HostReply`.
     CallReply {
         #[debug(with = plaintext_debug_fmt)]

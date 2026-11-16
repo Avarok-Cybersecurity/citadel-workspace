@@ -8,6 +8,9 @@
 #
 # CITADEL_CF_TOKEN_FILE  a file holding the Cloudflare API token. Read here, handed to wrangler in
 #                        its environment only; never an argument, never printed.
+# CITADEL_FIRST_PARTY_SIGNED_DIR  the first-party apps every workspace is provisioned with, signed
+#                        (`node scripts/build-first-party-apps.mjs --sign <dir>`, the deploy
+#                        workflow's step with the signing secret); the server wasm embeds them.
 # CITADEL_STRIPE_KEY_FILE a file holding STRIPE_SECRET_KEY=... for the read-only catalogue audit
 #                        (scripts/stripe-catalogue.mjs): the prices the Worker sells must exist.
 #                        A live key is refused by that script, so this deploys test mode only.
@@ -51,6 +54,9 @@ if [ "$DRY_RUN" = 0 ]; then
   TOKEN="$(tr -d '\r\n ' < "$CITADEL_CF_TOKEN_FILE")"
   [ -n "$TOKEN" ] || fail "the token file is empty"
   [ -n "${CITADEL_STRIPE_KEY_FILE:-}" ] || fail "set CITADEL_STRIPE_KEY_FILE for the Stripe catalogue audit"
+  # Without it the server builds with no first-party apps, and every new workspace lacks them.
+  [ -n "${CITADEL_FIRST_PARTY_SIGNED_DIR:-}" ] || fail "set CITADEL_FIRST_PARTY_SIGNED_DIR to the signed first-party apps (build-first-party-apps.mjs --sign)"
+  [ -f "$CITADEL_FIRST_PARTY_SIGNED_DIR/calendar/app.mldsa.sig" ] || fail "CITADEL_FIRST_PARTY_SIGNED_DIR holds no signed calendar"
 fi
 
 # wrangler with the token in its environment, and any line that could echo an auth header dropped.

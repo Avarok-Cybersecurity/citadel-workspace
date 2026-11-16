@@ -18,6 +18,7 @@ fn limits_are_clamped_to_the_host_ceilings() {
         ("frame_budget_ms", 1001),
         ("storage_user_bytes", 1024 * 1024 + 1),
         ("storage_scope_bytes", 8 * 1024 * 1024 + 1),
+        ("storage_node_authored_bytes", 256 * 1024 + 1),
         ("close_grace_ms", 0),
         ("close_grace_ms", 2001),
     ] {
@@ -30,6 +31,7 @@ fn limits_are_clamped_to_the_host_ceilings() {
     }
     assert!(with(|m| m["limits"]["memory_pages"] = json!(4096)).is_ok());
     assert!(with(|m| m["limits"]["close_grace_ms"] = json!(2000)).is_ok());
+    assert!(with(|m| m["limits"]["storage_node_authored_bytes"] = json!(256 * 1024)).is_ok());
 }
 
 #[test]

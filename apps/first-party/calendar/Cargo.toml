@@ -1,0 +1,29 @@
+# The Calendar (net.avarok.calendar), a first-party app on the glue ABI (Calendar design §3.2):
+# its UI is React in the UI bundle, and everything it decides is `core`, pure Rust with no I/O,
+# compiled natively for its tests and to wasm32-unknown-unknown for the page. Its own workspace,
+# as every first-party app is (apps/first-party/compute-pool).
+[workspace]
+resolver = "2"
+members = ["core", "glue", "sdk-client"]
+exclude = ["sdk"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[workspace.dependencies]
+# Through sdk/'s symlinks, for the reason apps/sdk-fixtures/Cargo.toml gives: a path inside the
+# workspace root keeps the bytes independent of where the repository is checked out.
+citadel-app-sdk = { path = "sdk/citadel-app-sdk" }
+citadel-app-sdk-types = { path = "sdk/citadel-app-sdk-types" }
+calendar-core = { path = "core" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true

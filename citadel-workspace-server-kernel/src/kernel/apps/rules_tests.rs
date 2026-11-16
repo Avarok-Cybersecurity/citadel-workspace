@@ -209,7 +209,7 @@ fn an_owner_may_grant_everything_and_a_member_seed_only_the_intrinsic_capabiliti
 /// to an apps permission an installer can hold, and only `storage.files` reaching the file store.
 #[test]
 fn every_sdk_capability_has_an_installer_permission() {
-    assert_eq!(Capability::ALL.len(), 32);
+    assert_eq!(Capability::ALL.len(), 33);
     for cap in Capability::ALL.iter().copied() {
         let needed = required_installer_permission(cap);
         assert!(

@@ -11,6 +11,12 @@ export type AppLimits = {
  */
 memory_pages: number, max_call_rate_per_s: number, frame_budget_ms: number, storage_user_bytes: number, storage_scope_bytes: number, 
 /**
+ * Bytes one member may post on one node (`storage.node.authored`), at most
+ * `MAX_STORAGE_NODE_AUTHORED_BYTES`. Absent: that platform cap. Optional, unlike the two
+ * above, because the field came after manifests that were already published.
+ */
+storage_node_authored_bytes?: number, 
+/**
  * How long `app_close` and the replies it waits on may take before the host ends the
  * instance, in milliseconds: 1 to `abi::MAX_CLOSE_GRACE_MS`. Required, never defaulted: the
  * publisher states the cleanup it needs, the consent screen and the host hold it to that.

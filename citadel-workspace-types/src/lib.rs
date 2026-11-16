@@ -558,6 +558,11 @@ pub enum WorkspaceProtocolResponse {
         /// predates the field still decodes, as a list of direct members.
         #[serde(default)]
         inherited_from: std::collections::HashMap<String, String>,
+        /// The listed members a live booking link names as guests (Calendar design §3.6.4),
+        /// derived from the link records on each call. Sent to callers holding ManageRoles only;
+        /// empty for everyone else, and from a server that predates the field.
+        #[serde(default)]
+        guests: Vec<String>,
     },
     /// The roster of `domain_id` exists and an admin has hidden it from this
     /// caller (SetMembersVisible). Not an empty `Members`: an empty list claims

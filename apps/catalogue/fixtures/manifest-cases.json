@@ -1966,6 +1966,32 @@
    ]
   },
   {
+   "name": "limit storage_node_authored_bytes 262145",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "limits",
+      "storage_node_authored_bytes"
+     ],
+     "value": 262145
+    }
+   ]
+  },
+  {
+   "name": "control: limit storage_node_authored_bytes 262144",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "limits",
+      "storage_node_authored_bytes"
+     ],
+     "value": 262144
+    }
+   ]
+  },
+  {
    "name": "limit close_grace_ms 0",
    "expect": "Limits",
    "set": [

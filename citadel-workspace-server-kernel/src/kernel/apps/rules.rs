@@ -24,9 +24,8 @@ pub fn required_installer_permission(cap: Capability) -> Permission {
         FilesRead | FilesWrite | StorageFiles => Permission::AppInstallAllowFiles,
         ChatRead | ChatSend => Permission::AppInstallAllowChat,
         MembersList => Permission::AppInstallAllowMembers,
-        StorageUser | StorageScope | StorageNode | StorageBlob | StorageLocal => {
-            Permission::AppInstallAllowStorage
-        }
+        StorageUser | StorageScope | StorageNode | StorageNodeAuthored | StorageBlob
+        | StorageLocal => Permission::AppInstallAllowStorage,
         ClipboardRead | ClipboardWrite => Permission::AppInstallAllowClipboard,
         Notifications => Permission::AppInstallAllowNotifications,
         NetHost => Permission::AppInstallAllowHostNetwork,
@@ -52,7 +51,9 @@ pub fn acting_user_requirement(cap: Capability) -> &'static [Permission] {
     use Capability::*;
     match cap {
         Canvas | Ui | Events | Navigate | Log | NodesRead | StorageUser | StorageScope
-        | StorageNode | StorageBlob | StorageLocal => &[Permission::ViewContent],
+        | StorageNode | StorageNodeAuthored | StorageBlob | StorageLocal => {
+            &[Permission::ViewContent]
+        }
         NodesWrite => &[Permission::CreateNode, Permission::EditTreeStructure],
         MdEdit | Documents => &[Permission::EditMdx],
         // `storage.files` is the app's own directory in the server file store: the member must be

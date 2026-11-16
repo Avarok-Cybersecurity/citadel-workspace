@@ -32,6 +32,9 @@ pub mod facts;
 pub mod fetcher;
 #[cfg(not(target_family = "wasm"))]
 pub mod fetcher_native;
+/// The apps every workspace is provisioned with, and the releases this server embeds for it.
+pub mod first_party;
+pub mod first_party_bundles;
 pub mod host_net;
 pub mod ihttp_adverts;
 pub mod ihttp_audit;
@@ -47,7 +50,9 @@ pub mod peer_rules;
 pub mod records;
 pub mod rules;
 pub mod storage;
+pub mod storage_authored;
 pub mod storage_entitlement;
+pub mod storage_notice;
 pub mod storage_write;
 pub mod update;
 pub mod usage_meter;
@@ -64,6 +69,8 @@ mod egress_in_flight_tests;
 mod egress_native_tests;
 #[cfg(test)]
 mod egress_tests;
+#[cfg(test)]
+mod first_party_key_tests;
 #[cfg(test)]
 mod ihttp_adverts_tests;
 #[cfg(test)]
@@ -84,6 +91,10 @@ mod install_tests;
 mod kernel_advertise_tests;
 #[cfg(test)]
 mod kernel_artifact_tests;
+#[cfg(test)]
+mod kernel_authored_quota_tests;
+#[cfg(test)]
+mod kernel_authored_tests;
 #[cfg(test)]
 mod kernel_call_backend_tests;
 #[cfg(test)]
@@ -136,6 +147,8 @@ mod runtime_wire_fixture_tests;
 mod runtime_wire_frames;
 #[cfg(test)]
 mod runtime_wire_relay;
+#[cfg(test)]
+mod storage_authored_tests;
 #[cfg(test)]
 mod storage_tests;
 #[cfg(test)]

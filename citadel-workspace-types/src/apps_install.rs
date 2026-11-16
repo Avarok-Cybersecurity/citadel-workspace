@@ -120,6 +120,9 @@ pub enum ListingSource {
     WorkspaceRegistry { entry_id: String },
     /// Uploaded by the installer, for a scope of their own.
     Upload,
+    /// Installed when the workspace was provisioned, from a release a first-party key signed and
+    /// the server was built with (Calendar design §3.2). Takes signed updates, as an upload does.
+    FirstParty,
 }
 
 /// Why an apps request was refused.

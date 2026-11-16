@@ -216,6 +216,27 @@ jobs:
           cargo fmt --all --check
           cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
           cargo test --locked -p compute-pool-core
+      # The Calendar (Calendar design 3.2): its core is pure and runs natively for its tests,
+      # including the sweep over every IANA zone's transitions, and builds for the page's wasm32.
+      - name: First-party Calendar - fmt, clippy native and wasm32, and its core's tests
+        working-directory: apps/first-party/calendar
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
+          cargo test --locked -p calendar-core
+      # The core's TypeScript (core/bindings) is what the page is compiled against; regenerating
+      # it must change nothing, and the glue vendored into the UI must be what the source builds.
+      - name: First-party Calendar - committed bindings and vendored glue match the source
+        run: |
+          (cd apps/first-party/calendar && cargo test --locked -p calendar-core --features ts)
+          git diff --exit-code -- apps/first-party/calendar/core/bindings
+          untracked="$(git ls-files --others --exclude-standard -- apps/first-party/calendar/core/bindings)"
+          if [ -n "$untracked" ]; then echo "::error::bindings not committed: $untracked"; exit 1; fi
+          version="$(sed -n '/^name = "wasm-bindgen"$/{n;s/^version = "\(.*\)"$/\1/p;}' apps/first-party/calendar/Cargo.lock)"
+          test -n "$version" || { echo "::error::no wasm-bindgen in apps/first-party/calendar/Cargo.lock"; exit 1; }
+          cargo install wasm-bindgen-cli --locked --version "$version"
+          node scripts/build-calendar-glue.mjs --check
       - name: The committed first-party apps rebuild byte-for-byte from their source
         run: node scripts/build-first-party-apps.mjs --check
       - name: First-party app signer - fmt, clippy and tests
@@ -224,6 +245,16 @@ jobs:
           cargo +1.99.0 fmt --check
           cargo +1.99.0 clippy --locked --all-targets -- -D warnings
           cargo +1.99.0 test --locked
+      # The deploy's signing step, as far as a PR can run it: no secret here (forks get none), so a
+      # seed made for this step, which the script must find NOT first-party. The deploy runs the
+      # same command with the real seed, where the key must be first-party.
+      - name: First-party apps - the signing step signs with a throwaway seed
+        run: |
+          set -euo pipefail
+          node --test scripts/lib/sign-first-party-apps.test.mjs
+          CITADEL_APP_SIGNING_SEED_HEX="$(openssl rand -hex 32)" \
+            node scripts/build-first-party-apps.mjs --sign "$RUNNER_TEMP/first-party-signed" --throwaway-key
+          test -s "$RUNNER_TEMP/first-party-signed/calendar/app.mldsa.sig"
       - name: Reference host - fmt, clippy, every fixture judged and run as fixtures.json says
         working-directory: apps/sdk-fixtures/harness
         run: |

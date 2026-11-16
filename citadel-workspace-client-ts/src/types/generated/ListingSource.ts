@@ -3,4 +3,4 @@
 /**
  * Where the install's listing came from, and so where updates are looked for.
  */
-export type ListingSource = { "Global": { catalogue_version: bigint, } } | { "WorkspaceRegistry": { entry_id: string, } } | "Upload";
+export type ListingSource = { "Global": { catalogue_version: bigint, } } | { "WorkspaceRegistry": { entry_id: string, } } | "Upload" | "FirstParty";

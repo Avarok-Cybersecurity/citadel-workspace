@@ -55,3 +55,39 @@ fn a_manifest_that_does_not_declare_what_the_module_imports_is_refused() {
     let why = sign(&m.to_string(), WASM, &key()).unwrap_err();
     assert!(why.contains("ABI inspector"), "{why}");
 }
+
+const CALENDAR: &str = include_str!("../../calendar/manifest.json");
+const CALENDAR_GLUE: &[u8] =
+    include_bytes!("../../../../citadel-workspaces/public/calendar/calendar_glue_bg.wasm");
+
+#[test]
+fn a_glue_app_signs_without_the_abi_1_inspector_and_verifies() {
+    let signed = sign(CALENDAR, CALENDAR_GLUE, &key()).unwrap();
+    let digests = ArtifactDigests::of(&signed.manifest, CALENDAR_GLUE);
+    verify(
+        &key().public_key_hex(),
+        "net.avarok.calendar",
+        "0.1.0",
+        &digests,
+        &signed.signature,
+    )
+    .unwrap();
+}
+
+#[test]
+fn an_abi_the_signer_does_not_know_is_refused() {
+    let mut m: Value = serde_json::from_str(CALENDAR).unwrap();
+    m["sdk"]["abi"] = Value::String("wasm-bindgen-glue-thirdparty".into());
+    let why = sign(&m.to_string(), CALENDAR_GLUE, &key()).unwrap_err();
+    assert!(why.contains("knows no ABI"), "{why}");
+}
+
+#[test]
+fn the_glue_abi_is_the_kernels() {
+    let types = include_str!("../../../../citadel-workspace-types/src/apps_manifest.rs");
+    let declared = format!("pub const ABI_FIRST_PARTY_GLUE: &str = {ABI_FIRST_PARTY_GLUE:?};");
+    assert!(
+        types.contains(&declared),
+        "the kernel's glue ABI is not {ABI_FIRST_PARTY_GLUE:?}"
+    );
+}

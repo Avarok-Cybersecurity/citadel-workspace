@@ -18,6 +18,9 @@ pub const MAX_CALL_RATE_PER_S: u32 = 200;
 pub const MAX_FRAME_BUDGET_MS: u32 = 1000;
 pub const MAX_STORAGE_USER_BYTES: u32 = 1024 * 1024;
 pub const MAX_STORAGE_SCOPE_BYTES: u32 = 8 * 1024 * 1024;
+/// What one member may hold on one node per app and scope (`storage.node.authored`, Calendar
+/// design §3.3.1): the kernel's quota for the namespace, and the most a manifest may declare.
+pub const MAX_STORAGE_NODE_AUTHORED_BYTES: u32 = 256 * 1024;
 pub const MAX_ARTIFACT_BYTES: u32 = 8 * 1024 * 1024;
 pub const MAX_LOCATIONS: usize = 4;
 pub const MAX_GITHUB_PATH_BYTES: usize = 256;
@@ -141,6 +144,12 @@ pub(crate) fn check_limits(
         (
             "storage_scope_bytes",
             limits.storage_scope_bytes <= MAX_STORAGE_SCOPE_BYTES,
+        ),
+        (
+            "storage_node_authored_bytes",
+            limits
+                .storage_node_authored_bytes
+                .is_none_or(|bytes| bytes <= MAX_STORAGE_NODE_AUTHORED_BYTES),
         ),
         (
             "close_grace_ms",

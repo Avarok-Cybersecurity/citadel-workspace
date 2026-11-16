@@ -604,6 +604,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             let mut member_ids: Vec<String> = Vec::new();
             let mut inherited_from: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
+            // An admin sees booking guests, to find and remove them, wherever they are listed.
+            let live_guests = if is_admin {
+                backend
+                    .live_guest_users(super::telemetry::now_ms()?)
+                    .await?
+            } else {
+                Default::default()
+            };
             {
                 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
                 for entry in roster {
@@ -616,7 +624,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         )
                         .await
                         .unwrap_or(false);
-                    if !has_access {
+                    if !has_access && !live_guests.contains(&entry.user_id) {
                         continue;
                     }
                     if let Some(via) = entry.via {
@@ -674,6 +682,11 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 // Echoed from the request, resolved the same way the lookup
                 // above resolved it, so the answer says what it is about.
                 domain_id: Some(target_id.to_string()),
+                guests: users
+                    .iter()
+                    .filter(|u| live_guests.contains(&u.id))
+                    .map(|u| u.id.clone())
+                    .collect(),
                 members: users,
                 inherited_from,
             })
