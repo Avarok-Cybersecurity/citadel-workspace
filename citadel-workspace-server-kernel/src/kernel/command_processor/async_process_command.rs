@@ -1251,6 +1251,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             rules,
             chat_enabled,
             is_default,
+            metadata,
         } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             use crate::platform::{SystemTime, UNIX_EPOCH};
@@ -1265,6 +1266,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     rules.as_deref(),
                     *chat_enabled,
                     *is_default,
+                    metadata.as_deref(),
                 )
                 .await
             {
@@ -1320,12 +1322,17 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     // reached the gate and never reached here: setting which
                     // room a workspace opens on was written on the server and
                     // announced to nobody.
-                    if crate::handlers::domain::node_ops::update_changes_structure(
-                        name.as_deref(),
-                        description.as_deref(),
-                        rules.as_deref(),
-                        *chat_enabled,
-                        *is_default,
+                    let changes_structure =
+                        crate::handlers::domain::node_ops::update_changes_structure(
+                            name.as_deref(),
+                            description.as_deref(),
+                            rules.as_deref(),
+                            *chat_enabled,
+                            *is_default,
+                        );
+                    if crate::handlers::domain::node_ops::update_announces_the_node(
+                        changes_structure,
+                        metadata.is_some(),
                     ) {
                         // Node-scoped, like the content update above: a structural edit
                         // carries the whole DomainNode, name, rules and all.
@@ -1343,6 +1350,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     e
                 ))),
             }
+        }
+
+        WorkspaceProtocolRequest::SetDefaultAppTabs { app_tabs } => {
+            super::default_app_tabs::set_default_app_tabs(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                app_tabs,
+            )
+            .await
         }
 
         WorkspaceProtocolRequest::SetMembersVisible { node_id, visible } => {

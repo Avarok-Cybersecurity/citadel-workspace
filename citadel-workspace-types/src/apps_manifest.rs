@@ -112,6 +112,9 @@ pub enum AppSurface {
     CanvasPane,
     /// A zone inside a document (`<AppZone app=.. />`).
     MdZone,
+    /// A tab of a node's pane, beside its page and chat. Everyone on the node sees it, so an app
+    /// listing it must support a scope that reaches a node (`workspace`, `node` or `node_tree`).
+    NodeTab,
 }
 
 /// One capability the app asks for, and why. `hosts` is present exactly for `net.host` and

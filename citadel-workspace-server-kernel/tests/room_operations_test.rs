@@ -94,6 +94,7 @@ async fn test_room_operations() {
             rules: None,
             chat_enabled: None,
             is_default: None,
+            metadata: None,
         },
     )
     .await

@@ -1218,6 +1218,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             // theme configured before the workspace was initialised — the same
             // defect already fixed on the theme path, which this call site
             // never received.
+            super::node_metadata_merge::check_workspace_metadata_patch(&meta_bytes)
+                .map_err(NetworkError::msg)?;
             workspace.metadata =
                 super::metadata_merge::merge_metadata_document(&workspace.metadata, &meta_bytes)
                     .map_err(NetworkError::msg)?;

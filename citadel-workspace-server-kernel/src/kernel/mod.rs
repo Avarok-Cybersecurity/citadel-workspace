@@ -22,6 +22,8 @@ pub mod chat_document_limit;
 /// Which account each live connection belongs to.
 mod cid_attribution;
 pub mod command_processor;
+/// Giving the root workspace its default app tabs when it has none.
+mod default_tabs_provisioning;
 pub mod display_name;
 /// The Documents relay: configuration and the log's rules.
 pub mod documents;

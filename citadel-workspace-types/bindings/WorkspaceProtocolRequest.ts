@@ -146,4 +146,11 @@ logo: WorkspaceLogoChange | null, } } | { "UpdateNode": { node_id: string, name:
  *
  * Exactly one node is the default, so setting it clears the others.
  */
-is_default: boolean | null, } } | { "SetMembersVisible": { node_id: string, visible: boolean, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes" | { "Telemetry": TelemetryRequest } | { "MessagingTrust": MessagingTrustRequest } | { "Roles": RolesRequest } | { "Documents": DocumentsRequest } | { "ChatDocuments": ChatDocumentsRequest } | { "ChatAttachments": ChatAttachmentsRequest } | { "SecureLinks": SecureLinksRequest } | { "Apps": AppsRequest };
+is_default: boolean | null, 
+/**
+ * A JSON object merged key by key into the node's metadata (`node_tabs`): `app_tabs`
+ * and `time_zone` are checked, `null` under either removes it (the node then follows
+ * the workspace), `citadel_app` may not change, any other key is kept as sent. Needs
+ * `UpdateNodeSettings` on the node.
+ */
+metadata?: Array<number>, } } | { "SetDefaultAppTabs": { app_tabs: Array<string>, } } | { "SetMembersVisible": { node_id: string, visible: boolean, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes" | { "Telemetry": TelemetryRequest } | { "MessagingTrust": MessagingTrustRequest } | { "Roles": RolesRequest } | { "Documents": DocumentsRequest } | { "ChatDocuments": ChatDocumentsRequest } | { "ChatAttachments": ChatAttachmentsRequest } | { "SecureLinks": SecureLinksRequest } | { "Apps": AppsRequest };
