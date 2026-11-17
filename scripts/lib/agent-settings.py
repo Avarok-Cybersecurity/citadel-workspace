@@ -7,10 +7,18 @@ three launchers cannot drift apart:
 
     agent-settings.py <Info.plist> get <Key>
     agent-settings.py <Info.plist> render <template>   # @Key@ -> value, to stdout
+    agent-settings.py <Info.plist> launch-asset <template>   # citadel-agent-launch.json
+
+`launch-asset` writes the release asset a tarball's updating agent reads (citadel-internal-
+service's updater/launch_settings.rs): {"v":1,"settings":{"--flag":"value"}}, every flag the
+Linux launcher template passes a release-wide value for (a `--flag '@Key@'` line), with that
+key's value. The flags and their values are the launcher's, so the asset cannot drift from
+what the packages start the agent with. The release signs it like every other asset.
 
 Every value is checked against the shape the agent accepts before it is written into a
 shell script or an installer, so a stray quote in the plist cannot become code.
 """
+import json
 import plistlib
 import re
 import sys
@@ -48,9 +56,31 @@ def render(settings: dict, template: str) -> str:
     return out
 
 
+# A `--flag '@Key@' \` line of the launcher template.
+LAUNCH_LINE = re.compile(r"^\s*(--[a-z0-9][a-z0-9-]*) '@([A-Za-z]+)@' \\$", re.M)
+# The format the updater reads; it refuses any other.
+LAUNCH_FORMAT = 1
+# Never offered: structopt requires --bind, so every running agent was given it (perhaps as
+# -b, which the updater cannot see as the same flag), and offering it could only repeat it.
+NOT_OFFERED = {"--bind"}
+
+
+def launch_asset(settings: dict, template: str) -> str:
+    flags = {}
+    for flag, key in LAUNCH_LINE.findall(template):
+        if key not in settings:
+            sys.exit(f"agent-settings: the template names an unknown key @{key}@")
+        if flag not in NOT_OFFERED:
+            flags[flag] = settings[key]
+    if not flags:
+        sys.exit("agent-settings: the template passes no release-wide setting; is it the launcher?")
+    asset = {"v": LAUNCH_FORMAT, "settings": flags}
+    return json.dumps(asset, sort_keys=True, separators=(",", ":")) + "\n"
+
+
 def main(argv: list) -> None:
-    if len(argv) != 4 or argv[2] not in ("get", "render"):
-        sys.exit("usage: agent-settings.py <Info.plist> get <Key> | render <template>")
+    if len(argv) != 4 or argv[2] not in ("get", "render", "launch-asset"):
+        sys.exit("usage: agent-settings.py <Info.plist> get <Key> | render <template> | launch-asset <template>")
     settings = load(argv[1])
     if argv[2] == "get":
         if argv[3] not in settings:
@@ -58,7 +88,9 @@ def main(argv: list) -> None:
         print(settings[argv[3]])
     else:
         with open(argv[3], encoding="utf-8") as f:
-            sys.stdout.write(render(settings, f.read()))
+            template = f.read()
+        out = render(settings, template) if argv[2] == "render" else launch_asset(settings, template)
+        sys.stdout.write(out)
 
 
 if __name__ == "__main__":

@@ -121,6 +121,8 @@ fn update_relaunch(name: &str, stun: bool) -> Run {
         backup,
         health,
         version: VERSION.to_string(),
+        // The old version's own command: the backup's wrapper adds what it needs.
+        restore_args: args.clone(),
         args,
         failed_marker: dir.join(format!("failed-{VERSION}")),
     };

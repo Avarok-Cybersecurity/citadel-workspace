@@ -111,6 +111,29 @@ open accounts will have to sign in again before it sends the request.
 
 A version whose install failed is never retried automatically in that run or the next.
 
+### Launch settings for a tarball's agent
+
+A tarball's agent is started with a command its operator wrote, and is restarted with it. When a
+release adds a setting the agent refuses to start without, the release's
+`citadel-agent-launch.json` (`{"v":1,"settings":{"--flag":"value"}}`, signed like every asset)
+says what the new version must be started with. The updater (`updater/fetch_launch.rs`,
+`updater/launch_settings.rs` in citadel-internal-service) requires it for a tarball before
+downloading anything, verifies its `.mldsa.sig`, and appends only the settings the command does
+not give (as `--flag value` or `--flag=value`): the operator's value always wins. The staged
+version's `--check-launch` and the watchdog's start use the merged command; a rollback starts the
+old version with its own command (`WatchPlan::restore_args`). A missing, unsigned, tampered,
+malformed or unknown-format asset is refused and nothing is installed; `last_error` says why.
+
+The release workflow's `launch-settings` job writes it with
+`scripts/lib/agent-settings.py <Info.plist> launch-asset packaging/linux/citadel-agent-launch.in`:
+every `--flag '@Key@'` line of the Linux launcher, with that key's Info.plist value, except
+`--bind` (structopt requires it, so it is always given). A required setting added to the launchers
+therefore reaches binary-only agents with no other change. `scripts/test-agent-launch-asset.sh`
+holds the asset to the launcher.
+
+A restart that is not the updater's (a reboot, a service manager, the operator) uses the
+operator's command again, which still lacks the setting; the new version's refusal names it.
+
 ## Signing releases
 
 `release-agent.yml` signs every asset (everything in `dist/` but the `.sha256` files) in its
