@@ -237,10 +237,8 @@ services:
       # (integration-tests/src/lib/config.ts); a human usually types localhost.
       - INTERNAL_SERVICE_ALLOWED_ORIGINS=http://localhost:5291,http://127.0.0.1:5291
       - *dev-stun-servers
-      # The portable identity's timings, in seconds; the agent refuses to start without them.
+      # How long the portable identity stays unlocked, in seconds; the agent refuses to start without it.
       - INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS=900
-      - INTERNAL_SERVICE_IDENTITY_CHALLENGE_TIMEOUT_SECS=10
-      - INTERNAL_SERVICE_IDENTITY_FETCH_TIMEOUT_SECS=10
     deploy:
       resources:
         limits:

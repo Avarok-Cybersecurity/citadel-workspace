@@ -87,8 +87,6 @@ runs:
           -d Bind="$(s CitadelAgentBind)" -d Origin="$(s CitadelWorkspaceOrigin)" \
           -d Stun="$(s CitadelAgentStunServers)" -d DataDirName="$(s CitadelAgentDataDirectoryName)" \
           -d UnlockIdle="$(s CitadelAgentIdentityUnlockIdleSecs)" \
-          -d ChallengeTimeout="$(s CitadelAgentIdentityChallengeTimeoutSecs)" \
-          -d FetchTimeout="$(s CitadelAgentIdentityFetchTimeoutSecs)" \
           -o Citadel-Agent-x64.msi
     - name: Sign the MSI (DISABLED -- see above)
       if: inputs.signing == 'enabled'

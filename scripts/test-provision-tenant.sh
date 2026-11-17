@@ -116,8 +116,8 @@ else
   echo "  FAIL: a full tenant's INTERNAL_SERVICE_STUN_SERVERS is [$got_stun], not the agents' [$want_stun]"; fails=$((fails+1))
 fi
 
-# And its identity timings, under the same rule and from the same file.
-for key in UnlockIdleSecs:UNLOCK_IDLE ChallengeTimeoutSecs:CHALLENGE_TIMEOUT FetchTimeoutSecs:FETCH_TIMEOUT; do
+# And its identity unlock idle, under the same rule and from the same file.
+for key in UnlockIdleSecs:UNLOCK_IDLE; do
   want=$(python3 scripts/lib/agent-settings.py apps/macos-agent/Info.plist get "CitadelAgentIdentity${key%%:*}" 2>/dev/null || true)
   got=$(sed -n "s/^INTERNAL_SERVICE_IDENTITY_${key#*:}_SECS=//p" <<<"$out")
   if [ -n "$want" ] && [ "$got" = "$want" ]; then

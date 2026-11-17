@@ -176,14 +176,9 @@ fi
 # could be provisioned and never deployed.
 STUN_SERVERS="$(python3 scripts/lib/agent-settings.py apps/macos-agent/Info.plist get CitadelAgentStunServers)" \
   || die "could not read the agent's STUN servers from apps/macos-agent/Info.plist"
-# The portable identity's timings, from the same file on the same reasoning.
-identity_setting() {
-  python3 scripts/lib/agent-settings.py apps/macos-agent/Info.plist get "CitadelAgentIdentity$1"
-}
-UNLOCK_IDLE_SECS="$(identity_setting UnlockIdleSecs)" \
-  && CHALLENGE_TIMEOUT_SECS="$(identity_setting ChallengeTimeoutSecs)" \
-  && FETCH_TIMEOUT_SECS="$(identity_setting FetchTimeoutSecs)" \
-  || die "could not read the agent's identity timings from apps/macos-agent/Info.plist"
+# How long the portable identity stays unlocked, from the same file on the same reasoning.
+UNLOCK_IDLE_SECS="$(python3 scripts/lib/agent-settings.py apps/macos-agent/Info.plist get CitadelAgentIdentityUnlockIdleSecs)" \
+  || die "could not read the agent's identity unlock idle from apps/macos-agent/Info.plist"
 
 # The WORKSPACE SERVER binds publicly so each user's own agent can dial in. That
 # is the supported topology and the protocol is E2E encrypted between client and
@@ -210,8 +205,6 @@ INTERNAL_SERVICE_BIND_HOST=$AGENT_BIND_HOST
 INTERNAL_SERVICE_ALLOWED_ORIGINS=$ORIGINS
 INTERNAL_SERVICE_STUN_SERVERS=$STUN_SERVERS
 INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS=$UNLOCK_IDLE_SECS
-INTERNAL_SERVICE_IDENTITY_CHALLENGE_TIMEOUT_SECS=$CHALLENGE_TIMEOUT_SECS
-INTERNAL_SERVICE_IDENTITY_FETCH_TIMEOUT_SECS=$FETCH_TIMEOUT_SECS
 IMAGE_TAG=${IMAGE_TAG:-latest}
 EOF
   # The UI's published port must be the one the vhost proxies to: without it

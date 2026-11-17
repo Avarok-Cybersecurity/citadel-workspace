@@ -250,10 +250,8 @@ services:
       - INTERNAL_SERVICE_ALLOWED_ORIGINS=${INTERNAL_SERVICE_ALLOWED_ORIGINS}
       # Exactly three STUN servers, host:port; the binary refuses to start without them.
       - INTERNAL_SERVICE_STUN_SERVERS=${INTERNAL_SERVICE_STUN_SERVERS}
-      # The portable identity's timings, whole seconds; the binary refuses to start without them.
+      # How long the portable identity stays unlocked, whole seconds; the binary refuses to start without it.
       - INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS=${INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS}
-      - INTERNAL_SERVICE_IDENTITY_CHALLENGE_TIMEOUT_SECS=${INTERNAL_SERVICE_IDENTITY_CHALLENGE_TIMEOUT_SECS}
-      - INTERNAL_SERVICE_IDENTITY_FETCH_TIMEOUT_SECS=${INTERNAL_SERVICE_IDENTITY_FETCH_TIMEOUT_SECS}
     deploy:
       resources:
         limits:

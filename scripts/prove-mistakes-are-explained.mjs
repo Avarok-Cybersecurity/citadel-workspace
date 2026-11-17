@@ -90,8 +90,7 @@ const browser = await chromium.launch({ args: RESOLVER ? [`--host-resolver-rules
     console.error('  ./citadel-agent --bind 127.0.0.1:12345 --backend filesystem \\');
     console.error(`      --allowed-origins ${ORIGIN} \\`);
     console.error('      --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 \\');
-    console.error('      --identity-unlock-idle-secs 900 --identity-challenge-timeout-secs 10 \\');
-    console.error('      --identity-fetch-timeout-secs 10');
+    console.error('      --identity-unlock-idle-secs 900');
     await browser.close();
     process.exit(2);
   }

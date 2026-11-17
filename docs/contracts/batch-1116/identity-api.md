@@ -19,6 +19,7 @@ file wins and the crate changes.
 | `BINDING_VERSION` / `BINDING_FIXED_LEN` | `0x02` / 5272 (+ `len(domain)`) |
 | `MAX_BINDING_BASE64_LEN` / `MAX_BINDING_FUTURE_SKEW_S` | 8192 / 300 |
 | `WELL_KNOWN_VERSION` / `SERVER_KEY_ALG` | 1 / `"ML-DSA-65"` |
+| `SERVER_CHALLENGE_TIMEOUT_S` / `WELL_KNOWN_FETCH_TIMEOUT_S` | 10 / 10 (seconds: the agent's wait for the `ServerIdentity` answer before refusing the sign-in / the whole `/.well-known/citadel` exchange) |
 | `ASSERTION_VERSION` / `MAX_ASSERTION_FIELD_BYTES` | `0x01` / 255 |
 | `PHRASE_WORDS` | 24 |
 

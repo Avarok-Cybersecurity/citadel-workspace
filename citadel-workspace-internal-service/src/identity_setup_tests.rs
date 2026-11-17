@@ -17,49 +17,29 @@ use citadel_workspace_server_kernel_test_common::production_server::start_server
 use futures::StreamExt;
 use uuid::Uuid;
 
-const NONE: (Option<&str>, Option<&str>) = (None, None);
-
-fn all(secs: &str) -> Result<IdentityTimings, String> {
-    IdentityTimings::resolve((None, Some(secs)), (None, Some(secs)), (None, Some(secs)))
-}
-
 #[test]
-fn each_missing_timing_is_named_with_its_flag_and_variable() {
-    for (missing, timing) in [
-        (0, &UNLOCK_IDLE),
-        (1, &CHALLENGE_TIMEOUT),
-        (2, &FETCH_TIMEOUT),
-    ] {
-        let mut given = [(None, Some("5")); 3];
-        given[missing] = NONE;
-        let error = IdentityTimings::resolve(given[0], given[1], given[2]).unwrap_err();
-        assert!(error.contains(timing.flag), "{error}");
-        assert!(error.contains(timing.env), "{error}");
+fn a_missing_unlock_idle_is_named_with_its_flag_and_variable() {
+    for given in [(None, None), (Some(""), Some(""))] {
+        let error = unlock_idle(given.0, given.1).unwrap_err();
+        assert!(error.contains(UNLOCK_IDLE_FLAG), "{error}");
+        assert!(error.contains(UNLOCK_IDLE_ENV), "{error}");
     }
 }
 
 #[test]
 fn the_variable_wins_and_an_empty_one_is_unset() {
-    let timings = IdentityTimings::resolve(
-        (Some("7"), Some("1")),
-        (Some(""), Some("2")),
-        (None, Some("3")),
-    )
-    .unwrap();
-    assert_eq!(timings.unlock_idle, Duration::from_secs(7));
-    assert_eq!(timings.challenge_timeout, Duration::from_secs(2));
-    assert_eq!(timings.fetch_timeout, Duration::from_secs(3));
-    assert!(
-        IdentityTimings::resolve((Some(""), Some("")), (None, Some("1")), (None, Some("1")))
-            .is_err()
+    assert_eq!(
+        unlock_idle(Some("7"), Some("1")),
+        Ok(Duration::from_secs(7))
     );
+    assert_eq!(unlock_idle(Some(""), Some("2")), Ok(Duration::from_secs(2)));
 }
 
 #[test]
 fn zero_and_non_numbers_are_refused() {
-    // Zero would lock the identity at once, or give up on every server before it could answer.
+    // Zero would lock the identity the moment it was unlocked.
     for bad in ["0", "-1", "10s", "1.5", "nine"] {
-        let error = all(bad).unwrap_err();
+        let error = unlock_idle(None, Some(bad)).unwrap_err();
         assert!(error.contains("whole number of seconds"), "{bad}: {error}");
     }
 }
@@ -103,8 +83,8 @@ async fn a_kernel_s_answer_verifies_the_pinned_server() {
 
     let data = tempfile::tempdir().unwrap();
     let backend = BackendType::Filesystem(data.path().to_string_lossy().into_owned());
-    // Generous and not under test: the shipped launchers' values are the operators' choice.
-    let timings = all("20").unwrap();
+    // Not under test: the shipped launchers' value is the operators' choice.
+    let idle = Duration::from_secs(900);
     let bind: std::net::SocketAddr = format!("127.0.0.1:{}", common::get_free_port())
         .parse()
         .unwrap();
@@ -115,7 +95,7 @@ async fn a_kernel_s_answer_verifies_the_pinned_server() {
     )
     .await
     .unwrap();
-    let service = applied(service, identity_config(&timings, &backend).unwrap());
+    let service = applied(service, identity_config(idle, &backend).unwrap());
     let node = NodeBuilder::<StackedRatchet>::default()
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_node_type(NodeType::Peer)

@@ -62,7 +62,7 @@ fn an_agent_whose_command_lacks_a_setting_will_not_install_this_version() {
     // An agent started before the identity's timings existed is refused this version rather
     // than swapped into one that will not start: it stays put until its launcher passes them.
     let why = refused_old.unwrap_err();
-    assert!(why.contains(support::IDENTITY_FLAGS[0]), "{why}");
+    assert!(why.contains(support::UNLOCK_IDLE_FLAG), "{why}");
     assert_eq!(
         accepted,
         Ok(()),

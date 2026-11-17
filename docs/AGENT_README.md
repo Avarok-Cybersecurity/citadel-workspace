@@ -18,7 +18,7 @@ flags below already set, and starts when you log in. On Windows,
 archive is for terminal use and scripts.
 
 ```bash
-./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 --identity-unlock-idle-secs 900 --identity-challenge-timeout-secs 10 --identity-fetch-timeout-secs 10
+./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 --identity-unlock-idle-secs 900
 ```
 
 Then reload Citadel Workspace in your browser.
@@ -40,13 +40,11 @@ Every flag matters:
   public address, which it needs to connect directly to other members. The agent
   refuses to start without them; `INTERNAL_SERVICE_STUN_SERVERS` does the same
   and takes precedence.
-- **The three `--identity-*` flags time your portable identity,** in whole
-  seconds: how long it stays unlocked after its last use, how long a sign-in
-  waits for a server to prove the key you pinned for it, and how long fetching
-  a server's `/.well-known/citadel` may take. The agent refuses to start without
-  any of them; `INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS`,
-  `INTERNAL_SERVICE_IDENTITY_CHALLENGE_TIMEOUT_SECS` and
-  `INTERNAL_SERVICE_IDENTITY_FETCH_TIMEOUT_SECS` do the same and take precedence.
+- **`--identity-unlock-idle-secs` is how long your portable identity stays
+  unlocked** after its last use, in whole seconds; longer means fewer unlock
+  prompts and a longer window for anyone at your machine. The agent refuses to
+  start without it; `INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS` does the same
+  and takes precedence.
 - **Apps reach your private network only if you say so,** on the agent page
   under Apps, for your own account. Until then every app request to a private,
   loopback or link-local address is refused; public hosts are unaffected.
@@ -93,7 +91,7 @@ shown to `%LOCALAPPDATA%\Citadel Agent\agent.log` (the menu's "Show Log"). Start
 terminal, as below, it prints in that terminal instead.
 
 ```powershell
-.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 --identity-unlock-idle-secs 900 --identity-challenge-timeout-secs 10 --identity-fetch-timeout-secs 10
+.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 --identity-unlock-idle-secs 900
 ```
 
 ## Checking it is up

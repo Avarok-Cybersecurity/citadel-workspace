@@ -137,23 +137,15 @@ async fn run() -> Result<(), Box<dyn Error>> {
         &default_dir,
     )?;
 
-    // The portable identity's timings, required like the STUN servers; its store follows the
-    // backend just chosen (identity_setup.rs).
-    let identity_timings = identity_setup::IdentityTimings::resolve(
-        (
-            env_setting(identity_setup::UNLOCK_IDLE.env).as_deref(),
-            opts.identity_unlock_idle_secs.as_deref(),
-        ),
-        (
-            env_setting(identity_setup::CHALLENGE_TIMEOUT.env).as_deref(),
-            opts.identity_challenge_timeout_secs.as_deref(),
-        ),
-        (
-            env_setting(identity_setup::FETCH_TIMEOUT.env).as_deref(),
-            opts.identity_fetch_timeout_secs.as_deref(),
-        ),
+    // How long the portable identity stays unlocked, required like the STUN servers; its store
+    // follows the backend just chosen (identity_setup.rs).
+    let unlock_idle = identity_setup::unlock_idle(
+        std::env::var(identity_setup::UNLOCK_IDLE_ENV)
+            .ok()
+            .as_deref(),
+        opts.identity_unlock_idle_secs.as_deref(),
     )?;
-    let identity = identity_setup::identity_config(&identity_timings, &backend_type)?;
+    let identity = identity_setup::identity_config(unlock_idle, &backend_type)?;
 
     // Every required setting has resolved, and nothing is bound yet: an updating agent asks
     // a staged version this before installing it (citadel-internal-service's
@@ -268,18 +260,6 @@ struct Options {
     /// INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS overrides it.
     #[structopt(long)]
     identity_unlock_idle_secs: Option<String>,
-    /// Whole seconds a sign-in waits for the server to prove the key its account pinned.
-    /// Required; INTERNAL_SERVICE_IDENTITY_CHALLENGE_TIMEOUT_SECS overrides it.
-    #[structopt(long)]
-    identity_challenge_timeout_secs: Option<String>,
-    /// Whole seconds fetching a server's /.well-known/citadel may take. Required;
-    /// INTERNAL_SERVICE_IDENTITY_FETCH_TIMEOUT_SECS overrides it.
-    #[structopt(long)]
-    identity_fetch_timeout_secs: Option<String>,
-}
-
-fn env_setting(name: &str) -> Option<String> {
-    std::env::var(name).ok()
 }
 
 /// The certificate the agent serves, and the only one.

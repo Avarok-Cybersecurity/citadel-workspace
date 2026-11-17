@@ -58,8 +58,6 @@ PORT="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));prin
 INTERNAL_SERVICE_ALLOWED_ORIGINS="http://localhost:5291" \
 INTERNAL_SERVICE_STUN_SERVERS="stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302" \
 INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS=900 \
-INTERNAL_SERVICE_IDENTITY_CHALLENGE_TIMEOUT_SECS=10 \
-INTERNAL_SERVICE_IDENTITY_FETCH_TIMEOUT_SECS=10 \
   "$BIN" --bind "127.0.0.1:$PORT" >"$WORK/agent.log" 2>&1 &
 AGENT_PID=$!
 
