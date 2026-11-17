@@ -412,6 +412,7 @@ mod rollback_tests {
             members: vec![],
             offices: vec![],
             metadata: vec![],
+            accepted_domains: Vec::new(),
         }
     }
 

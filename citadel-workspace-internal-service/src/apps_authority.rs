@@ -63,6 +63,14 @@ impl HostNetAuthority for WorkspaceHostNetAuthority {
                     app_id: g.app_id,
                     hosts: g.hosts,
                     private: g.private,
+                    // No install holds `citadel.session` yet: the SDK's closed capability list
+                    // (`citadel-app-sdk-types`) has no such capability, so no manifest can ask
+                    // for it, no installer can grant it, and `HostNetGrant` carries no
+                    // `servers` or `limits.session` to read (`citadel-session-abi.md` §1-2,
+                    // lane H2's host part). This is the server's whole answer, not a fallback:
+                    // the agent refuses every `AppSessionOpen` as ungranted.
+                    servers: Vec::new(),
+                    session: None,
                 }),
             },
             // What the server said about the member's installs may no longer hold.

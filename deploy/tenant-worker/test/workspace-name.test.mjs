@@ -120,13 +120,13 @@ describe("the workspace's name", () => {
     vi.restoreAllMocks();
 
     const { object } = await namedTenant("wp", "Fine");
-    const { tenant_id, master_password, entitlements } = await runInDurableObject(object, (i) => i.provisioning.record);
+    const { tenant_id, master_password, entitlements, identity } = await runInDurableObject(object, (i) => i.provisioning.record);
     // In the object, so the refusal is caught where it is thrown rather than crossing the RPC.
     const refusals = await runInDurableObject(object, async (instance) => {
       const refused = [];
       for (const display_name of ["a\u0085b", undefined]) {
         try {
-          await instance.provisioning.provision({ tenant_id, master_password, entitlements, display_name }, false);
+          await instance.provisioning.provision({ tenant_id, master_password, entitlements, display_name, identity }, false);
           refused.push(null);
         } catch (e) {
           refused.push(e.message);

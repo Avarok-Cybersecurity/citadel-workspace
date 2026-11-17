@@ -30,10 +30,14 @@ pub mod documents;
 pub mod group_access;
 pub mod group_chat_gates;
 pub mod ice_servers;
+/// Verifying an `UpdateUserProfile.identity_binding` before it is stored.
+pub mod identity_binding;
 /// A usage limit as the host states it: a count, or explicitly none.
 pub mod limit;
 pub mod profile_limits;
 pub mod profile_update;
+#[cfg(test)]
+mod profile_update_tests;
 pub mod profile_visibility;
 pub mod rate_limiter;
 /// Edits to a workspace's role table, and the rules they obey. Pure.
@@ -44,6 +48,8 @@ pub mod secret_eq;
 pub mod secure_links;
 /// What the server advertises, derived from the backend it runs on.
 pub mod server_capabilities;
+/// The server's canonical domain, key, identity challenge and `/.well-known/citadel`.
+pub mod server_identity;
 pub mod sign_in;
 pub mod telemetry;
 pub mod transaction;

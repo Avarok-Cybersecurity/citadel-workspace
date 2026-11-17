@@ -205,6 +205,9 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// What app storage reads the tenant's entitlement from: the node's backend, or none, which
     /// refuses every app storage write.
     storage_entitlement: Option<crate::kernel::apps::storage_entitlement::StorageEntitlement>,
+    /// The server's `[identity]` and key: none until the bootstrap installs them, and then the
+    /// identity challenge is refused and no binding or domain name is accepted.
+    server_identity: crate::kernel::server_identity::ServerIdentityHandle,
 }
 
 /// Ends a connection's relayed streams and advertisements with its attribution.
@@ -259,6 +262,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             apps_relay: self.apps_relay.clone(),
             usage_meter: self.usage_meter.clone(),
             storage_entitlement: self.storage_entitlement.clone(),
+            server_identity: self.server_identity.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -317,6 +321,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             apps_relay: Default::default(),
             usage_meter: None,
             storage_entitlement: None,
+            server_identity: None,
         }
     }
 
@@ -452,6 +457,18 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     pub fn sign_in_settings(&self) -> &crate::kernel::sign_in::SignInSettingsHandle {
         &self.sign_in_settings
+    }
+
+    /// Set by the server bootstrap from `[identity]` and the server key.
+    pub fn set_server_identity(
+        &mut self,
+        identity: crate::kernel::server_identity::ServerIdentityHandle,
+    ) {
+        self.server_identity = identity;
+    }
+
+    pub fn server_identity(&self) -> &crate::kernel::server_identity::ServerIdentityHandle {
+        &self.server_identity
     }
 
     /// Set by the server bootstrap: the host's relay-credential minter, or none, in which case
@@ -887,6 +904,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 members: vec![],
                 offices: vec![],
                 metadata: vec![],
+                accepted_domains: Vec::new(),
             };
 
             // Create domain wrapper for the workspace
@@ -1906,6 +1924,23 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             return Ok(());
                         }
 
+                        // The second gate (identity doc §6 rev b): an account named under a
+                        // domain this server does not answer to is not enrolled, the way a
+                        // removed one is not. A kernel with no identity accepts no domain.
+                        let accepted = this
+                            .server_identity()
+                            .as_ref()
+                            .map(|identity| identity.accepted_domains())
+                            .unwrap_or_default();
+                        if let Some(reason) =
+                            crate::kernel::server_identity::enrolment::enrolment_refusal(
+                                &user_id, &accepted,
+                            )
+                        {
+                            warn!(target: "citadel", "[ASYNC_KERNEL] Not enrolling on connect: {reason}");
+                            return Ok(());
+                        }
+
                         // The role the table gives new members; see joiner_role.
                         this.domain_operations
                             .give_joiner_the_default_role(
@@ -2545,6 +2580,7 @@ mod structure_seed_idempotency_tests {
             members: vec![],
             offices: vec![],
             metadata: vec![],
+            accepted_domains: Vec::new(),
         };
         let backend = &kernel.domain_operations.backend_tx_manager;
         backend

@@ -99,6 +99,34 @@ admission = "none"
 # settings_file = "/data/server/sign-in/settings.json"  # where the admin's switch is kept
 
 # =============================================================================
+# Identity (required): the name this server is reached by and how clients come
+# to trust its key. No key has a default, and the name is never taken from
+# bind_addr; see citadel-workspace-server-kernel/src/kernel/server_identity/config.rs.
+# Every registration here is handle@<canonical_domain>.
+# =============================================================================
+[identity]
+# What clients dial, canonical: lowercase, no scheme, no trailing "/", no ":443".
+# The dev stack's agents dial the server at localhost:12349.
+canonical_domain = "localhost:12349"
+# Names this server answered to before (still accepted for sign-in and bindings,
+# never for registration). [] for none.
+former_domains = []
+# "well_known": the operator serves the kernel's /.well-known/citadel over HTTPS
+#   (then set citadel_wss and well_known_file too).
+# "pinned": no HTTPS; the operator hands out the key fingerprint the server logs
+#   at start, and clients show the domain as unverified until it matches. The dev
+#   stack has no HTTPS front, so it is pinned.
+discovery = "pinned"
+# citadel_wss = "wss://work.example.com/citadel"           # well_known only
+# well_known_file = "/data/server/identity/well-known.json"  # well_known only
+# The server key's 32-byte seed, mode 0600, made ONCE with
+#   citadel-workspace-server-kernel --init-server-key <path>
+# The image's start script (docker/workspace-server/start.sh) runs that on the
+# first start. Never replace it: a new key makes every client that pinned this
+# server refuse it.
+server_key_file = "/data/server/identity/server-key"
+
+# =============================================================================
 # Path policy (required): the network paths peer connections may take, in order of
 # precedence, each with its attempt timeout and the traffic classes it may carry.
 # No default: the server refuses to start without this section. Classes are Control,

@@ -4,6 +4,10 @@
 //! test against it proves something about the shipped wiring.
 
 use citadel_workspace_server_kernel::config::ServerConfig;
+use citadel_workspace_server_kernel::kernel::server_identity::config::IdentityConfig;
+use citadel_workspace_server_kernel::kernel::server_identity::key_file::{
+    init_server_key, native_identity,
+};
 use citadel_workspace_server_kernel::kernel::sign_in::native::init_sign_in_seed;
 use citadel_workspace_server_kernel::kernel::sign_in::turnstile::SiteVerify;
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -36,6 +40,42 @@ pub fn test_path_policy_toml() -> String {
         })
         .collect();
     format!("[path_policy]\ndenied = []\n{}", rules.join("\n"))
+}
+
+/// The canonical domain every test server is configured with. A macro, so a test's username
+/// constants can be built from it at compile time with [`test_user!`].
+#[macro_export]
+macro_rules! test_domain {
+    () => {
+        "kernel.test"
+    };
+}
+
+/// `handle@<the test servers' canonical domain>`: the only names a test server registers.
+#[macro_export]
+macro_rules! test_user {
+    ($handle:literal) => {
+        concat!($handle, "@", $crate::test_domain!())
+    };
+}
+
+pub const TEST_CANONICAL_DOMAIN: &str = test_domain!();
+
+/// `[identity]` for a test server: the test domain, no former ones, discovery by a pinned key,
+/// its key seed in `dir` made the way an operator makes one (`--init-server-key`).
+pub fn test_identity_toml(dir: &Path) -> String {
+    pinned_identity_toml(dir, TEST_CANONICAL_DOMAIN)
+}
+
+/// `[identity]` for a `pinned` server named `canonical_domain`, its key seed made in `dir`.
+fn pinned_identity_toml(dir: &Path, canonical_domain: &str) -> String {
+    let key = dir.join("server-key");
+    init_server_key(&key).expect("server key");
+    format!(
+        "[identity]\ncanonical_domain = \"{canonical_domain}\"\nformer_domains = []\n\
+         discovery = \"pinned\"\nserver_key_file = \"{}\"\n",
+        key.display()
+    )
 }
 
 fn free_addr() -> SocketAddr {
@@ -83,17 +123,52 @@ pub async fn start_native_server(
     tail: &str,
     site_verify: Option<Arc<dyn SiteVerify>>,
 ) -> SocketAddr {
+    let identity = test_identity_toml(&sign_in_dir());
+    start_native_server_on(free_addr(), tail, site_verify, &identity).await
+}
+
+/// A production server, post-quantum sign-in without a human check, whose canonical domain is
+/// `localhost:<port>`: the name an agent registering by a pinned key dials, so it answers the
+/// `ServerIdentityChallenge` under that name. Bound on the first address `localhost` resolves
+/// to. Returns the name and its key's fingerprint, which a member is handed out of band.
+pub async fn start_server_named_localhost() -> (String, String) {
+    let first = std::net::ToSocketAddrs::to_socket_addrs("localhost:0")
+        .expect("resolve localhost")
+        .next()
+        .expect("localhost resolves to nothing");
+    let addr = TcpListener::bind(first)
+        .expect("bind")
+        .local_addr()
+        .expect("addr");
+    let name = format!("localhost:{}", addr.port());
+    let dir = sign_in_dir();
+    let identity = pinned_identity_toml(&dir, &name);
+    let parsed: toml::Value = toml::from_str(&identity).expect("[identity]");
+    let config: IdentityConfig = parsed["identity"].clone().try_into().expect("[identity]");
+    let key = native_identity(Some(&config), 0).expect("the server's identity");
+    let fp = citadel_identity::fingerprint(key.key().public_key());
+    let tail = sign_in_without_admission(&dir);
+    start_native_server_on(addr, &tail, None, &identity).await;
+    (name, fp)
+}
+
+async fn start_native_server_on(
+    addr: SocketAddr,
+    tail: &str,
+    site_verify: Option<Arc<dyn SiteVerify>>,
+    identity: &str,
+) -> SocketAddr {
     assert!(
         std::env::var("WORKSPACE_BIND_ADDR").is_err(),
         "WORKSPACE_BIND_ADDR is set; the server would bind it instead of the test's port"
     );
-    let addr = free_addr();
     // The shipped `[documents]` limits, after `extra_toml`: a table takes every key after it.
     let config: ServerConfig = toml::from_str(&format!(
-        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\nchat_attachment_max_bytes = 0\nchat_attachment_max_files_per_node = 0\n{}\n{tail}\n{}\n{}",
+        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\nchat_attachment_max_bytes = 0\nchat_attachment_max_files_per_node = 0\n{}\n{tail}\n{}\n{}\n{}",
         test_stun_servers_toml(),
         crate::documents_test_utils::shipped_documents_section(),
-        test_path_policy_toml()
+        test_path_policy_toml(),
+        identity
     ))
     .expect("config");
     tokio::spawn(async move {

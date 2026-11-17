@@ -66,7 +66,7 @@ describe("the OPRF seed", () => {
     const first = hex(await storedSeed(object));
     const [again, other] = await runInDurableObject(object, async (instance) => {
       const record = await instance.ctx.storage.get("control:provisioning");
-      const data = { tenant_id: record.tenant_id, master_password: record.master_password, entitlements: record.entitlements, display_name: "Acme" };
+      const data = { tenant_id: record.tenant_id, master_password: record.master_password, entitlements: record.entitlements, display_name: "Acme", identity: record.identity };
       await instance.provision(data);
       const kept = hex(await instance.ctx.storage.get(OPRF_SEED_KEY));
       await instance.provision({ ...data, tenant_id: `${record.tenant_id}-next` });

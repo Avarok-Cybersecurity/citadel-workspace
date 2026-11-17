@@ -9,6 +9,8 @@ struct AgentSettings {
     let dataDirectory: URL
     /// Exactly three `host:port` STUN servers, as the agent's --stun-servers takes them.
     let stunServers: String
+    /// How long the portable identity stays unlocked, whole seconds, as --identity-unlock-idle-secs takes it.
+    let identityUnlockIdleSecs: String
 
     init(bundle: Bundle) throws {
         func string(_ key: String) throws -> String {
@@ -33,6 +35,11 @@ struct AgentSettings {
         dataDirectory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(try string("CitadelAgentDataDirectoryName"), isDirectory: true)
         stunServers = try string("CitadelAgentStunServers")
+        let idle = try string("CitadelAgentIdentityUnlockIdleSecs")
+        guard let secs = UInt32(idle), secs > 0 else {
+            throw SettingsError.invalid("CitadelAgentIdentityUnlockIdleSecs", idle)
+        }
+        identityUnlockIdleSecs = idle
     }
 
     /// The same flags the README gives a terminal user, spelled out rather than left to defaults.
@@ -41,7 +48,8 @@ struct AgentSettings {
          "--backend", "filesystem",
          "--data-dir", dataDirectory.path,
          "--allowed-origins", workspaceURL.absoluteString,
-         "--stun-servers", stunServers]
+         "--stun-servers", stunServers,
+         "--identity-unlock-idle-secs", identityUnlockIdleSecs]
     }
 }
 

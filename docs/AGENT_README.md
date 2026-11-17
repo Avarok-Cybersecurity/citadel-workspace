@@ -18,7 +18,7 @@ flags below already set, and starts when you log in. On Windows,
 archive is for terminal use and scripts.
 
 ```bash
-./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
+./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 --identity-unlock-idle-secs 900
 ```
 
 Then reload Citadel Workspace in your browser.
@@ -39,6 +39,11 @@ Every flag matters:
 - **`--stun-servers` names exactly three STUN servers** the agent asks for its
   public address, which it needs to connect directly to other members. The agent
   refuses to start without them; `INTERNAL_SERVICE_STUN_SERVERS` does the same
+  and takes precedence.
+- **`--identity-unlock-idle-secs` is how long your portable identity stays
+  unlocked** after its last use, in whole seconds; longer means fewer unlock
+  prompts and a longer window for anyone at your machine. The agent refuses to
+  start without it; `INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS` does the same
   and takes precedence.
 - **Apps reach your private network only if you say so,** on the agent page
   under Apps, for your own account. Until then every app request to a private,
@@ -86,7 +91,7 @@ shown to `%LOCALAPPDATA%\Citadel Agent\agent.log` (the menu's "Show Log"). Start
 terminal, as below, it prints in that terminal instead.
 
 ```powershell
-.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
+.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 --identity-unlock-idle-secs 900
 ```
 
 ## Checking it is up

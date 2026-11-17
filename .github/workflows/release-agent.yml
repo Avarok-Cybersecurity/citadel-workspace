@@ -33,6 +33,9 @@
 # the secret is missing, the embedded key is the placeholder, or the two are not one pair. A dry
 # run signs with a throwaway key, labelled. docs/plans/agent-auto-update.md has the format.
 #
+# citadel-agent-launch.json is published beside them (the launch-settings job): what a tarball's
+# updating agent adds to its operator's command so a version that requires a new setting starts.
+#
 # Each job's steps live in composite actions under .github/actions/. What the UI's contract test
 # reads stays here: the build matrix, the packaged binary's name, the Mac image, and every
 # upload-artifact step publish collects.
@@ -300,10 +303,35 @@ jobs:
             Citadel-Agent-x64.msi.sha256
           if-no-files-found: error
 
+  # citadel-agent-launch.json: the settings a tarball's updating agent adds to the command its
+  # operator wrote, when that command lacks one the new version requires (citadel-internal-
+  # service's updater/launch_settings.rs). Derived from the Linux launcher template and
+  # Info.plist, where the packaged launchers get the same flags and values, so it cannot drift
+  # from them; signed by `sign` like every asset, and refused by the updater unsigned.
+  launch-settings:
+    name: citadel-agent-launch.json
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: The asset is the launcher's settings
+        run: bash scripts/test-agent-launch-asset.sh
+      - name: Write it
+        run: |
+          set -euo pipefail
+          python3 scripts/lib/agent-settings.py apps/macos-agent/Info.plist launch-asset \
+            packaging/linux/citadel-agent-launch.in > citadel-agent-launch.json
+          cat citadel-agent-launch.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: citadel-agent-launch-settings
+          path: citadel-agent-launch.json
+          if-no-files-found: error
+
   # <asset>.mldsa.sig for every release asset, verified before it is uploaded (the action says how).
   sign:
     name: Sign release assets (ML-DSA-65)
-    needs: [version, build, macos-app, linux-packages, windows-msi]
+    needs: [version, build, macos-app, linux-packages, windows-msi, launch-settings]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -336,7 +364,7 @@ jobs:
     # Observed under a minute; this bounds a hang, not performance.
     timeout-minutes: 15
     name: Publish release
-    needs: [build, macos-app, linux-packages, windows-msi, sign]
+    needs: [build, macos-app, linux-packages, windows-msi, launch-settings, sign]
     runs-on: ubuntu-24.04
     # Only a real tag push publishes. workflow_dispatch builds and smoke-tests
     # every platform without creating a release, so the pipeline is exercisable

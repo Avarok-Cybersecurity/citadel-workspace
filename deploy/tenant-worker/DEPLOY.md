@@ -76,6 +76,20 @@ cfw secret put CITADEL_SUPPORT_MLDSA_PUBLIC_KEY   # the 3904 hex characters keyg
 
 It is a secret only so that wrangler.toml carries no value for it; `deploy.sh` requires it.
 
+work.avarok.net's own server key signs its `/.well-known/citadel` and every "Sign in with
+Citadel" assertion (control/control-identity.mjs). Make it ONCE, from the OS CSPRNG, and set
+`CONTROL_SERVER_KEY_ISSUED_AT` in wrangler.toml to the same moment (`date -u +%s`) in the same
+change. The Worker never makes one: a new key makes every MCP and node that pinned the old one
+refuse the issuer (`KeyChanged`), so replacing it is a planned ceremony, never a repair.
+
+```sh
+openssl rand -hex 32 | cfw secret put CONTROL_SERVER_KEY_SEED   # 64 lowercase hex characters; never echoed, never stored elsewhere
+```
+
+Without it the control host's `/.well-known/citadel` answers 404 and every `/sign-in/*` route
+`503 issuer_unavailable`, each with a `[control] ... CONTROL_SERVER_KEY_SEED is not set` log line;
+`deploy.sh` requires it.
+
 Two more are OPTIONAL, and `deploy.sh` does not require them until the agent asks for relay
 servers: the Cloudflare Realtime TURN key the tenant objects mint members' short-lived relay
 credentials from (`GetIceServers`, control/ice.mjs). Without both, a member asking for relay
@@ -183,6 +197,39 @@ locks out every account that signed in since.
 `PQ_KSF_*` in `wrangler.toml` is the Argon2id cost clients stretch a password factor with; the
 node refuses anything below the SDK's floor. The monitor counts accounts by auth-record version (AUTH-CENSUS.md).
 
+## Server identities: the one-time upgrade
+
+From batch 1116 every tenant's object holds an ML-DSA-65 server key seed (`control:server-key-seed`)
+and its provisioning record names its domains (the kernel's `[identity]`); both are made when it is
+provisioned, and never when they are read, since a new key makes every client that pinned the old
+one refuse the server. A tenant provisioned before then (`main.work.avarok.net` among them) has
+neither, and **refuses to start** ("provisioned again to get one") and answers 404 at
+`/.well-known/citadel` until it is upgraded. Nothing falls back to a default.
+
+The upgrade (`control/identity-upgrade.mjs`) is run by the Worker's Cron trigger (every 15
+minutes, `control/scheduled.mjs`, before the usage monitor), so the deploy that ships it runs it;
+no operator key is involved. Migration `0018` gives every existing registry row
+`identity_version = 0`; a row created afterwards is inserted at the current version. Each run takes
+the rows still below it that are not pending (`control/identity-version.mjs`), by slug, 50 a query
+and at most 500 a run, and for each asks the object to provision itself again through its own
+`provision()` with the identity the row describes (`<slug>.work.avarok.net`, no former domain, or
+a custom domain attached since). That path keeps a key the object already has and makes one only
+if it has none; an object that already has its domains and a key answers `unchanged`. The row is
+then recorded at the current version, so a later run never visits it again.
+
+- Logged per tenant: `[identity-upgrade] <slug>: provisioned as <domain> with its server key`, or
+  `... unchanged`.
+- A tenant that fails (an object never provisioned, one serving another tenant id than its row) is
+  logged as `[identity-upgrade] <slug>: FAILED, not recorded, tried again next run: <reason>`, the
+  others go on, and the Cron run fails naming it. It keeps refusing to start until the cause is
+  fixed; the next run then upgrades it.
+- `deploy.sh` step 9 waits for none to remain. **Expect the pre-batch-1116 tenants to be down
+  from the deploy until the first Cron run after it, up to 15 minutes**: the old code cannot
+  receive the upgrade, so it cannot run earlier. To see what remains:
+  `wrangler d1 execute citadel-control --remote --command "SELECT slug FROM tenants WHERE status != 'pending' AND identity_version < 1"`.
+- Rolling back below this release leaves the upgraded records and keys in place (the older code
+  ignores them); rolling forward again finds them upgraded and changes nothing.
+
 ## Deploying
 
 ```sh
@@ -213,6 +260,9 @@ the directory. `--dry-run` builds without it, provisioning no first-party app.
    Durable Object migration `v1`.
 8. Smoke: `https://work.avarok.net/create` carries `citadel-control-plane=/api` and a CSP that
    allows Turnstile; `https://smoke-probe.work.avarok.net/` answers `426`.
+9. Identity upgrade: waits, at most 20 minutes, until the registry holds no tenant still to be
+   upgraded to server identities (below), and fails naming any that remain. With none it passes at
+   once.
 
 Then by hand: open `https://work.avarok.net/create`, create a free workspace (Turnstile renders
 and passes), then a paid one with Stripe's test card `4242 4242 4242 4242`; in the Stripe

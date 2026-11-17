@@ -54,6 +54,8 @@ pub mod roles_stored;
 /// Secure links: tokens the server maps to in-app deep links for the people named.
 pub mod secure_links;
 pub mod server_feature_refusal;
+/// The post-connect server identity challenge and its answer.
+pub mod server_identity;
 pub mod sign_in;
 pub mod structs;
 /// The build script's submodule-freshness rule, here so it can be tested.
@@ -233,6 +235,10 @@ pub enum WorkspaceProtocolRequest {
         /// The server's peer list reports connection state to everyone, so
         /// this is published for their clients to honour. `None` leaves it.
         shows_online_status: Option<bool>,
+        /// The user's identity binding (base64url, identity doc §3.4 rev b): their portable
+        /// identity's signature that it holds this username on this server. The server verifies
+        /// it before storing it, and every member may read it. `None` leaves it.
+        identity_binding: Option<String>,
     },
 
     Message {
@@ -525,6 +531,8 @@ pub enum WorkspaceProtocolRequest {
     SecureLinks(secure_links::SecureLinksRequest),
     /// Citadel Apps: listings, installs and their artifacts; see `apps_protocol`.
     Apps(apps_protocol::AppsRequest),
+    /// Prove this server holds the key the client pinned; see `server_identity`.
+    ServerIdentityChallenge(server_identity::ServerIdentityChallenge),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -771,6 +779,8 @@ pub enum WorkspaceProtocolResponse {
     ChatAttachments(chat_attachments::ChatAttachmentsResponse),
     SecureLinks(secure_links::SecureLinksResponse),
     Apps(apps_responses::AppsResponse),
+    /// The answer to `ServerIdentityChallenge`.
+    ServerIdentity(server_identity::ServerIdentity),
 }
 
 /// Type of group message

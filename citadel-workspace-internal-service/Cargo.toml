@@ -1,6 +1,6 @@
 [package]
 name = "citadel-workspace-internal-service"
-version = "0.12.1"
+version = "0.13.0"
 edition = "2021"
 license.workspace = true
 
@@ -33,6 +33,8 @@ citadel_sdk = { workspace = true, features = ["sql"]}
 citadel_types = { workspace = true }
 citadel_logging = { workspace = true }
 citadel-workspace-types = { path = "../citadel-workspace-types" }
+# identity_setup.rs: the service's I/O bound, which `with_identity` is defined under.
+citadel-internal-service-connector = { path = "../citadel-internal-service/citadel-internal-service-connector" }
 serde_json = { workspace = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -43,6 +45,13 @@ lazy_static = { workspace = true, optional = true }
 [dev-dependencies]
 # The request a window forwards its console in, built by the telemetry tests.
 citadel-internal-service-types = { path = "../citadel-internal-service/citadel-internal-service-types" }
+# identity_setup_tests.rs: the shipped server in-process, and an agent driven over its own
+# request protocol, as the agent repository's identity tests drive theirs.
+citadel-workspace-server-kernel-test-common = { workspace = true }
+citadel-internal-service-test-common = { path = "../citadel-internal-service/citadel-internal-service/tests/common" }
+futures = { workspace = true }
+uuid = { workspace = true }
+tempfile = "3.10.1"
 
 # The Windows tray icon and its supporting Win32 calls (src/windows_shell). Windows only: the
 # Mac has its own menu-bar app (apps/macos-agent) and Linux has a launcher, so neither links these.

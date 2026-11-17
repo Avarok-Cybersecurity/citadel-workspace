@@ -1,0 +1,73 @@
+# Docker-specific manifest for citadel-workspace-internal-service: the crate's own Cargo.toml with
+# its [dev-dependencies] removed, and nothing else changed.
+#
+# The server image never builds this crate, but it is a member of Cargo.docker.toml, and Cargo
+# parses every member's dependency tables, dev-dependencies included. Its tests depend on the
+# kernel's tests/common, which this image leaves out because that crate enables `localhost-testing`
+# in its normal dependencies: copied in, it becomes an implicit member and the image's
+# `cargo build --release --bin citadel-workspace-server-kernel` (no `-p`) compiles that feature into
+# the server. Dropping the agent from the members instead is not neutral either: its normal
+# dependencies are unified into the server build (citadel_sdk's `multi-threaded` reaches the
+# server only that way), so the binary would change. This copy keeps the server's build identical.
+#
+# scripts/check-docker-manifest-matches-the-crate.mjs holds its [dependencies] to the crate's.
+
+[package]
+name = "citadel-workspace-internal-service"
+version = "0.13.0"
+edition = "2021"
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+# Statically link OpenSSL so the released agent runs on machines with a different OpenSSL, or
+# none. Forwarded to the kernel crate, which defines what "vendored" means there.
+vendored = ["citadel-internal-service/vendored"]
+deadlock-detection = ["parking_lot/deadlock_detection", "parking_lot", "lazy_static"]
+native-dialogs = ["citadel-internal-service/native-dialogs"]
+# Check GitHub for newer agent releases and install them (the agent's src/updater). Only the
+# artefacts the release builds turn this on (.github/actions/build-agent): the docker image and a
+# developer's `cargo run` must never replace themselves.
+self-update = []
+
+[[bin]]
+name = "citadel-workspace-internal-service"
+path = "src/main.rs"
+
+[build-dependencies]
+# No external dependencies needed for the build script
+
+[dependencies]
+structopt = { workspace = true }
+dirs2 = "3"
+tokio = { workspace = true, features = ["macros", "rt"] }
+citadel-internal-service = { path = "../citadel-internal-service/citadel-internal-service", features = ["websockets"] }
+citadel_sdk = { workspace = true, features = ["sql"]}
+citadel_types = { workspace = true }
+citadel_logging = { workspace = true }
+citadel-workspace-types = { path = "../citadel-workspace-types" }
+# identity_setup.rs: the service's I/O bound, which `with_identity` is defined under.
+citadel-internal-service-connector = { path = "../citadel-internal-service/citadel-internal-service-connector" }
+serde_json = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+parking_lot = { workspace = true, optional = true }
+lazy_static = { workspace = true, optional = true }
+
+# The Windows tray icon and its supporting Win32 calls (src/windows_shell). Windows only: the
+# Mac has its own menu-bar app (apps/macos-agent) and Linux has a launcher, so neither links these.
+[target.'cfg(windows)'.dependencies]
+tray-icon = { version = "0.21", default-features = false }
+png = "0.18"
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Console",
+    "Win32_System_Environment",
+    "Win32_System_Registry",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }

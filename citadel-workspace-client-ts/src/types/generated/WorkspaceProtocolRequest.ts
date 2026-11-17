@@ -10,6 +10,7 @@ import type { NodeEntityType } from "./NodeEntityType";
 import type { Permission } from "./Permission";
 import type { RolesRequest } from "./RolesRequest";
 import type { SecureLinksRequest } from "./SecureLinksRequest";
+import type { ServerIdentityChallenge } from "./ServerIdentityChallenge";
 import type { SignInSettings } from "./SignInSettings";
 import type { TelemetryRequest } from "./TelemetryRequest";
 import type { TreeSchema } from "./TreeSchema";
@@ -76,7 +77,13 @@ accepts_requests_from_strangers: boolean | null,
  * The server's peer list reports connection state to everyone, so
  * this is published for their clients to honour. `None` leaves it.
  */
-shows_online_status: boolean | null, } } | { "Message": { contents: Array<number>, } } | { "SendGroupMessage": { 
+shows_online_status: boolean | null, 
+/**
+ * The user's identity binding (base64url, identity doc §3.4 rev b): their portable
+ * identity's signature that it holds this username on this server. The server verifies
+ * it before storing it, and every member may read it. `None` leaves it.
+ */
+identity_binding: string | null, } } | { "Message": { contents: Array<number>, } } | { "SendGroupMessage": { 
 /**
  * UUID of the group chat channel (office.chat_channel_id or room.chat_channel_id)
  */
@@ -153,4 +160,4 @@ is_default: boolean | null,
  * the workspace), `citadel_app` may not change, any other key is kept as sent. Needs
  * `UpdateNodeSettings` on the node.
  */
-metadata?: Array<number>, } } | { "SetDefaultAppTabs": { app_tabs: Array<string>, } } | { "SetMembersVisible": { node_id: string, visible: boolean, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes" | { "Telemetry": TelemetryRequest } | { "MessagingTrust": MessagingTrustRequest } | { "Roles": RolesRequest } | { "Documents": DocumentsRequest } | { "ChatDocuments": ChatDocumentsRequest } | { "ChatAttachments": ChatAttachmentsRequest } | { "SecureLinks": SecureLinksRequest } | { "Apps": AppsRequest };
+metadata?: Array<number>, } } | { "SetDefaultAppTabs": { app_tabs: Array<string>, } } | { "SetMembersVisible": { node_id: string, visible: boolean, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes" | { "Telemetry": TelemetryRequest } | { "MessagingTrust": MessagingTrustRequest } | { "Roles": RolesRequest } | { "Documents": DocumentsRequest } | { "ChatDocuments": ChatDocumentsRequest } | { "ChatAttachments": ChatAttachmentsRequest } | { "SecureLinks": SecureLinksRequest } | { "Apps": AppsRequest } | { "ServerIdentityChallenge": ServerIdentityChallenge };

@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avarok.net/contracts/batch-1116/update-manifest.schema.json",
+  "title": "Avarok update manifest",
+  "description": "tray-core update.rs. sig = FIPS 204 ML-DSA-65 with context \"avarok-update-manifest-v1\" over the deterministic CBOR of every field but sig, by a pinned publisher. The host applies only a strictly newer x.y.z for its own product and target, downloads over https only, and checks size, SHA3-256 and the OS code signature of the staged bundle.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": 1
+    },
+    "product": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]{0,8})\\.(?:0|[1-9][0-9]{0,8})\\.(?:0|[1-9][0-9]{0,8})$"
+    },
+    "notes_url": {
+      "type": "string",
+      "pattern": "^https://[\\x21-\\x7e]+$",
+      "maxLength": 1024
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9_]+)+$",
+            "maxLength": 64,
+            "description": "e.g. macos-aarch64, windows-x86_64, linux-x86_64"
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://[\\x21-\\x7e]+$",
+            "maxLength": 1024
+          },
+          "sha3_256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "target",
+          "url",
+          "sha3_256",
+          "size"
+        ]
+      }
+    },
+    "publisher": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "mldsa65_public_key": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{3904}$"
+        }
+      },
+      "required": [
+        "name",
+        "mldsa65_public_key"
+      ]
+    },
+    "sig": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "minLength": 4412,
+      "maxLength": 4412
+    }
+  },
+  "required": [
+    "format",
+    "product",
+    "version",
+    "notes_url",
+    "assets",
+    "publisher",
+    "sig"
+  ]
+}

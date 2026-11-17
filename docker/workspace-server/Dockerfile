@@ -62,6 +62,9 @@ COPY --exclude=tests ./citadel-workspace-server-kernel /usr/src/app/citadel-work
 # Replace kernel's Cargo.toml with Docker-specific version (no dev-dependencies)
 COPY ./docker/workspace-server/citadel-workspace-server-kernel.Cargo.docker.toml /usr/src/app/citadel-workspace-server-kernel/Cargo.toml
 COPY ./citadel-workspace-internal-service /usr/src/app/citadel-workspace-internal-service
+# Replace the agent's Cargo.toml with one without dev-dependencies: they name the kernel's
+# tests/common, which this image leaves out (see that file's header)
+COPY ./docker/workspace-server/citadel-workspace-internal-service.Cargo.docker.toml /usr/src/app/citadel-workspace-internal-service/Cargo.toml
 COPY ./citadel-workspace-types /usr/src/app/citadel-workspace-types
 COPY ./citadel-support-signature /usr/src/app/citadel-support-signature
 # A workspace member. Cargo loads EVERY member's manifest before building any

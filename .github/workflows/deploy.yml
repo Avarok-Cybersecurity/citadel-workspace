@@ -122,7 +122,10 @@ jobs:
       always() && needs.plan.result == 'success' &&
       (needs.release.result == 'success' || (needs.release.result == 'skipped' && needs.plan.outputs.state == 'released'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # 45 for the build, gates and deploy, and 20 more for deploy.sh's last step: waiting for the
+    # Cron trigger (every 15 minutes) to bring every tenant up to server identities, which it
+    # skips at once when none remains (control/identity-upgrade.mjs, DEPLOY.md).
+    timeout-minutes: 65
     environment: production
     steps:
       - uses: actions/checkout@v4

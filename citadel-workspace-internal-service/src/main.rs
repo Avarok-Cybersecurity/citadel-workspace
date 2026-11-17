@@ -15,8 +15,10 @@ use structopt::StructOpt;
 
 mod app_net;
 mod apps_authority;
+mod identity_setup;
 mod log_setup;
 mod notice_token;
+mod server_identity_codec;
 mod shell_menu;
 mod telemetry;
 #[cfg(feature = "self-update")]
@@ -135,6 +137,16 @@ async fn run() -> Result<(), Box<dyn Error>> {
         &default_dir,
     )?;
 
+    // How long the portable identity stays unlocked, required like the STUN servers; its store
+    // follows the backend just chosen (identity_setup.rs).
+    let unlock_idle = identity_setup::unlock_idle(
+        std::env::var(identity_setup::UNLOCK_IDLE_ENV)
+            .ok()
+            .as_deref(),
+        opts.identity_unlock_idle_secs.as_deref(),
+    )?;
+    let identity = identity_setup::identity_config(unlock_idle, &backend_type)?;
+
     // Every required setting has resolved, and nothing is bound yet: an updating agent asks
     // a staged version this before installing it (citadel-internal-service's
     // updater/launch_check.rs), so one that would refuse its command is never swapped in.
@@ -171,7 +183,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
     .with_app_net(
         app_net,
         std::sync::Arc::new(apps_authority::WorkspaceHostNetAuthority),
-    );
+    )
+    .with_app_sessions(app_net::app_session_config());
 
     // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
     let mut node_builder = NodeBuilder::<StackedRatchet>::default();
@@ -192,6 +205,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         windows_shell::start_tray(spec);
     }
 
+    let service = identity_setup::applied(service, identity);
     let service = notice_token::applied(service);
     #[cfg(feature = "self-update")]
     let service = update_setup::applied(service, opts.bind)?;
@@ -243,6 +257,10 @@ struct Options {
     /// version with its own command.
     #[structopt(long)]
     check_launch: bool,
+    /// Whole seconds the unsealed portable identity is kept after its last use. Required;
+    /// INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS overrides it.
+    #[structopt(long)]
+    identity_unlock_idle_secs: Option<String>,
 }
 
 /// The certificate the agent serves, and the only one.

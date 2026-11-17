@@ -66,6 +66,7 @@ async fn alice_sets(kernel: &Kernel, show: Option<bool>, accepts: Option<bool>) 
             show_profile_to_strangers: show,
             accepts_requests_from_strangers: accepts,
             shows_online_status: None,
+            identity_binding: None,
         },
         ALICE,
     )
@@ -187,6 +188,7 @@ async fn alice_publishes_presence(kernel: &Kernel, shows: bool) {
             show_profile_to_strangers: None,
             accepts_requests_from_strangers: None,
             shows_online_status: Some(shows),
+            identity_binding: None,
         },
         ALICE,
     )

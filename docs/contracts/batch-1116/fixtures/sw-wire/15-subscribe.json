@@ -1,0 +1,33 @@
+{
+  "cbor_hex": "a2010f02a3626f70697375627363726962656a70726f6a6563745f69646670726f6a2d316c73696e63655f637572736f7200",
+  "model": {
+    "$map": [
+      [
+        1,
+        15
+      ],
+      [
+        2,
+        {
+          "$map": [
+            [
+              "op",
+              "subscribe"
+            ],
+            [
+              "project_id",
+              "proj-1"
+            ],
+            [
+              "since_cursor",
+              0
+            ]
+          ]
+        }
+      ]
+    ]
+  },
+  "name": "15-subscribe",
+  "signed": false,
+  "typ": 15
+}

@@ -47,6 +47,9 @@ pub mod group_typing;
 /// What a failed workspace lookup means, decided from facts rather than prose.
 pub mod workspace_lookup;
 
+/// ServerIdentityChallenge, GetWorkspace's accepted domains, a binding write's context.
+pub mod server_identity;
+
 /// UpdateWorkspaceProfile: name, description and icon.
 mod workspace_profile;
 

@@ -188,6 +188,8 @@ run_deploy() { # <name> <service>...
     # The agent's other required setting, under the same rule (NO_STUN=1 for the case that
     # proves deploy.sh refuses without it).
     [ -n "${NO_STUN:-}" ] || printf 'INTERNAL_SERVICE_STUN_SERVERS=stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302\n'
+    # And the identity's unlock idle (NO_IDENTITY=1 for the refusal).
+    [ -n "${NO_IDENTITY:-}" ] || printf 'INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS=900\n'
     # Required whenever a `ui` service is deployed, for the same reason as the
     # origins above: with the /ws proxy off, an empty value ships a page that
     # loads and can reach no agent. NO_LOOPBACK=1 for the case that proves
@@ -232,6 +234,7 @@ run_deploy() { # <name> <service>...
   fi
   ( cd "$dir" && HOME="$dir" PATH="$WORK/bin:$PATH" \
       env -u INTERNAL_SERVICE_ALLOWED_ORIGINS -u INTERNAL_SERVICE_STUN_SERVERS \
+        -u INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS \
         bash ./deploy.sh --no-pull ${DEPLOY_ARGS:-} >"$dir/out.txt" 2>&1 ) || status=$?
   [ -n "${HOLD_LOCK:-}" ] && exec 8>&-
   [ -n "${HOLD_CHECKOUT:-}" ] && exec 7<&-
@@ -372,6 +375,19 @@ grep -q "INTERNAL_SERVICE_STUN_SERVERS is unset" "$d/out.txt" \
   || fail "an agent deployment without STUN servers was not refused with a reason (see $d/out.txt)"
 grep -qE 'up -d' "$d/calls.txt" && fail "the STUN refusal came after a restart (see $d/out.txt)"
 echo "  no-stun     -> an agent deploy without STUN servers is refused"; pass_count=$((pass_count+1))
+
+# The same for how long the portable identity stays unlocked.
+d=$(NO_IDENTITY=1 run_deploy no-identity server internal-service)
+assert_failed "$d"
+grep -q "INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS is unset" "$d/out.txt" \
+  || fail "an agent deployment without the identity's unlock idle was not refused with a reason (see $d/out.txt)"
+grep -qE 'up -d' "$d/calls.txt" && fail "the identity refusal came after a restart (see $d/out.txt)"
+echo "  no-identity -> an agent deploy without the identity's unlock idle is refused"; pass_count=$((pass_count+1))
+
+# ...and a server-only tenant is not asked for it.
+d=$(NO_IDENTITY=1 run_deploy no-identity-server-only server)
+assert_succeeded "$d"
+echo "  no-identity -> server-only is not asked for it"; pass_count=$((pass_count+1))
 
 # The control: the same agent deploy with no apps setting at all deploys. LAN access for
 # apps is each member's own grant on the agent page, not a deployment setting.

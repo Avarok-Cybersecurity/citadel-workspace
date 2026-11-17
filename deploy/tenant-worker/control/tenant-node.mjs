@@ -56,11 +56,12 @@ export function nodeStorage(storage, entitlements) {
  * mirror, `plan()` the tenant's enforced entitlements, `meter()` the object's current meter:
  * members' reported TURN bytes go to it through their hourly ceiling (control/turn-cap.mjs,
  * server-wasm turn.rs), and apps' usage through its intake (control/apps-usage.mjs, usage.rs);
- * `onExit(outcome)` is told how the node ended. The plan gives the secure-link limits (control/tenant-links.mjs), read on each use, and
+ * `onExit(outcome)` is told how the node ended, `identity` is its server identity
+ * (control/tenant-identity.mjs `host()`, built in this same instance). The plan gives the secure-link limits (control/tenant-links.mjs), read on each use, and
  * the path policy (control/path-policy.mjs), read once here: a plan change reaches the path
  * policy at the node's next start, not on a running node (v1).
  */
-export function startNode(wasm, env, { config, storage, ice, signIn, grants, plan, meter, onExit }) {
+export function startNode(wasm, env, { config, storage, ice, signIn, grants, plan, meter, onExit, identity }) {
   const argon = new wasm.ArgonCost(
     Number(required(env, "ARGON_LANES")),
     Number(required(env, "ARGON_MEM_KIB")),
@@ -72,5 +73,5 @@ export function startNode(wasm, env, { config, storage, ice, signIn, grants, pla
   const pathPolicy = JSON.stringify(pathPolicyOf(plan()));
   const turnUsage = new TurnIntake(meter, Date.now, TURN_BYTES_PER_MEMBER_HOUR);
   const appsUsage = new AppsUsageIntake(meter);
-  return new wasm.TenantServer(config, storage, argon, ice, pq, signIn.host(), grants, links, turnUsage, appsUsage, required(env, "STUN_SERVERS"), pathPolicy, required(env, "LOG_FILTER"), onExit);
+  return new wasm.TenantServer(config, storage, argon, ice, pq, signIn.host(), grants, links, turnUsage, appsUsage, required(env, "STUN_SERVERS"), pathPolicy, required(env, "LOG_FILTER"), onExit, identity);
 }

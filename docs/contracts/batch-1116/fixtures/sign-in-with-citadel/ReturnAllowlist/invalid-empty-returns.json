@@ -1,0 +1,17 @@
+{
+  "clients": {
+    "sw-mcp": {
+      "aud": "sw-mcp",
+      "display_name": "synchronized.work MCP",
+      "returns": []
+    },
+    "synchronized.work": {
+      "aud": "synchronized.work",
+      "display_name": "synchronized.work",
+      "returns": [
+        "https://synchronized.work/auth/return"
+      ]
+    }
+  },
+  "v": 1
+}

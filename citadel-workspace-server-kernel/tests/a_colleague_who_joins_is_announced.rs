@@ -24,9 +24,9 @@ use tokio::sync::oneshot;
 
 const PASSWORD: &str = "password123";
 const WITHIN: Duration = Duration::from_secs(90);
-const FIRST: &str = "alice1015";
-const SECOND: &str = "bob1015";
-const NEWCOMER: &str = "carol1015";
+const FIRST: &str = common::test_user!("alice1015");
+const SECOND: &str = common::test_user!("bob1015");
+const NEWCOMER: &str = common::test_user!("carol1015");
 
 /// What a session reports back to the test.
 struct Reports {

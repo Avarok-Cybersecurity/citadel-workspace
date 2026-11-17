@@ -66,7 +66,7 @@ async fn the_production_server_refuses_a_transient_account() {
     let registered = attempt(
         ServerConnectionSettingsBuilder::credentialed_registration(
             addr,
-            "realuser",
+            common::test_user!("realuser"),
             "Real User",
             "password123",
         )

@@ -3,29 +3,17 @@
  * (docs/plans/pq-sign-in.md). Every account's OPRF key is derived from it, so a stolen copy of the
  * accounts alone cannot drive an offline password guess: the guesser needs this too.
  *
- * It lives in the object's key-value storage under its own key, apart from the node's `citadel_*`
- * SQL rows and from the provisioning record, and is never logged, never reported by stats and
- * never sent anywhere but into the node. 32 bytes from the platform CSPRNG.
+ * Kept as stored-seed.mjs keeps every object secret: its own key, never logged, never reported by
+ * stats, never sent anywhere but into the node. 32 bytes from the platform CSPRNG.
  */
+import { SEED_BYTES, storedSeed } from "./stored-seed.mjs";
 
 export const OPRF_SEED_KEY = "control:oprf-seed";
-export const OPRF_SEED_BYTES = 32;
+export const OPRF_SEED_BYTES = SEED_BYTES;
 
-function checked(seed) {
-  // ArrayBuffer.isView, not instanceof: a typed array from another realm fails instanceof.
-  if (!ArrayBuffer.isView(seed) || seed.byteLength !== OPRF_SEED_BYTES) {
-    // Never repaired by generating another: a new seed silently locks out every post-quantum
-    // account, which is worse than a node that refuses to start.
-    throw new Error(`the stored OPRF seed is not ${OPRF_SEED_BYTES} bytes; refusing to start sign-in`);
-  }
-  return new Uint8Array(seed.buffer, seed.byteOffset, seed.byteLength);
-}
-
-async function generate(storage, random) {
-  const seed = random.getRandomValues(new Uint8Array(OPRF_SEED_BYTES));
-  await storage.put(OPRF_SEED_KEY, seed);
-  return seed;
-}
+// A malformed seed is never repaired by generating another: a new seed silently locks out every
+// post-quantum account, which is worse than a node that refuses to start.
+const OPRF_SEED = storedSeed(OPRF_SEED_KEY, "OPRF seed");
 
 /**
  * The stored seed, generated and stored first if there is none: at provisioning, and on the first
@@ -33,9 +21,7 @@ async function generate(storage, random) {
  * stored is the seed for good. `random` is the CSPRNG (`crypto`).
  */
 export async function ensureOprfSeed(storage, random) {
-  const stored = await storage.get(OPRF_SEED_KEY);
-  if (stored !== undefined) return checked(stored);
-  return generate(storage, random);
+  return (await OPRF_SEED.read(storage)) ?? OPRF_SEED.generate(storage, random);
 }
 
 /**
@@ -43,5 +29,5 @@ export async function ensureOprfSeed(storage, random) {
  * started, Provisioning.provision): it has no accounts, and one tenant's secret is not another's.
  */
 export async function replaceOprfSeed(storage, random) {
-  return generate(storage, random);
+  return OPRF_SEED.generate(storage, random);
 }

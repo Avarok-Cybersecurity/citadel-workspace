@@ -116,6 +116,13 @@ export function installerFamily(candidates: readonly AgentPlatform[]): Installer
 export const AGENT_STUN_SERVERS: string =
   'stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302';
 
+/**
+ * How long the agent keeps its portable identity unlocked, in whole seconds (it will not start
+ * without --identity-unlock-idle-secs): the value the Mac app's Info.plist passes
+ * (`CitadelAgentIdentityUnlockIdleSecs`), which a test here reads it against.
+ */
+export const AGENT_IDENTITY_UNLOCK_IDLE_SECS: string = '900';
+
 /** What the hosted page knows that the command needs. */
 export interface RunCommandInputs {
   platform: AgentPlatform;
@@ -147,6 +154,7 @@ export function agentRunCommand({ platform, pageOrigin, loopbackOrigin }: RunCom
     '--backend filesystem',
     `--allowed-origins ${pageOrigin}`,
     `--stun-servers ${AGENT_STUN_SERVERS}`,
+    `--identity-unlock-idle-secs ${AGENT_IDENTITY_UNLOCK_IDLE_SECS}`,
   ];
   // NO loopback flags. This used to append `--loopback-host` and
   // `--loopback-cert-url`, and the agent has never had either:

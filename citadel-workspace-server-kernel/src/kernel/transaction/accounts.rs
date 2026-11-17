@@ -68,3 +68,15 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         }
     }
 }
+
+/// Registration's name rules ask the SDK's account store (`sign_in::name_policy`).
+#[async_trait::async_trait]
+impl<R: Ratchet + Send + Sync + 'static> crate::kernel::sign_in::name_policy::AccountDirectory
+    for BackendTransactionManager<R>
+{
+    async fn exists(&self, username: &str) -> Result<bool, String> {
+        self.account_is_registered(username)
+            .await
+            .map_err(|e| e.to_string())
+    }
+}

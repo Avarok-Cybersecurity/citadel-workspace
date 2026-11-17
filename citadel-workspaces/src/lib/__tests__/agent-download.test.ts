@@ -8,6 +8,7 @@ import {
   agentDownloadUrl,
   agentPlatformCandidates,
   agentRunCommand,
+  AGENT_IDENTITY_UNLOCK_IDLE_SECS,
   type AgentPlatform,
 } from '../agent-download';
 import { filesThePublishJobCollects } from './release-workflow';
@@ -120,6 +121,24 @@ describe('the run command only uses flags the agent has', () => {
     expect(flags.has('bind')).toBe(true);
     expect(flags.has('allowed-origins')).toBe(true);
     expect(flags.size).toBeGreaterThan(4);
+  });
+
+  it('carries the identity unlock idle the packaged agents start with', () => {
+    const plist: string = readFileSync(
+      join(process.cwd(), '..', 'apps', 'macos-agent', 'Info.plist'),
+      'utf8',
+    );
+    const value: string | undefined = plist.match(
+      /<key>CitadelAgentIdentityUnlockIdleSecs<\/key>\s*<string>([^<]*)<\/string>/,
+    )?.[1];
+    expect(value, 'Info.plist has no CitadelAgentIdentityUnlockIdleSecs').toBeDefined();
+    expect(AGENT_IDENTITY_UNLOCK_IDLE_SECS).toBe(value);
+    const command: string = agentRunCommand({
+      platform: 'linux-x64',
+      pageOrigin: 'https://work.example.com',
+      loopbackOrigin: undefined,
+    });
+    expect(command).toContain(`--identity-unlock-idle-secs ${String(value)}`);
   });
 
   it('every flag in every command it can produce is a real one', () => {

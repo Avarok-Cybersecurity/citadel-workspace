@@ -20,6 +20,7 @@ pub(crate) async fn hosted_kernel(
     chat_document_limit: kernel::chat_document_limit::ChatDocumentLimitSourceHandle,
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
     server_egress: kernel::apps::egress::ServerEgressHandle,
+    server_identity: std::sync::Arc<kernel::server_identity::ServerIdentity>,
 ) -> Result<AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
     let workspace_structure = crate::resolve_workspace_structure(config, None)?;
     let first_connect_admin =
@@ -36,6 +37,7 @@ pub(crate) async fn hosted_kernel(
         server_egress,
         kernel::apps::storage_entitlement::StorageEntitlement::of(backend),
         telemetry.usage_meter,
+        server_identity,
     )
     .await?;
     kernel.set_support_grant_observer(telemetry.support_grants);

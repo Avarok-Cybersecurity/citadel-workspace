@@ -8,6 +8,8 @@ use std::collections::HashMap;
 
 use citadel_workspace_types::structs::{MetadataValue, User};
 
+pub use super::identity_binding::{BindingWrite, IDENTITY_BINDING_KEY};
+
 /// `User.metadata` key holding the base64 avatar.
 pub const AVATAR_KEY: &str = "avatar";
 /// `User.metadata` key holding the contact email.
@@ -38,12 +40,17 @@ pub const PROFILE_DETAIL_KEYS: [&str; 3] = [AVATAR_KEY, EMAIL_KEY, TITLE_KEY];
 /// `shows_online_status` likewise: presence comes from the Citadel server's
 /// peer list, which reports it to everyone, so the only party able to withhold
 /// it is the viewer's client -- and it can only do that if it can read this.
-pub const MEMBER_VISIBLE_KEYS: [&str; 5] = [
+///
+/// `identity_binding` likewise, and outside `PROFILE_DETAIL_KEYS`: it is how
+/// any member, stranger or not, learns this account is the same person as an
+/// account elsewhere, and it verified before it was stored.
+pub const MEMBER_VISIBLE_KEYS: [&str; 6] = [
     AVATAR_KEY,
     EMAIL_KEY,
     TITLE_KEY,
     ACCEPTS_REQUESTS_FROM_STRANGERS_KEY,
     SHOWS_ONLINE_STATUS_KEY,
+    IDENTITY_BINDING_KEY,
 ];
 
 /// One profile update as received. `None` leaves a field unchanged.
@@ -61,6 +68,9 @@ pub struct ProfileUpdate {
     pub accepts_requests_from_strangers: Option<bool>,
     /// Stored under `SHOWS_ONLINE_STATUS_KEY`.
     pub shows_online_status: Option<bool>,
+    /// Stored under `IDENTITY_BINDING_KEY`, once `identity_binding::check_binding_write`
+    /// accepts it against the stored one.
+    pub identity_binding: Option<BindingWrite>,
 }
 
 /// Apply an already-checked update to `user`.
@@ -86,6 +96,12 @@ pub fn apply_profile_update(user: &mut User, update: ProfileUpdate) {
         SHOWS_ONLINE_STATUS_KEY,
         update.shows_online_status,
     );
+    if let Some(binding) = update.identity_binding {
+        user.metadata.insert(
+            IDENTITY_BINDING_KEY.to_string(),
+            MetadataValue::String(binding.blob_base64url),
+        );
+    }
 }
 
 fn set_flag(metadata: &mut HashMap<String, MetadataValue>, key: &str, value: Option<bool>) {
@@ -114,123 +130,4 @@ pub fn member_visible_metadata(
         .iter()
         .filter_map(|key| metadata.get(*key).map(|v| (key.to_string(), v.clone())))
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use citadel_workspace_types::structs::UserRole;
-
-    fn user() -> User {
-        User::new("u".into(), "U".into(), UserRole::Member)
-    }
-
-    fn update(email: Option<&str>, title: Option<&str>) -> ProfileUpdate {
-        ProfileUpdate {
-            name: None,
-            avatar_data: None,
-            email: email.map(str::to_string),
-            title: title.map(str::to_string),
-            show_profile_to_strangers: None,
-            accepts_requests_from_strangers: None,
-            shows_online_status: None,
-        }
-    }
-
-    fn text(user: &User, key: &str) -> Option<String> {
-        match user.metadata.get(key) {
-            Some(MetadataValue::String(s)) => Some(s.clone()),
-            _ => None,
-        }
-    }
-
-    #[test]
-    fn email_and_title_are_stored() {
-        let mut u = user();
-        apply_profile_update(&mut u, update(Some("a@b.c"), Some("Engineer")));
-        assert_eq!(text(&u, EMAIL_KEY).as_deref(), Some("a@b.c"));
-        assert_eq!(text(&u, TITLE_KEY).as_deref(), Some("Engineer"));
-    }
-
-    #[test]
-    fn an_absent_field_leaves_the_stored_value() {
-        let mut u = user();
-        apply_profile_update(&mut u, update(Some("a@b.c"), Some("Engineer")));
-        apply_profile_update(&mut u, update(None, None));
-        assert_eq!(text(&u, EMAIL_KEY).as_deref(), Some("a@b.c"));
-        assert_eq!(text(&u, TITLE_KEY).as_deref(), Some("Engineer"));
-    }
-
-    #[test]
-    fn an_empty_avatar_clears_the_stored_one() {
-        let mut u = user();
-        let with_avatar = ProfileUpdate {
-            name: None,
-            avatar_data: Some("AAAA".into()),
-            email: None,
-            title: None,
-            show_profile_to_strangers: None,
-            accepts_requests_from_strangers: None,
-            shows_online_status: None,
-        };
-        apply_profile_update(&mut u, with_avatar.clone());
-        assert!(u.metadata.contains_key(AVATAR_KEY));
-        apply_profile_update(
-            &mut u,
-            ProfileUpdate {
-                avatar_data: Some(String::new()),
-                ..with_avatar
-            },
-        );
-        assert!(!u.metadata.contains_key(AVATAR_KEY));
-    }
-
-    #[test]
-    fn an_empty_string_clears_the_field() {
-        let mut u = user();
-        apply_profile_update(&mut u, update(Some("a@b.c"), Some("Engineer")));
-        apply_profile_update(&mut u, update(Some(""), Some("")));
-        assert!(!u.metadata.contains_key(EMAIL_KEY));
-        assert!(!u.metadata.contains_key(TITLE_KEY));
-    }
-
-    #[test]
-    fn members_see_the_avatar_email_and_title_and_nothing_else() {
-        let mut u = user();
-        apply_profile_update(
-            &mut u,
-            ProfileUpdate {
-                name: None,
-                avatar_data: Some("AAAA".into()),
-                email: Some("a@b.c".into()),
-                title: Some("Engineer".into()),
-                show_profile_to_strangers: None,
-                accepts_requests_from_strangers: None,
-                shows_online_status: None,
-            },
-        );
-        u.metadata
-            .insert("other".into(), MetadataValue::String("x".into()));
-        let visible = member_visible_metadata(&u.metadata);
-        let mut keys: Vec<&str> = visible.keys().map(String::as_str).collect();
-        keys.sort_unstable();
-        assert_eq!(keys, vec![AVATAR_KEY, EMAIL_KEY, TITLE_KEY]);
-    }
-
-    #[test]
-    fn the_presence_choice_is_stored_and_members_can_read_it() {
-        let mut u = user();
-        apply_profile_update(
-            &mut u,
-            ProfileUpdate {
-                shows_online_status: Some(false),
-                ..update(None, None)
-            },
-        );
-        let visible = member_visible_metadata(&u.metadata);
-        assert_eq!(
-            visible.get(SHOWS_ONLINE_STATUS_KEY),
-            Some(&MetadataValue::Boolean(false))
-        );
-    }
 }
