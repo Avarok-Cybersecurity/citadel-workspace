@@ -192,8 +192,9 @@ IdentityRefusal::{ NoIdentity, WrongPassword, NoBrowserOrigin, RateLimited, BadF
   origin label of its own that the issuer would list.
 - The password is re-proven per signature; lock state is unchanged (a locked identity signs after
   the re-proof exactly as `IdentityExport` exports). Rate: one request per 2 s per connection; five
-  `WrongPassword` in a row → `RateLimited` for 60 s. Both are explicit `[identity]` settings in the
-  agent's config (PCND), with these values in the shipped `kernel.toml`.
+  `WrongPassword` in a row → `RateLimited` for 60 s. Both are protocol constants, not settings:
+  `SIGN_MIN_INTERVAL_S`, `SIGN_WRONG_PASSWORD_LIMIT` and `SIGN_LOCKOUT_S` (identity-api.md §1,
+  `identity-kat.json`), the same in every agent.
 - `issuer`, `aud` 1..=255 bytes; `nonce`, `challenge` exactly 32 → else `BadField`. The agent
   signs whatever `issuer` and `aud` the page names: both are checked by the issuer, and the page is
   on the issuer's own origin by construction.
