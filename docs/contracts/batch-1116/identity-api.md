@@ -20,6 +20,7 @@ file wins and the crate changes.
 | `MAX_BINDING_BASE64_LEN` / `MAX_BINDING_FUTURE_SKEW_S` | 8192 / 300 |
 | `WELL_KNOWN_VERSION` / `SERVER_KEY_ALG` | 1 / `"ML-DSA-65"` |
 | `ASSERTION_VERSION` / `MAX_ASSERTION_FIELD_BYTES` | `0x01` / 255 |
+| `PROOF_VERSION` / `PROOF_FIXED_LEN` | `0x01` / 5332 (+ `len(issuer) + len(aud) + len(origin)`) (§7a) |
 | `PHRASE_WORDS` | 24 |
 
 ## 2. Primitives and domain separation
@@ -42,6 +43,7 @@ file wins and the crate changes.
 | `citadel-server-challenge-v1` | post-connect server challenge (§6) |
 | `citadel-sign-in-assertion-v1` | "Sign in with Citadel" assertion (§7, `sign-in-with-citadel.md`) |
 | `citadel-sign-in-match-v1` | match-phrase hash (`sign-in-with-citadel.md`) |
+| `citadel-sign-in-proof-v1` | the identity's proof to the sign-in issuer (§7a, `sign-in-with-citadel.md` §1a) |
 
 - Encodings: `base64url_nopad` (RFC 4648 §5, strict decode: padding, other alphabets and non-zero
   trailing bits refused); `base32_lower_nopad` (RFC 4648 §6 alphabet, lowercase); `u16be`/`u64be`
@@ -119,8 +121,9 @@ against the stored binding is the server's check**, not this function's. Vectors
 pub struct ServerKey; impl ServerKey { pub fn from_seed(seed: &[u8; 32]) -> ServerKey; pub fn public_key(&self) -> &MlDsa65Pk;
   pub fn sign_challenge(&self, domain: &CanonicalDomain, cid: u64, nonce: &[u8; 32]) -> Vec<u8>;
   pub fn sign_well_known(&self, doc: &WellKnownCitadel) -> Result<Vec<u8> /* JSON */, WellKnownError>; }
-pub struct WellKnownCitadel { pub v: u8, pub canonical_domain: CanonicalDomain, pub citadel_wss: String,
+pub struct WellKnownCitadel { pub v: u8, pub canonical_domain: CanonicalDomain, pub citadel_wss: Option<String>,
   pub server_key: MlDsa65Pk, pub former_domains: Vec<CanonicalDomain>, pub issued_at_s: u64 }
+  // citadel_wss: None ⇔ the JSON has no `citadel` member — an issuer-only server (work.avarok.net) that runs no node
 pub fn well_known_message(doc: &WellKnownCitadel) -> Result<Vec<u8>, WellKnownError>;
 pub fn parse_well_known(json: &[u8], fetched_from: &CanonicalDomain) -> Result<WellKnownCitadel, WellKnownError>;
 pub fn check_against_pin(doc: &WellKnownCitadel, pinned_key: &MlDsa65Pk, pinned_issued_at_s: u64) -> Result<(), WellKnownError>;
@@ -132,10 +135,12 @@ pub fn verify_server_challenge(pk: &MlDsa65Pk, domain: &CanonicalDomain, cid: u6
   `"citadel-well-known-v1" ‖ 0x00 ‖ CBOR(doc without sig)` where the CBOR is RFC 8949 §4.2.1
   deterministic: a map with text keys sorted by their encoded bytes, `v` and `issued_at` unsigned
   integers, `pk` the base64url **text**, `former_domains` an array of text, nested maps `citadel`
-  and `server_key` the same way. `parse_well_known` checks in order: JSON shape, `alg`, canonical
-  domains (each equal to its own canonical form; no former domain equals the canonical or repeats),
-  `v`, `wss://` endpoint whose host canonicalises, signature, then `fetched_from ∈ {canonical} ∪
-  former` (`NotThisServer`). `check_against_pin`: key must equal the pinned key (`KeyChanged`,
+  and `server_key` the same way; an absent `citadel` is simply not encoded (never `null`, never an
+  empty map). `parse_well_known` checks in order: JSON shape, `alg`, canonical domains (each equal
+  to its own canonical form; no former domain equals the canonical or repeats), `v`, the `wss://`
+  endpoint whose host canonicalises **when `citadel` is present**, signature, then `fetched_from ∈
+  {canonical} ∪ former` (`NotThisServer`). Vector for the issuer-only form: `sign-in-kat.json`
+  `issuer.well_known` (`fixtures/well-known-citadel/valid-issuer-only.json`). `check_against_pin`: key must equal the pinned key (`KeyChanged`,
   both fingerprints — never a silent re-pin) and `issued_at ≥ pinned` (`Stale`).
 - Challenge: `body = nonce[32] ‖ u64be(cid) ‖ utf8(domain)`; `sig = Sign(sk_server,
   "citadel-server-challenge-v1" ‖ 0x00 ‖ body)`. A signature for another `cid`, `domain` or
@@ -158,6 +163,29 @@ blob = 0x01 ‖ body ‖ sig[3309]
 The identity is the full public key (never only `id_fp`). `verify_assertion` order: parse,
 `Version`, signature, `aud == expect_aud` (`WrongAudience`), `nonce == expect_nonce`
 (`WrongNonce`), `now_s < exp_s` (`Expired`). Vectors: `sign-in-kat.json`.
+
+## 7a. Sign-in identity proof (the agent signs; the issuer verifies — `sign-in-with-citadel.md` §1a)
+
+```rust
+pub struct SignInProof { pub issuer: String, pub aud: String, pub origin: String, pub nonce: [u8; 32], pub challenge: [u8; 32], pub identity: MlDsa65Pk }
+pub fn proof_message(p: &SignInProof) -> Result<Vec<u8>, ProofError>;
+impl Identity { pub fn sign_proof(&self, issuer: &str, aud: &str, origin: &str, nonce: &[u8; 32], challenge: &[u8; 32]) -> Result<Vec<u8> /* blob */, ProofError>; }
+pub fn verify_proof(blob: &[u8], expect_issuer: &str, expect_origin: &str, expect_aud: &str, expect_nonce: &[u8; 32], expect_challenge: &[u8; 32]) -> Result<SignInProof, ProofError>;
+```
+```
+body = str16(issuer) ‖ str16(aud) ‖ str16(origin) ‖ nonce[32] ‖ challenge[32] ‖ identity_pk[1952]   issuer, aud, origin: 1..=255 bytes
+sig  = Sign(sk_identity, "citadel-sign-in-proof-v1" ‖ 0x00 ‖ body)
+blob = 0x01 ‖ body ‖ sig[3309]                                                                 = 5332 + len(issuer) + len(aud) + len(origin)
+```
+`issuer` is the issuer's canonical domain; `aud` the client id; `origin` the browser `Origin` the
+agent saw on the control connection (never a value the page sent); `nonce` the issuer's attempt
+nonce; `challenge` the link's. The signer is the identity key, and the subject is the key inside
+the blob: `verify_proof` checks the signature **under that key**, so the proof is self-certifying
+and the issuer keeps no registry. No clock: freshness is the issuer's attempt. Order: parse
+(`Malformed`), `Version`, signature (`Signature`), `issuer` (`WrongIssuer`), `origin`
+(`WrongOrigin`), `aud` (`WrongAudience`), `nonce` (`WrongNonce`), `challenge` (`WrongChallenge`).
+Vectors: `sign-in-kat.json` `attempt`, `proof`, `proof_must_fail` (incl. the cross-role control: a
+`citadel-identity-binding-v2` signature over the proof body must not verify).
 
 ## 8. Recovery phrase
 

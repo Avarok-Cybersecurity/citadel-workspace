@@ -9,9 +9,9 @@ refusal (`deny_unknown_fields`), and a fixture directory with no valid or no inv
 | contract | files | built by |
 |---|---|---|
 | Identity crate API, derivations, blobs | `identity-api.md`, `identity-kat.json` | I1 (crate), I2, I3, I5, S1 |
-| `/.well-known/citadel` | `well-known-citadel.schema.json`, `fixtures/well-known-citadel/` | I3, I4, S2 |
+| `/.well-known/citadel` (`citadel` optional: an issuer-only server such as work.avarok.net has none) | `well-known-citadel.schema.json`, `fixtures/well-known-citadel/` | I3, I4, S2 |
 | Post-connect server identity challenge | `server-identity-challenge.md` | I2, I3 |
-| Sign in with Citadel (D-B) | `sign-in-with-citadel.md`, `sign-in-with-citadel.schema.json`, `fixtures/sign-in-with-citadel/`, `sign-in-kat.json` | I5, S3, S4, S2 |
+| Sign in with Citadel (D-B), incl. the identity proof (§1a, §7, §8; design `SIGN-IN-IDENTITY-PROOF.md`) | `sign-in-with-citadel.md`, `sign-in-with-citadel.schema.json`, `fixtures/sign-in-with-citadel/`, `sign-in-kat.json` | I5 (page), I4 (issuer, control-host identity), I2 (agent `IdentitySignChallenge`), I1 (crate §7a), S3, S4, S2 |
 | CW-6 `citadel.session` | `citadel-session-abi.md` | H2, S6 |
 | CW-1..3 `node_page` | `node-page-abi.md`, `node-page-envelope.schema.json`, `fixtures/node-page-envelope/` | H1, S6 |
 | CW-5 canvas extension | `canvas-ext-abi.md` | H3, S1 |

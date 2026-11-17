@@ -33,7 +33,9 @@ knows it, never a value the client sends.
   `Accept: application/json`, 64 KiB cap, I/O behind a port), `parse_well_known(json, dialled)`,
   dial `citadel.wss`, register as `handle@canonical_domain`, pin `(canonical_domain, server_key,
   issued_at)` in the account record. `discovery = "pinned"` servers: the operator-typed key is
-  pinned instead and the record is marked `unverified` until a challenge matches.
+  pinned instead and the record is marked `unverified` until a challenge matches. A document
+  with no `citadel` member (an issuer-only server, `sign-in-with-citadel.md` §7) refuses both
+  `RegisterIdentity` and `ServerDiscovery` with `NoCitadelEndpoint`: there is no node to dial.
 - After every successful connect (first and reconnect): send the challenge with a fresh random
   nonce; `verify_server_challenge(pinned_pk, pinned_domain, session_cid, nonce, sig)`. On any
   failure: disconnect, emit a `ServerIdentityMismatch { domain, pinned_fp, offered_fp }` warning

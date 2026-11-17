@@ -33,7 +33,7 @@ class Tally {
 }
 const D = { sign: 'citadel-identity-sign-v1', pw: 'citadel-identity-pw-v1', server: 'citadel-server-sign-v1', spw: 'citadel-server-pw-v2',
   fp: 'citadel-identity-fp-v1', binding: 'citadel-identity-binding-v2', wk: 'citadel-well-known-v1', challenge: 'citadel-server-challenge-v1',
-  assertion: 'citadel-sign-in-assertion-v1', match: 'citadel-sign-in-match-v1' };
+  assertion: 'citadel-sign-in-assertion-v1', match: 'citadel-sign-in-match-v1', proof: 'citadel-sign-in-proof-v1' };
 
 function identity(t, name, id) {
   const seed = hexToBytes(id.seed_hex);
@@ -134,7 +134,55 @@ export function checkSignInKat(kat, identityKat, readFixture) {
   t.eq('fixture request.device', request.device, kat.device.value);
   t.eq('fixture response.assertion', readFixture('fixtures/sign-in-with-citadel/SignInCompleteResponse/valid.json').assertion, a.blob_b64url);
   t.eq('fixture link.challenge', readFixture('fixtures/sign-in-with-citadel/SignInLink/valid-sw-mcp.json').challenge, kat.challenge_b64url);
+  signInProof(t, kat, identityKat, readFixture);
   return t;
+}
+
+/** §1a: the attempt, the identity proof (by identity A, over the issuer's nonce) and the issuer's own document. */
+function signInProof(t, kat, identityKat, readFixture) {
+  const at = kat.attempt;
+  t.eq('attempt.id', b64(hexToBytes(at.id_hex)), at.id_b64url);
+  t.len('attempt.nonce', hexToBytes(at.nonce_hex), 32);
+  t.eq('attempt.nonce_b64url', b64(hexToBytes(at.nonce_hex)), at.nonce_b64url);
+  t.eq('attempt.ttl_s', at.ttl_s, kat.proof_constants.ATTEMPT_TTL_S);
+  t.eq('proof_constants.PROOF_FIXED_LEN', 1 + 2 + 2 + 2 + 32 + 32 + 1952 + 3309, kat.proof_constants.PROOF_FIXED_LEN);
+  const p = kat.proof;
+  t.eq('proof.identity is identity A', p.identity_pk_b64url, identityKat.identities.A.pk_b64url);
+  t.eq('proof.identity_id_fp', p.identity_id_fp, identityKat.identities.A.id_fp);
+  t.eq('proof.nonce is the attempt nonce', p.nonce_hex, at.nonce_hex);
+  t.eq('proof.challenge is the challenge', p.challenge_hex, kat.challenge_hex);
+  t.eq('proof.issuer', p.issuer, kat.issuer.domain);
+  t.eq('proof.origin', p.origin, kat.issuer.origin);
+  const proofOf = (q, label) => {
+    const body = Buffer.concat([str16(q.issuer), str16(q.aud), str16(q.origin), hexToBytes(q.nonce_hex), hexToBytes(q.challenge_hex), unb64(q.identity_pk_b64url)]);
+    if (q.body_hex !== undefined) t.eq(`${label}.body`, hex(body), q.body_hex);
+    if (q.message_hex !== undefined) t.eq(`${label}.message`, hex(ds(D.proof, body)), q.message_hex);
+    const sig = hexToBytes(q.sig_hex);
+    t.len(`${label}.sig`, sig, 3309);
+    const blob = Buffer.concat([Buffer.of(1), body, sig]);
+    t.eq(`${label}.blob`, b64(blob), q.blob_b64url);
+    t.eq(`${label}.blob_len`, blob.length, q.blob_len);
+    t.eq(`${label}.blob_len formula`, kat.proof_constants.PROOF_FIXED_LEN + Buffer.byteLength(q.issuer) + Buffer.byteLength(q.aud) + Buffer.byteLength(q.origin), q.blob_len);
+  };
+  proofOf(p, 'proof');
+  const wrong = kat.proof_must_fail.find((c) => c.reason === 'wrong_origin');
+  t.eq('proof_must_fail.wrong_origin names another origin', wrong.origin !== p.origin, true);
+  proofOf({ ...p, origin: wrong.origin, sig_hex: wrong.sig_hex, blob_b64url: wrong.blob_b64url, blob_len: wrong.blob_len, body_hex: undefined, message_hex: undefined }, 'proof_must_fail.wrong_origin');
+  const wk = kat.issuer.well_known;
+  const doc = readFixture(wk.document);
+  t.eq('issuer.well_known.pk', doc.server_key.pk, kat.issuer.key.pk_b64url);
+  t.eq('issuer.well_known.canonical_domain', doc.canonical_domain, kat.issuer.domain);
+  t.eq('issuer.well_known has no citadel member', 'citadel' in doc, false);
+  t.eq('issuer.well_known.signed_cbor', signedCbor(doc), wk.signed_cbor_hex);
+  t.len('issuer.well_known.sig', unb64(doc.sig), 3309);
+  const begin = readFixture('fixtures/sign-in-with-citadel/SignInBeginResponse/valid.json');
+  t.eq('fixture begin.attempt', begin.attempt, at.id_b64url);
+  t.eq('fixture begin.nonce', begin.nonce, at.nonce_b64url);
+  t.eq('fixture begin.issuer', begin.issuer, kat.issuer.domain);
+  const prove = readFixture('fixtures/sign-in-with-citadel/SignInProveRequest/valid.json');
+  t.eq('fixture prove.attempt', prove.attempt, at.id_b64url);
+  t.eq('fixture prove.proof', prove.proof, p.blob_b64url);
+  t.eq('fixture prove response.code', readFixture('fixtures/sign-in-with-citadel/SignInProveResponse/valid.json').code, kat.code.example);
 }
 
 export function checkTrayKat(kat, readFixture) {

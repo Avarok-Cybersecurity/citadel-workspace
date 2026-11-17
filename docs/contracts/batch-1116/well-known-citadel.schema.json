@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://avarok.net/contracts/batch-1116/well-known-citadel.schema.json",
   "title": "/.well-known/citadel",
-  "description": "The server identity document (plan §5.2, identity-api.md §6). deny_unknown_fields at every level. The signature covers the RFC 8949 deterministic CBOR of every field but sig under domain citadel-well-known-v1 ‖ 0x00.",
+  "description": "The server identity document (plan §5.2, identity-api.md §6). deny_unknown_fields at every level. The signature covers the RFC 8949 deterministic CBOR of every present field but sig under domain citadel-well-known-v1 ‖ 0x00; `citadel` is absent on an issuer-only server (sign-in-with-citadel.md §7).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -28,7 +28,8 @@
       },
       "required": [
         "wss"
-      ]
+      ],
+      "description": "The Citadel node this identity serves. Absent on an issuer-only server (work.avarok.net: it signs sign-in assertions and runs no node); the agent refuses RegisterIdentity against such a domain (NoCitadelEndpoint)."
     },
     "server_key": {
       "type": "object",
@@ -76,7 +77,6 @@
   "required": [
     "v",
     "canonical_domain",
-    "citadel",
     "server_key",
     "former_domains",
     "issued_at",
