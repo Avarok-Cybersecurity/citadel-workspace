@@ -95,7 +95,7 @@ CONTROL_HOST = "work.avarok.net"
 # When CONTROL_SERVER_KEY_SEED was made (Unix seconds): the `issued_at` of the control host's
 # /.well-known/citadel. A var, not the first request's clock, so every isolate serves the same
 # document; changed only together with the key (DEPLOY.md step 4).
-CONTROL_SERVER_KEY_ISSUED_AT = "1794891989"
+CONTROL_SERVER_KEY_ISSUED_AT = "1794930356"
 PUBLIC_ORIGIN = "https://work.avarok.net"
 ALLOWED_ORIGINS = "https://work.avarok.net"
 TURNSTILE_HOSTNAMES = "work.avarok.net"
