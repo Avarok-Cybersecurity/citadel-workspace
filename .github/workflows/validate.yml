@@ -851,8 +851,6 @@ jobs:
         run: node scripts/check-sender-identity.mjs
       - name: Check the client TypeScript bindings match the Rust types
         run: node scripts/check-generated-types-fresh.mjs
-      - name: Check the UI submodule runs every integration leg this workflow does
-        run: node scripts/check-ci-matrices-agree.mjs
       - name: Check every workspace crate reaches the images that run cargo
         run: node scripts/check-dockerfiles-copy-every-crate.mjs
       - name: Check the sync image has every script the WASM sync runs
@@ -899,8 +897,7 @@ jobs:
         # packages and runs scripts/ci/install-chromium.sh, which waits for apt's locks, then
         # bounds and retries the download. It replaced seven inline copies that had drifted --
         # one had no lock wait and failed twice on 2026-10-22 -- and the bounded-retry gate this
-        # step used to run, whose rule now lives in the script. The UI runs the same check on its
-        # own workflow (npm run check:browser-installs).
+        # step used to run, whose rule now lives in the script.
         run: node citadel-workspaces/scripts/check-browser-installs-use-the-script.mjs .
       - name: Network fetches are bounded, not only retried
         # Two jobs were killed by their budgets in consecutive runs, both in
@@ -1555,6 +1552,104 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: ./scripts/check-doc-env-vars.sh
         working-directory: .
+      # Moved from the UI repo's own validate.yml when the UI was folded into citadel-workspaces/;
+      # its lint job was the only place these ran.
+      - name: Every UI gate is invoked by something
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:gates-invoked
+        working-directory: citadel-workspaces
+      - name: People are drawn by the shared avatar
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:people-avatars
+        working-directory: citadel-workspaces
+      - name: Spec locators match real app copy
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:spec-copy
+        working-directory: citadel-workspaces
+      - name: Debug log arguments are cheap
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:debug-args
+        working-directory: citadel-workspaces
+      - name: Assertions can fail
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:assertions
+        working-directory: citadel-workspaces
+      - name: A captured console line is not automatically a failure
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:captured-vs-failed
+        working-directory: citadel-workspaces
+      - name: Every event has an emitter and a listener (npm script form)
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:event-pairs
+        working-directory: citadel-workspaces
+      - name: The browser install waits for apt's locks and keeps its packages
+        if: matrix.project == 'citadel-workspaces'
+        run: bash scripts/ci/install-chromium.test.sh
+        working-directory: citadel-workspaces
+
+  # Browser geometry and pixel gates over the shipped components, moved from the UI repo's own
+  # validate.yml when the UI was folded into citadel-workspaces/. jsdom has no layout, so a hover
+  # card lying across the rows above it passes every unit test; these serve the real components
+  # and assert bounding boxes in Chromium. GitHub-hosted, never the shared Mac: the scroll-frame
+  # leg is a timing measurement.
+  ui-browser-gates:
+    needs: [lint]
+    name: ${{ matrix.gate.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+        # The whole command: check-every-gate-is-invoked.mjs reads the workflow text for `npm run <gate>`.
+          - { name: Chat polish geometry, run: 'npm run check:chat-polish' }
+          # The chat's pictures, viewer and always-accept question at 375px too, under Full and Lite motion.
+          - { name: Chat files geometry, run: 'npm run check:chat-files' }
+          # The switcher's signed-out account row and the sign-in it opens, at 375px too, under Full and Lite motion.
+          - { name: Account switch geometry, run: 'npm run check:account-switch' }
+          - { name: UI sweep geometry, run: 'npm run check:ui-sweep' }
+          - { name: Docs text crispness, run: 'npm run check:docs-crispness' }
+          - { name: Docs pane states, run: 'npm run check:docs-pane-states' }
+          - { name: App zone geometry, run: 'npm run check:app-zone' }
+          # The Calendar's grids and views on the shipped engine: every day reached by keyboard through
+          # one roving tab stop, 44px targets and no sideways scroll at 375px, axe clean at rest.
+          - { name: Calendar grid and views, run: 'npm run check:calendar-grid' }
+          - { name: Docs scroll frames, run: 'npm run check:cdoc-scroll-perf' }
+    # Measured about 4 minutes for the gate plus 3-4 of setup in UI run 113773787106; this bounds a hang.
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Workspace Dependencies
+        run: npm ci
+      - name: Build citadel-internal-service typescript-client
+        run: npm run build
+        working-directory: citadel-internal-service/typescript-client
+      - name: Build citadel-workspace-client-ts
+        run: npm run build
+        working-directory: citadel-workspace-client-ts
+      - name: Install Chromium
+        uses: ./citadel-workspaces/.github/actions/install-chromium
+        with:
+          working-directory: citadel-workspaces
+      - name: ${{ matrix.gate.name }}
+        run: ${{ matrix.gate.run }}
+        env:
+          POLISH_ENGINES: chromium
+        working-directory: citadel-workspaces
+      - name: Upload the scroll pass's frames
+        if: ${{ always() && matrix.gate.name == 'Docs scroll frames' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: scroll-frames
+          path: citadel-workspaces/scroll-frames.json
+          if-no-files-found: error
+          retention-days: 14
 
   # The integration stack, built once per run. Every integration and Playwright leg used to
   # build it itself, with a compose build on every leg: in run 38056778313 that was 25.7 of
@@ -2917,6 +3012,7 @@ jobs:
       - unit-tests
       - typecheck
       - lint
+      - ui-browser-gates
       - integration-tests
       - playwright-tests
       - deploy-gate-tests

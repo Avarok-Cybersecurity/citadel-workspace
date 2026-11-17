@@ -101,24 +101,23 @@ export function typeScriptSteps(root, dir) {
 }
 
 /**
- * Builds the overlay: the parent at `parentSha`, the UI and agent at the commits given (null:
- * whatever the parent records), the agent's ILM at whatever the agent records.
+ * Builds the overlay: the parent at `parentSha` (its citadel-workspaces/ is a plain directory),
+ * the agent at the commit given (null: whatever the parent records), the agent's ILM at whatever
+ * the agent records.
  */
-export function buildOverlay({ root, dir, parentSha, uiSha, agentSha }) {
+export function buildOverlay({ root, dir, parentSha, agentSha }) {
   sharedClone(root, dir);
   ensureCommit(dir, parentSha);
   checkout(dir, parentSha);
-  return attachSubmodules(root, dir, uiSha, agentSha);
+  return attachSubmodules(root, dir, agentSha);
 }
 
-/** The UI, agent and ILM shared clones inside a checked-out parent overlay. */
-export function attachSubmodules(root, dir, uiSha, agentSha) {
-  const ui = uiSha ?? git(dir, 'rev-parse', `HEAD:${UI_DIR}`);
+/** The agent and ILM shared clones inside a checked-out parent overlay. */
+export function attachSubmodules(root, dir, agentSha) {
   const agent = agentSha ?? git(dir, 'rev-parse', `HEAD:${AGENT_DIR}`);
-  attach(join(root, UI_DIR), join(dir, UI_DIR), ui);
   attach(join(root, AGENT_DIR), join(dir, AGENT_DIR), agent);
   attachIlm(root, dir);
-  return { ui, agent };
+  return { agent };
 }
 
 /** The ILM the overlay's agent records -- again after the agent moves. */

@@ -36,7 +36,6 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const WORKFLOWS = [
   '.github/workflows/validate.yml',
-  'citadel-workspaces/.github/workflows/validate.yml',
 ];
 
 const SCRIPT = 'scripts/pull-base-images.sh';

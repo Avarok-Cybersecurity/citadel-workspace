@@ -32,11 +32,8 @@ import { fileURLToPath } from 'node:url';
 
 const UI = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Both workflows, so the parent cannot regress while this one is fixed. */
-const WORKFLOWS = [
-  join(UI, '.github/workflows/validate.yml'),
-  join(UI, '..', '.github/workflows/validate.yml'),
-];
+/** The validation workflow (the UI's own was retired when the UI was folded into the parent). */
+const WORKFLOWS = [join(UI, '..', '.github/workflows/validate.yml')];
 
 /** A step that brings the stack up. */
 const STARTS_STACK = /docker\s+compose\s+up\b/;
@@ -102,9 +99,9 @@ for (const path of WORKFLOWS) {
   }
 }
 
-// Vacuity floor: both workflows have such jobs. Zero means the step vocabulary
-// changed and the walk went past all of them.
-if (workflowsRead < 2 || jobsChecked < 3) {
+// Vacuity floor: validate.yml has two such jobs (integration-tests, playwright-tests).
+// Fewer means the step vocabulary changed and the walk went past them.
+if (workflowsRead < 1 || jobsChecked < 2) {
   console.error(
     `FAIL: read ${workflowsRead} workflow(s) and found ${jobsChecked} job(s) that start the\n` +
       'stack and run tests; there are more than that. The step shapes changed — fix the\n' +

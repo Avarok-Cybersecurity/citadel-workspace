@@ -39,11 +39,8 @@ import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-/** This repository's workflow, and the UI submodule's, which runs the same matrix. */
-const FILES = [
-  join(root, '.github', 'workflows', 'validate.yml'),
-  join(root, 'citadel-workspaces', '.github', 'workflows', 'validate.yml'),
-];
+/** The one validation workflow. (The UI repo had its own until it was folded into citadel-workspaces/.) */
+const FILES = [join(root, '.github', 'workflows', 'validate.yml')];
 
 /** job name -> { text: everything under it, needs: Set } */
 function readJobs(source) {
@@ -114,7 +111,7 @@ const EXPENSIVE = /docker\s+compose/;
 // lint-red change four build legs, not the fifty-odd test legs, which stay gated (and need it).
 // Narrow on purpose: where a workflow has a job of that name, it must be the stack build (it
 // runs `ci-stack.sh build`) and must run no test, or this check fails. A workflow without one
-// (the UI's, before it builds its stack once) exempts nothing.
+// exempts nothing.
 const STARTS_AT_ONCE = 'integration-stack';
 const STACK_BUILD = /ci-stack\.sh\s+build\b/;
 const RUNS_TESTS = /npm\s+run\s+test|playwright\s+test|vitest|cargo\s+(test|nextest)/;
@@ -127,8 +124,7 @@ for (const file of FILES) {
   if (!existsSync(file)) {
     console.error(
       `${file} is missing.\n` +
-        'Run from the parent checkout with submodules initialised. Reading one of the two\n' +
-        'workflows is exactly how the UI half of this rule went unenforced.',
+        'It is the workflow this rule judges; a gate reading nothing would report agreement.',
     );
     process.exit(1);
   }

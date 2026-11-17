@@ -14,8 +14,8 @@
  *
  * Usage: node scripts/check-browser-installs-use-the-script.mjs <repo-root>
  * It reads <repo-root>/.github/workflows/*.yml and <repo-root>/.github/actions/* /action.yml.
- * The UI runs it on itself (`npm run check:browser-installs`); the parent runs it on the
- * parent's root, from citadel-workspaces/.
+ * validate.yml runs it on the repository root (the UI's own workflow, which ran it on itself,
+ * was retired when the UI was folded into citadel-workspaces/).
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -27,7 +27,7 @@ const UI_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const INLINE = /playwright\s+install/;
 const SCRIPT_CALL = /install-chromium\.sh/;
 const BROWSER_CACHE = /ms-playwright/;
-const USES = /^(-\s+)?uses:\s*\.\/(parent\/)?citadel-workspaces\/\.github\/actions\/install-chromium$/;
+const USES = /^(-\s+)?uses:\s*\.\/citadel-workspaces\/\.github\/actions\/install-chromium$/;
 
 if (process.argv.length !== 3) {
   console.error('usage: check-browser-installs-use-the-script.mjs <repo-root>');
@@ -87,8 +87,7 @@ if (problems.length > 0) {
   console.error(
     `\nFAIL: ${problems.length} line(s) install or cache a browser beside the install-chromium action.\n` +
       'Replace the step with\n' +
-      '  uses: ./parent/citadel-workspaces/.github/actions/install-chromium   (UI workflow)\n' +
-      '  uses: ./citadel-workspaces/.github/actions/install-chromium          (parent workflow)\n' +
+      '  uses: ./citadel-workspaces/.github/actions/install-chromium\n' +
       'and `working-directory:` naming a directory whose node_modules holds the locked playwright.\n' +
       'It waits for the dpkg lock and caches the browser and the apt packages; a copy beside it is\n' +
       'how a step came to have no wait at all.',
@@ -96,7 +95,7 @@ if (problems.length > 0) {
   process.exit(1);
 }
 if (calls === 0) {
-  // Both repositories install Chromium in CI. None found means the call shape changed and
+  // CI installs Chromium in several jobs. None found means the call shape changed and
   // this check stopped recognising it -- not that the browsers stopped being installed.
   console.error(`FAIL: no \`uses: .../${dirname(ACTION)}\` step in ${files.length} file(s) under ${root}.`);
   process.exit(1);

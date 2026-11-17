@@ -29,7 +29,7 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-const DIRS = ['.github/workflows', 'citadel-workspaces/.github/workflows'];
+const DIRS = ['.github/workflows'];
 
 let load;
 try {

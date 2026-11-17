@@ -1,10 +1,8 @@
 /**
- * The gates preflight derives from CI: the parent's validate.yml AND the UI repo's.
+ * The gates preflight derives from CI: validate.yml, each step in the directory CI gives it.
  *
- * The UI repo's `npm run check:*` steps ran only in UI CI, so a UI change could pass preflight
- * and fail the bundle budget, the gate-invocation check or the geometry harness a cycle later.
- * Both workflows are read here, each step in the directory CI gives it, and a gate the two
- * repos share runs once.
+ * The UI repo's workflow was read here too while the UI was a submodule with CI of its own; its
+ * gates moved into validate.yml when the UI was folded into citadel-workspaces/.
  *
  * NEEDS_MORE_THAN_A_CHECKOUT below is the ONE place that says which CI gates preflight does not
  * run, and why (with MERGE_PREVIEW_CANNOT_JUDGE beside it for the merge preview). Everything else
@@ -13,7 +11,6 @@
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { deriveGates, nodeRequirement } from './ci-gates.mjs';
-import { readJobs, workflowEnv } from './workflow-steps.mjs';
 
 /**
  * Gates that genuinely cannot run on a checkout, keyed by command, with what they need.
@@ -44,7 +41,6 @@ export const NOT_ON_PRE_COMMIT = new Map([
 ]);
 
 export const PARENT_WORKFLOW = '.github/workflows/validate.yml';
-export const UI_WORKFLOW = 'citadel-workspaces/.github/workflows/validate.yml';
 
 /** A gate's skip key: its script, or the whole command for npm and `node --test`. */
 export function gateKey(argv) {
@@ -56,24 +52,8 @@ function read(root, path) {
     return readFileSync(join(root, path), 'utf8');
   } catch {
     // An unreadable workflow means an empty gate list, and an empty list is a clean run over nothing.
-    throw new Error(`cannot read ${path}; the gate list would be empty. Is the submodule populated?`);
+    throw new Error(`cannot read ${path}; the gate list would be empty.`);
   }
-}
-
-/**
- * Where the UI workflow checks the parent out (`path:` of the checkout step whose repository is
- * PARENT_REPO), so its `parent/...` working directories map onto this checkout.
- */
-export function parentCheckoutPath(text) {
-  for (const job of readJobs(text)) {
-    for (const step of job.steps) {
-      if (step.uses?.startsWith('actions/checkout') && /PARENT_REPO/.test(step.with.repository ?? '')) {
-        if (!step.with.path) throw new Error(`UI workflow job '${job.id}' checks the parent out with no path:`);
-        return step.with.path;
-      }
-    }
-  }
-  throw new Error('the UI workflow never checks out PARENT_REPO; its working directories cannot be mapped');
 }
 
 /** The script a check executes, for reading its source: `node x.mjs`, or the npm script's target. */
@@ -90,27 +70,10 @@ function scriptOf(root, gate) {
 /** Every derived gate as a preflight check, the skipped ones, and the Node requirement. */
 export function derivedChecks(root) {
   const parentText = read(root, PARENT_WORKFLOW);
-  const uiText = read(root, UI_WORKFLOW);
-  const prefix = parentCheckoutPath(uiText);
-  const seen = new Map();
-  const parent = deriveGates({ text: parentText, source: 'parent', resolveDir: (wd) => join(root, wd), seen });
-  const ui = deriveGates({
-    text: uiText,
-    source: 'ui',
-    seen,
-    resolveDir: (wd) => {
-      if (wd !== prefix && !wd.startsWith(`${prefix}/`)) {
-        throw new Error(`UI workflow working-directory '${wd}' is outside the parent checkout '${prefix}'`);
-      }
-      return join(root, wd.slice(prefix.length));
-    },
-  });
-  for (const [label, gates, floor] of [['parent', parent, 10], ['UI', ui, 5]]) {
-    if (gates.length < floor) {
-      throw new Error(`only ${gates.length} gates found in the ${label} workflow; it moved or changed shape, so the list cannot be trusted`);
-    }
+  const all = deriveGates({ text: parentText, source: 'parent', resolveDir: (wd) => join(root, wd), seen: new Map() });
+  if (all.length < 10) {
+    throw new Error(`only ${all.length} gates found in ${PARENT_WORKFLOW}; it moved or changed shape, so the list cannot be trusted`);
   }
-  const all = [...parent, ...ui];
   const skipped = [];
   const checks = [];
   const run = [];
@@ -135,5 +98,5 @@ export function derivedChecks(root) {
       sources: gate.sources,
     });
   }
-  return { checks, skipped, node: nodeRequirement(run), uiEnv: workflowEnv(uiText) };
+  return { checks, skipped, node: nodeRequirement(run) };
 }

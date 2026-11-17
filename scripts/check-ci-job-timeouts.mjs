@@ -69,7 +69,6 @@ const WORKFLOWS = [
   '.github/workflows/validate.yml',
   '.github/workflows/publish-images.yml',
   '.github/workflows/release-agent.yml',
-  'citadel-workspaces/.github/workflows/validate.yml',
 ];
 
 const problems = [];

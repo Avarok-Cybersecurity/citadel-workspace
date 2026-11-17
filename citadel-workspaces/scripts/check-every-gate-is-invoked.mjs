@@ -9,8 +9,9 @@
  * copy the app had deliberately removed.
  *
  * The parent repository has had this check for its own `scripts/` since the
- * same failure happened there. This submodule did not, which is why six more
- * gates were in the same state.
+ * same failure happened there. The UI, then a separate repository, did not,
+ * which is why six more gates were in the same state. Since the UI was folded
+ * into citadel-workspaces/, its gates run from the parent's workflows.
  *
  * The rule: every `check:*` npm script must be named by a step in a workflow,
  * or appear here with the reason it is not — and the reason must say what it
@@ -22,7 +23,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const WORKFLOWS = join(ROOT, '.github', 'workflows');
+const WORKFLOWS = join(ROOT, '..', '.github', 'workflows');
 
 /**
  * Gates not yet wired, each with what it needs before it can be.
@@ -34,9 +35,6 @@ const WORKFLOWS = join(ROOT, '.github', 'workflows');
  */
 const NOT_IN_CI = new Map([
   ['check:types', 'static, but RED today on a real finding: declarations without a type'],
-  ['check:a11y', 'needs the built app served and a browser driving it'],
-  ['check:toast-header', 'needs a running app with a toast on screen; it measures geometry'],
-  ['check:agent-down', 'needs port 12399 free, or it measures a CONNECTED app and reports the agent-down state works'],
   ['check:cdoc-paint-perf', 'a timing measurement that asserts no time; needs a quiet machine (a GitHub runner, never the shared Mac). Its vitest, paint-perf.test.ts, runs in CI'],
 ]);
 

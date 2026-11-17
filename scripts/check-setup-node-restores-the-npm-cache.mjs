@@ -26,11 +26,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-/** Both workflow directories: this repository's, and the UI submodule's. */
-const WORKFLOW_DIRS = [
-  join(ROOT, '.github/workflows'),
-  join(ROOT, 'citadel-workspaces/.github/workflows'),
-];
+/** The workflow directory. (The UI repo's was retired when it was folded into citadel-workspaces/.) */
+const WORKFLOW_DIRS = [join(ROOT, '.github/workflows')];
 
 /** Indentation width of a line, ignoring blank and comment-only lines. */
 function indentOf(line) {
@@ -46,13 +43,12 @@ for (const dir of WORKFLOW_DIRS) {
   if (!existsSync(dir)) {
     console.error(
       `FAIL: ${dir} is missing.\n` +
-        'Run from the parent checkout with submodules initialised. A gate that silently\n' +
-        'examines one of the two workflows is exactly how the UI half went unfixed.',
+        'A gate that silently examines no workflow reports a clean bill it never earned.',
     );
     process.exit(1);
   }
   for (const f of readdirSync(dir).filter((f) => /\.ya?ml$/.test(f))) {
-    files.push([`${dir.includes('citadel-workspaces') ? 'citadel-workspaces/' : ''}${f}`, join(dir, f)]);
+    files.push([f, join(dir, f)]);
   }
 }
 

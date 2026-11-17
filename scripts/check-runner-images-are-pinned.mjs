@@ -8,15 +8,15 @@
  * change of ours. A named release (`ubuntu-24.04`) moves only when we move it,
  * together with whatever has to follow (Playwright, the geometry baselines).
  *
- * Reach: the parent's and the UI submodule's workflows, Linux only. The agent
- * repository pins its own; `macos-latest` and `windows-latest` are not judged.
+ * Reach: the root workflows (the UI's moved here when it was folded into citadel-workspaces/),
+ * Linux only. The agent repository pins its own; `macos-latest` and `windows-latest` are not judged.
  */
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const WORKFLOW_DIRS = ['.github/workflows', 'citadel-workspaces/.github/workflows'];
+const WORKFLOW_DIRS = ['.github/workflows'];
 const FLOATING = /ubuntu-latest/;
 
 const problems = [];
@@ -24,7 +24,7 @@ let files = 0;
 for (const dir of WORKFLOW_DIRS) {
   const path = join(ROOT, dir);
   if (!existsSync(path)) {
-    problems.push(`${dir} does not exist; initialise submodules, or this check measured nothing there`);
+    problems.push(`${dir} does not exist; this check measured nothing there`);
     continue;
   }
   for (const name of readdirSync(path).filter((f) => /\.ya?ml$/.test(f))) {

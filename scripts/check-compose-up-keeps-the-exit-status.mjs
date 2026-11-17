@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const DIRS = ['.github/workflows', 'citadel-workspaces/.github/workflows'];
+const DIRS = ['.github/workflows'];
 
 /** Every foreground compose `up` in `text`, as `{ line, cmd }`. Pure. */
 export function foregroundUps(text) {
