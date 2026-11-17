@@ -388,6 +388,8 @@ jobs:
         run: node --test scripts/lib/publish-validation-decision.test.mjs
       - name: Preflight derives CI's gates, tiers a change, and plans merge previews correctly
         run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/merge-preview-planning.test.mjs
+      - name: The flaky-spec report counts only attempts that failed
+        run: node --test scripts/lib/retry-passes.test.mjs
       - name: The stack's loopback STUN answers as RFC 5389 says
         run: node --test docker/stun/stun-wire.test.mjs
       - name: Check the docs' commands resolve
