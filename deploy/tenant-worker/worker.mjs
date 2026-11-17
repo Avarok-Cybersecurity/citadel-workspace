@@ -13,7 +13,7 @@
  */
 import { DurableObject } from "cloudflare:workers";
 import { dispatch, ioFor, tenantFor } from "./control/dispatch.mjs";
-import { config, isWebSocketUpgrade, json, turnConfig, upgradeRequired } from "./control/http.mjs";
+import { config, isWebSocketUpgrade, json, required, turnConfig, upgradeRequired } from "./control/http.mjs";
 import { IceMinter } from "./control/ice.mjs";
 import { Provisioning } from "./control/provisioning.mjs";
 import { Meter, periodAt, relayBytes } from "./control/meter.mjs";
@@ -52,7 +52,7 @@ export class WorkspaceServer extends DurableObject {
     this.accepted = 0;
     // What the control plane gave this tenant (its master password, its entitlements), read before
     // any request is delivered. One key-value entry, apart from the node's `citadel_*` SQL tables.
-    this.provisioning = new Provisioning(ctx.storage);
+    this.provisioning = new Provisioning(ctx.storage, { registrationNames: () => required(env, "REGISTRATION_NAMES") });
     // Metered usage (control/meter.mjs), resumed from this period's persisted totals.
     this.usageTable = new UsageTable(ctx.storage.sql);
     this.meter = null;

@@ -136,7 +136,8 @@ fn bind(binding: &str) -> WorkspaceProtocolRequest {
 #[tokio::test]
 async fn the_kernel_stores_a_verified_binding_and_a_stranger_reads_it() {
     let config = toml::from_str(
-        "canonical_domain = \"acme.example\"\nformer_domains = []\ndiscovery = \"pinned\"\n",
+        "canonical_domain = \"acme.example\"\nformer_domains = []\ndiscovery = \"pinned\"\n\
+         registration_names = \"require_canonical\"\n",
     )
     .unwrap();
     let identity = Arc::new(hosted_identity(Some(&config), &[3; 32]).unwrap());

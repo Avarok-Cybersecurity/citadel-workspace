@@ -12,9 +12,14 @@ import { checkedIdentity } from "./tenant-domains.mjs";
 const KEY = "control:provisioning";
 const HEX64 = /^[0-9a-f]{64}$/;
 
+/** `[identity] registration_names`, the kernel's two values (server_identity/config.rs). */
+const REGISTRATION_NAMES = new Set(["require_canonical", "allow_legacy"]);
+
 export class Provisioning {
-  constructor(storage) {
+  /** `registrationNames()` is wrangler.toml's REGISTRATION_NAMES, required and never defaulted. */
+  constructor(storage, { registrationNames }) {
     this.storage = storage;
+    this.registrationNames = registrationNames;
     this.record = null;
     this.fingerprint = null;
   }
@@ -94,6 +99,12 @@ export class Provisioning {
    * owns no socket. Strings are JSON-quoted, which is a TOML basic string for any name
    * `displayNameOf` admits (no control characters, no lone surrogates).
    */
+  #registrationNames() {
+    const names = this.registrationNames();
+    if (!REGISTRATION_NAMES.has(names)) throw new Error(`REGISTRATION_NAMES ${JSON.stringify(names)} is not one of ${[...REGISTRATION_NAMES].join(", ")}`);
+    return names;
+  }
+
   kernelConfig() {
     const lines = [
       `bind_addr = "127.0.0.1:0"`,
@@ -119,6 +130,7 @@ export class Provisioning {
       `former_domains = ${JSON.stringify(identity.former_domains)}`,
       `discovery = "well_known"`,
       `citadel_wss = ${JSON.stringify(`wss://${identity.canonical_domain}/citadel`)}`,
+      `registration_names = ${JSON.stringify(this.#registrationNames())}`,
     );
     // Last: a table takes every key after it. Required; the kernel refuses to start without it.
     lines.push(

@@ -10,6 +10,7 @@
 //! citadel_wss = "wss://work.example.com/citadel"   # well_known only: the dial address it publishes
 //! server_key_file = "/data/server/identity/server-key"    # native only, made by --init-server-key
 //! well_known_file = "/data/server/identity/well-known.json"   # native well_known only
+//! registration_names = "allow_legacy"          # or "require_canonical": identity doc §6 rule 1
 //! ```
 //!
 //! The canonical domain is never taken from `bind_addr` or any other key: the address a socket
@@ -32,6 +33,19 @@ pub enum Discovery {
     Pinned,
 }
 
+/// Which new names rule 1 (identity doc §6) admits. Required, with no default: the rollout
+/// turns `RequireCanonical` on together with the UI's identity sign-up (lane I5), and until then
+/// every shipped server says `AllowLegacy`.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RegistrationNames {
+    /// Every registration is `handle@<canonical_domain>`; a bare name is refused.
+    RequireCanonical,
+    /// A bare name registers too. Rules 2 and 3 still hold for `handle@<canonical_domain>`, rule 3
+    /// both ways, and a name under any other domain is still refused.
+    AllowLegacy,
+}
+
 /// `[identity]` as written.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -42,6 +56,7 @@ pub struct IdentityConfig {
     pub citadel_wss: Option<String>,
     pub server_key_file: Option<String>,
     pub well_known_file: Option<String>,
+    pub registration_names: Option<RegistrationNames>,
 }
 
 /// `[identity]`, checked: the names and the discovery mode. Nothing read yet.
@@ -52,6 +67,7 @@ pub struct IdentityPlan {
     pub discovery: Discovery,
     /// `Some` exactly when `discovery` is `WellKnown`.
     pub citadel_wss: Option<String>,
+    pub registration_names: RegistrationNames,
 }
 
 impl IdentityPlan {
@@ -142,10 +158,15 @@ pub fn plan(config: Option<&IdentityConfig>) -> Result<IdentityPlan, String> {
         .discovery
         .ok_or("[identity] discovery is required: \"well_known\" or \"pinned\"")?;
     let citadel_wss = endpoint(config, discovery)?;
+    let registration_names = config.registration_names.ok_or(
+        "[identity] registration_names is required: \"require_canonical\" (every new name is \
+         handle@<canonical_domain>) or \"allow_legacy\" (bare names register too)",
+    )?;
     Ok(IdentityPlan {
         canonical,
         former,
         discovery,
         citadel_wss,
+        registration_names,
     })
 }

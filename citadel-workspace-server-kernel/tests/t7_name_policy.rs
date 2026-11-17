@@ -1,4 +1,6 @@
-//! T7 (identity doc §6/§10 rev b): every registration on a server is `handle@<canonical>`.
+//! T7 (identity doc §6/§10 rev b), under `registration_names = "require_canonical"` (the
+//! `allow_legacy` table is `t7_name_policy_allow_legacy.rs`): every registration on a server is
+//! `handle@<canonical>`.
 //! A bare name, another domain, a former domain, an `@` or a space in the handle, `..`, a
 //! 256-byte name and a handle someone already holds (as `alice`, or under any of the server's
 //! domains) are each refused with their reason; a dotted handle and a 255-byte name are admitted.
@@ -50,7 +52,8 @@ impl AdmissionPolicy for Turnstile {
 fn identity(canonical: &str, former: &[&str]) -> IdentityPlan {
     let former: Vec<String> = former.iter().map(|f| format!("{f:?}")).collect();
     let toml = format!(
-        "canonical_domain = {canonical:?}\nformer_domains = [{}]\ndiscovery = \"pinned\"\n",
+        "canonical_domain = {canonical:?}\nformer_domains = [{}]\ndiscovery = \"pinned\"\n\
+         registration_names = \"require_canonical\"\n",
         former.join(", ")
     );
     plan(Some(&toml::from_str(&toml).unwrap())).expect("plan")

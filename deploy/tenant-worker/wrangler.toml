@@ -70,6 +70,10 @@ LOG_FILTER = "citadel=warn"
 # The STUN servers each tenant's node learns its NAT mapping from (server-wasm `TenantServer`):
 # required, at least three distinct host:port endpoints, with no default list.
 STUN_SERVERS = "stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302"
+# Each tenant kernel's [identity] registration_names (server_identity/config.rs): required, no
+# default. "allow_legacy" lets bare usernames register as before identities; "require_canonical"
+# (every new name handle@<tenant host>) is turned on together with the UI's identity sign-up (I5).
+REGISTRATION_NAMES = "allow_legacy"
 
 # The control plane. Secrets (`wrangler secret put`), each of which leaves its routes answering
 # 503 until it is set; deploy.sh refuses to deploy while any is missing:

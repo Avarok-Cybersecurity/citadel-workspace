@@ -2,7 +2,9 @@
 //! (`docs/contracts/batch-1116/`), read from the contract itself so a test can never drift from
 //! it. Every seed there is a published test seed; none is, or may become, a production key.
 
-use citadel_workspace_server_kernel::kernel::server_identity::config::{Discovery, IdentityConfig};
+use citadel_workspace_server_kernel::kernel::server_identity::config::{
+    Discovery, IdentityConfig, RegistrationNames,
+};
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -60,5 +62,7 @@ pub fn identity_config_of(document: &Value) -> IdentityConfig {
         citadel_wss: Some(text(document, "/citadel/wss").to_string()),
         server_key_file: None,
         well_known_file: None,
+        // The fixtures describe names, not the rollout; the policy's own tests cover both.
+        registration_names: Some(RegistrationNames::RequireCanonical),
     }
 }

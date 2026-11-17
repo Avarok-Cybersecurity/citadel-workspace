@@ -175,10 +175,14 @@ documents every key; none has a default, and the name is never taken from
 `bind_addr`).
 
 - **`canonical_domain`** is the name clients reach the server by, canonical
-  (lowercase, no scheme, no trailing `/`, no `:443`). Every registration is
-  `handle@<canonical_domain>`; a bare name is refused with
-  `citadel-identity-v1 canonical=<canonical_domain>`. Accounts registered
-  before this keep their bare names and keep signing in.
+  (lowercase, no scheme, no trailing `/`, no `:443`). Accounts registered
+  before identities keep their bare names and keep signing in.
+- **`registration_names`** decides which new names register. With
+  `"require_canonical"` every registration is `handle@<canonical_domain>`, and a
+  bare name is refused with `citadel-identity-v1 canonical=<canonical_domain>`.
+  With `"allow_legacy"`, the shipped value until the UI's identity sign-up
+  ships, a bare name registers too. A handle and the same bare name are still
+  reserved against each other, and any other domain is still refused.
 - **`former_domains`** lists names the server answered to before (`[]` for
   none): still accepted for sign-in and identity bindings, never for
   registration.

@@ -6,7 +6,7 @@
  */
 import { env, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
-import { config } from "../control/http.mjs";
+import { config, required } from "../control/http.mjs";
 import { attached, createdIdentity } from "../control/tenant-domains.mjs";
 import { SERVER_KEY_SEED_KEY } from "../control/tenant-identity.mjs";
 import { freeTenant, freshSlug, tenantObject } from "./helpers.mjs";
@@ -138,11 +138,13 @@ describe("the kernel.toml's [identity]", () => {
     const lines = text.split("\n");
     const at = lines.indexOf("[identity]");
     expect(at).toBeGreaterThan(-1);
-    expect(lines.slice(at + 1, at + 5)).toEqual([
+    expect(lines.slice(at + 1, at + 6)).toEqual([
       `canonical_domain = "${slug}.${CFG.controlHost}"`,
       "former_domains = []",
       `discovery = "well_known"`,
       `citadel_wss = "wss://${slug}.${CFG.controlHost}/citadel"`,
+      // wrangler.toml's REGISTRATION_NAMES: bare names register until the identity sign-up (I5).
+      `registration_names = "allow_legacy"`,
     ]);
     expect(text).not.toMatch(/server_key_file|well_known_file/);
   });
@@ -173,5 +175,26 @@ describe("the kernel.toml's [identity]", () => {
     expect(refusals[0]).toMatch(/identity\.canonical_domain/);
     expect(refusals[1]).toMatch(/identity\.former_domains/);
     expect(refusals[2]).toMatch(/provisioned before server identities/);
+  });
+
+  it("is refused, rather than defaulted, when REGISTRATION_NAMES is unset or unknown", async () => {
+    const { object } = await freeTenant("wk");
+    const refusals = await runInDurableObject(object, (instance) => {
+      const shipped = instance.provisioning.registrationNames;
+      const out = [];
+      for (const names of [() => required({}, "REGISTRATION_NAMES"), () => "open"]) {
+        instance.provisioning.registrationNames = names;
+        try {
+          instance.provisioning.kernelConfig();
+          out.push(null);
+        } catch (e) {
+          out.push(e.message);
+        }
+      }
+      instance.provisioning.registrationNames = shipped;
+      return out;
+    });
+    expect(refusals[0]).toMatch(/REGISTRATION_NAMES is not set/);
+    expect(refusals[1]).toMatch(/REGISTRATION_NAMES "open" is not one of/);
   });
 });

@@ -77,6 +77,21 @@ domain must equal its own `canonical_domain` (`NotCanonical`). `display_handle` 
 handle iff V2 and `domain ∈ accepted`; otherwise the whole input. Vectors: `identity-kat.json`
 `canonical_domain`, `validate_handle`, `parse_username`, `display_handle`.
 
+**Which names a server registers** (identity doc §6 rules 1-3) is the kernel's `[identity]
+registration_names`, required, with no default; a server without it refuses to start (native
+kernel.toml, and the tenant worker's `REGISTRATION_NAMES` var, which it writes into each tenant's
+kernel.toml).
+- `"require_canonical"`: every new name is `handle@<canonical_domain>`; anything else (a bare name,
+  a former or foreign domain) is refused with `citadel-identity-v1 canonical=<canonical_domain>`.
+- `"allow_legacy"`: a bare name (`Username::Legacy`) also registers, as it did before identities.
+  `handle@<canonical_domain>` still needs a valid handle, a foreign or former domain is still
+  refused with the canonical refusal, and reservation (rule 3) holds both ways: a bare `alice` is
+  refused while `alice@<canonical or former>` exists, and `alice@<canonical>` while `alice` does.
+  A bare name outside the handle charset reserves nothing, since no handle can equal it.
+
+Every shipped server says `allow_legacy` until the UI's identity sign-up (lane I5) ships; the two
+are turned on together (identity doc §7 rollout).
+
 ## 4. Identity, fingerprint, password
 
 ```rust

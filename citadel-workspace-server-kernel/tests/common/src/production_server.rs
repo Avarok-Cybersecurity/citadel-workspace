@@ -62,18 +62,21 @@ macro_rules! test_user {
 pub const TEST_CANONICAL_DOMAIN: &str = test_domain!();
 
 /// `[identity]` for a test server: the test domain, no former ones, discovery by a pinned key,
-/// its key seed in `dir` made the way an operator makes one (`--init-server-key`).
+/// its key seed in `dir` made the way an operator makes one (`--init-server-key`). Names are
+/// `require_canonical`, the setting the test suite's `handle@<test domain>` names were written
+/// against; a test of `allow_legacy` asks for it with [`pinned_identity_toml`].
 pub fn test_identity_toml(dir: &Path) -> String {
-    pinned_identity_toml(dir, TEST_CANONICAL_DOMAIN)
+    pinned_identity_toml(dir, TEST_CANONICAL_DOMAIN, "require_canonical")
 }
 
-/// `[identity]` for a `pinned` server named `canonical_domain`, its key seed made in `dir`.
-fn pinned_identity_toml(dir: &Path, canonical_domain: &str) -> String {
+/// `[identity]` for a `pinned` server named `canonical_domain` whose `registration_names` is
+/// `names`, its key seed made in `dir`.
+pub fn pinned_identity_toml(dir: &Path, canonical_domain: &str, names: &str) -> String {
     let key = dir.join("server-key");
     init_server_key(&key).expect("server key");
     format!(
         "[identity]\ncanonical_domain = \"{canonical_domain}\"\nformer_domains = []\n\
-         discovery = \"pinned\"\nserver_key_file = \"{}\"\n",
+         discovery = \"pinned\"\nserver_key_file = \"{}\"\nregistration_names = \"{names}\"\n",
         key.display()
     )
 }
@@ -142,7 +145,7 @@ pub async fn start_server_named_localhost() -> (String, String) {
         .expect("addr");
     let name = format!("localhost:{}", addr.port());
     let dir = sign_in_dir();
-    let identity = pinned_identity_toml(&dir, &name);
+    let identity = pinned_identity_toml(&dir, &name, "require_canonical");
     let parsed: toml::Value = toml::from_str(&identity).expect("[identity]");
     let config: IdentityConfig = parsed["identity"].clone().try_into().expect("[identity]");
     let key = native_identity(Some(&config), 0).expect("the server's identity");
@@ -150,6 +153,13 @@ pub async fn start_server_named_localhost() -> (String, String) {
     let tail = sign_in_without_admission(&dir);
     start_native_server_on(addr, &tail, None, &identity).await;
     (name, fp)
+}
+
+/// The production server, post-quantum sign-in without a human check, with `identity` as its
+/// `[identity]` section.
+pub async fn start_native_server_with_identity(identity: &str) -> SocketAddr {
+    let tail = sign_in_without_admission(&sign_in_dir());
+    start_native_server_on(free_addr(), &tail, None, identity).await
 }
 
 async fn start_native_server_on(

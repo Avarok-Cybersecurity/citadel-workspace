@@ -102,7 +102,7 @@ admission = "none"
 # Identity (required): the name this server is reached by and how clients come
 # to trust its key. No key has a default, and the name is never taken from
 # bind_addr; see citadel-workspace-server-kernel/src/kernel/server_identity/config.rs.
-# Every registration here is handle@<canonical_domain>.
+# New names follow registration_names below.
 # =============================================================================
 [identity]
 # What clients dial, canonical: lowercase, no scheme, no trailing "/", no ":443".
@@ -125,6 +125,14 @@ discovery = "pinned"
 # first start. Never replace it: a new key makes every client that pinned this
 # server refuse it.
 server_key_file = "/data/server/identity/server-key"
+# Which new usernames register (required, no default):
+# "require_canonical": every new account is handle@<canonical_domain>; a bare
+#   name is refused with "citadel-identity-v1 canonical=<canonical_domain>".
+# "allow_legacy": a bare name registers too, as before identities. A
+#   handle@<canonical_domain> name keeps the handle rules, a handle and the bare
+#   name are reserved against each other, and any other domain is refused.
+# Shipped as allow_legacy until the UI's identity sign-up ships (lane I5).
+registration_names = "allow_legacy"
 
 # =============================================================================
 # Path policy (required): the network paths peer connections may take, in order of

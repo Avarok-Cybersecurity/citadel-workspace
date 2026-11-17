@@ -242,7 +242,8 @@ fn the_built_document_is_the_contract_fixture_and_fits_the_schema() {
 #[test]
 fn a_pinned_server_publishes_no_document() {
     let config = section(
-        "canonical_domain = \"acme.example\"\nformer_domains = []\ndiscovery = \"pinned\"\n",
+        "canonical_domain = \"acme.example\"\nformer_domains = []\ndiscovery = \"pinned\"\n\
+         registration_names = \"allow_legacy\"\n",
     );
     let identity = hosted_identity(Some(&config), &[1; 32]).expect("identity");
     assert!(identity.well_known_document(1_794_700_000).is_err());
