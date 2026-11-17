@@ -20,6 +20,19 @@ const CONTRACT_WELL_KNOWN = JSON.stringify({
   fixtures: Object.fromEntries(readdirSync(`${C0}/fixtures/well-known-citadel`).map((f) => [f, c0(`fixtures/well-known-citadel/${f}`)])),
   servers: JSON.parse(c0("identity-kat.json")).servers,
 });
+// "Sign in with Citadel": the schema's $defs, every fixture (by "<Def>/<file>"), the known answers,
+// and identity B's public key (the forged-proof case swaps it in).
+const SIGN_IN_FIXTURES = `${C0}/fixtures/sign-in-with-citadel`;
+const CONTRACT_SIGN_IN = JSON.stringify({
+  defs: JSON.parse(c0("sign-in-with-citadel.schema.json")).$defs,
+  fixtures: Object.fromEntries(
+    readdirSync(SIGN_IN_FIXTURES).flatMap((def) =>
+      readdirSync(`${SIGN_IN_FIXTURES}/${def}`).map((f) => [`${def}/${f}`, c0(`fixtures/sign-in-with-citadel/${def}/${f}`)]),
+    ),
+  ),
+  kat: JSON.parse(c0("sign-in-kat.json")),
+  identityB: JSON.parse(c0("identity-kat.json")).identities.B.pk_b64url,
+});
 
 export default defineConfig({
   plugins: [
@@ -31,6 +44,11 @@ export default defineConfig({
           TEST_MIGRATIONS: migrations,
           PRODUCTION_CONFIG,
           CONTRACT_WELL_KNOWN,
+          CONTRACT_SIGN_IN,
+          // The contract's TEST issuer seed (sign-in-kat.json issuer.key.seed_hex) and its issuer-only
+          // document's issued_at, so the control host reproduces valid-issuer-only.json; never production's.
+          CONTROL_SERVER_KEY_SEED: JSON.parse(c0("sign-in-kat.json")).issuer.key.seed_hex,
+          CONTROL_SERVER_KEY_ISSUED_AT: String(JSON.parse(c0("fixtures/well-known-citadel/valid-issuer-only.json")).issued_at),
           // Test-only values. The Turnstile secret is Cloudflare's always-pass testing secret; the
           // tests answer siteverify themselves at the fetch boundary, so it never leaves the process.
           TURNSTILE_SECRET: "1x0000000000000000000000000000000AA",

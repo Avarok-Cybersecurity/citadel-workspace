@@ -56,11 +56,15 @@ export async function wellKnownOf(io, slug) {
   if (refusal) return refusal;
   const document = await io.tenant(slug).wellKnown();
   if (document === null) return refuse("not-found", "this workspace publishes no server identity", 404);
-  return new Response(document, {
+  return wellKnownResponse(document);
+}
+
+/** A `/.well-known/citadel` document as served, a tenant's or the control host's (control-identity.mjs). */
+export const wellKnownResponse = (document) =>
+  new Response(document, {
     headers: {
       "content-type": "application/json",
       "cache-control": `public, max-age=${WELL_KNOWN_MAX_AGE}`,
       "x-content-type-options": "nosniff",
     },
   });
-}

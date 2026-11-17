@@ -22,6 +22,9 @@ tenant-auth-versions = { path = "../auth-versions" }
 # The signed support and admin requests the control plane verifies (support.rs, admin.rs).
 citadel-support-signature = { path = "../../../citadel-support-signature" }
 toml = "0.8"
+# work.avarok.net's issuer identity (issuer.rs): the proof, the assertion and the issuer-only document.
+citadel-identity = { path = "../../../citadel-internal-service/citadel-identity" }
+sha3 = "0.10"
 
 # Keep the name section through wasm-opt so a panic inside the Durable Object prints Rust
 # function names instead of bare offsets; it costs size, not speed.

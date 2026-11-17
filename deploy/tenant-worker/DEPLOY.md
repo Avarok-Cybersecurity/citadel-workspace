@@ -77,6 +77,20 @@ cfw secret put CITADEL_SUPPORT_MLDSA_PUBLIC_KEY   # the 3904 hex characters keyg
 
 It is a secret only so that wrangler.toml carries no value for it; `deploy.sh` requires it.
 
+work.avarok.net's own server key signs its `/.well-known/citadel` and every "Sign in with
+Citadel" assertion (control/control-identity.mjs). Make it ONCE, from the OS CSPRNG, and set
+`CONTROL_SERVER_KEY_ISSUED_AT` in wrangler.toml to the same moment (`date -u +%s`) in the same
+change. The Worker never makes one: a new key makes every MCP and node that pinned the old one
+refuse the issuer (`KeyChanged`), so replacing it is a planned ceremony, never a repair.
+
+```sh
+openssl rand -hex 32 | cfw secret put CONTROL_SERVER_KEY_SEED   # 64 lowercase hex characters; never echoed, never stored elsewhere
+```
+
+Without it the control host's `/.well-known/citadel` answers 404 and every `/sign-in/*` route
+`503 issuer_unavailable`, each with a `[control] ... CONTROL_SERVER_KEY_SEED is not set` log line;
+`deploy.sh` requires it.
+
 Two more are OPTIONAL, and `deploy.sh` does not require them until the agent asks for relay
 servers: the Cloudflare Realtime TURN key the tenant objects mint members' short-lived relay
 credentials from (`GetIceServers`, control/ice.mjs). Without both, a member asking for relay

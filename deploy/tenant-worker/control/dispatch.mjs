@@ -5,6 +5,8 @@
  * is that tenant's Durable Object, reached only while the registry says the tenant is active. So
  * is a tenant's custom domain (control/tenant-domains.mjs): any host that is neither, found in the
  * registry. A tenant host answers its WebSocket and `GET /.well-known/citadel` (discovery.mjs).
+ * The control host answers its own issuer-only document (control-identity.mjs) and "Sign in with
+ * Citadel" under `/sign-in/` (sign-in-routes.mjs); CONTROL_SEGMENTS keeps both off the tenants.
  */
 import { Store } from "./store.mjs";
 import { UsageStore } from "./usage-store.mjs";
@@ -21,6 +23,9 @@ import { verifyAdminRequest, verifySupportRequest } from "./support-verifier.mjs
 import { CouponStore } from "./coupon-store.mjs";
 import { previewCoupon } from "./coupons.mjs";
 import { couponAdminRoute, serveCouponAdmin } from "./coupon-admin.mjs";
+import { serveControlWellKnown } from "./control-identity.mjs";
+import { SignInStore } from "./sign-in-store.mjs";
+import { serveSignIn, SIGN_IN_PREFIX } from "./sign-in-routes.mjs";
 
 /** Creation and portal bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
@@ -41,17 +46,26 @@ export function ioFor(env) {
     verifySupport: verifySupportRequest,
     coupons: new CouponStore(env.CONTROL_DB),
     verifyAdmin: verifyAdminRequest,
+    signIn: new SignInStore(env.CONTROL_DB),
+    random: (n) => crypto.getRandomValues(new Uint8Array(n)),
   };
 }
+
+/**
+ * The first path segments that are the control plane's own on its host, never a tenant's slug
+ * under TENANT_PATH_ROUTING: the API, its identity document, and "Sign in with Citadel". Each is
+ * also reserved as a slug (slug.mjs), so no tenant's subdomain can take one either.
+ */
+export const CONTROL_SEGMENTS = new Set(["api", ".well-known", "sign-in"]);
 
 /** Which tenant a request is for, or null when it is for the control plane. */
 export function tenantFor(url, cfg) {
   const host = url.hostname.toLowerCase();
   const suffix = `.${cfg.controlHost}`;
   if (host.endsWith(suffix)) return host.slice(0, -suffix.length);
-  if (cfg.pathRouting && !url.pathname.startsWith("/api/")) {
+  if (cfg.pathRouting) {
     const segment = url.pathname.split("/").filter(Boolean)[0];
-    if (segment !== undefined) return segment;
+    if (segment !== undefined && !CONTROL_SEGMENTS.has(segment)) return segment;
   }
   return null;
 }
@@ -63,6 +77,8 @@ export async function dispatch(request, env) {
   const tenant = await routeOf(io, cfg, url);
   if (tenant !== null) return toTenant(io, cfg, tenant, request);
   if (url.pathname.startsWith("/api/")) return api(io, cfg, request, url);
+  if (request.method === "GET" && url.pathname === WELL_KNOWN_PATH) return serveControlWellKnown(cfg);
+  if (url.pathname.startsWith(SIGN_IN_PREFIX)) return signIn(io, cfg, request, url);
   return serveUi(env.ASSETS, cfg.ui, request);
 }
 
@@ -98,6 +114,15 @@ async function toTenant(io, cfg, { slug, path }, request) {
   const own = new URL(request.url);
   if (tenantFor(own, cfg) !== slug) own.hostname = slugHost(cfg, slug);
   return object.fetch(own.href === request.url ? request : new Request(own, request));
+}
+
+async function signIn(io, cfg, request, url) {
+  try {
+    return await serveSignIn(io, cfg, request, url);
+  } catch (e) {
+    console.error(`[control] ${request.method} ${url.pathname} failed: ${e?.stack ?? e}`);
+    return json({ error: "internal", detail: "the request failed" }, 500);
+  }
 }
 
 async function api(io, cfg, request, url) {

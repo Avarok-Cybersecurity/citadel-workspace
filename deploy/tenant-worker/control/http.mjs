@@ -84,6 +84,27 @@ function mldsaPublicKey(env, name) {
   return key === null ? null : key.trim();
 }
 
+/** `well-known-citadel.schema.json`'s bounds on `issued_at` (Unix seconds). */
+const ISSUED_AT_RANGE = [1700000000, 4102444800];
+
+/**
+ * work.avarok.net's issuer key (sign-in-with-citadel.md §7): the secret CONTROL_SERVER_KEY_SEED
+ * (64 lowercase hex characters), null when unset -- the issuer's routes then refuse and nothing is
+ * signed; it is never generated -- and the var CONTROL_SERVER_KEY_ISSUED_AT, required, changed
+ * only together with the key so every isolate serves the same document.
+ */
+function issuerConfig(env) {
+  const issuedAt = Number(required(env, "CONTROL_SERVER_KEY_ISSUED_AT"));
+  if (!Number.isInteger(issuedAt) || issuedAt < ISSUED_AT_RANGE[0] || issuedAt > ISSUED_AT_RANGE[1]) {
+    throw new Error(`CONTROL_SERVER_KEY_ISSUED_AT is Unix seconds from ${ISSUED_AT_RANGE[0]} to ${ISSUED_AT_RANGE[1]}`);
+  }
+  const seed = optional(env, "CONTROL_SERVER_KEY_SEED");
+  if (seed !== null && !/^[0-9a-f]{64}$/.test(seed.trim())) {
+    throw new Error("CONTROL_SERVER_KEY_SEED is 32 bytes as 64 lowercase hex characters");
+  }
+  return { seedHex: seed === null ? null : seed.trim(), issuedAt };
+}
+
 /**
  * Cloudflare Realtime TURN (control/ice.mjs): the key's id and API token are secrets, and
  * without both no relay credentials are minted (members are told so); the credentials' lifetime
@@ -137,6 +158,7 @@ export function config(env) {
     // The coupon admin's key (control/coupon-admin.mjs), separate from support's, so a support-read
     // key can never issue a coupon. Unset, the admin routes answer 503.
     adminPublicKey: mldsaPublicKey(env, "CITADEL_ADMIN_MLDSA_PUBLIC_KEY"),
+    issuer: issuerConfig(env),
   };
 }
 

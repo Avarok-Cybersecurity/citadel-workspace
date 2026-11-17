@@ -10,7 +10,7 @@ export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/;
  */
 export const RESERVED = new Set([
   "www", "api", "admin", "app", "local", "status", "mail", "mx", "docs", "blog", "auth",
-  "gitlab", "work", "citadel",
+  "gitlab", "work", "citadel", "sign-in",
   "ares", "activate", "dev-finco", "netdata", "rcon",
 ]);
 

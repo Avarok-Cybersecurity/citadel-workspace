@@ -815,6 +815,7 @@ dependencies = [
 name = "citadel-tenant-server-wasm"
 version = "0.1.0"
 dependencies = [
+ "citadel-identity",
  "citadel-support-signature",
  "citadel-workspace-server-kernel",
  "citadel-workspace-types",
@@ -822,6 +823,7 @@ dependencies = [
  "js-sys",
  "serde",
  "serde_json",
+ "sha3",
  "tenant-auth-versions",
  "tenant-console-log",
  "toml",
