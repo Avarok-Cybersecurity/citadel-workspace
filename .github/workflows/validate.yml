@@ -352,6 +352,8 @@ jobs:
         run: node --test scripts/lib/publish-validation-decision.test.mjs
       - name: Preflight derives CI's gates, tiers a change, and plans merge previews correctly
         run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/merge-preview-planning.test.mjs
+      - name: A hook skips a gate only on a pass stamped over identical inputs
+        run: node --test scripts/lib/preflight-stamp.test.mjs scripts/lib/preflight-stamp-io.test.mjs
       - name: Check the docs' commands resolve
         run: node scripts/check-doc-commands.mjs
       - name: Check request handlers cannot panic

@@ -6,6 +6,11 @@
  *   node scripts/preflight.mjs --tier pre-commit   staged paths only; the pre-commit hook
  *   node scripts/preflight.mjs --tier pre-push     what the pushed commits changed; the pre-push hook
  *   node scripts/preflight.mjs --print-plan        the full plan as JSON, run nothing
+ *   node scripts/preflight.mjs --tier … --dry-run   what this hook would run or skip as stamped, as JSON
+ *
+ * Pass stamps (lib/preflight-stamp.mjs): a gate keyed over the whole tree that already passed on
+ * this box over byte-identical inputs prints `ok (stamped: …)` and is not re-run. Never on
+ * `--tier full` or with PREFLIGHT_NO_STAMP=1; `--stamp-dir <dir>` names another store.
  *
  * `--repo ui` says the hook runs in the UI submodule (its paths are prefixed citadel-workspaces/);
  * pre-push also takes `--remote <name>` and the refs on stdin, exactly as git hands them over.
@@ -38,6 +43,8 @@ import { NOT_ON_PRE_COMMIT, derivedChecks, gateKey } from './lib/preflight-plan.
 import { crateOf, readsWholeRepo, selectChecks } from './lib/change-tiers.mjs';
 import { pushedPaths, stagedPaths } from './lib/changed-paths.mjs';
 import { printFailures, runChecks, runFatal } from './lib/preflight-run.mjs';
+import { STAMP_DIR, distStaleness, planStamps, recordPasses } from './lib/preflight-stamp-io.mjs';
+import { stampedLine } from './lib/preflight-stamp.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const UI = join(ROOT, 'citadel-workspaces');
@@ -55,6 +62,13 @@ function option(name, allowed) {
 }
 const tier = option('--tier', ['full', 'pre-commit', 'pre-push']) ?? 'full';
 const repo = option('--repo', ['parent', 'ui']) ?? 'parent';
+const stampDirAt = process.argv.indexOf('--stamp-dir');
+if (stampDirAt >= 0 && !process.argv[stampDirAt + 1]) {
+  console.error('preflight: --stamp-dir takes a directory.');
+  process.exit(2);
+}
+const stampDir = stampDirAt >= 0 ? process.argv[stampDirAt + 1] : STAMP_DIR;
+const hook = `${tier}${repo === 'ui' ? ' (UI repo)' : ''}`;
 const remote = tier === 'pre-push' ? (process.argv[process.argv.indexOf('--remote') + 1] ?? null) : null;
 if (tier === 'pre-push' && (process.argv.indexOf('--remote') < 0 || !remote)) {
   console.error('preflight: --tier pre-push needs --remote <name> (the hook passes "$1").');
@@ -63,6 +77,8 @@ if (tier === 'pre-push' && (process.argv.indexOf('--remote') < 0 || !remote)) {
 
 const tag = (...tiers) => new Set(tiers);
 const check = (name, cmd, args, cwd, tiers) => ({ name, cmd, args, cwd, env: {}, tiers });
+/** A check whose inputs are the working tree, the installs and the environment: stamp-keyable. */
+const worldCheck = (...a) => ({ ...check(...a), stamp: 'world' });
 
 /** The checkout itself, first and fatal: every other check reads it. */
 const ENVIRONMENT = [
@@ -157,9 +173,9 @@ const CHECKS = [
   check('generated bindings typecheck', 'npx', ['tsc', '--noEmit', '-p', 'tsconfig.json'], join(IS, 'typescript-client'), tag('ui', 'rust:agent')),
   ...uiPushTypecheck,
   // The local typecheck stands in for the CI-parent one everywhere but a UI push.
-  ...(uiPushTypecheck.length > 0 ? [] : [check('typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI, tag('ui'))]),
-  check('eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI, tag('ui')),
-  check('unit tests', 'npx', ['vitest', 'run'], UI, tag('ui')),
+  ...(uiPushTypecheck.length > 0 ? [] : [worldCheck('typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI, tag('ui'))]),
+  worldCheck('eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI, tag('ui')),
+  worldCheck('unit tests', 'npx', ['vitest', 'run'], UI, tag('ui')),
   ...preCommitOnly(),
   ...cargo,
 ];
@@ -171,10 +187,39 @@ if (process.argv.includes('--print-plan')) {
 }
 
 const started = Date.now();
-console.log(`preflight --tier ${tier}${repo === 'ui' ? ' (UI repo)' : ''}${paths.length ? `: ${paths.length} changed path(s)` : ''}`);
-await runFatal(ENVIRONMENT);
 const selected = selectChecks(CHECKS, tier, paths, ROOT_CRATES);
-const failed = await runChecks(selected);
+function planOrDie() {
+  try {
+    return planStamps({ root: ROOT, checks: selected, tier, env: process.env, dir: stampDir, now: started });
+  } catch (error) {
+    console.error(`preflight: pass stamps: ${error.message}\n  (an error is never a stamp match; PREFLIGHT_NO_STAMP=1 runs without stamps)`);
+    process.exit(1);
+  }
+}
+const noteOf = (stamps) => (stamps.off ? `stamps not consulted: ${stamps.off}` : `stamps: ${stampDir}`);
+if (process.argv.includes('--dry-run')) {
+  const stamps = planOrDie();
+  const rows = stamps.plan.map(({ check: c, key, decision: d }) => ({ name: c.name, run: d.run, key,
+    why: d.run ? d.why : stampedLine(d.record, started), ms: d.run ? null : d.record.ms }));
+  writeFileSync(1, `${JSON.stringify({ hook, paths, note: noteOf(stamps), distWarning: stamps.browser ? distStaleness(ROOT) : null, rows })}\n`);
+  process.exit(0);
+}
+console.log(`preflight --tier ${hook}${paths.length ? `: ${paths.length} changed path(s)` : ''}`);
+await runFatal(ENVIRONMENT);
+const stamps = planOrDie();
+console.log(`  (${noteOf(stamps)})`);
+const stale = stamps.browser ? distStaleness(ROOT) : null;
+if (stale) console.log(`  warning, separate from stamps: ${stale}`);
+const toRun = [];
+for (const { check: c, decision } of stamps.plan) {
+  if (decision.run) toRun.push(c);
+  if (decision.run && decision.warn) console.log(`  ${c.name}: re-running, ${decision.why}`);
+  if (!decision.run) console.log(`  ${c.name} … ${stampedLine(decision.record, started)}`);
+}
+const keyOf = new Map(stamps.plan.filter((p) => p.key).map((p) => [p.check, p.key]));
+const passes = [];
+const failed = await runChecks(toRun, (c, ms) => { if (keyOf.has(c)) passes.push({ key: keyOf.get(c), name: c.name, ms }); });
+if (stamps.world) console.log(`  (${recordPasses({ root: ROOT, env: process.env, dir: stampDir, world: stamps.world, hook, passes, now: Date.now() })})`);
 const total = selected.length + ENVIRONMENT.length;
 const took = `${((Date.now() - started) / 1000).toFixed(1)}s`;
 
