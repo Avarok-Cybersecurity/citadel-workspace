@@ -30,6 +30,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 
 const DOCKER_ROOT = 'docker/workspace-server/Cargo.docker.toml';
+const DOCKERFILE = 'docker/workspace-server/Dockerfile';
 
 /** Members the Docker build actually copies in, from its own manifest. */
 function workspaceMembers(manifestText) {
@@ -86,6 +87,7 @@ if (!existsSync(DOCKER_ROOT)) {
 }
 
 const dockerRootText = readFileSync(DOCKER_ROOT, 'utf8');
+const dockerfileText = readFileSync(DOCKERFILE, 'utf8');
 const defined = definedKeys(dockerRootText, 'workspace.dependencies');
 const definedPackage = definedKeys(dockerRootText, 'workspace.package');
 // Counted so a pass says what it examined; a fixed sentence cannot be told
@@ -97,10 +99,12 @@ const problems = [];
 
 for (const member of workspaceMembers(dockerRootText)) {
   members += 1;
-  // The Dockerfile swaps in a per-member manifest for the kernel itself; prefer
-  // that one where it exists, since it is what the image actually compiles.
+  // The Dockerfile swaps in a per-member manifest for some members; prefer that
+  // one, since it is what the image actually loads, but only when the Dockerfile
+  // really copies it over the member's: a substitute file alone changes nothing.
   const substitute = join(dirname(DOCKER_ROOT), `${member}.Cargo.docker.toml`);
-  const memberManifest = existsSync(substitute) ? substitute : join(member, 'Cargo.toml');
+  const substituted = dockerfileText.includes(`COPY ./${substitute} /usr/src/app/${member}/Cargo.toml`);
+  const memberManifest = substituted ? substitute : join(member, 'Cargo.toml');
   if (!existsSync(memberManifest)) continue;
 
   const memberText = readFileSync(memberManifest, 'utf8');
