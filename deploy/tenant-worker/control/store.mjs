@@ -8,7 +8,8 @@ const ADDON_COLUMNS = ADDONS.map((a) => a.quantityField);
 const COLUMNS =
   `slug, tenant_id, display_name, status, tier, interval, seats, ${ADDON_COLUMNS.join(", ")}, stripe_customer, ` +
   "stripe_subscription, created_at, expires_at, claim_hash, checkout_hash, sub_event_created, reservation_hash, checkout_sealed, " +
-  "period_start, period_end, usage_subscription, coupon_hash, grant_id, grant_unlimited, trial_end, stripe_status";
+  "period_start, period_end, usage_subscription, coupon_hash, grant_id, grant_unlimited, trial_end, stripe_status, " +
+  "custom_domain, former_domains";
 /** The coupon columns (migration 0009), which every insert names: a comp grant is set when it activates. */
 const COUPON_COLUMNS = ["coupon_hash", "grant_id", "grant_unlimited", "trial_end", "stripe_status"];
 const INSERT_COLUMNS = ["slug", "tenant_id", "display_name", "status", "tier", "interval", "seats", ...ADDON_COLUMNS,
@@ -105,6 +106,29 @@ export class Store {
       ...also,
       this.db.prepare("DELETE FROM tenants WHERE slug = ? AND tenant_id = ? AND status = 'pending'").bind(slug, tenantId),
     ]);
+  }
+
+  /** The slug whose canonical custom domain is `host`, or null. */
+  async slugForDomain(host) {
+    const row = await this.db.prepare("SELECT slug FROM tenants WHERE custom_domain = ?").bind(host).first();
+    return row?.slug ?? null;
+  }
+
+  /**
+   * Makes `domain` the active tenant's canonical domain with `former` (an array) before it. False
+   * when another tenant holds the domain or the row is no longer this active tenant.
+   */
+  async setDomains(slug, tenantId, domain, former) {
+    try {
+      const done = await this.db
+        .prepare("UPDATE tenants SET custom_domain = ?, former_domains = ? WHERE slug = ? AND tenant_id = ? AND status = 'active'")
+        .bind(domain, JSON.stringify(former), slug, tenantId)
+        .run();
+      return done.meta.changes === 1;
+    } catch (e) {
+      if (/UNIQUE|constraint/i.test(String(e?.message))) return false;
+      throw e;
+    }
   }
 
   async activateFree(slug, tenantId) {

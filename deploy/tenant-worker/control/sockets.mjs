@@ -38,3 +38,32 @@ export function meterSocket(server, { meter, id, maxFrameBytes, now, onRelease }
   server.addEventListener("close", release);
   server.addEventListener("error", release);
 }
+
+/**
+ * Accepts a new socket for the running `node`: metered from its first byte (meterSocket, so before
+ * the node sees it), handed to the node, and its client address `ip` recorded for the admission
+ * check (control/admission.mjs). `onIdle()` runs when the last open connection is released.
+ * Returns the client half.
+ */
+export function acceptSocket({ node, signIn, meter, id, maxFrameBytes, ip, now, onIdle }) {
+  const [client, server] = Object.values(new WebSocketPair());
+  server.accept();
+  // Frames and bytes per connection and per period (control/meter.mjs). CPU is measured outside
+  // the isolate (proof.mjs samples workerd's process CPU at each phase boundary).
+  meter.connect(id, now());
+  let peer = null;
+  meterSocket(server, {
+    meter,
+    id,
+    maxFrameBytes,
+    now,
+    onRelease: (record) => {
+      console.log(`[tenant] connection ${id} closed after ${record.open_ms} ms; ${JSON.stringify(record)}`);
+      if (peer !== null) signIn.released(peer);
+      if (meter.openCount === 0) onIdle();
+    },
+  });
+  peer = node.accept(server);
+  signIn.connected(peer, ip);
+  return client;
+}

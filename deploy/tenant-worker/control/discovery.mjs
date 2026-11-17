@@ -11,6 +11,12 @@
  * Its answer is advisory. The tenant's admission check is what enforces the setting, and fails
  * closed; a stale "not required" costs the visitor one refused attempt that then shows the check.
  * So the answer may be cached briefly, and is.
+ *
+ * `GET /.well-known/citadel` on a tenant's host (and on its custom domain) is its server identity
+ * document (contract well-known-citadel.schema.json): built by the tenant's kernel from its key
+ * and `[identity]` (control/tenant-identity.mjs), the same bytes for the life of the object's
+ * instance. Public by design: clients fetch it before they have an account. A tenant with no
+ * server key answers 404, never a document under some other key.
  */
 import { checkSlug } from "./slug.mjs";
 import { discovery } from "./admission.mjs";
@@ -25,10 +31,36 @@ const answer = (required, cfg) =>
 /** The answer for no particular workspace: the site key alone. */
 export const admissionAnywhere = (cfg) => answer(false, cfg);
 
-export async function admissionOf(io, cfg, slug) {
-  if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
+/** The path a tenant's host serves its identity document at. */
+export const WELL_KNOWN_PATH = "/.well-known/citadel";
+
+/** Seconds a fetcher may reuse the document: it is re-issued only when the object restarts. */
+export const WELL_KNOWN_MAX_AGE = 300;
+
+/** `{row}` for a tenant a request may reach, or `{refusal}`: unknown and pending ones are not found. */
+export async function reachable(io, slug) {
+  if (!checkSlug(slug).ok) return { refusal: refuse("not-found", "no such workspace", 404) };
   const row = await io.store.holder(slug, io.now());
-  if (!row || row.status === "pending") return refuse("not-found", "no such workspace", 404);
-  if (row.status === "suspended") return refuse("suspended", "this workspace is suspended", 403);
-  return answer(await io.tenant(slug).admissionRequired(), cfg);
+  if (!row || row.status === "pending") return { refusal: refuse("not-found", "no such workspace", 404) };
+  if (row.status === "suspended") return { refusal: refuse("suspended", "this workspace is suspended", 403) };
+  return { row };
+}
+
+export async function admissionOf(io, cfg, slug) {
+  const { refusal } = await reachable(io, slug);
+  return refusal ?? answer(await io.tenant(slug).admissionRequired(), cfg);
+}
+
+export async function wellKnownOf(io, slug) {
+  const { refusal } = await reachable(io, slug);
+  if (refusal) return refusal;
+  const document = await io.tenant(slug).wellKnown();
+  if (document === null) return refuse("not-found", "this workspace publishes no server identity", 404);
+  return new Response(document, {
+    headers: {
+      "content-type": "application/json",
+      "cache-control": `public, max-age=${WELL_KNOWN_MAX_AGE}`,
+      "x-content-type-options": "nosniff",
+    },
+  });
 }

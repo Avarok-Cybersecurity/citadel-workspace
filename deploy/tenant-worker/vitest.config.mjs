@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
 import { unstable_readConfig } from "wrangler";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 // The real Worker (worker.mjs: control plane + tenant Durable Object with its wasm server) under
 // Miniflare, with a local D1 migrated from control/migrations.
@@ -11,6 +11,15 @@ const migrations = await readD1Migrations("./control/migrations");
 // bindings below override some of these vars for every other test; this copy is untouched.
 const production = unstable_readConfig({ config: "./wrangler.toml" });
 const PRODUCTION_CONFIG = JSON.stringify({ vars: production.vars, routes: production.routes, assets: production.assets });
+// Batch 1116's frozen contract (lane C0): the /.well-known/citadel schema, its fixtures and the
+// server known answers, read where C0 publishes them, so the tests hold the Worker to that copy.
+const C0 = "../../docs/contracts/batch-1116";
+const c0 = (path) => readFileSync(`${C0}/${path}`, "utf8");
+const CONTRACT_WELL_KNOWN = JSON.stringify({
+  schema: JSON.parse(c0("well-known-citadel.schema.json")),
+  fixtures: Object.fromEntries(readdirSync(`${C0}/fixtures/well-known-citadel`).map((f) => [f, c0(`fixtures/well-known-citadel/${f}`)])),
+  servers: JSON.parse(c0("identity-kat.json")).servers,
+});
 
 export default defineConfig({
   plugins: [
@@ -21,6 +30,7 @@ export default defineConfig({
         bindings: {
           TEST_MIGRATIONS: migrations,
           PRODUCTION_CONFIG,
+          CONTRACT_WELL_KNOWN,
           // Test-only values. The Turnstile secret is Cloudflare's always-pass testing secret; the
           // tests answer siteverify themselves at the fetch boundary, so it never leaves the process.
           TURNSTILE_SECRET: "1x0000000000000000000000000000000AA",

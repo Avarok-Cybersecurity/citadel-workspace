@@ -59,7 +59,9 @@ function uiConfig(env) {
   if (webAnalyticsToken !== null && !/^[0-9a-f]{32}$/.test(webAnalyticsToken)) {
     throw new Error("WEB_ANALYTICS_TOKEN is a 32-hex-digit site token");
   }
-  return { loopbackAgent, defaultServer, webAnalyticsToken };
+  // The landing page names itself canonical by it (control/ui.mjs landingHeaders).
+  const publicOrigin = required(env, "PUBLIC_ORIGIN");
+  return { loopbackAgent, defaultServer, webAnalyticsToken, publicOrigin };
 }
 
 const optional = (env, name) => (env[name] === undefined || env[name] === "" ? null : env[name]);

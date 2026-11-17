@@ -1,11 +1,13 @@
 /**
  * What a tenant's Durable Object holds from the control plane: its master password (the claim
- * code the creator was shown once), its entitlements and the name it was created with. Kept in
+ * code the creator was shown once), its entitlements, the name it was created with and the
+ * domains its server identity names (tenant-domains.mjs). Kept in
  * the object's own storage under one key, apart from the workspace's data.
  */
 
 import { displayNameOf } from "./display-name.mjs";
 import { sha256Hex } from "./secrets.mjs";
+import { checkedIdentity } from "./tenant-domains.mjs";
 
 const KEY = "control:provisioning";
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -49,12 +51,13 @@ export class Provisioning {
    * reservation is provisioned again for its new tenant; an object whose node has ever started
    * belongs to its tenant for good and refuses another's password.
    */
-  async provision({ tenant_id, master_password, entitlements, display_name }, running) {
+  async provision({ tenant_id, master_password, entitlements, display_name, identity }, running) {
     if (typeof tenant_id !== "string" || !HEX64.test(master_password ?? "") || typeof entitlements !== "object") {
       throw new Error("provisioning needs a tenant id, a 32-byte hex master password and entitlements");
     }
     const name = displayNameOf(display_name);
     if (name === null) throw new Error("provisioning needs a display_name the workspace can be shown by");
+    const domains = checkedIdentity(identity);
     const current = this.record;
     if (current && current.tenant_id !== tenant_id && (current.started || running)) {
       throw new Error("this object already serves another tenant");
@@ -64,6 +67,7 @@ export class Provisioning {
       master_password,
       entitlements,
       display_name: name,
+      identity: domains,
       started: current?.tenant_id === tenant_id && Boolean(current.started),
     };
     await this.storage.put(KEY, this.record);
@@ -90,6 +94,17 @@ export class Provisioning {
     ];
     const name = this.displayName();
     if (name !== null) lines.push(`workspace_name = ${JSON.stringify(name)}`);
+    // Required: the kernel refuses to start without [identity]. An object provisioned before
+    // server identities has none, and is provisioned again rather than given a default name.
+    const identity = this.record.identity;
+    if (!identity) throw new Error("this workspace was provisioned before server identities; it is provisioned again to get one");
+    lines.push(
+      "[identity]",
+      `canonical_domain = ${JSON.stringify(identity.canonical_domain)}`,
+      `former_domains = ${JSON.stringify(identity.former_domains)}`,
+      `discovery = "well_known"`,
+      `citadel_wss = ${JSON.stringify(`wss://${identity.canonical_domain}/citadel`)}`,
+    );
     // Last: a table takes every key after it. Required; the kernel refuses to start without it.
     lines.push(
       "[documents]",
@@ -127,6 +142,13 @@ export class Provisioning {
   async setEntitlements(entitlements) {
     if (this.record === null) throw new Error("entitlements for a tenant that has not been provisioned");
     this.record = { ...this.record, entitlements };
+    await this.storage.put(KEY, this.record);
+  }
+
+  /** The domains changed (a custom domain was attached): the node takes them at its next start. */
+  async setIdentity(identity) {
+    if (this.record === null) throw new Error("domains for a tenant that has not been provisioned");
+    this.record = { ...this.record, identity: checkedIdentity(identity) };
     await this.storage.put(KEY, this.record);
   }
 

@@ -2,16 +2,18 @@
  * One Worker, two faces. `work.avarok.net` (and any host that is not a tenant's) is the control
  * plane: `/api/*` here, the static UI (ui.mjs, the Worker's assets) otherwise. `<slug>.work.avarok.net` -- and, when
  * TENANT_PATH_ROUTING is on (`wrangler dev`, where there are no subdomains), the path `/<slug>` --
- * is that tenant's Durable Object, reached only while the registry says the tenant is active.
+ * is that tenant's Durable Object, reached only while the registry says the tenant is active. So
+ * is a tenant's custom domain (control/tenant-domains.mjs): any host that is neither, found in the
+ * registry. A tenant host answers its WebSocket and `GET /.well-known/citadel` (discovery.mjs).
  */
-import { checkSlug } from "./slug.mjs";
 import { Store } from "./store.mjs";
 import { UsageStore } from "./usage-store.mjs";
 import { AuthVersionStore } from "./auth-versions.mjs";
 import { config, isWebSocketUpgrade, json, upgradeRequired, readJson, refuse } from "./http.mjs";
 import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tenants.mjs";
 import { handleWebhook } from "./webhook.mjs";
-import { admissionAnywhere, admissionOf } from "./discovery.mjs";
+import { admissionAnywhere, admissionOf, reachable, WELL_KNOWN_PATH, wellKnownOf } from "./discovery.mjs";
+import { slugHost } from "./tenant-domains.mjs";
 import { serveUi } from "./ui.mjs";
 import { serveSupport, supportRoute } from "./support.mjs";
 import { SupportStore } from "./support-store.mjs";
@@ -58,25 +60,44 @@ export async function dispatch(request, env) {
   const cfg = config(env);
   const url = new URL(request.url);
   const io = ioFor(env);
-  const tenant = tenantFor(url, cfg);
+  const tenant = await routeOf(io, cfg, url);
   if (tenant !== null) return toTenant(io, cfg, tenant, request);
   if (url.pathname.startsWith("/api/")) return api(io, cfg, request, url);
   return serveUi(env.ASSETS, cfg.ui, request);
 }
 
-async function toTenant(io, cfg, slug, request) {
+/**
+ * The tenant a request is for and the path within its host, or null for the control plane: its
+ * subdomain, then its custom domain, then (TENANT_PATH_ROUTING) the path `/<slug>`.
+ */
+async function routeOf(io, cfg, url) {
+  const host = url.hostname.toLowerCase();
+  if (host !== cfg.controlHost && !host.endsWith(`.${cfg.controlHost}`)) {
+    const slug = await io.store.slugForDomain(host);
+    if (slug !== null) return { slug, path: url.pathname };
+  }
+  const slug = tenantFor(url, cfg);
+  if (slug === null) return null;
+  const byPath = !host.endsWith(`.${cfg.controlHost}`);
+  return { slug, path: byPath ? url.pathname.slice(slug.length + 1) || "/" : url.pathname };
+}
+
+async function toTenant(io, cfg, { slug, path }, request) {
+  if (request.method === "GET" && path === WELL_KNOWN_PATH) return wellKnownOf(io, slug);
   const upgrade = isWebSocketUpgrade(request);
   // Refused before the registry is read, so a plain request learns nothing, not even existence.
   if (!upgrade && !cfg.diagnostics) return upgradeRequired();
-  if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
-  const row = await io.store.holder(slug, io.now());
-  if (!row || row.status === "pending") return refuse("not-found", "no such workspace", 404);
-  if (row.status === "suspended") return refuse("suspended", "this workspace is suspended", 403);
+  const { row, refusal } = await reachable(io, slug);
+  if (refusal) return refusal;
   const object = io.tenant(slug);
   // Objects provisioned before names were passed on hold none; D1 has it (see adoptDisplayName).
   if (row.display_name) await object.adoptDisplayName(row.display_name);
   if (!upgrade) return json(await object.stats());
-  return object.fetch(request);
+  // The object knows its tenant by the host it is reached at (tenantFor); a custom domain is
+  // handed over as the tenant's own host.
+  const own = new URL(request.url);
+  if (tenantFor(own, cfg) !== slug) own.hostname = slugHost(cfg, slug);
+  return object.fetch(own.href === request.url ? request : new Request(own, request));
 }
 
 async function api(io, cfg, request, url) {
