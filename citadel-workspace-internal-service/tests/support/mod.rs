@@ -30,24 +30,51 @@ pub fn launcher_0_10_6(bind: &str, data_dir: &Path) -> Vec<String> {
     .to_vec()
 }
 
-/// `args` without `--stun-servers` and its value: a command missing a setting the agent
-/// requires, which it refuses to start without.
-pub fn without_stun(args: Vec<String>) -> Vec<String> {
+/// The portable identity's timings, which this version also requires, as the packaged
+/// launchers pass them (apps/macos-agent/Info.plist's `CitadelAgentIdentity*` keys).
+pub const IDENTITY_FLAGS: [&str; 3] = [
+    "--identity-unlock-idle-secs",
+    "--identity-challenge-timeout-secs",
+    "--identity-fetch-timeout-secs",
+];
+const IDENTITY_VALUES: [&str; 3] = ["900", "10", "10"];
+
+/// What this version's launchers pass: the 0.10.6 launcher's arguments and the identity's.
+pub fn launcher(bind: &str, data_dir: &Path) -> Vec<String> {
+    let mut args = launcher_0_10_6(bind, data_dir);
+    for (flag, value) in IDENTITY_FLAGS.iter().zip(IDENTITY_VALUES) {
+        args.extend([flag.to_string(), value.to_string()]);
+    }
+    args
+}
+
+/// `args` without `flag` and its value: a command missing a setting the agent requires,
+/// which it refuses to start without.
+pub fn without(args: Vec<String>, flag: &str) -> Vec<String> {
     let mut kept = Vec::with_capacity(args.len());
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--stun-servers" => drop(args.next()),
-            _ => kept.push(arg),
+        if arg == flag {
+            drop(args.next());
+        } else {
+            kept.push(arg);
         }
     }
     kept
 }
 
+/// `args` without `--stun-servers` and its value.
+pub fn without_stun(args: Vec<String>) -> Vec<String> {
+    without(args, "--stun-servers")
+}
+
 /// The settings CI exports for its stack; a test that runs the binary decides them itself.
-const AGENT_ENV: [&str; 2] = [
+const AGENT_ENV: [&str; 5] = [
     "INTERNAL_SERVICE_ALLOWED_ORIGINS",
     "INTERNAL_SERVICE_STUN_SERVERS",
+    "INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS",
+    "INTERNAL_SERVICE_IDENTITY_CHALLENGE_TIMEOUT_SECS",
+    "INTERNAL_SERVICE_IDENTITY_FETCH_TIMEOUT_SECS",
 ];
 
 /// This test process without any of `AGENT_ENV`, for a test whose agent production code
@@ -69,17 +96,16 @@ pub const AGENT: &str = env!("CARGO_BIN_EXE_citadel-workspace-internal-service")
 /// Far longer than a refusal or a launch check takes (both come before anything is bound).
 const EXITS_WITHIN: Duration = Duration::from_secs(30);
 
-/// The shipped binary, run with the 0.10.6 launcher's arguments (without `--stun-servers`
-/// unless `stun`) and `extra`, to its exit. One still running after `EXITS_WITHIN` started an
-/// agent: it is killed and the test fails.
-pub fn agent_that_exits(name: &str, stun: bool, extra: &[&str]) -> Output {
+/// The shipped binary, run with this version's launcher arguments (without `missing` and its
+/// value, when given) and `extra`, to its exit. One still running after `EXITS_WITHIN` started
+/// an agent: it is killed and the test fails.
+pub fn agent_that_exits(name: &str, missing: Option<&str>, extra: &[&str]) -> Output {
     let tmp = std::env::temp_dir().join(format!("agent-exits-{}-{name}", std::process::id()));
     std::fs::create_dir_all(&tmp).unwrap();
-    let launcher = launcher_0_10_6("127.0.0.1:0", &tmp.join("data"));
-    let launcher = if stun {
-        launcher
-    } else {
-        without_stun(launcher)
+    let launcher = launcher("127.0.0.1:0", &tmp.join("data"));
+    let launcher = match missing {
+        Some(flag) => without(launcher, flag),
+        None => launcher,
     };
     let mut command = Command::new(AGENT);
     let mut agent = without_agent_env(&mut command)

@@ -21,6 +21,10 @@ SHAPES = {
     "CitadelAgentBind": r"127\.0\.0\.1:[0-9]{1,5}",
     "CitadelAgentDataDirectoryName": r"\.?[A-Za-z0-9_-]+",
     "CitadelAgentStunServers": r"[a-z0-9.-]+:[0-9]{1,5}(,[a-z0-9.-]+:[0-9]{1,5}){2}",
+    # The portable identity's timings: whole seconds above zero, as the agent takes them.
+    "CitadelAgentIdentityUnlockIdleSecs": r"[1-9][0-9]{0,5}",
+    "CitadelAgentIdentityChallengeTimeoutSecs": r"[1-9][0-9]{0,5}",
+    "CitadelAgentIdentityFetchTimeoutSecs": r"[1-9][0-9]{0,5}",
 }
 
 

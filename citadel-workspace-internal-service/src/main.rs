@@ -15,8 +15,10 @@ use structopt::StructOpt;
 
 mod app_net;
 mod apps_authority;
+mod identity_setup;
 mod log_setup;
 mod notice_token;
+mod server_identity_codec;
 mod shell_menu;
 mod telemetry;
 #[cfg(feature = "self-update")]
@@ -135,6 +137,24 @@ async fn run() -> Result<(), Box<dyn Error>> {
         &default_dir,
     )?;
 
+    // The portable identity's timings, required like the STUN servers; its store follows the
+    // backend just chosen (identity_setup.rs).
+    let identity_timings = identity_setup::IdentityTimings::resolve(
+        (
+            env_setting(identity_setup::UNLOCK_IDLE.env).as_deref(),
+            opts.identity_unlock_idle_secs.as_deref(),
+        ),
+        (
+            env_setting(identity_setup::CHALLENGE_TIMEOUT.env).as_deref(),
+            opts.identity_challenge_timeout_secs.as_deref(),
+        ),
+        (
+            env_setting(identity_setup::FETCH_TIMEOUT.env).as_deref(),
+            opts.identity_fetch_timeout_secs.as_deref(),
+        ),
+    )?;
+    let identity = identity_setup::identity_config(&identity_timings, &backend_type)?;
+
     // Every required setting has resolved, and nothing is bound yet: an updating agent asks
     // a staged version this before installing it (citadel-internal-service's
     // updater/launch_check.rs), so one that would refuse its command is never swapped in.
@@ -192,6 +212,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         windows_shell::start_tray(spec);
     }
 
+    let service = identity_setup::applied(service, identity);
     let service = notice_token::applied(service);
     #[cfg(feature = "self-update")]
     let service = update_setup::applied(service, opts.bind)?;
@@ -243,6 +264,22 @@ struct Options {
     /// version with its own command.
     #[structopt(long)]
     check_launch: bool,
+    /// Whole seconds the unsealed portable identity is kept after its last use. Required;
+    /// INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS overrides it.
+    #[structopt(long)]
+    identity_unlock_idle_secs: Option<String>,
+    /// Whole seconds a sign-in waits for the server to prove the key its account pinned.
+    /// Required; INTERNAL_SERVICE_IDENTITY_CHALLENGE_TIMEOUT_SECS overrides it.
+    #[structopt(long)]
+    identity_challenge_timeout_secs: Option<String>,
+    /// Whole seconds fetching a server's /.well-known/citadel may take. Required;
+    /// INTERNAL_SERVICE_IDENTITY_FETCH_TIMEOUT_SECS overrides it.
+    #[structopt(long)]
+    identity_fetch_timeout_secs: Option<String>,
+}
+
+fn env_setting(name: &str) -> Option<String> {
+    std::env::var(name).ok()
 }
 
 /// The certificate the agent serves, and the only one.

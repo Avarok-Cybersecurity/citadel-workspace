@@ -30,7 +30,7 @@
 
     <!-- The flags on either side of the data directory, whose form differs by who expands it. -->
     <?define Head = "--bind $(var.Bind) --backend filesystem --data-dir" ?>
-    <?define Tail = "--allowed-origins $(var.Origin) --stun-servers $(var.Stun)" ?>
+    <?define Tail = "--allowed-origins $(var.Origin) --stun-servers $(var.Stun) --identity-unlock-idle-secs $(var.UnlockIdle) --identity-challenge-timeout-secs $(var.ChallengeTimeout) --identity-fetch-timeout-secs $(var.FetchTimeout)" ?>
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="Citadel Agent" />

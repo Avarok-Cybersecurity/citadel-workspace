@@ -208,6 +208,16 @@ if declares_service internal-service; then
         echo "    INTERNAL_SERVICE_STUN_SERVERS=stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302"
         exit 1
     fi
+    # The portable identity's timings, on the same reasoning.
+    for timing in UNLOCK_IDLE CHALLENGE_TIMEOUT FETCH_TIMEOUT; do
+        key="INTERNAL_SERVICE_IDENTITY_${timing}_SECS"
+        if [[ -z "$(deploy_setting "$key")" ]]; then
+            echo "ERROR: $key is unset or empty."
+            echo "  Set it to a whole number of seconds above zero; .env.example gives each one's"
+            echo "  meaning and a value."
+            exit 1
+        fi
+    done
 fi
 
 # The hosted UI's one off-origin socket, on exactly the same reasoning.

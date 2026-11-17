@@ -33,4 +33,7 @@ exec "$here/citadel-agent" \
   --data-dir "$HOME/@CitadelAgentDataDirectoryName@" \
   --allowed-origins '@CitadelWorkspaceOrigin@' \
   --stun-servers '@CitadelAgentStunServers@' \
+  --identity-unlock-idle-secs '@CitadelAgentIdentityUnlockIdleSecs@' \
+  --identity-challenge-timeout-secs '@CitadelAgentIdentityChallengeTimeoutSecs@' \
+  --identity-fetch-timeout-secs '@CitadelAgentIdentityFetchTimeoutSecs@' \
   "$@"

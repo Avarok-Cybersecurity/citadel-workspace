@@ -16,14 +16,15 @@ const STUN_REFUSAL: &str = "no STUN servers configured";
 
 #[test]
 fn a_command_carrying_every_setting_is_answered_without_starting_an_agent() {
-    let output = support::agent_that_exits("complete", true, &[CHECK_LAUNCH_FLAG]);
+    let output = support::agent_that_exits("complete", None, &[CHECK_LAUNCH_FLAG]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
 }
 
 #[test]
 fn a_command_without_the_stun_servers_is_answered_with_the_refusal() {
-    let output = support::agent_that_exits("incomplete", false, &[CHECK_LAUNCH_FLAG]);
+    let output =
+        support::agent_that_exits("incomplete", Some("--stun-servers"), &[CHECK_LAUNCH_FLAG]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success());
     assert!(stderr.contains(STUN_REFUSAL), "{stderr}");
@@ -47,15 +48,21 @@ fn an_agent_whose_command_lacks_a_setting_will_not_install_this_version() {
     std::fs::create_dir_all(&dir).unwrap();
     let staged = dir.join("staged-agent");
     std::fs::copy(support::AGENT, &staged).unwrap();
-    let complete = support::launcher_0_10_6("127.0.0.1:12345", &dir.join("data"));
+    let complete = support::launcher("127.0.0.1:12345", &dir.join("data"));
     let incomplete = support::without_stun(complete.clone());
+    let before_identity = support::launcher_0_10_6("127.0.0.1:12345", &dir.join("data"));
 
     let refused = installer_relaunching_with(incomplete, &dir).can_install(&staged);
+    let refused_old = installer_relaunching_with(before_identity, &dir).can_install(&staged);
     let accepted = installer_relaunching_with(complete, &dir).can_install(&staged);
     std::fs::remove_dir_all(&dir).unwrap();
 
     let why = refused.unwrap_err();
     assert!(why.contains(STUN_REFUSAL), "{why}");
+    // An agent started before the identity's timings existed is refused this version rather
+    // than swapped into one that will not start: it stays put until its launcher passes them.
+    let why = refused_old.unwrap_err();
+    assert!(why.contains(support::IDENTITY_FLAGS[0]), "{why}");
     assert_eq!(
         accepted,
         Ok(()),

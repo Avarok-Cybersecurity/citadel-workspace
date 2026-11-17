@@ -93,8 +93,8 @@ struct Run {
     stderr: String,
 }
 
-/// The watchdog, run to its end on a swap whose new version is started with the 0.10.6
-/// launcher's arguments, without `--stun-servers` unless `stun`.
+/// The watchdog, run to its end on a swap whose new version is started with this version's
+/// launcher arguments, without `--stun-servers` unless `stun`.
 fn update_relaunch(name: &str, stun: bool) -> Run {
     let dir = std::env::temp_dir().join(format!("agent-relaunch-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -109,7 +109,7 @@ fn update_relaunch(name: &str, stun: bool) -> Run {
         &format!(" --stun-servers {}", support::STUN_SERVERS),
     );
     let health: SocketAddr = format!("127.0.0.1:{}", free_port()).parse().unwrap();
-    let launcher = support::launcher_0_10_6(&health.to_string(), &dir.join("data"));
+    let launcher = support::launcher(&health.to_string(), &dir.join("data"));
     let args = if stun {
         launcher
     } else {
