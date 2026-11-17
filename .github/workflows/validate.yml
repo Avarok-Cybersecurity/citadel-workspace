@@ -39,8 +39,8 @@ jobs:
   # Jobs whose runs-on is the long `vars.CITADEL_MAC_RUNNER` expression may run on
   # the self-hosted Apple Silicon runners (`apple-48gb-metal`, two slots). They are
   # the ones needing neither Docker nor Linux; everything that brings up
-  # `docker compose` stays on ubuntu-latest. Unset, the org variable sends every one
-  # of them back to ubuntu-latest, which is the escape hatch when the Mac is down.
+  # `docker compose` stays on ubuntu-24.04. Unset, the org variable sends every one
+  # of them back to ubuntu-24.04, which is the escape hatch when the Mac is down.
   # The same-repo clause is not optional: this repository is public, and a fork's
   # pull request must never execute on that machine.
   # scripts/check-mac-runner-is-fork-safe.mjs refuses any other spelling.
@@ -54,7 +54,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,7 +73,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -101,7 +101,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -130,7 +130,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -154,7 +154,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -176,7 +176,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -216,6 +216,28 @@ jobs:
           cargo fmt --all --check
           cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
           cargo test --locked -p compute-pool-core
+      # The Calendar (Calendar design 3.2): its core is pure and runs natively for its tests,
+      # including the sweep over every IANA zone's transitions, and builds for the page's wasm32.
+      - name: First-party Calendar - fmt, clippy native and wasm32, and its core's tests
+        working-directory: apps/first-party/calendar
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
+          cargo test --locked -p calendar-core
+      # The core's TypeScript (core/bindings) is what the page is compiled against; regenerating
+      # it must change nothing, and the glue vendored into the UI must be what the source builds.
+      - name: First-party Calendar - committed bindings and vendored glue match the source
+        run: |
+          (cd apps/first-party/calendar && cargo test --locked -p calendar-core --features ts)
+          git diff --exit-code -- apps/first-party/calendar/core/bindings
+          untracked="$(git ls-files --others --exclude-standard -- apps/first-party/calendar/core/bindings)"
+          if [ -n "$untracked" ]; then echo "::error::bindings not committed: $untracked"; exit 1; fi
+          version="$(sed -n '/^name = "wasm-bindgen"$/{n;s/^version = "\(.*\)"$/\1/p;}' apps/first-party/calendar/Cargo.lock)"
+          test -n "$version" || { echo "::error::no wasm-bindgen in apps/first-party/calendar/Cargo.lock"; exit 1; }
+          # Into this run's own root, named on PATH: the runner's cargo home need not be on PATH.
+          cargo install wasm-bindgen-cli --locked --version "$version" --root "$RUNNER_TEMP/wasm-bindgen-$version"
+          PATH="$RUNNER_TEMP/wasm-bindgen-$version/bin:$PATH" node scripts/build-calendar-glue.mjs --check
       - name: The committed first-party apps rebuild byte-for-byte from their source
         run: node scripts/build-first-party-apps.mjs --check
       - name: First-party app signer - fmt, clippy and tests
@@ -224,6 +246,16 @@ jobs:
           cargo +1.99.0 fmt --check
           cargo +1.99.0 clippy --locked --all-targets -- -D warnings
           cargo +1.99.0 test --locked
+      # The deploy's signing step, as far as a PR can run it: no secret here (forks get none), so a
+      # seed made for this step, which the script must find NOT first-party. The deploy runs the
+      # same command with the real seed, where the key must be first-party.
+      - name: First-party apps - the signing step signs with a throwaway seed
+        run: |
+          set -euo pipefail
+          node --test scripts/lib/sign-first-party-apps.test.mjs
+          CITADEL_APP_SIGNING_SEED_HEX="$(openssl rand -hex 32)" \
+            node scripts/build-first-party-apps.mjs --sign "$RUNNER_TEMP/first-party-signed" --throwaway-key
+          test -s "$RUNNER_TEMP/first-party-signed/calendar/app.mldsa.sig"
       - name: Reference host - fmt, clippy, every fixture judged and run as fixtures.json says
         working-directory: apps/sdk-fixtures/harness
         run: |
@@ -242,7 +274,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -329,7 +361,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -346,12 +378,16 @@ jobs:
         run: node scripts/check-crate-coverage.mjs
       - name: No fork's pull request can reach the self-hosted Mac
         run: node scripts/check-mac-runner-is-fork-safe.mjs
+      - name: Every hosted Linux runner names its release
+        run: node scripts/check-runner-images-are-pinned.mjs
       - name: The Mac fork guard refuses every unguarded shape
         run: node --test scripts/lib/mac-runner-routing.test.mjs
       - name: Publish skips re-validation only on proof that this tree passed
         run: node --test scripts/lib/publish-validation-decision.test.mjs
       - name: Preflight derives CI's gates, tiers a change, and plans merge previews correctly
         run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/merge-preview-planning.test.mjs
+      - name: The stack's loopback STUN answers as RFC 5389 says
+        run: node --test docker/stun/stun-wire.test.mjs
       - name: Check the docs' commands resolve
         run: node scripts/check-doc-commands.mjs
       - name: Check request handlers cannot panic
@@ -909,7 +945,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -942,7 +978,7 @@ jobs:
     # timeouts, reply budgets), and the Mac is shared with other jobs and other organisations.
     # A 1.4 s test hit its 5 s timeout there at load 76 (2026-10-16). Owner: "anything perf
     # sensitive should be on a github runner".
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -982,7 +1018,7 @@ jobs:
     # timeouts, reply budgets), and the Mac is shared with other jobs and other organisations.
     # A 1.4 s test hit its 5 s timeout there at load 76 (2026-10-16). Owner: "anything perf
     # sensitive should be on a github runner".
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -1036,7 +1072,7 @@ jobs:
     # timeouts, reply budgets), and the Mac is shared with other jobs and other organisations.
     # A 1.4 s test hit its 5 s timeout there at load 76 (2026-10-16). Owner: "anything perf
     # sensitive should be on a github runner".
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1086,7 +1122,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -1151,7 +1187,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -1537,7 +1573,7 @@ jobs:
     # The slowest leg is the agent's release compile: 16m43s inside a build that shared four
     # cores with the server's (run 38056778313). This bounds a hang, not performance.
     timeout-minutes: 45
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -1598,7 +1634,7 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
     timeout-minutes: 55
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -1703,6 +1739,8 @@ jobs:
             artifact: reconnect-c2s
           - test: test:reconnect-p2p-only
             artifact: reconnect-p2p-only
+          - test: test:reconnect-chat-level
+            artifact: reconnect-chat-level
           - test: test:reconnect-one-c2s
             artifact: reconnect-one-c2s
           - test: test:reconnect-both-c2s
@@ -1921,7 +1959,7 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 41m; this is generous headroom over it, not a target.
     timeout-minutes: 80
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -2121,7 +2159,7 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 9m; this is generous headroom over it, not a target.
     timeout-minutes: 40
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -2379,7 +2417,7 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
     timeout-minutes: 55
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -2776,7 +2814,7 @@ jobs:
     # measure the same bytes. Setup ~2 minutes, the install ~30 s warm, the gates ~6.
     needs: production-build
     timeout-minutes: 20
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -2891,7 +2929,7 @@ jobs:
       ${{ vars.CITADEL_MAC_RUNNER == '1'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
-          || 'ubuntu-latest' }}
+          || 'ubuntu-24.04' }}
     steps:
       - name: Every validation job succeeded
         env:

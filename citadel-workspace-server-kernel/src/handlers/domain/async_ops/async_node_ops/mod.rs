@@ -98,6 +98,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         rules: Option<&str>,
         chat_enabled: Option<bool>,
         is_default: Option<bool>,
+        metadata: Option<&[u8]>,
     ) -> Result<DomainNode, NetworkError> {
         self.update_node_impl(
             user_id,
@@ -108,6 +109,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             rules,
             chat_enabled,
             is_default,
+            metadata,
         )
         .await
     }

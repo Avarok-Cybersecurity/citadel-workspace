@@ -62,6 +62,14 @@ pub enum ScopeKind {
 /// The longest node id or username a scope may name.
 pub const MAX_SCOPE_ID_BYTES: usize = 128;
 
+impl ScopeKind {
+    /// Whether an install of this kind is seen by everyone on some node, as a node tab is: a tab
+    /// offered by a `self`- or `users`-only app would show its owner's tab to nobody else.
+    pub fn reaches_a_node(&self) -> bool {
+        matches!(self, Self::Workspace | Self::Node | Self::NodeTree)
+    }
+}
+
 impl InstallScope {
     pub fn kind(&self) -> ScopeKind {
         match self {

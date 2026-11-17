@@ -54,5 +54,6 @@ pub(crate) fn record(owner: &str, n: u64, expires_ms: u64) -> LinkRecord {
         uses: 0,
         last_used_ms: None,
         from_pool: false,
+        guests: Vec::new(),
     }
 }

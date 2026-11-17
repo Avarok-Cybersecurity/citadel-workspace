@@ -4,11 +4,11 @@
 use super::apps::{finish, Answer, Caller, Step};
 use super::apps_gather::holds_at;
 use crate::kernel::apps::artifact::check_upload_chunk;
-use crate::kernel::apps::records::UploadStaging;
+use crate::kernel::apps::records::UploadSlot;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::transaction::apps_store::APPS_LOCK;
+use crate::kernel::transaction::upload_staging::Staged;
 use crate::WORKSPACE_ROOT_ID;
-use citadel_app_signature::sha256;
 use citadel_sdk::prelude::Ratchet;
 use citadel_workspace_types::apps_install::AppsRefusal;
 use citadel_workspace_types::apps_responses::AppsResponse;
@@ -48,36 +48,12 @@ async fn upload_steps<R: Ratchet + Send + Sync + 'static>(
     check_upload_chunk(sha256_hex, index, total_chunks, bytes.len())?;
     let backend = &kernel.domain_operations.backend_tx_manager;
     let _guard = APPS_LOCK.lock().await;
-    let mut staging = match backend.app_upload(caller.user).await? {
-        Some(staging) if staging.sha256 == sha256_hex && staging.total_chunks == total_chunks => {
-            staging
-        }
-        // One upload per member: a different artifact replaces the one in progress.
-        _ => {
-            backend.drop_app_upload(caller.user).await?;
-            UploadStaging {
-                sha256: sha256_hex.to_string(),
-                total_chunks,
-                received: Default::default(),
-                complete: false,
-            }
-        }
-    };
-    if !staging.complete {
-        backend
-            .save_app_upload_chunk(caller.user, index, bytes)
-            .await?;
-        staging.received.insert(index);
-        backend.save_app_upload(caller.user, &staging).await?;
-    }
-    if !staging.complete && staging.received.len() as u32 == total_chunks {
-        let whole = backend.assemble_app_upload(caller.user, &staging).await?;
-        if whole.is_none_or(|whole| hex::encode(sha256(&whole)) != sha256_hex) {
-            backend.drop_app_upload(caller.user).await?;
-            return Err(AppsRefusal::ArtifactMismatch.into());
-        }
-        staging.complete = true;
-        backend.save_app_upload(caller.user, &staging).await?;
+    let slot = UploadSlot::Artifact(caller.user);
+    let staged = backend
+        .stage_upload_chunk(slot, sha256_hex, index, total_chunks, bytes)
+        .await?;
+    if staged == Staged::Mismatch {
+        return Err(AppsRefusal::ArtifactMismatch.into());
     }
     Ok(AppsResponse::ArtifactChunkStored {
         sha256: sha256_hex.to_string(),

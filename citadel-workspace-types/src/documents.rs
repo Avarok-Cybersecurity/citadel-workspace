@@ -165,7 +165,9 @@ pub enum DocumentsResponse {
     Refused(DocumentRefusal),
 }
 
-/// What each request needs on its node, named once for the handler and its callers.
+/// What each request needs on its node, named once for the handler and its callers. For the node's
+/// page; a document shared in its chat follows the channel's gates instead
+/// (`chat_documents::required_channel_permission`).
 pub fn required_permission(request: &DocumentsRequest) -> Permission {
     match request {
         DocumentsRequest::Append { .. } | DocumentsRequest::StoreSnapshot { .. } => {

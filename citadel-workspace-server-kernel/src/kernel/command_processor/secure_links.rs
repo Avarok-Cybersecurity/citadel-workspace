@@ -93,7 +93,7 @@ async fn create<R: Ratchet + Send + Sync + 'static>(
         }
         // No node the server can check, or a target `decide_create` refuses anyway.
         _ => true,
-    };
+    } && may_view_guest_nodes(kernel, actor, grants).await?;
     let input = CreateInput {
         may_share,
         may_view_target,
@@ -133,10 +133,32 @@ async fn create<R: Ratchet + Send + Sync + 'static>(
         uses: 0,
         last_used_ms: None,
         from_pool: source == LinkSource::Pool,
+        guests: Vec::new(),
     };
     backend.insert_link(&record).await?;
     answer(SecureLinksResponse::Created {
         info: record.info(),
         token,
     })
+}
+
+/// Whether `actor` can view every node a booking-guest grant would admit guests to: a link
+/// gives no one a node its creator cannot see (Calendar design §3.6.4).
+async fn may_view_guest_nodes<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    actor: &str,
+    grants: &[LinkGrant],
+) -> Result<bool, NetworkError> {
+    for grant in grants {
+        if let LinkGrant::BookingGuest { node_id, .. } = grant {
+            let ops = &kernel.domain_operations;
+            if !ops
+                .check_entity_permission(actor, node_id, Permission::ViewContent)
+                .await?
+            {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
 }

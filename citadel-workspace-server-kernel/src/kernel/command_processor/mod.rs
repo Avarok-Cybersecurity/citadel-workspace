@@ -33,6 +33,17 @@
 /// Async command processor
 pub mod async_process_command;
 
+mod chat_attachment_keep;
+mod chat_attachment_shares;
+mod chat_attachments;
+pub mod group_message_shape;
+/// ReactGroupMessage: reactions stored on a node channel's messages.
+pub mod group_reactions;
+/// MarkGroupRead: one read cursor per channel member.
+pub mod group_read_cursors;
+/// GroupTyping: relayed to the channel, never stored.
+pub mod group_typing;
+
 /// What a failed workspace lookup means, decided from facts rather than prose.
 pub mod workspace_lookup;
 
@@ -47,6 +58,12 @@ pub(crate) mod workspace_record;
 
 /// "Members can see each other": SetMembersVisible, and the rule ListMembers reads.
 mod members_visibility;
+
+/// The app tabs every node without a list of its own shows.
+mod default_app_tabs;
+/// Installing the first-party apps every workspace is provisioned with.
+mod first_party_provisioning;
+pub use first_party_provisioning::PROVISIONING_INSTALLER;
 
 /// Terms, consent and the Telemetry Service.
 mod telemetry;
@@ -76,6 +93,7 @@ mod apps_call;
 mod apps_call_blob;
 /// The storage backends `Call` serves.
 mod apps_call_storage;
+mod apps_call_storage_authored;
 /// Storage writes, decided and made under `APPS_LOCK`.
 mod apps_call_storage_write;
 /// The reads the apps decisions need, made before they decide, and what an install may do now.

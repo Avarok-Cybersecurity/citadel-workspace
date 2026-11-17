@@ -81,6 +81,12 @@ export class Provisioning {
       `workspace_master_password = ${JSON.stringify(this.masterPassword())}`,
       // An Avarok-hosted tenant: its creator and members were shown the platform terms.
       "require_platform_terms = true",
+      // The largest file a node's chat keeps on the server (25 MiB), as a native server's
+      // kernel.toml sets it. Required; the kernel refuses to start without it.
+      "chat_attachment_max_bytes = 26214400",
+      // How many files one node's chat keeps, as a native server's kernel.toml sets it: its index
+      // is one storage value, at most 2 MB. Required too.
+      "chat_attachment_max_files_per_node = 2048",
     ];
     const name = this.displayName();
     if (name !== null) lines.push(`workspace_name = ${JSON.stringify(name)}`);

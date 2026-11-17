@@ -43,7 +43,7 @@ jobs:
   # acquisitions in a row (~30 s of work behind ~10 min of queue in a saturated pool).
   plan:
     name: Plan (is the agent released?)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write # the agent-v* tag, created only when the plan says a release is due
@@ -121,7 +121,7 @@ jobs:
     if: >-
       always() && needs.plan.result == 'success' &&
       (needs.release.result == 'success' || (needs.release.result == 'skipped' && needs.plan.outputs.state == 'released'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: production
     steps:
@@ -160,6 +160,22 @@ jobs:
       - name: UI dependencies
         timeout-minutes: 15
         run: npm ci --no-audit --no-fund
+      # The apps every workspace is provisioned with (the Calendar), signed with the first-party
+      # key: the one step the seed is in. Only the signer reads it, from its environment, and prints
+      # the key's fingerprint, never the key or the seed. The script refuses a key the kernel does
+      # not list as first-party. deploy.sh refuses to build without what this writes.
+      - name: Sign the provisioned first-party apps
+        timeout-minutes: 15
+        env:
+          CITADEL_APP_SIGNING_SEED_HEX: ${{ secrets.CITADEL_APP_SIGNING_SEED_HEX }}
+        run: |
+          set -euo pipefail
+          [ -n "$CITADEL_APP_SIGNING_SEED_HEX" ] || { echo "::error::the CITADEL_APP_SIGNING_SEED_HEX secret is not set"; exit 1; }
+          pin="$(sed -n 's/^channel = "\(.*\)"$/\1/p' apps/first-party/compute-pool/rust-toolchain.toml)"
+          test -n "$pin" || { echo "::error::no channel in apps/first-party/compute-pool/rust-toolchain.toml"; exit 1; }
+          rustup toolchain install "$pin" --profile minimal
+          node scripts/build-first-party-apps.mjs --sign "$RUNNER_TEMP/first-party-signed"
+          echo "CITADEL_FIRST_PARTY_SIGNED_DIR=$RUNNER_TEMP/first-party-signed" >> "$GITHUB_ENV"
       - name: deploy.sh
         env:
           CF_TOKEN: ${{ secrets.CITADEL_CF_DEPLOY_TOKEN }}
@@ -183,7 +199,7 @@ jobs:
     # `release` is skipped on every deploy whose agent is already out. Without this the run
     # reported success while this check never ran (run 36304511815).
     if: always() && needs.deploy.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: The latest release is this commit's agent, and its downloads resolve

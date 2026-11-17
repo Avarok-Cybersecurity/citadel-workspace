@@ -30,7 +30,21 @@ pub enum LinkGrant {
         group_id: String,
         members: Vec<String>,
     },
+    /// Anyone who can view `node_id`, and up to `max_guests` signed-in accounts that are not
+    /// members, each admitted to that one node to book on `page` (Calendar design §3.6.4). A guest
+    /// is given `ViewContent` on the node alone, held while the link lives: deleting the link, or
+    /// its expiry, takes it back.
+    BookingGuest {
+        node_id: String,
+        /// The booking page the guest is sent to, e.g. a member's username.
+        page: String,
+        /// 1 to `MAX_BOOKING_GUESTS`: how many accounts the link may admit as guests.
+        max_guests: u8,
+    },
 }
+
+/// The most guests one booking-guest link admits.
+pub const MAX_BOOKING_GUESTS: u8 = 50;
 
 /// How long a link lives. A one-time link is deleted when it is first opened by someone it
 /// admits, and still expires if nobody does.

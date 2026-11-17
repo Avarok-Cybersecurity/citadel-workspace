@@ -48,6 +48,8 @@ for name in citadel-loopback-agent citadel-default-server citadel-control-plane;
   grep -q "name=\"$name\" content=\"\"" "$UI/dist/index.html" || fail "dist/index.html has no empty <meta name=\"$name\">"
 done
 [ -s "$UI/dist/wasm/citadel_internal_service_wasm_client_bg.wasm" ] || fail "dist/ has no WASM client"
+# This release's kill switch reaches /version.json, so pages on an older build reload.
+node "$HERE/assert-version-manifest.mjs" "$UI" || fail "dist/version.json does not carry this release's minimum build"
 
 rm -rf "$OUT"
 cp -R "$UI/dist" "$OUT"

@@ -2,9 +2,15 @@
 //! signing key, the manifest bytes to publish and their signature, or why not.
 
 use citadel_app_abi_inspect::{check, Policy};
+use citadel_app_sdk_types::abi::ABI_ID;
 use citadel_app_sdk_types::Capability;
 use citadel_app_signature::{sha256, AppSigningKey, ArtifactDigests};
 use serde_json::Value;
+
+/// The transitional in-page ABI (`ABI_FIRST_PARTY_GLUE` in citadel-workspace-types, which a test
+/// holds this to): a wasm-bindgen module the page imports, which the kernel accepts only under a
+/// first-party key.
+pub const ABI_FIRST_PARTY_GLUE: &str = "wasm-bindgen-glue-firstparty";
 
 /// What to install: the exact manifest bytes and the `app.mldsa.sig` text.
 #[derive(Debug, PartialEq, Eq)]
@@ -47,19 +53,11 @@ pub fn sign(manifest_text: &str, wasm: &[u8], key: &AppSigningKey) -> Result<Sig
     if field(&m, &["artifact", "bytes"])?.as_u64() != Some(wasm.len() as u64) {
         return Err("the module's size is not the manifest's".into());
     }
-    let pages = field(&m, &["limits", "memory_pages"])?
-        .as_u64()
-        .ok_or("memory_pages")?;
-    let policy = Policy {
-        declared: declared(&m)?,
-        max_memory_pages: u32::try_from(pages).map_err(|_| "memory_pages")?,
-    };
-    let verdict = check(wasm, &policy);
-    if !verdict.is_accepted() {
-        return Err(format!(
-            "the ABI inspector refuses the module: {:?}",
-            verdict.reasons()
-        ));
+    match text(&m, &["sdk", "abi"])? {
+        ABI_ID => inspect(&m, wasm)?,
+        // Its imports are wasm-bindgen's, not the host's: there is no ABI-1 import table to judge.
+        ABI_FIRST_PARTY_GLUE => {}
+        other => return Err(format!("the signer knows no ABI {other:?}")),
     }
     m["publisher"]["mldsa65_public_key"] = Value::String(key.public_key_hex());
     let mut manifest = serde_json::to_vec_pretty(&m).map_err(|e| e.to_string())?;
@@ -71,6 +69,25 @@ pub fn sign(manifest_text: &str, wasm: &[u8], key: &AppSigningKey) -> Result<Sig
         manifest,
         signature,
     })
+}
+
+/// The ABI inspector's verdict on an ABI-1 module against what its manifest declares.
+fn inspect(m: &Value, wasm: &[u8]) -> Result<(), String> {
+    let pages = field(m, &["limits", "memory_pages"])?
+        .as_u64()
+        .ok_or("memory_pages")?;
+    let policy = Policy {
+        declared: declared(m)?,
+        max_memory_pages: u32::try_from(pages).map_err(|_| "memory_pages")?,
+    };
+    let verdict = check(wasm, &policy);
+    if !verdict.is_accepted() {
+        return Err(format!(
+            "the ABI inspector refuses the module: {:?}",
+            verdict.reasons()
+        ));
+    }
+    Ok(())
 }
 
 fn hex(bytes: &[u8]) -> String {

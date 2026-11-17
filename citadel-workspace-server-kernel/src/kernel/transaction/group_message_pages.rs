@@ -47,6 +47,11 @@ pub(super) fn legacy_key(group_id: &str) -> String {
     format!("citadel_workspace.group_messages.{group_id}")
 }
 
+/// The key holding every member's read cursor in a room, beside its pages.
+pub(super) fn read_cursors_key(group_id: &str) -> String {
+    format!("citadel_workspace.group_messages.{group_id}.read_cursors")
+}
+
 /// Split a legacy blob into pages, preserving order.
 ///
 /// Returns at least one page, so a room that existed with no messages still
@@ -113,6 +118,7 @@ mod tests {
             message_type: GroupMessageType::Text,
             timestamp: 0,
             edited_at: None,
+            reactions: Vec::new(),
             reply_to: None,
             reply_count: 0,
             sender_name: String::new(),

@@ -8,6 +8,8 @@
 //! - `storage.user`: one KV per member per app and scope, at most `USER_KV_QUOTA`.
 //! - `storage.scope`: one KV per app and scope, shared, at most `SCOPE_KV_QUOTA`.
 //! - `storage.node`: one KV per app and scope per node, at most `NODE_KV_QUOTA` each.
+//! - `storage.node.authored`: one KV per app and scope per node per author, at most
+//!   `NODE_AUTHORED_KV_QUOTA` each (`storage_authored`).
 //! - `storage.blob`: content-addressed blobs per app and scope, each at most `BLOB_MAX_BYTES`,
 //!   together at most `BLOB_QUOTA`.
 //!
@@ -37,6 +39,7 @@ pub enum Namespace {
     User(String),
     Scope,
     Node(String),
+    NodeAuthored { node: String, author: String },
 }
 
 /// The storage one install's app has at its scope: `(app id, scope key)`.
@@ -63,8 +66,15 @@ impl StorageRoot {
             Namespace::User(user) => format!("u\n{user}"),
             Namespace::Scope => "s".to_string(),
             Namespace::Node(node) => format!("n\n{node}"),
+            Namespace::NodeAuthored { node, author } => format!("a\n{node}\n{author}"),
         };
         digest(&format!("{}\n{local}", self.id()))
+    }
+
+    /// The digest of `node`'s roster of authors (`storage_authored`): an index of author names,
+    /// recorded in the ledger like a namespace so a purge removes it too.
+    pub fn roster_id(&self, node: &str) -> String {
+        digest(&format!("{}\nr\n{node}", self.id()))
     }
 }
 
@@ -78,6 +88,7 @@ pub fn quota_of(namespace: &Namespace) -> u64 {
         Namespace::User(_) => USER_KV_QUOTA,
         Namespace::Scope => SCOPE_KV_QUOTA,
         Namespace::Node(_) => NODE_KV_QUOTA,
+        Namespace::NodeAuthored { .. } => super::storage_authored::NODE_AUTHORED_KV_QUOTA,
     }
 }
 

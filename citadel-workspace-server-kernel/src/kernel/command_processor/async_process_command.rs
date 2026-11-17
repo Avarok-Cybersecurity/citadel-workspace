@@ -604,6 +604,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             let mut member_ids: Vec<String> = Vec::new();
             let mut inherited_from: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
+            // An admin sees booking guests, to find and remove them, wherever they are listed.
+            let live_guests = if is_admin {
+                backend
+                    .live_guest_users(super::telemetry::now_ms()?)
+                    .await?
+            } else {
+                Default::default()
+            };
             {
                 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
                 for entry in roster {
@@ -616,7 +624,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         )
                         .await
                         .unwrap_or(false);
-                    if !has_access {
+                    if !has_access && !live_guests.contains(&entry.user_id) {
                         continue;
                     }
                     if let Some(via) = entry.via {
@@ -674,6 +682,11 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 // Echoed from the request, resolved the same way the lookup
                 // above resolved it, so the answer says what it is about.
                 domain_id: Some(target_id.to_string()),
+                guests: users
+                    .iter()
+                    .filter(|u| live_guests.contains(&u.id))
+                    .map(|u| u.id.clone())
+                    .collect(),
                 members: users,
                 inherited_from,
             })
@@ -784,17 +797,29 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             mentions,
         } => {
             use crate::kernel::group_access::{authorize_group_write, GROUP_ACCESS_DENIED};
-            if authorize_group_write(kernel, actor_user_id, group_id)
-                .await
-                .is_none()
-            {
+            let Some(node_id) = authorize_group_write(kernel, actor_user_id, group_id).await else {
                 return Ok(WorkspaceProtocolResponse::Error(
                     GROUP_ACCESS_DENIED.to_string(),
                 ));
-            }
+            };
 
+            if let Some(refusal) = super::group_message_shape::refusal(message_type) {
+                return Ok(WorkspaceProtocolResponse::Error(refusal.to_string()));
+            }
             use citadel_workspace_types::GroupMessage;
             use uuid::Uuid;
+            let message_id = Uuid::new_v4().to_string();
+            if let Some(refusal) = super::chat_attachment_shares::claim(
+                kernel,
+                &node_id,
+                actor_user_id,
+                message_type,
+                &message_id,
+            )
+            .await?
+            {
+                return Ok(WorkspaceProtocolResponse::Error(refusal.to_string()));
+            }
 
             // Get sender name from user
             let sender_name = match kernel
@@ -809,7 +834,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
             // Create the message
             let message = GroupMessage {
-                id: Uuid::new_v4().to_string(),
+                id: message_id,
                 group_id: group_id.clone(),
                 sender_id: actor_user_id.to_string(),
                 sender_name,
@@ -823,6 +848,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 reply_count: 0,
                 mentions: mentions.clone().unwrap_or_default(),
                 edited_at: None,
+                reactions: Vec::new(),
             };
 
             // Store the message
@@ -847,10 +873,19 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     );
                     Ok(notification)
                 }
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to send message: {}",
-                    e
-                ))),
+                Err(e) => {
+                    super::chat_attachment_shares::unclaim(
+                        kernel,
+                        &node_id,
+                        message_type,
+                        &message.id,
+                    )
+                    .await?;
+                    Ok(WorkspaceProtocolResponse::Error(format!(
+                        "Failed to send message: {}",
+                        e
+                    )))
+                }
             }
         }
 
@@ -945,14 +980,11 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             message_id,
         } => {
             use crate::kernel::group_access::{authorize_group_write, GROUP_ACCESS_DENIED};
-            if authorize_group_write(kernel, actor_user_id, group_id)
-                .await
-                .is_none()
-            {
+            let Some(node_id) = authorize_group_write(kernel, actor_user_id, group_id).await else {
                 return Ok(WorkspaceProtocolResponse::Error(
                     GROUP_ACCESS_DENIED.to_string(),
                 ));
-            }
+            };
 
             // Get the original message to verify ownership
             match kernel
@@ -983,6 +1015,13 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         .await
                     {
                         Ok(Some(_)) => {
+                            super::chat_attachment_shares::release(
+                                kernel,
+                                &node_id,
+                                &msg.message_type,
+                                message_id,
+                            )
+                            .await?;
                             let notification = WorkspaceProtocolResponse::GroupMessageDeleted {
                                 group_id: group_id.clone(),
                                 message_id: message_id.clone(),
@@ -1032,22 +1071,65 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
             let limit = limit.unwrap_or(50).min(100); // Default 50, max 100
 
-            match kernel
-                .domain_operations
-                .backend_tx_manager
+            let backend = &kernel.domain_operations.backend_tx_manager;
+            let read = match backend
                 .get_group_messages_paginated(group_id, *before_timestamp, limit)
                 .await
             {
-                Ok((messages, has_more)) => Ok(WorkspaceProtocolResponse::GroupMessages {
-                    group_id: group_id.clone(),
-                    messages,
-                    has_more,
-                }),
+                Ok(page) => backend
+                    .group_read_cursors(group_id)
+                    .await
+                    .map(|cursors| (page, cursors)),
+                Err(e) => Err(e),
+            };
+            match read {
+                Ok(((messages, has_more), read_cursors)) => {
+                    Ok(WorkspaceProtocolResponse::GroupMessages {
+                        group_id: group_id.clone(),
+                        messages,
+                        has_more,
+                        read_cursors,
+                    })
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to get messages: {}",
                     e
                 ))),
             }
+        }
+
+        WorkspaceProtocolRequest::ReactGroupMessage {
+            group_id,
+            message_id,
+            emoji,
+            on,
+        } => {
+            super::group_reactions::react(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                group_id,
+                message_id,
+                emoji,
+                *on,
+            )
+            .await
+        }
+        WorkspaceProtocolRequest::MarkGroupRead {
+            group_id,
+            upto_message_id,
+        } => {
+            super::group_read_cursors::mark_read(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                group_id,
+                upto_message_id,
+            )
+            .await
+        }
+        WorkspaceProtocolRequest::GroupTyping { group_id } => {
+            super::group_typing::typing(kernel, actor_user_id, requester_cid, group_id).await
         }
 
         WorkspaceProtocolRequest::GetThreadMessages {
@@ -1074,6 +1156,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     group_id: group_id.clone(),
                     messages,
                     has_more: false, // Thread messages are always returned fully
+                    // A thread is a filter of the channel; who has read how far is a fact of the
+                    // channel, and a thread view does not show ticks.
+                    read_cursors: Vec::new(),
                 }),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to get thread messages: {}",
@@ -1179,6 +1264,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             rules,
             chat_enabled,
             is_default,
+            metadata,
         } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             use crate::platform::{SystemTime, UNIX_EPOCH};
@@ -1193,6 +1279,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     rules.as_deref(),
                     *chat_enabled,
                     *is_default,
+                    metadata.as_deref(),
                 )
                 .await
             {
@@ -1248,12 +1335,17 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     // reached the gate and never reached here: setting which
                     // room a workspace opens on was written on the server and
                     // announced to nobody.
-                    if crate::handlers::domain::node_ops::update_changes_structure(
-                        name.as_deref(),
-                        description.as_deref(),
-                        rules.as_deref(),
-                        *chat_enabled,
-                        *is_default,
+                    let changes_structure =
+                        crate::handlers::domain::node_ops::update_changes_structure(
+                            name.as_deref(),
+                            description.as_deref(),
+                            rules.as_deref(),
+                            *chat_enabled,
+                            *is_default,
+                        );
+                    if crate::handlers::domain::node_ops::update_announces_the_node(
+                        changes_structure,
+                        metadata.is_some(),
                     ) {
                         // Node-scoped, like the content update above: a structural edit
                         // carries the whole DomainNode, name, rules and all.
@@ -1271,6 +1363,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     e
                 ))),
             }
+        }
+
+        WorkspaceProtocolRequest::SetDefaultAppTabs { app_tabs } => {
+            super::default_app_tabs::set_default_app_tabs(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                app_tabs,
+            )
+            .await
         }
 
         WorkspaceProtocolRequest::SetMembersVisible { node_id, visible } => {
@@ -1298,6 +1400,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
         WorkspaceProtocolRequest::Documents(request) => {
             super::documents::process(kernel, actor_user_id, requester_cid, request).await
+        }
+
+        WorkspaceProtocolRequest::ChatDocuments(request) => {
+            super::documents::process_chat(kernel, actor_user_id, requester_cid, request).await
+        }
+
+        WorkspaceProtocolRequest::ChatAttachments(request) => {
+            super::chat_attachments::process(kernel, actor_user_id, request).await
         }
 
         WorkspaceProtocolRequest::SecureLinks(request) => {

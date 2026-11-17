@@ -1,10 +1,13 @@
 //! The secure-link decisions, pure: given the facts, what happens. The request handler gathers
 //! the facts (permissions, roles, the stored record) and writes what these decide.
 
+use super::guests::{guest_verdict, GuestVerdict};
 use super::records::LinkRecord;
 use super::target::validate_target;
 use crate::kernel::secret_eq::secrets_match;
-use citadel_workspace_types::secure_links::{LinkGrant, LinkLifetime, SECURE_LINK_MAX_TTL_MS};
+use citadel_workspace_types::secure_links::{
+    LinkGrant, LinkLifetime, MAX_BOOKING_GUESTS, SECURE_LINK_MAX_TTL_MS,
+};
 use std::collections::HashMap;
 
 pub const MAX_LABEL_CHARS: usize = 120;
@@ -22,6 +25,8 @@ pub struct Visitor {
     pub role_id: Option<String>,
     /// For each node a grant names: whether they can view it.
     pub node_views: HashMap<String, bool>,
+    /// Not a member, but an account in good standing a booking-guest grant may admit.
+    pub guest_eligible: bool,
 }
 
 /// Whether any of `grants` admits `visitor`.
@@ -39,6 +44,9 @@ pub fn grant_admits(grants: &[LinkGrant], visitor: &Visitor) -> bool {
         LinkGrant::NodeViewers(node) => visitor.node_views.get(node).copied() == Some(true),
         LinkGrant::Workspace => true,
         LinkGrant::GroupSnapshot { members, .. } => named(members),
+        LinkGrant::BookingGuest { node_id, .. } => {
+            visitor.node_views.get(node_id).copied() == Some(true)
+        }
     })
 }
 
@@ -48,17 +56,20 @@ pub fn granted_nodes(grants: &[LinkGrant]) -> Vec<&str> {
         .iter()
         .filter_map(|grant| match grant {
             LinkGrant::NodeViewers(node) => Some(node.as_str()),
+            LinkGrant::BookingGuest { node_id, .. } => Some(node_id.as_str()),
             _ => None,
         })
         .collect()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolveDecision {
     /// Unknown, expired, not granted or no longer a valid target: one answer for all.
     Unavailable,
     /// Send them to the target; a one-time link is deleted first.
-    Admit { burn: bool },
+    /// `guest`: the node to give the visitor `ViewContent` on and record them as a guest of, when
+    /// a booking-guest grant admitted them for the first time.
+    Admit { burn: bool, guest: Option<String> },
 }
 
 /// Whether `visitor` may open the link `presented_digest` names, as of `now_ms`.
@@ -73,7 +84,16 @@ pub fn decide_resolve(
     // the CSPRNG, so no timing difference narrows a search for a valid one.
     // The grant is checked before the token is compared, and both run whatever the record, so
     // a miss costs what a hit does. Every refusal is the same answer either way.
-    let granted = record.is_some_and(|r| grant_admits(&r.grants, visitor));
+    let as_member = record.is_some_and(|r| grant_admits(&r.grants, visitor));
+    let candidate = super::guests::GuestCandidate {
+        user_id: &visitor.user_id,
+        eligible: visitor.guest_eligible,
+    };
+    let as_guest = match record {
+        Some(r) if !as_member => guest_verdict(&r.grants, &r.guests, &candidate),
+        _ => GuestVerdict::Refused,
+    };
+    let granted = as_member || as_guest != GuestVerdict::Refused;
     let matched = secrets_match(record.map_or("", |r| r.digest.as_str()), presented_digest);
     let Some(record) = record else {
         return ResolveDecision::Unavailable;
@@ -83,6 +103,10 @@ pub fn decide_resolve(
     if admitted {
         ResolveDecision::Admit {
             burn: record.one_time,
+            guest: match as_guest {
+                GuestVerdict::New { node } => Some(node),
+                GuestVerdict::Returning { .. } | GuestVerdict::Refused => None,
+            },
         }
     } else {
         ResolveDecision::Unavailable
@@ -136,6 +160,16 @@ pub fn decide_create(input: &CreateInput<'_>) -> Result<NewLink, String> {
         LinkLifetime::OneTime { ttl_ms } => (true, *ttl_ms),
     };
     let expires_ms = expiry_at(input.now_ms, ttl_ms)?;
+    let has_guests = input
+        .grants
+        .iter()
+        .any(|g| matches!(g, LinkGrant::BookingGuest { .. }));
+    if one_time && has_guests {
+        return Err(
+            "A booking link's guests keep access while it lives, so it cannot be one-time"
+                .to_string(),
+        );
+    }
     if !input.may_view_target {
         return Err("You can only share a link to something you can see".to_string());
     }
@@ -173,6 +207,19 @@ fn validate_grants(grants: &[LinkGrant]) -> Result<(), String> {
                 validate_names(members)?;
             }
             LinkGrant::NodeViewers(node) => validate_name(node)?,
+            LinkGrant::BookingGuest {
+                node_id,
+                page,
+                max_guests,
+            } => {
+                validate_name(node_id)?;
+                validate_name(page)?;
+                if *max_guests == 0 || *max_guests > MAX_BOOKING_GUESTS {
+                    return Err(format!(
+                        "A booking link admits 1 to {MAX_BOOKING_GUESTS} guests"
+                    ));
+                }
+            }
             LinkGrant::Workspace => {}
         }
     }

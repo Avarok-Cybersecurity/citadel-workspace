@@ -15,7 +15,7 @@ use citadel_workspace_types::apps_responses::AppsResponse;
 const CAPS: &[Capability] = &[Capability::StorageUser, Capability::StorageBlob];
 
 /// The keys app storage holds now.
-fn storage_keys(kernel: &super::test_support::Kernel) -> Vec<String> {
+pub(crate) fn storage_keys(kernel: &super::test_support::Kernel) -> Vec<String> {
     let storage = [".ledger.", ".kvindex.", ".kv.", ".blob.", ".blob_chunk."];
     let mut keys: Vec<String> = apps_keys(kernel)
         .into_keys()
@@ -35,7 +35,7 @@ async fn store_some(kernel: &super::test_support::Kernel, id: &str) {
     assert!(matches!(put, HostReply::Ok(_)));
 }
 
-async fn uninstall(kernel: &super::test_support::Kernel, id: &str, purge_storage: bool) {
+pub(crate) async fn uninstall(kernel: &super::test_support::Kernel, id: &str, purge_storage: bool) {
     let request = AppsRequest::Uninstall {
         install_id: id.to_string(),
         purge_storage,

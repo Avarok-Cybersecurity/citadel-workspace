@@ -126,7 +126,7 @@ jobs:
     name: Was this exact tree already validated?
     # API reads and one small artifact download; observed seconds. This bounds a hang.
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read        # the PR's validate runs, their jobs and their tree record
@@ -168,7 +168,7 @@ jobs:
       ${{ !cancelled() && (needs.validate.result == 'success' ||
           (needs.validate.result == 'skipped' && needs.validation-gate.result == 'success' &&
            needs.validation-gate.outputs.validated == 'true')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -466,7 +466,7 @@ jobs:
            needs.validation-gate.outputs.validated == 'true')) }}
     # One API call; this bounds a hang.
     timeout-minutes: 5
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       actions: write # workflow_dispatch of deploy.yml, nothing else
     steps:
@@ -490,7 +490,7 @@ jobs:
     # Explicit, not the implicit success(): `validate` may be skipped by the gate, and a skipped
     # job anywhere upstream otherwise skips this one even though every publish leg succeeded.
     if: ${{ !cancelled() && needs.publish.result == 'success' && github.ref == 'refs/heads/master' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # Checked again here, and first. This job runs on a fresh runner, so the
       # publish job's check proves nothing about this one - and a credential

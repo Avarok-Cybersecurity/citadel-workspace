@@ -85,11 +85,14 @@ const SKIP = new Map([
   ['lib/revfs/revfs-retry.ts', 254],
 
   ['components/ui/sidebar.tsx', 487],
-  ['lib/file-transfer/service.ts', 276],
+  ['lib/file-transfer/service.ts', 273],
   // Two data-testid attributes, so the integration suite's readiness probe can
   // stop keying on button copy — see ROBUSTNESS round 168.
   ['types/messaging-layer.ts', 438],
-  ['types/workspace-protocol.ts', 286],
+  // 275: Lane P's 282 (`ChatAttachments`, the request a node channel's files travel in) less what
+  // Lane T moved to node-tab-requests.ts. Each request variant is one line of this hand-kept mirror
+  // of the generated union.
+  ['types/workspace-protocol.ts', 275],
   // Not written here: a byte-for-byte copy of citadel-app-sdk-types' generated ABI
   // constants (every op's arguments and reply), held to its source by the UI's
   // generated-drift test. Splitting it would break that equality; it changes only
@@ -98,7 +101,9 @@ const SKIP = new Map([
   // 421: the topic ops and constants and the plane tables (TRANSPORT_CAPABILITY,
   // SERVE_PLANE_CAPABILITY), generated from the Rust constants (docs/plans/p2p-demo-design.md).
   // 423: TOPIC_ENVELOPE_TAG and TOPIC_ENVELOPE_OVERHEAD, which the agent caps a topic's group by.
-  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 423],
+  // 430: storage.node.authored, its KV_BACKEND_CAPABILITY row and the KvListAuthored op
+  // (Calendar design §3.3.1).
+  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 430],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {

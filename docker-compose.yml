@@ -5,6 +5,13 @@
 # to pass that flag. Hosted CI needs no host build network. A host that does must run
 # `BUILD_NETWORK=host COMPOSE_BAKE=false docker compose ...` (remove COMPOSE_BAKE=false only
 # once Compose can grant the network.host entitlement). Runtime `network_mode: host` is unaffected.
+# The agent's STUN servers: three loopback responders (the `stun` service), named once here
+# for both of them. Public STUN made the NAT verdict the runner's: on a VM whose NAT read as
+# unpredictable the server stamped no Direct path, no UDP channel was offered, and every call
+# failed while the same commit passed on another VM. A loopback answer is the same on every
+# machine (Constant 127.0.0.1, port Identity, so Direct). Production names its own (public)
+# servers in docker-compose.production.yml and the agent's settings; this is dev and CI only.
+x-dev-stun-servers: &dev-stun-servers INTERNAL_SERVICE_STUN_SERVERS=127.0.0.1:3478,127.0.0.1:3479,127.0.0.1:3480
 services:
   sync-wasm-client:
     build:
@@ -229,7 +236,7 @@ services:
       # compared byte-for-byte. The integration suite uses 127.0.0.1:5291
       # (integration-tests/src/lib/config.ts); a human usually types localhost.
       - INTERNAL_SERVICE_ALLOWED_ORIGINS=http://localhost:5291,http://127.0.0.1:5291
-      - INTERNAL_SERVICE_STUN_SERVERS=stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
+      - *dev-stun-servers
     deploy:
       resources:
         limits:
@@ -249,6 +256,26 @@ services:
         condition: service_completed_successfully
       server:
         condition: service_healthy
+      # Answering before the agent starts: it identifies its NAT once, at startup.
+      stun:
+        condition: service_healthy
+    network_mode: host
+
+  stun:
+    # Loopback STUN responders for the agent above (see x-dev-stun-servers). No build: the
+    # script is mounted into the same Node base the UI image is built from.
+    restart: unless-stopped
+    image: node:20-alpine
+    volumes:
+      - ./docker/stun:/stun:ro
+    environment:
+      - *dev-stun-servers
+    command: ["node", "/stun/stun-responder.mjs", "serve"]
+    healthcheck:
+      test: ["CMD", "node", "/stun/stun-responder.mjs", "probe"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
     network_mode: host
 
   ui:

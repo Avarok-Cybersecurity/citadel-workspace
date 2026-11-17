@@ -3,4 +3,12 @@
 /**
  * Who may open a link. A link carries one or more; a visitor passes if any admits them.
  */
-export type LinkGrant = { "Members": Array<string> } | { "Roles": Array<string> } | { "NodeViewers": string } | "Workspace" | { "GroupSnapshot": { group_id: string, members: Array<string>, } };
+export type LinkGrant = { "Members": Array<string> } | { "Roles": Array<string> } | { "NodeViewers": string } | "Workspace" | { "GroupSnapshot": { group_id: string, members: Array<string>, } } | { "BookingGuest": { node_id: string, 
+/**
+ * The booking page the guest is sent to, e.g. a member's username.
+ */
+page: string, 
+/**
+ * 1 to `MAX_BOOKING_GUESTS`: how many accounts the link may admit as guests.
+ */
+max_guests: number, } };

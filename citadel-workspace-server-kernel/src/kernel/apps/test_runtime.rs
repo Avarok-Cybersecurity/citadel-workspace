@@ -27,6 +27,7 @@ pub(crate) fn runtime_spec() -> Spec {
             optional("storage.node"),
             optional("storage.blob"),
             optional("storage.local"),
+            optional("storage.node.authored"),
             { "cap": "net.server", "why": "Syncs", "optional": true, "hosts": [API_HOST] },
             { "cap": "ihttp.serve", "why": "Serves", "optional": true, "routes": ["GET /cards"] },
             { "cap": "ihttp.call", "why": "Calls", "optional": true, "targets": [] },
@@ -43,11 +44,22 @@ pub(crate) async fn install(
     scope: InstallScope,
     granted: &[Capability],
 ) -> String {
-    let (key, bytes, spec) = (publisher(1), wasm(1, 4096), runtime_spec());
+    install_spec(kernel, installer, scope, granted, &runtime_spec()).await
+}
+
+/// As `install`, of `spec` (the runtime app with something of its manifest changed).
+pub(crate) async fn install_spec(
+    kernel: &Kernel,
+    installer: &str,
+    scope: InstallScope,
+    granted: &[Capability],
+    spec: &Spec,
+) -> String {
+    let (key, bytes) = (publisher(1), wasm(1, 4096));
     let mut caps = vec![Capability::Canvas];
     caps.extend_from_slice(granted);
-    let listing = signed(&spec, &key, &bytes);
-    let request = install_request(&spec, &key, listing, scope, &caps, false);
+    let listing = signed(spec, &key, &bytes);
+    let request = install_request(spec, &key, listing, scope, &caps, false);
     match ask_on(kernel, installer, None, request).await {
         AppsResponse::Installed { install } => install.id,
         other => panic!("not installed: {other:?}"),

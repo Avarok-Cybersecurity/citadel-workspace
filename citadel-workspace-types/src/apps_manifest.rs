@@ -112,6 +112,9 @@ pub enum AppSurface {
     CanvasPane,
     /// A zone inside a document (`<AppZone app=.. />`).
     MdZone,
+    /// A tab of a node's pane, beside its page and chat. Everyone on the node sees it, so an app
+    /// listing it must support a scope that reaches a node (`workspace`, `node` or `node_tree`).
+    NodeTab,
 }
 
 /// One capability the app asks for, and why. `hosts` is present exactly for `net.host` and
@@ -157,6 +160,12 @@ pub struct AppLimits {
     pub frame_budget_ms: u32,
     pub storage_user_bytes: u32,
     pub storage_scope_bytes: u32,
+    /// Bytes one member may post on one node (`storage.node.authored`), at most
+    /// `MAX_STORAGE_NODE_AUTHORED_BYTES`. Absent: that platform cap. Optional, unlike the two
+    /// above, because the field came after manifests that were already published.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage_node_authored_bytes: Option<u32>,
     /// How long `app_close` and the replies it waits on may take before the host ends the
     /// instance, in milliseconds: 1 to `abi::MAX_CLOSE_GRACE_MS`. Required, never defaulted: the
     /// publisher states the cleanup it needs, the consent screen and the host hold it to that.

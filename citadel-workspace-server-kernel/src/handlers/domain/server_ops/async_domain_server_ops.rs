@@ -140,11 +140,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
         // O(depth × N) on every permission check on every request. One read is
         // also one consistent view of the tree.
         let nodes = self.backend_tx_manager.get_all_nodes_shared().await?;
+        // The entity, then each level above: what a booking guest's node may cover.
+        let mut chain: Vec<&str> = vec![entity_id];
         if let Some(node) = nodes.get(entity_id) {
             let mut visited: std::collections::HashSet<&str> = std::collections::HashSet::new();
             visited.insert(entity_id);
             let mut current_parent = node.parent_id.as_deref();
             while let Some(pid) = current_parent {
+                chain.push(pid);
                 if let Some(parent_perms) = user.permissions.get(pid) {
                     if parent_perms.contains(&permission) || parent_perms.contains(&Permission::All)
                     {
@@ -168,16 +171,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
         // role for nothing, so a plain member could read an office and never post to it.
         // Scoped to membership of THIS domain, which a member of the workspace has throughout
         // it, and to that workspace's table: a role in one workspace confers nothing in another.
-        let Some(workspace_id) = self.workspace_of(entity_id, &nodes).await? else {
-            return Ok(false);
-        };
-        if !self.is_member_of_domain(user_id, entity_id).await? {
-            return Ok(false);
-        }
-        Ok(self
-            .role_in_table(&workspace_id, &user)
+        if self
+            .role_grants_here(user_id, &user, entity_id, &nodes, permission)
             .await?
-            .is_some_and(|role| role.grants(permission)))
+        {
+            return Ok(true);
+        }
+        // Last: a booking guest views their node while a live link names them for it.
+        Ok(permission == Permission::ViewContent && self.guest_may_view(user_id, &chain).await?)
     }
 
     async fn is_member_of_domain(
@@ -1218,6 +1219,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             // theme configured before the workspace was initialised — the same
             // defect already fixed on the theme path, which this call site
             // never received.
+            super::node_metadata_merge::check_workspace_metadata_patch(&meta_bytes)
+                .map_err(NetworkError::msg)?;
             workspace.metadata =
                 super::metadata_merge::merge_metadata_document(&workspace.metadata, &meta_bytes)
                     .map_err(NetworkError::msg)?;

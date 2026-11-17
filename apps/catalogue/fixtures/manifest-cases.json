@@ -856,6 +856,104 @@
    ]
   },
   {
+   "name": "a node tab",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "md_zone",
+      "node_tab"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a node tab from a self-only app",
+   "expect": "Scopes",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_tab"
+     ]
+    },
+    {
+     "path": [
+      "scopes"
+     ],
+     "value": [
+      "self"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a node tab from an app for named members",
+   "expect": "Scopes",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_tab"
+     ]
+    },
+    {
+     "path": [
+      "scopes"
+     ],
+     "value": [
+      "users",
+      "self"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "control: a node tab installed at one node",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_tab"
+     ]
+    },
+    {
+     "path": [
+      "scopes"
+     ],
+     "value": [
+      "node",
+      "self"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a repeated node tab",
+   "expect": "Surfaces",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_tab",
+      "node_tab"
+     ]
+    }
+   ]
+  },
+  {
    "name": "an unknown surface",
    "expect": "Json",
    "set": [
@@ -1864,6 +1962,32 @@
       "storage_scope_bytes"
      ],
      "value": 8388609
+    }
+   ]
+  },
+  {
+   "name": "limit storage_node_authored_bytes 262145",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "limits",
+      "storage_node_authored_bytes"
+     ],
+     "value": 262145
+    }
+   ]
+  },
+  {
+   "name": "control: limit storage_node_authored_bytes 262144",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "limits",
+      "storage_node_authored_bytes"
+     ],
+     "value": 262144
     }
    ]
   },

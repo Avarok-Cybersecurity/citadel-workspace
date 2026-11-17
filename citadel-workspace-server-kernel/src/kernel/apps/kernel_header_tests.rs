@@ -52,6 +52,7 @@ async fn edit(kernel: &Kernel, who: &str, node: &str, mdx: String) -> WorkspaceP
         rules: None,
         chat_enabled: None,
         is_default: None,
+        metadata: None,
     };
     process_command_with_user(kernel, &request, who)
         .await

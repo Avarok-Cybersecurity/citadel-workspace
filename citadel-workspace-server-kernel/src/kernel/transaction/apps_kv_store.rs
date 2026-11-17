@@ -168,6 +168,27 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(Some(bytes))
     }
 
+    /// Chunk `index` of a stored blob, with how many chunks it has and its length; `None` when
+    /// the blob or that chunk is not held.
+    pub(crate) async fn blob_chunk(
+        &self,
+        root: &StorageRoot,
+        sha256: &str,
+        index: u32,
+    ) -> Result<Option<(ArtifactMeta, Vec<u8>)>, NetworkError> {
+        let root_id = root.id();
+        let meta: Option<ArtifactMeta> = self.backend_get(&blob_key(&root_id, sha256)).await?;
+        let Some(meta) = meta.filter(|meta| index < meta.total_chunks) else {
+            return Ok(None);
+        };
+        let key = blob_chunk_key(&root_id, sha256, index);
+        let text: Option<String> = self.backend_get(&key).await?;
+        Ok(match text {
+            Some(text) => Some((meta, decode(&text, &key)?)),
+            None => None,
+        })
+    }
+
     /// Whether a blob's meta landed, which `store_blob` writes after every chunk.
     pub(crate) async fn blob_complete(
         &self,

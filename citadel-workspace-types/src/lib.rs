@@ -18,6 +18,14 @@ pub mod apps_peer;
 pub mod apps_protocol;
 /// The answers to apps requests, and the apps audit log.
 pub mod apps_responses;
+/// Files shared in a node's chat, kept on the workspace server; see `chat_attachments`.
+pub mod chat_attachments;
+#[cfg(test)]
+mod chat_attachments_tests;
+/// Documents shared in a node's chat, on the page's relay; see `chat_documents`.
+pub mod chat_documents;
+#[cfg(test)]
+mod chat_documents_tests;
 /// The build script's cross-workspace dependency rule, here so it can be tested.
 ///
 /// The parent and the agent are separate cargo workspaces with separate lock
@@ -27,8 +35,14 @@ pub mod dependency_agreement;
 /// A document node's CRDT update log, its snapshot, and the awareness relay.
 pub mod document_refusal;
 pub mod documents;
+/// A node channel's reactions, read cursors and typing.
+pub mod group_chat;
+#[cfg(test)]
+mod group_chat_tests;
 pub mod ice;
 pub mod messaging_trust;
+/// The metadata keys behind a node's tabs and time zone, and what each may hold.
+pub mod node_tabs;
 /// A workspace's role table and its built-ins.
 pub mod roles;
 /// Records written before the role table, read into it.
@@ -52,6 +66,8 @@ pub mod telemetry;
 pub mod telemetry_metric;
 pub mod telemetry_reads;
 pub mod terms;
+/// The IANA time-zone names a workspace or node may be set to.
+pub mod time_zones;
 pub mod turn_usage;
 
 /// The id of the workspace every tree hangs from; the kernel and the UI read it from here.
@@ -270,6 +286,25 @@ pub enum WorkspaceProtocolRequest {
         parent_message_id: String,
     },
 
+    /// Add (`on`) or retract the requester's `emoji` on a message (one of `REACTION_EMOJIS`)
+    ReactGroupMessage {
+        group_id: String,
+        message_id: String,
+        emoji: String,
+        on: bool,
+    },
+
+    /// The requester has read every message up to and including `upto_message_id`
+    MarkGroupRead {
+        group_id: String,
+        upto_message_id: String,
+    },
+
+    /// The requester is typing in the channel; relayed to its readers, never stored
+    GroupTyping {
+        group_id: String,
+    },
+
     // ========== Server Capabilities ==========
     /// Query server file transfer and storage capabilities.
     /// Returns configuration limits for RE-VFS storage, file transfers, etc.
@@ -371,6 +406,21 @@ pub enum WorkspaceProtocolRequest {
         ///
         /// Exactly one node is the default, so setting it clears the others.
         is_default: Option<bool>,
+        /// A JSON object merged key by key into the node's metadata (`node_tabs`): `app_tabs`
+        /// and `time_zone` are checked, `null` under either removes it (the node then follows
+        /// the workspace), `citadel_app` may not change, any other key is kept as sent. Needs
+        /// `UpdateNodeSettings` on the node.
+        #[ts(optional)]
+        #[debug(with = bytes_opt_debug_fmt)]
+        metadata: Option<Vec<u8>>,
+    },
+
+    /// Set the app tabs a node shows when it has no list of its own (`node_tabs`): the root
+    /// workspace's `default_app_tabs`, at most eight distinct app ids, in order; empty means
+    /// none. Needs `EditWorkspaceConfig`, not the master password `UpdateWorkspace` demands.
+    /// Answered, and announced to the members, with the workspace.
+    SetDefaultAppTabs {
+        app_tabs: Vec<String>,
     },
 
     /// Switch "Members can see each other" on a node. Admin only.
@@ -467,6 +517,10 @@ pub enum WorkspaceProtocolRequest {
 
     /// A document node's update log, snapshot and awareness; see `documents`.
     Documents(documents::DocumentsRequest),
+    /// A document shared in a node's chat; see `chat_documents`.
+    ChatDocuments(chat_documents::ChatDocumentsRequest),
+    /// A file shared in a node's chat; see `chat_attachments`.
+    ChatAttachments(chat_attachments::ChatAttachmentsRequest),
     /// Secure links; see `secure_links`.
     SecureLinks(secure_links::SecureLinksRequest),
     /// Citadel Apps: listings, installs and their artifacts; see `apps_protocol`.
@@ -504,6 +558,11 @@ pub enum WorkspaceProtocolResponse {
         /// predates the field still decodes, as a list of direct members.
         #[serde(default)]
         inherited_from: std::collections::HashMap<String, String>,
+        /// The listed members a live booking link names as guests (Calendar design §3.6.4),
+        /// derived from the link records on each call. Sent to callers holding ManageRoles only;
+        /// empty for everyone else, and from a server that predates the field.
+        #[serde(default)]
+        guests: Vec<String>,
     },
     /// The roster of `domain_id` exists and an admin has hidden it from this
     /// caller (SetMembersVisible). Not an empty `Members`: an empty list claims
@@ -571,6 +630,29 @@ pub enum WorkspaceProtocolResponse {
         group_id: String,
         messages: Vec<GroupMessage>,
         has_more: bool,
+        /// How far each member has read, so ticks are right the moment the channel opens.
+        #[serde(default)]
+        read_cursors: Vec<group_chat::GroupReadCursor>,
+    },
+
+    /// A reaction changed on a stored message (broadcast to the channel's readers)
+    GroupMessageReacted {
+        group_id: String,
+        message_id: String,
+        /// The message's reactions after the change.
+        reactions: Vec<group_chat::GroupReaction>,
+    },
+
+    /// A member's read cursor moved (broadcast to the channel's readers)
+    GroupReadCursorMoved {
+        group_id: String,
+        cursor: group_chat::GroupReadCursor,
+    },
+
+    /// A member is typing (relayed to the channel's readers; never stored)
+    GroupTypingNotice {
+        group_id: String,
+        member: String,
     },
 
     /// Notification that a message was edited
@@ -685,6 +767,8 @@ pub enum WorkspaceProtocolResponse {
     Roles(roles_protocol::RolesResponse),
 
     Documents(documents::DocumentsResponse),
+    ChatDocuments(chat_documents::ChatDocumentsResponse),
+    ChatAttachments(chat_attachments::ChatAttachmentsResponse),
     SecureLinks(secure_links::SecureLinksResponse),
     Apps(apps_responses::AppsResponse),
 }
@@ -699,6 +783,19 @@ pub enum GroupMessageType {
     Markdown,
     /// System message (user joined, settings changed, etc.)
     System,
+    /// Shares a live document in the channel (`chat_documents`); the message's `content` is its
+    /// title, so an edit of the message is the one way the title changes.
+    LiveDocument { document_id: String },
+    /// Shares a file kept on the workspace server under the node (`chat_attachments`). The
+    /// server stores it only when the sender uploaded `attachment_id` at this channel's node and
+    /// `size_bytes` is its size; `name` and `mime` are the sender's, shown and checked for shape.
+    FileShare {
+        attachment_id: String,
+        name: String,
+        #[ts(type = "bigint")]
+        size_bytes: u64,
+        mime: String,
+    },
 }
 
 /// A message in a group chat channel
@@ -729,6 +826,11 @@ pub struct GroupMessage {
     /// Unix timestamp of last edit (None if never edited)
     #[ts(type = "bigint | null")]
     pub edited_at: Option<u64>,
+    /// Reactions, retractions included. Absent on messages stored before reactions existed,
+    /// which is the same fact as an empty list: nobody has reacted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<group_chat::GroupReaction>>", optional)]
+    pub reactions: Vec<group_chat::GroupReaction>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
