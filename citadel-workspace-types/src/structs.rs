@@ -1151,6 +1151,13 @@ pub struct Workspace {
     pub offices: Vec<String>,
     #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub metadata: Vec<u8>,
+    /// The server's domains, canonical first then its former ones: a member named
+    /// `handle@<one of these>` is shown as the bare handle. Filled from the server's `[identity]`
+    /// on every `GetWorkspace` answer, never stored: a stored record carries none, and a reply
+    /// from a server that predates the field decodes as an empty list.
+    #[serde(default)]
+    #[ts(as = "Option<Vec<String>>", optional)]
+    pub accepted_domains: Vec<String>,
 }
 
 impl Workspace {

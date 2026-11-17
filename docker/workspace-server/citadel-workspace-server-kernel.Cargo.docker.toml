@@ -51,6 +51,9 @@ citadel-app-id = { path = "../citadel-internal-service/citadel-app-id" }
 citadel-app-net-policy = { path = "../citadel-internal-service/citadel-app-net-policy" }
 citadel-app-sdk-types = { path = "../citadel-internal-service/citadel-app-sdk-types" }
 citadel-ihttp-types = { path = "../citadel-internal-service/citadel-ihttp-types" }
+# The portable identity (kernel::server_identity, sign_in::name_policy, identity_binding): names,
+# the server key, the challenge, /.well-known/citadel and binding verification. Pure, wasm32 clean.
+citadel-identity = { path = "../citadel-internal-service/citadel-identity" }
 hex = "0.4"
 
 # The constant-time master-password comparison (kernel/secret_eq.rs).

@@ -54,6 +54,15 @@ pub fn check_profile_update(update: &ProfileUpdate) -> Result<(), NetworkError> 
     if let Some(email) = update.email.as_deref().filter(|e| !e.is_empty()) {
         check_email(email)?;
     }
+    if let Some(binding) = update.identity_binding.as_ref() {
+        let len = binding.blob_base64url.len();
+        if len > citadel_identity::MAX_BINDING_BASE64_LEN {
+            return Err(NetworkError::msg(format!(
+                "An identity binding may be at most {} characters; this one is {len}.",
+                citadel_identity::MAX_BINDING_BASE64_LEN
+            )));
+        }
+    }
     if let Some(title) = update.title.as_deref() {
         if title.len() > MAX_TITLE_LEN {
             return Err(NetworkError::msg(format!(
@@ -104,6 +113,7 @@ mod tests {
             show_profile_to_strangers: None,
             accepts_requests_from_strangers: None,
             shows_online_status: None,
+            identity_binding: None,
         }
     }
 

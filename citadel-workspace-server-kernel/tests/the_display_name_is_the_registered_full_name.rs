@@ -17,7 +17,7 @@ use common::production_server::start_production_server;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-const USERNAME: &str = "bob0924";
+const USERNAME: &str = common::test_user!("bob0924");
 const FULL_NAME: &str = "Bob Brown";
 const PASSWORD: &str = "password123";
 const MUST_ANSWER_WITHIN: Duration = Duration::from_secs(60);
@@ -56,6 +56,7 @@ async fn stored_name(settings: ServerConnectionSettings<StackedRatchet>, repair:
                     show_profile_to_strangers: None,
                     accepts_requests_from_strangers: None,
                     shows_online_status: None,
+                    identity_binding: None,
                 };
                 let renamed = ask(&mut tx, &mut rx, rename, |r| match r {
                     WorkspaceProtocolResponse::UserProfileUpdated(u) => Some(u),

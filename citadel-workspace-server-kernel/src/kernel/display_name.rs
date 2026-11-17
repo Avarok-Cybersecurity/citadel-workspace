@@ -16,12 +16,13 @@ use citadel_workspace_types::structs::User;
 
 use super::transaction::BackendTransactionManager;
 
-/// The display name for an account: its registered full name, or the username
-/// when the SDK has none to give.
+/// The display name for an account: its registered full name, or, when the SDK
+/// has none to give, the handle of a `handle@domain` username (the whole name of a
+/// legacy one) -- the domain is the server's, not part of what people are called.
 pub fn display_name_for(user_id: &str, registered_full_name: Option<&str>) -> String {
     match registered_full_name.map(str::trim) {
         Some(full) if !full.is_empty() => full.to_string(),
-        _ => user_id.to_string(),
+        _ => super::server_identity::enrolment::fallback_display_name(user_id).to_string(),
     }
 }
 
@@ -69,6 +70,15 @@ mod tests {
     #[test]
     fn the_registered_full_name_is_the_display_name() {
         assert_eq!(display_name_for("bob0924", Some("Bob Brown")), "Bob Brown");
+    }
+
+    #[test]
+    fn the_handle_stands_in_for_a_domain_name_with_no_full_name() {
+        assert_eq!(display_name_for("alice@acme.example", None), "alice");
+        assert_eq!(
+            display_name_for("alice@acme.example", Some("Alice A")),
+            "Alice A"
+        );
     }
 
     #[test]

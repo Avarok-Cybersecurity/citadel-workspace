@@ -103,6 +103,7 @@ async fn a_failed_history_purge_leaves_the_delete_retryable() {
             members: vec!["admin".to_string()],
             offices: vec![],
             metadata: vec![],
+            accepted_domains: Vec::new(),
         },
     )
     .await

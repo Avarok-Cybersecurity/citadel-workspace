@@ -5,7 +5,9 @@
 use citadel_workspace_server_kernel::config::ServerConfig;
 use citadel_workspace_server_kernel::run_server_with_base_path;
 use common::documents_test_utils::shipped_documents_section;
-use common::production_server::{sign_in_dir, sign_in_without_admission, test_stun_servers_toml};
+use common::production_server::{
+    sign_in_dir, sign_in_without_admission, test_identity_toml, test_stun_servers_toml,
+};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn startup_fails_without_it() {
@@ -13,10 +15,11 @@ async fn startup_fails_without_it() {
     let config: ServerConfig = toml::from_str(&format!(
         "bind_addr = \"127.0.0.1:0\"\nworkspace_master_password = \"a-test-master-password\"\n\
          require_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\nchat_attachment_max_bytes = 0\nchat_attachment_max_files_per_node = 0\n\
-         {}\n{}\n{}",
+         {}\n{}\n{}\n{}",
         test_stun_servers_toml(),
         sign_in_without_admission(&sign_in_dir()),
-        shipped_documents_section()
+        shipped_documents_section(),
+        test_identity_toml(&sign_in_dir())
     ))
     .expect("config");
     let refused = tokio::time::timeout(

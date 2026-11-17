@@ -48,6 +48,7 @@ impl DomainEntity for Workspace {
             members: vec![],
             offices: vec![],
             metadata: Vec::new(),
+            accepted_domains: Vec::new(),
         }
     }
 

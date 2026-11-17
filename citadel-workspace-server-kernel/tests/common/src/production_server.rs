@@ -4,6 +4,7 @@
 //! test against it proves something about the shipped wiring.
 
 use citadel_workspace_server_kernel::config::ServerConfig;
+use citadel_workspace_server_kernel::kernel::server_identity::key_file::init_server_key;
 use citadel_workspace_server_kernel::kernel::sign_in::native::init_sign_in_seed;
 use citadel_workspace_server_kernel::kernel::sign_in::turnstile::SiteVerify;
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -36,6 +37,37 @@ pub fn test_path_policy_toml() -> String {
         })
         .collect();
     format!("[path_policy]\ndenied = []\n{}", rules.join("\n"))
+}
+
+/// The canonical domain every test server is configured with. A macro, so a test's username
+/// constants can be built from it at compile time with [`test_user!`].
+#[macro_export]
+macro_rules! test_domain {
+    () => {
+        "kernel.test"
+    };
+}
+
+/// `handle@<the test servers' canonical domain>`: the only names a test server registers.
+#[macro_export]
+macro_rules! test_user {
+    ($handle:literal) => {
+        concat!($handle, "@", $crate::test_domain!())
+    };
+}
+
+pub const TEST_CANONICAL_DOMAIN: &str = test_domain!();
+
+/// `[identity]` for a test server: the test domain, no former ones, discovery by a pinned key,
+/// its key seed in `dir` made the way an operator makes one (`--init-server-key`).
+pub fn test_identity_toml(dir: &Path) -> String {
+    let key = dir.join("server-key");
+    init_server_key(&key).expect("server key");
+    format!(
+        "[identity]\ncanonical_domain = \"{TEST_CANONICAL_DOMAIN}\"\nformer_domains = []\n\
+         discovery = \"pinned\"\nserver_key_file = \"{}\"\n",
+        key.display()
+    )
 }
 
 fn free_addr() -> SocketAddr {
@@ -90,10 +122,11 @@ pub async fn start_native_server(
     let addr = free_addr();
     // The shipped `[documents]` limits, after `extra_toml`: a table takes every key after it.
     let config: ServerConfig = toml::from_str(&format!(
-        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\nchat_attachment_max_bytes = 0\nchat_attachment_max_files_per_node = 0\n{}\n{tail}\n{}\n{}",
+        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\nchat_documents_limit = 0\nchat_attachment_max_bytes = 0\nchat_attachment_max_files_per_node = 0\n{}\n{tail}\n{}\n{}\n{}",
         test_stun_servers_toml(),
         crate::documents_test_utils::shipped_documents_section(),
-        test_path_policy_toml()
+        test_path_policy_toml(),
+        test_identity_toml(&sign_in_dir())
     ))
     .expect("config");
     tokio::spawn(async move {

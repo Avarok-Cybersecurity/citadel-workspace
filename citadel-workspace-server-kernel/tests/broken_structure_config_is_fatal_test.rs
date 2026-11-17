@@ -44,6 +44,7 @@ fn config_naming(structure_file: Option<&str>) -> ServerConfig {
         app_server_egress: None,
         stun_servers: None,
         path_policy: None,
+        identity: None,
     }
 }
 
