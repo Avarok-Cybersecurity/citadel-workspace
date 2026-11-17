@@ -87,6 +87,6 @@ pub fn applied<T: IOInterface, R: Ratchet>(
     service.with_identity(config)
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 #[path = "identity_setup_tests.rs"]
 mod tests;

@@ -45,9 +45,6 @@ lazy_static = { workspace = true, optional = true }
 [dev-dependencies]
 # The request a window forwards its console in, built by the telemetry tests.
 citadel-internal-service-types = { path = "../citadel-internal-service/citadel-internal-service-types" }
-# identity_setup_tests.rs: the shipped server in-process, and an agent driven over its own
-# request protocol, as the agent repository's identity tests drive theirs.
-citadel-workspace-server-kernel-test-common = { workspace = true }
 citadel-internal-service-test-common = { path = "../citadel-internal-service/citadel-internal-service/tests/common" }
 futures = { workspace = true }
 uuid = { workspace = true }
@@ -55,6 +52,13 @@ tempfile = "3.10.1"
 
 # The Windows tray icon and its supporting Win32 calls (src/windows_shell). Windows only: the
 # Mac has its own menu-bar app (apps/macos-agent) and Linux has a launcher, so neither links these.
+[target.'cfg(unix)'.dev-dependencies]
+# identity_setup_tests.rs: the shipped server in-process, and an agent driven over its own
+# request protocol, as the agent repository's identity tests drive theirs. Unix only: the
+# workspace server ships only as a Linux image, and its native sign-in files set Unix modes
+# (kernel/sign_in/native/{seed,settings}_file.rs), so the kernel does not build for Windows.
+citadel-workspace-server-kernel-test-common = { workspace = true }
+
 [target.'cfg(windows)'.dependencies]
 tray-icon = { version = "0.21", default-features = false }
 png = "0.18"
