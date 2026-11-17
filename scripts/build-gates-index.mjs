@@ -44,8 +44,8 @@ for (const dir of DIRS) {
   } catch {
     // A missing scan root is a FAILURE, not an empty result.
     //
-    // `citadel-workspaces/scripts` lives in a submodule. In a worktree without
-    // submodules the find failed, this swallowed it, and the generator wrote a
+    // `citadel-workspaces/scripts` lived in a submodule until the UI was folded
+    // in. In a worktree without submodules the find failed, this swallowed it, and the generator wrote a
     // 57-gate index -- while a full checkout has 98. `--check` then PASSED on
     // the truncated index and CI, which does check out submodules, failed with
     // "out of date" and no indication of why. The anti-vacuity floor below
@@ -53,7 +53,7 @@ for (const dir of DIRS) {
     // is not none.
     console.error(`FAIL: scan root '${dir}' does not exist.`);
     console.error('An index built from a subset of its roots reports a');
-    console.error('completeness it never measured. Initialise submodules first.');
+    console.error('completeness it never measured.');
     process.exit(1);
   }
   for (const file of files) rows.push({ dir, file, name: file.split('/').pop(), summary: summarise(file) });
@@ -82,27 +82,25 @@ out += `
 ## Running them before CI does
 
 \`node scripts/preflight.mjs\` runs every gate here that needs no Docker, in the directory and
-with the environment CI gives it. Its list is DERIVED from both repos' \`validate.yml\`
+with the environment CI gives it. Its list is DERIVED from \`validate.yml\`
 (\`scripts/lib/preflight-plan.mjs\`, which is also the one place that lists what it skips, and
-why). It fails first if this clone or the UI submodule has no hooks installed, or if \`node\` is
+why). It fails first if this clone has no hooks installed, or if \`node\` is
 not the major CI's gate jobs pin (derived from their \`actions/setup-node\` steps; where CI pins
 two majors, the one covering more gates wins and the rest are printed).
 
-The hooks run tiers of it, installed by the root \`prepare\` script (\`npm install\`), and by the
-UI's own \`prepare\` in a standalone UI clone:
+The hooks run tiers of it, installed by the root \`prepare\` script (\`npm install\`):
 
 | hook | runs |
 |---|---|
-| pre-commit (parent or UI) | static gates whose source reads the staged paths, eslint on staged files, \`cargo fmt\` for touched crates |
-| pre-push (parent or UI) | by what the pushed commits change: UI -> typecheck, eslint, vitest, UI gates; Rust -> fmt, clippy, tests of that workspace; scripts/workflows -> every parent gate. Always: submodule work committed, pointers pushed |
-| pre-push (UI) | also typechecks the PUSHED commit against the parent ref UI CI will resolve, and refuses when a same-name local parent branch is ahead of its remote: push the parent first |
+| pre-commit | static gates whose source reads the staged paths, eslint on staged files, \`cargo fmt\` for touched crates |
+| pre-push | by what the pushed commits change: UI -> typecheck, eslint, vitest, UI gates; Rust -> fmt, clippy, tests of that workspace; scripts/workflows -> every parent gate. Always: submodule work committed, pointers pushed |
 
 The only bypass is git's own, \`--no-verify\`, for one commit or push.
 
-\`node scripts/merge-preview.mjs --repo parent|ui|agent|cross\` merges every open PR into master
+\`node scripts/merge-preview.mjs --repo parent|agent\` merges every open PR into master
 in a scratch clone, names each one that conflicts (a PR that conflicts with its base gets no CI
-run at all), and runs the static gates and TypeScript build on the combination; \`cross\` moves
-both submodule pointers to their merged previews inside the parent's master.
+run at all), and runs the static gates and TypeScript build on the combination; \`agent\` merges
+the agent repo's open PRs and moves its pointer inside the parent's master.
 
 \`CI_PARITY=1\` on a geometry or harness run (\`npm run check:ui-sweep\`, \`check:chat-polish\`,
 \`check:mobile\`) makes Chromium report CI's runner (4 cores, deviceMemory 8) so Animations=Auto resolves as

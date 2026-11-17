@@ -7,16 +7,15 @@
  *   node scripts/preflight.mjs --tier pre-push     what the pushed commits changed; the pre-push hook
  *   node scripts/preflight.mjs --print-plan        the full plan as JSON, run nothing
  *
- * `--repo ui` says the hook runs in the UI submodule (its paths are prefixed citadel-workspaces/);
  * pre-push also takes `--remote <name>` and the refs on stdin, exactly as git hands them over.
  * The hooks have one escape hatch, `git commit/push --no-verify`, and no silent one.
  *
  * Thirty days of CI held 344 root-cause failures; ~190 were gates this file already ran, that
  * nobody ran before pushing. Hence the hooks. The rest of this file's history, briefly:
  *
- *  - The gate list is DERIVED from the workflows (lib/preflight-plan.mjs), now BOTH the parent's
- *    validate.yml and the UI repo's. A hand-kept list drifted to ten gates while CI ran twenty-one,
- *    and the UI's `npm run check:*` steps ran nowhere but UI CI.
+ *  - The gate list is DERIVED from validate.yml (lib/preflight-plan.mjs). A hand-kept list drifted
+ *    to ten gates while CI ran twenty-one. (The UI repo's workflow was read too, until the UI was
+ *    folded into citadel-workspaces/ and its gates into validate.yml.)
  *  - Arguments are part of a gate: `build-gates-index.mjs` without `--check` WRITES docs/GATES.md.
  *  - The checkout is checked first and alone (ENVIRONMENT): on an uninitialised tree, 80 true
  *    failures used to bury the one that named the cause a thousand lines down.
@@ -54,7 +53,6 @@ function option(name, allowed) {
   return value;
 }
 const tier = option('--tier', ['full', 'pre-commit', 'pre-push']) ?? 'full';
-const repo = option('--repo', ['parent', 'ui']) ?? 'parent';
 const remote = tier === 'pre-push' ? (process.argv[process.argv.indexOf('--remote') + 1] ?? null) : null;
 if (tier === 'pre-push' && (process.argv.indexOf('--remote') < 0 || !remote)) {
   console.error('preflight: --tier pre-push needs --remote <name> (the hook passes "$1").');
@@ -111,15 +109,13 @@ if (haveCargo) {
   skipped.push(['rust wasm target compiles, fmt, clippy, tests', 'cargo is not on PATH']);
 }
 
-/** Paths this hook judges, relative to the parent. */
+/** Paths this hook judges. */
 function changedPaths() {
-  const prefix = repo === 'ui' ? 'citadel-workspaces/' : '';
-  const dir = repo === 'ui' ? UI : ROOT;
-  if (tier === 'pre-commit') return { paths: stagedPaths(dir, prefix), refs: [] };
-  if (tier === 'pre-push') return pushedPaths(dir, prefix, remote, readFileSync(0, 'utf8'));
-  return { paths: [], refs: [] };
+  if (tier === 'pre-commit') return stagedPaths(ROOT, '');
+  if (tier === 'pre-push') return pushedPaths(ROOT, '', remote, readFileSync(0, 'utf8')).paths;
+  return [];
 }
-const { paths, refs } = changedPaths();
+const paths = changedPaths();
 
 /** Checks whose arguments ARE the staged files. */
 function preCommitOnly() {
@@ -137,27 +133,15 @@ function preCommitOnly() {
   return out;
 }
 
-/** Every UI branch push typechecks against the parent UI CI will resolve, not the local one -- changed paths or not. */
-const uiPushTypecheck = repo === 'ui' && tier === 'pre-push'
-  ? refs.filter((r) => r.remoteRef.startsWith('refs/heads/')).map((r) => {
-    const branch = r.remoteRef.slice('refs/heads/'.length);
-    return check(`UI typechecks against its CI parent (${branch})`, 'node',
-      ['scripts/check-ui-typechecks-against-its-ci-parent.mjs', '--branch', branch, '--ui-sha', r.localSha], ROOT, tag('push'));
-  })
-  : [];
-
 const CHECKS = [
   ...derived,
   // Not in validate.yml: by the time CI runs, checkout has already succeeded or died.
-  // The parent's pointers; a UI push is what makes them pushable, so its hook does not ask.
-  ...(repo === 'parent' ? [check('submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT, tag('push'))] : []),
+  check('submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT, tag('push')),
   // Before the TypeScript checks: without these artefacts they fail as if the source were broken.
   check('generated artefacts present', 'node', ['scripts/check-generated-artefacts-present.mjs'], ROOT, tag('ui', 'rust:agent')),
   // ts-rs drops imports named inside `#[ts(type = "...")]`; CI type-checks the bindings alone.
   check('generated bindings typecheck', 'npx', ['tsc', '--noEmit', '-p', 'tsconfig.json'], join(IS, 'typescript-client'), tag('ui', 'rust:agent')),
-  ...uiPushTypecheck,
-  // The local typecheck stands in for the CI-parent one everywhere but a UI push.
-  ...(uiPushTypecheck.length > 0 ? [] : [check('typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI, tag('ui'))]),
+  check('typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI, tag('ui')),
   check('eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI, tag('ui')),
   check('unit tests', 'npx', ['vitest', 'run'], UI, tag('ui')),
   ...preCommitOnly(),
@@ -171,7 +155,7 @@ if (process.argv.includes('--print-plan')) {
 }
 
 const started = Date.now();
-console.log(`preflight --tier ${tier}${repo === 'ui' ? ' (UI repo)' : ''}${paths.length ? `: ${paths.length} changed path(s)` : ''}`);
+console.log(`preflight --tier ${tier}${paths.length ? `: ${paths.length} changed path(s)` : ''}`);
 await runFatal(ENVIRONMENT);
 const selected = selectChecks(CHECKS, tier, paths, ROOT_CRATES);
 const failed = await runChecks(selected);

@@ -2,8 +2,8 @@
 # Builds the UI's production bundle into ui-dist/, the directory wrangler.toml's [assets] serves.
 # ui-dist/ is build output: gitignored, never committed, rebuilt by every deploy (deploy.sh).
 #
-# Needs the parent repo's submodules checked out -- citadel-workspaces (the UI) at the revision
-# to ship, and citadel-internal-service (its typescript-client) -- and Node >= 22.
+# Builds citadel-workspaces/ (the UI) as the checked-out commit has it. Needs the
+# citadel-internal-service submodule checked out (its typescript-client), and Node >= 22.
 #
 # The steps are the production Docker image's (docker/ui/Dockerfile, build stage), which also
 # builds in the repo's npm workspace: the root lockfile, the two client packages built before the
@@ -19,7 +19,7 @@ OUT="$HERE/ui-dist"
 fail() { echo "build-ui: $*" >&2; exit 1; }
 
 for pkg in "$UI" "$TS_CLIENT" "$WS_CLIENT"; do
-  [ -f "$pkg/package.json" ] || fail "$pkg is not checked out (git submodule update --init citadel-workspaces citadel-internal-service)"
+  [ -f "$pkg/package.json" ] || fail "$pkg is not checked out (git submodule update --init citadel-internal-service)"
 done
 
 # The browser's WASM client: the tracked, source-stamped build in citadel-workspace-client-ts/pkg,
@@ -53,4 +53,4 @@ node "$HERE/assert-version-manifest.mjs" "$UI" || fail "dist/version.json does n
 
 rm -rf "$OUT"
 cp -R "$UI/dist" "$OUT"
-echo "build-ui: $(find "$OUT" -type f | wc -l | tr -d ' ') files in $OUT (UI $(git -C "$UI" rev-parse --short HEAD))"
+echo "build-ui: $(find "$OUT" -type f | wc -l | tr -d ' ') files in $OUT (commit $(git -C "$UI" rev-parse --short HEAD))"

@@ -1,0 +1,17 @@
+{
+  "src/components/LoadingModal.tsx:LoadingModal": [
+    "timeoutMs"
+  ],
+  "src/components/LoadingModalConfigs.tsx:ConnectLoadingModal": [
+    "errorMessage"
+  ],
+  "src/components/layout/sidebar/TopBar.tsx:TopBar": [
+    "currentWorkspace"
+  ],
+  "src/components/p2p/MarkdownToolbar.tsx:MarkdownToolbar": [
+    "inputRef"
+  ],
+  "src/components/ui/empty-state.tsx:EmptyState": [
+    "action"
+  ]
+}

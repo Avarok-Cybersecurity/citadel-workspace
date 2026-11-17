@@ -60,8 +60,9 @@ try {
   process.exit(1);
 }
 
-if (paths.length < 2) {
-  console.error(`\n  Found only ${paths.length} submodule(s); expected at least 2. Fix this reader.\n`);
+// One top-level submodule (citadel-internal-service) since the UI was folded into citadel-workspaces/.
+if (paths.length < 1) {
+  console.error(`\n  Found ${paths.length} submodules; expected at least 1. Fix this reader.\n`);
   process.exit(1);
 }
 

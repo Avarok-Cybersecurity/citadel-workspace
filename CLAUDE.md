@@ -61,7 +61,7 @@ const session = connectionManager.getTabSelectedSession();  // Returns Promise!
 
 ## Repository Structure & Git Submodules
 
-This repository uses **nested git submodules**. Understanding the hierarchy is critical for the merge/commit process.
+This repository uses **nested git submodules** for the agent (`citadel-internal-service`, with `intersession-layer-messaging` inside it). The UI, `citadel-workspaces/`, is an ordinary directory: it was the separate `citadel-workspace-ui` repository (now archived) until it was folded in with its history. Understanding the hierarchy is critical for the merge/commit process.
 
 ### Dependency Hierarchy
 
@@ -70,7 +70,7 @@ graph TB
     subgraph main["citadel-workspace (main repo)"]
         CWC["citadel-workspace-client-ts<br/>(directory in main repo)"]
 
-        subgraph sub_cw["📦 citadel-workspaces (git submodule)"]
+        subgraph sub_cw["citadel-workspaces (directory in main repo)"]
             UI["React UI Application"]
             UI -->|"imports"| CWC
         end
@@ -99,7 +99,6 @@ graph TB
 
 | Submodule | Path | Remote URL |
 |-----------|------|------------|
-| citadel-workspaces | `citadel-workspaces/` | https://github.com/Avarok-Cybersecurity/citadel-workspace-ui |
 | citadel-internal-service | `citadel-internal-service/` | https://github.com/Avarok-Cybersecurity/citadel-internal-service |
 | intersession-layer-messaging | `citadel-internal-service/intersession-layer-messaging/` | https://github.com/tbraun96/intersession-layer-messaging |
 
@@ -115,12 +114,9 @@ graph TB
    - Contains typescript-client and Rust services
    - Commit (including submodule pointer update if #1 changed) → Push
 
-3. **citadel-workspaces** (if changed)
-   - The React UI application
-   - Commit → Push
-
-4. **citadel-workspace** (main repo - LAST)
-   - Update submodule pointers for any changed submodules
+3. **citadel-workspace** (main repo - LAST)
+   - UI changes (`citadel-workspaces/`) are ordinary commits here
+   - Update the `citadel-internal-service` pointer if it changed
    - Commit → Push
 
 ### Example Workflow
@@ -135,13 +131,9 @@ cd ..
 git add intersession-layer-messaging  # Update submodule pointer
 git add -A && git commit -m "Update: ..." && git push
 
-# 3. If citadel-workspaces changed
-cd ../citadel-workspaces
-git add . && git commit -m "Feature: ..." && git push
-
-# 4. Update main repo (LAST)
+# 3. Update main repo (LAST); UI edits under citadel-workspaces/ are part of this commit
 cd ..
-git add citadel-internal-service citadel-workspaces  # Update submodule pointers
+git add citadel-internal-service citadel-workspaces/src/...  # pointer + UI paths, explicitly
 git commit -m "Sync submodules" && git push
 ```
 

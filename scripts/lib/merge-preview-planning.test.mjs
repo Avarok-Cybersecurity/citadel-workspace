@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { exitStatus, planMerges, verdictLines } from './merge-plan.mjs';
-import { decideParentRef, fallbackBranch, pushedBranch } from './parent-ref.mjs';
 
 const pr = (number, baseRefName, extra = {}) => ({ number, baseRefName, headRefName: `b${number}`, isCrossRepository: false, ...extra });
 
@@ -29,50 +28,4 @@ test('the exit status is red on any conflict or a failing combination, green oth
   assert.equal(exitStatus(clean, null), 0);
   assert.equal(exitStatus(clean, { failed: ['x'] }), 1);
   assert.equal(exitStatus([{ alone: 'conflict', together: 'skipped' }], null), 1);
-});
-
-const base = { branch: 'feat/x', fallback: 'master', fallbackSha: 'f'.repeat(40) };
-
-test('CI takes the same-name parent branch when the remote has it', () => {
-  const d = decideParentRef({ ...base, remoteSha: 'a'.repeat(40), local: null });
-  assert.deepEqual([d.verdict, d.ref, d.sha], ['ok', 'feat/x', 'a'.repeat(40)]);
-});
-
-test('CI falls back to PARENT_BRANCH when the parent has no such branch anywhere', () => {
-  const d = decideParentRef({ ...base, remoteSha: null, local: null });
-  assert.deepEqual([d.verdict, d.ref, d.sha], ['ok', 'master', 'f'.repeat(40)]);
-});
-
-test('a same-name local parent branch not on the remote refuses the push', () => {
-  const d = decideParentRef({ ...base, remoteSha: null, local: { sha: 'b'.repeat(40), unpushed: ['citadel-workspace-client-ts/src/a.ts'] } });
-  assert.equal(d.verdict, 'refuse');
-  assert.match(d.why, /not on its remote.*client-ts\/src\/a\.ts.*Push the parent first/s);
-});
-
-test('a same-name local parent branch ahead of its remote refuses the push', () => {
-  const d = decideParentRef({ ...base, remoteSha: 'a'.repeat(40), local: { sha: 'b'.repeat(40), unpushed: ['x', 'y'] } });
-  assert.equal(d.verdict, 'refuse');
-  assert.match(d.why, /ahead of its remote by 2 path/);
-});
-
-test('a local parent branch level with its remote is fine', () => {
-  const d = decideParentRef({ ...base, remoteSha: 'a'.repeat(40), local: { sha: 'a'.repeat(40), unpushed: [] } });
-  assert.equal(d.verdict, 'ok');
-});
-
-test('a local parent branch that only moves the UI pointer does not block the UI push', () => {
-  const d = decideParentRef({ ...base, remoteSha: null, local: { sha: 'b'.repeat(40), unpushed: [] } });
-  assert.deepEqual([d.verdict, d.ref], ['ok', 'master']);
-});
-
-test('PARENT_BRANCH must be a literal in the UI workflow env', () => {
-  assert.equal(fallbackBranch({ PARENT_BRANCH: 'master' }), 'master');
-  assert.throws(() => fallbackBranch({}), /no literal PARENT_BRANCH/);
-  assert.throws(() => fallbackBranch({ PARENT_BRANCH: '${{ vars.X }}' }), /no literal/);
-});
-
-test('pre-push lines: a branch push is read, a deletion and a tag are not', () => {
-  assert.deepEqual(pushedBranch(`refs/heads/a ${'1'.repeat(40)} refs/heads/a ${'0'.repeat(40)}`), { branch: 'a', localRef: 'refs/heads/a', sha: '1'.repeat(40) });
-  assert.equal(pushedBranch(`(delete) ${'0'.repeat(40)} refs/heads/a ${'2'.repeat(40)}`), null);
-  assert.equal(pushedBranch(`refs/tags/v1 ${'1'.repeat(40)} refs/tags/v1 ${'0'.repeat(40)}`), null);
 });

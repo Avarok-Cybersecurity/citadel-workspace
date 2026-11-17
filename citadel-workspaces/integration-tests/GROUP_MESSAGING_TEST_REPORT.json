@@ -1,0 +1,103 @@
+{
+  "timestamp": "2025-12-26T18:23:26.902Z",
+  "user": "groupchat_user_1766773367383",
+  "office": "General",
+  "room": "Random",
+  "results": {
+    "accountCreation": true,
+    "workspaceLoaded": true,
+    "isAdminAfterInit": false,
+    "officeNavigation": false,
+    "officeChatEnabled": true,
+    "officeChatTabSwitch": true,
+    "officeMessageSent": false,
+    "officeMessageReceived": false,
+    "officeContentTabSwitch": false,
+    "roomNavigation": false,
+    "roomChatEnabled": true,
+    "roomChatTabSwitch": true,
+    "roomMessageSent": false,
+    "roomMessageReceived": false,
+    "multipleMessagesSent": false,
+    "messagesOrdered": false,
+    "uxChecks": {
+      "timestamps": false,
+      "rulesBanner": false,
+      "chatTabVisible": true,
+      "contentTabVisible": false
+    }
+  },
+  "uxIssues": [
+    {
+      "severity": "suggestion",
+      "category": "functional",
+      "description": "Admin status indicator not visible in UI after workspace initialization",
+      "screenshot": null,
+      "timestamp": "2025-12-26T18:23:13.478Z"
+    },
+    {
+      "severity": "major",
+      "category": "functional",
+      "description": "Cannot create office - may need workspace initialization or admin permissions",
+      "screenshot": null,
+      "timestamp": "2025-12-26T18:23:14.613Z"
+    },
+    {
+      "severity": "major",
+      "category": "functional",
+      "description": "Group chat message input not visible",
+      "screenshot": null,
+      "timestamp": "2025-12-26T18:23:18.233Z"
+    },
+    {
+      "severity": "major",
+      "category": "functional",
+      "description": "Group chat message input not visible",
+      "screenshot": null,
+      "timestamp": "2025-12-26T18:23:21.852Z"
+    },
+    {
+      "severity": "major",
+      "category": "functional",
+      "description": "Group chat message input not visible",
+      "screenshot": null,
+      "timestamp": "2025-12-26T18:23:21.853Z"
+    },
+    {
+      "severity": "major",
+      "category": "functional",
+      "description": "Group chat message input not visible",
+      "screenshot": null,
+      "timestamp": "2025-12-26T18:23:22.855Z"
+    },
+    {
+      "severity": "major",
+      "category": "functional",
+      "description": "Group chat message input not visible",
+      "screenshot": null,
+      "timestamp": "2025-12-26T18:23:23.857Z"
+    },
+    {
+      "severity": "major",
+      "category": "functional",
+      "description": "Group message not received: \"Message 1: Testing multiple me...\"",
+      "screenshot": null,
+      "timestamp": "2025-12-26T18:23:26.862Z"
+    },
+    {
+      "severity": "major",
+      "category": "functional",
+      "description": "Group message not received: \"Message 2: Second message in s...\"",
+      "screenshot": null,
+      "timestamp": "2025-12-26T18:23:26.865Z"
+    },
+    {
+      "severity": "major",
+      "category": "functional",
+      "description": "Group message not received: \"Message 3: Third message to ve...\"",
+      "screenshot": null,
+      "timestamp": "2025-12-26T18:23:26.867Z"
+    }
+  ],
+  "passed": false
+}

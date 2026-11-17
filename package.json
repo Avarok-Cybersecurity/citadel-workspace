@@ -27,6 +27,6 @@
     "check:stack": "node scripts/check-stack-reachable.mjs",
     "check:pointers": "node scripts/check-submodule-pointers-pushed.mjs",
     "prepush": "node scripts/check-submodule-pointers-pushed.mjs",
-    "prepare": "git config core.hooksPath .githooks && git -C citadel-workspaces config core.hooksPath .githooks || true"
+    "prepare": "if git rev-parse --git-dir >/dev/null 2>&1; then git config core.hooksPath .githooks; else echo 'prepare: not a git checkout, so there are no hooks to install'; fi"
   }
 }

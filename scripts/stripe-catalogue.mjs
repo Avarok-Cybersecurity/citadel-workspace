@@ -28,6 +28,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { deriveCatalogue, deriveMetered, meterDiffs, priceDiffs, productDiffs } from '../billing/catalogue.mjs';
 import { couponDiffs, couponForm, deriveCoupons, staleCoupons } from './lib/stripe-coupons.mjs';
+import { priceLookupPaths } from './lib/stripe-lookup.mjs';
 
 const [keyFile, ...flags] = process.argv.slice(2);
 const APPLY = flags.includes('--apply');
@@ -74,8 +75,8 @@ const wanted = [...deriveCatalogue(table), ...deriveMetered(table)];
 const products = await listAll('products?active=true');
 const meters = await listAll('billing/meters?status=active');
 const keys = wanted.flatMap((w) => w.prices.map((p) => p.lookup_key));
-const priceQuery = keys.map((k) => `lookup_keys[]=${encodeURIComponent(k)}`).join('&');
-const pricesByKey = Object.fromEntries((await stripe('GET', `prices?${priceQuery}&limit=100`)).data.map((p) => [p.lookup_key, p]));
+const pricePages = await Promise.all(priceLookupPaths(keys).map((path) => stripe('GET', path)));
+const pricesByKey = Object.fromEntries(pricePages.flatMap((page) => page.data).map((p) => [p.lookup_key, p]));
 
 let drift = 0;
 /** Each tier's product id as this run leaves it (created under --apply), for the coupons' applies_to. */

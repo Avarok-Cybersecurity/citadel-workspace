@@ -33,10 +33,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const KERNEL = join(ROOT, 'citadel-internal-service', 'citadel-internal-service', 'src', 'kernel');
-const WORKFLOWS = [
-  join(ROOT, '.github/workflows/validate.yml'),
-  join(ROOT, 'citadel-workspaces/.github/workflows/validate.yml'),
-];
+const WORKFLOWS = [join(ROOT, '.github/workflows/validate.yml')];
 
 /** Bracketed prefixes on the peer / P2P paths, as the agent actually logs them. */
 const PREFIX = /\[(P2P-[A-Z-]+|Peer[A-Za-z]+|PostRegister|UDP-NEGOTIATION)\]/g;
@@ -80,8 +77,7 @@ for (const path of WORKFLOWS) {
   if (!existsSync(path)) {
     console.error(
       `FAIL: ${path} is missing.\n` +
-        'Run from the parent checkout with submodules initialised. A capture fixed in one\n' +
-        'workflow and not the other is exactly how this class of defect survives.',
+        'It is the workflow whose failure captures this gate judges.',
     );
     process.exit(1);
   }

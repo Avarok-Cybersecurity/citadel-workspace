@@ -1,0 +1,10 @@
+{
+  "baseUrl": "http://127.0.0.1:5291",
+  "internalServiceUrl": "http://127.0.0.1:12345",
+  "workspaceServer": {
+    "host": "127.0.0.1",
+    "port": 12349
+  },
+  "workspacePassword": "dev-local-workspace-password",
+  "defaultPassword": "test12345"
+}

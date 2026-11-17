@@ -1,0 +1,38 @@
+{
+  "timestamp": "2025-12-27T01:55:06.265Z",
+  "testName": "Office & Room CRUD Integration Test",
+  "overallPass": false,
+  "results": {
+    "accountCreation": true,
+    "workspaceLoaded": true,
+    "isAdmin": false,
+    "officeCreated": false,
+    "officeNameUpdated": false,
+    "officeDescriptionUpdated": false,
+    "officeMdxUpdated": false,
+    "officeDeleted": false,
+    "roomCreated": false,
+    "roomNameUpdated": false,
+    "roomDescriptionUpdated": false,
+    "roomMdxUpdated": false,
+    "roomDeleted": false,
+    "cascadeDeleteWorks": false,
+    "nonAdminCannotCreateOffice": true,
+    "nonAdminCannotDeleteOffice": false,
+    "nonAdminCannotCreateRoom": false,
+    "nonAdminCannotDeleteRoom": false,
+    "memberAddedToOffice": false,
+    "memberRemovedFromOffice": false,
+    "memberAddedToRoom": false,
+    "memberRemovedFromRoom": false
+  },
+  "uxIssues": [
+    {
+      "severity": "major",
+      "category": "functional",
+      "description": "Could not create office",
+      "screenshot": null,
+      "timestamp": "2025-12-27T01:54:37.580Z"
+    }
+  ]
+}

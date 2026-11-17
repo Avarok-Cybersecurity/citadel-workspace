@@ -3,10 +3,9 @@
  * What master looks like once every open pull request has merged -- before any of them has.
  *
  *   node scripts/merge-preview.mjs --repo parent   the parent's open PRs, onto its master
- *   node scripts/merge-preview.mjs --repo ui       the UI repo's, inside the parent's master
- *   node scripts/merge-preview.mjs --repo agent    the agent repo's, likewise
- *   node scripts/merge-preview.mjs --repo cross    the parent's master with BOTH submodule
- *                                                  pointers moved to their merged previews
+ *   node scripts/merge-preview.mjs --repo agent    the agent repo's, inside the parent's master
+ *
+ * (The UI is a directory of the parent since it was folded in, so its PRs are parent PRs.)
  *
  * Two UI pull requests each passed alone and broke master together: one started using a hook
  * the other removed, and the two together took a file to 251 lines. And an agent pull request
@@ -27,12 +26,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exitStatus, verdictLines } from './lib/merge-plan.mjs';
 import { mergeOpenPullRequests, slugOf } from './lib/merge-run.mjs';
-import { AGENT_DIR, UI_DIR, attachIlm, attachSubmodules, buildOverlay, checkout, git, makeScratch, prepareTypeScript, recordPointer, removeScratch, sharedClone, typeScriptSteps } from './lib/overlay.mjs';
+import { AGENT_DIR, attachIlm, attachSubmodules, buildOverlay, checkout, git, makeScratch, prepareTypeScript, recordPointer, removeScratch, sharedClone, typeScriptSteps } from './lib/overlay.mjs';
 import { MERGE_PREVIEW_CANNOT_JUDGE, derivedChecks, gateKey } from './lib/preflight-plan.mjs';
 import { printFailures, runChecks } from './lib/preflight-run.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const MODES = ['parent', 'ui', 'agent', 'cross'];
+const MODES = ['parent', 'agent'];
 
 const at = process.argv.indexOf('--repo');
 const mode = at < 0 ? null : process.argv[at + 1];
@@ -109,12 +108,11 @@ try {
     sharedClone(ROOT, overlay);
     const merge = mergeOpenPullRequests(overlay, slug(ROOT));
     checkout(overlay, merge.head);
-    attachSubmodules(ROOT, overlay, null, null);
+    attachSubmodules(ROOT, overlay, null);
     previews.push({ path: 'parent', ...merge });
   } else {
-    buildOverlay({ root: ROOT, dir: overlay, parentSha: parentMasterSha(), uiSha: null, agentSha: null });
-    if (mode === 'ui' || mode === 'cross') previews.push(previewSubmodule(overlay, UI_DIR));
-    if (mode === 'agent' || mode === 'cross') previews.push(previewSubmodule(overlay, AGENT_DIR));
+    buildOverlay({ root: ROOT, dir: overlay, parentSha: parentMasterSha(), agentSha: null });
+    previews.push(previewSubmodule(overlay, AGENT_DIR));
   }
   for (const p of previews) {
     console.log(`\n${p.path}: ${p.results.length} open PR(s) into ${p.base} (${p.baseSha.slice(0, 12)}) -> preview ${p.head.slice(0, 12)}`);
@@ -122,7 +120,7 @@ try {
   }
   console.log('\nfast tier on the combination:');
   const tier = await fastTier(overlay);
-  if (mode === 'agent' || mode === 'cross') {
+  if (mode === 'agent') {
     const fmt = spawnSync('cargo', ['fmt', '--all', '--check'], { cwd: join(overlay, AGENT_DIR), encoding: 'utf8', env: { ...process.env, CARGO_NET_OFFLINE: 'true' } });
     console.log(`  agent cargo fmt … ${fmt.status === 0 ? 'ok' : 'FAILED'}`);
     tier.ran += 1;

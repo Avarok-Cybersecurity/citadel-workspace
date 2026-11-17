@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-12-28T19:48:13.285Z",
+  "users": {
+    "user1": "native_alice_1766951124908",
+    "user2": "native_bob_1766951124908"
+  },
+  "results": {
+    "accountCreation": {
+      "user1": true,
+      "user2": true
+    },
+    "p2pRegistration": true,
+    "p2pAccept": true,
+    "conversationOpen": {
+      "user1": true,
+      "user2": true
+    },
+    "nativePickerFlow": {
+      "modalOpened": true,
+      "nativeButtonVisible": true,
+      "nativeButtonClicked": true,
+      "pickFileRequestSent": true,
+      "fileSelected": false,
+      "sendFileProtocolUsed": false,
+      "transferCompleted": false,
+      "error": "Timeout"
+    }
+  },
+  "passed": true,
+  "note": "Native picker UI verified, manual file selection was skipped or timed out"
+}
