@@ -75,6 +75,21 @@ export class Provisioning {
   }
 
   /**
+   * What provision() is given again to bring an object provisioned before server identities up to
+   * them (control/identity-upgrade.mjs), or null when it needs nothing: it names its domains and
+   * `hasKey`. `registry` is the D1 row's tenant id, identity and name: its identity is the record
+   * of the tenant's domains (tenant-domains.mjs; attaching writes it first), so a domain attached
+   * before the upgrade is kept. The rest of the object's record is its own, a name it holds included.
+   */
+  upgradeData(registry, hasKey) {
+    if (this.record === null) throw new Error("this object was never provisioned; there is nothing to upgrade");
+    if (this.record.tenant_id !== registry.tenant_id) throw new Error("this object serves another tenant than the registry's row");
+    if (this.record.identity && hasKey) return null;
+    const { started: _started, ...record } = this.record;
+    return { ...record, identity: registry.identity, display_name: record.display_name ?? registry.display_name };
+  }
+
+  /**
    * The node's kernel.toml. `bind_addr` is recorded as its address and never bound: the object
    * owns no socket. Strings are JSON-quoted, which is a TOML basic string for any name
    * `displayNameOf` admits (no control characters, no lone surrogates).

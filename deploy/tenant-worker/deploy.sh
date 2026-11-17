@@ -17,7 +17,7 @@
 #
 # Order: build (wasm, UI) -> local gates (vitest, stored-account compat, CSP parity) -> the D1 id
 # is real -> Stripe's catalogue matches -> every secret is set -> D1 migrations (remote) -> deploy
-# -> smoke.
+# -> smoke -> every tenant upgraded to server identities (by the Cron trigger; waited for here).
 set -euo pipefail
 cd "$(dirname "$0")"
 HERE="$(pwd)"
@@ -126,4 +126,24 @@ printf '%s' "$page" | grep -q 'name="citadel-control-plane" content="/api"' || f
 curl -fsSI https://work.avarok.net/ | grep -qi '^content-security-policy:.*challenges.cloudflare.com' || fail "the page's CSP does not allow Turnstile"
 status="$(curl -s -o /dev/null -w '%{http_code}' https://smoke-probe.work.avarok.net/)"
 [ "$status" = 426 ] || fail "a tenant host answered a plain request with $status, not 426"
+
+say "identity upgrade: every tenant has its server identity"
+# A tenant provisioned before server identities refuses to start until the Worker's Cron trigger
+# (every 15 minutes) provisions it again (control/identity-upgrade.mjs). Wait for the registry to
+# hold none, and fail naming those that remain: a failed tenant is retried every run and its reason
+# logged ("[identity-upgrade] <slug>: FAILED"). The rows are the ones identity-version.mjs names.
+PENDING_SQL="$(node -e 'import("./control/identity-version.mjs").then((m) => console.log(`SELECT slug FROM tenants WHERE ${m.IDENTITY_PENDING} ORDER BY slug`))')"
+pending_identities() {
+  CLOUDFLARE_API_TOKEN="$TOKEN" CI=1 npx --no-install wrangler d1 execute citadel-control --remote --json --command "$PENDING_SQL" 2>/dev/null \
+    | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => console.log(JSON.parse(s).flatMap((r) => r.results).map((r) => r.slug).join(" ")))'
+}
+deadline=$((SECONDS + 1200))
+while :; do
+  pending="$(pending_identities)" || fail "could not read the registry's pending identity upgrades"
+  [ -z "$pending" ] && break
+  [ "$SECONDS" -lt "$deadline" ] || fail "not upgraded to server identities after 20 minutes: $pending (\`cfw tail citadel-tenant\` shows why; DEPLOY.md)"
+  echo "waiting for the Cron trigger's identity upgrade: $(printf '%s\n' $pending | wc -l | tr -d ' ') tenant(s) remain"
+  sleep 30
+done
+echo "every tenant has its server identity"
 echo "deploy OK"

@@ -21,7 +21,7 @@ import { UsageTable } from "./control/usage-table.mjs";
 import { acceptSocket } from "./control/sockets.mjs";
 import { enforcedEntitlements, METERING } from "./control/plans.mjs";
 import { limitOf } from "./control/entitlement-limits.mjs";
-import { runMonitor } from "./control/monitor.mjs";
+import { runScheduled } from "./control/scheduled.mjs";
 import { objectStats } from "./control/object-stats.mjs";
 import { authVersions } from "./control/auth-versions.mjs";
 import { TenantSignIn } from "./control/tenant-sign-in.mjs";
@@ -37,10 +37,10 @@ const REPORTED_PERIODS = 2;
 
 // Which face a request is for -- the control plane or a tenant's object -- is decided in
 // `control/dispatch.mjs`; a tenant's object is reached only while the registry says it is active.
-// The Cron trigger (wrangler.toml [triggers]) runs the usage monitor (control/monitor.mjs).
+// The Cron trigger (wrangler.toml [triggers]) runs the identity upgrade and the usage monitor (control/scheduled.mjs).
 export default {
   fetch: (request, env) => dispatch(request, env),
-  scheduled: (_controller, env) => runMonitor(ioFor(env), config(env)),
+  scheduled: (_controller, env) => runScheduled(ioFor(env), config(env)),
 };
 
 export class WorkspaceServer extends DurableObject {
@@ -94,6 +94,12 @@ export class WorkspaceServer extends DurableObject {
     await this.identity.provisioned(before !== null && before !== data.tenant_id);
     this.#roll(Date.now());
     await this.#arm(false);
+  }
+
+  /** RPC from the identity upgrade (control/identity-upgrade.mjs): provision() again, for an object that predates server identities. */
+  async upgradeIdentity(registry) {
+    const data = this.provisioning.upgradeData(registry, this.identity.seed !== null);
+    return data === null ? "unchanged" : (await this.provision(data), "upgraded");
   }
 
   /** RPC for discovery (dispatch.mjs): whether this workspace requires a check to sign in. */
@@ -220,15 +226,9 @@ export class WorkspaceServer extends DurableObject {
 
   async fetch(request) {
     // Stats are an RPC the Worker gates (dispatch.mjs); a request is served only as a socket.
-    if (!isWebSocketUpgrade(request)) {
-      return upgradeRequired();
-    }
-    if (this.exit !== null) {
-      return new Response(`node exited: ${this.exit}`, { status: 503 });
-    }
-    if (!this.provisioning.ready()) {
-      return new Response("this workspace has not been provisioned", { status: 503 });
-    }
+    if (!isWebSocketUpgrade(request)) return upgradeRequired();
+    if (this.exit !== null) return new Response(`node exited: ${this.exit}`, { status: 503 });
+    if (!this.provisioning.ready()) return new Response("this workspace has not been provisioned", { status: 503 });
     this.signIn.serving(tenantFor(new URL(request.url), config(this.env)));
     const limits = enforcedEntitlements(this.provisioning.summary().entitlements);
     this.#roll(Date.now());
