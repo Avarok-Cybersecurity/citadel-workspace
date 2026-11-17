@@ -252,8 +252,13 @@ const dist = join(root, 'dist');
  * receipts and typing, which arrive whatever page is open (group-conversations/channel-signals.ts
  * 580, workspace-service/group-chat-signals.ts 626, response-handler/group-signal-handlers.ts 446,
  * chat-attachments-event.ts 138); and the Members answer's booking guests (members-event.ts).
+ *
+ * 344 -> 345 (2026-11-17), for identity batch 1116 (PR #267): master measured 344.0 against
+ * 344 with no headroom left, and the batch tipped it over by under 0.05 KB. What it adds runs
+ * on the landing page's agent setup: the run command now carries the identity's required
+ * --identity-unlock-idle-secs (lib/agent-download.ts, UI commits b4fd4fb7 + df22eee0).
  */
-const BUDGET_KB = 344;
+const BUDGET_KB = 345;
 
 /**
  * Modules that must stay OFF the critical path, checked against the source
