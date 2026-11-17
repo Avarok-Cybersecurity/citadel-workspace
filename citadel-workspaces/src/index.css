@@ -1,0 +1,796 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+ 
+@layer base {
+  /*
+   * Design tokens.
+   *
+   * Every colour the product uses lives here once. Components reference the
+   * semantic name (bg-card, border-border, text-primary), never a hex — which is
+   * what makes a theme switch possible at all, and what stops the palette drifting
+   * into thirty near-identical greys again.
+   *
+   * :root is the LIGHT theme and .dark is the dark one, per the shadcn convention
+   * the rest of the stack assumes. Both were previously filled with the same dark
+   * values, so `.dark` toggled nothing and light mode did not exist.
+   *
+   * The dark values are the ones the app already shipped, so its appearance is
+   * unchanged; they are just named now. Where several hexes were doing the same
+   * job (#2A2438 / #3D3F5A / #3B3D57 / #3A3F5C / #282A42 / #1E2235 all sat between
+   * "card" and "border") they collapse onto the nearest role.
+   */
+  :root {
+    /* Surfaces, lightest to deepest */
+    --background: 0 0% 100%;
+    --foreground: 235 18% 13%;
+    --card: 240 20% 99%;
+    --card-foreground: 235 18% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 235 18% 13%;
+    /* Elevated surface: menus, hover states, selected rows */
+    --surface: 240 20% 96%;
+    --surface-foreground: 235 18% 13%;
+
+    /* Brand. --primary is the button FILL, so it must carry white text at AA:
+       hsl(257 45% 45%) on white gives ~7:1, and white on it ~6.6:1. */
+    --primary: 257 45% 45%;
+    --primary-foreground: 0 0% 100%;
+    /* The lighter brand tone used for accent text and icons. Darkened for light
+       mode so it still passes contrast on a white background. */
+    --primary-accent: 257 45% 42%;
+
+    --secondary: 240 20% 96%;
+    --secondary-foreground: 235 18% 13%;
+    --muted: 240 20% 96%;
+    --muted-foreground: 235 12% 38%;
+    --accent: 240 20% 94%;
+    --accent-foreground: 235 18% 13%;
+
+    /* Status */
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    /* Destructive as TEXT. Darker than the surface token because it also has to
+       clear the TINTED backgrounds this colour is read on: bg-destructive/10 in
+       the error boxes (5.76:1) and bg-destructive/20 in the Banned badge
+       (4.86:1). Matching the surface value cleared plain white at 5.81 but left
+       that badge at 4.06. */
+    --destructive-emphasis: 0 72% 40%;
+    --success: 160 84% 28%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 33%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Text weights, for the same reason --destructive-emphasis exists.
+       --success and --warning are SURFACE tokens: white foreground sits on
+       them, which pins their lightness. Used as TEXT they were 3.54:1 and
+       3.49:1 on their own tinted backgrounds -- the "Active" badge in Account
+       Management is text-success on bg-success/20 -- and 4.62:1 on --card,
+       barely over. These clear 4.5:1 on background, card, and the /10, /15 and
+       /20 tints, which is every surface they are read on. */
+    --success-emphasis: 160 84% 23%;
+    --warning-emphasis: 38 92% 27%;
+    /* "Seen" double tick. Sits on your own bubble (bg-primary) in both themes: 5.25:1 light, 3.91:1 dark, above the 3:1 a graphic needs. */
+    --read-receipt: 199 100% 80%;
+
+    /* Lines and controls */
+    --border: 240 15% 88%;
+    --input: 240 20% 97%;
+    --ring: 257 45% 45%;
+    /* Resting edge of text fields: >= 3:1 on background/card/surface (WCAG 1.4.11). */
+    --control-border: 257 35% 62%;
+
+    --radius: 0.75rem;
+
+    /* The sidebar family, aliased onto the palette rather than given its own.
+       shadcn's sidebar primitive references bg-sidebar / bg-sidebar-accent /
+       border-sidebar-border, and none of them were ever defined — so
+       SidebarMenuButton's hover:, active: and data-[active=true]: rules all
+       generated nothing and the app's permanent navigation had no hover, no
+       pressed and no selected highlight at all. The base colour was masked
+       because AppLayout passes bg-input at the call site; the STATES had no
+       fallback. --sidebar-accent is `surface`, whose own comment names it as
+       the token for "hover and selected rows". */
+    --sidebar: var(--input);
+    --sidebar-foreground: var(--foreground);
+    --sidebar-accent: var(--surface);
+    --sidebar-accent-foreground: var(--foreground);
+    --sidebar-border: var(--border);
+    --sidebar-ring: var(--ring);
+
+  }
+
+  .dark {
+    /* Surfaces, deepest to lightest — the values the app already shipped */
+    --background: 235 18% 13%;      /* was #1C1D28 */
+    --foreground: 0 0% 100%;
+    --card: 234 21% 17%;            /* was #232536 */
+    --card-foreground: 0 0% 100%;
+    --popover: 234 21% 17%;
+    --popover-foreground: 0 0% 100%;
+    --surface: 230 32% 22%;         /* was #262C4A */
+    --surface-foreground: 0 0% 100%;
+
+    --primary: 257 30% 50%;         /* was #6E59A5 */
+    --primary-foreground: 0 0% 100%;
+    --primary-accent: 251 85% 75%;  /* was #9B87F5 */
+
+    --secondary: 234 21% 17%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 234 21% 17%;
+    /* 72%, not 54%: at 54% this rendered 3.49:1 on the card surface, below the
+       4.5:1 AA minimum, which Lighthouse flagged on every toast description. */
+    --muted-foreground: 265 25% 72%;
+    --accent: 230 32% 22%;
+    --accent-foreground: 0 0% 100%;
+
+    /* 50% is chosen for the SURFACE role: white --destructive-foreground on
+       this colour is 4.53:1, and lightening it breaks that. ("then 60%" refers
+       to the note in lib/theme/preset-avarok.ts, which records that white on
+       the lighter red measured 3.78:1 — the dangling "see below" pointed at
+       another file.)
+
+       The same value as TEXT on --background is only 3.72:1, and 3.38:1 on
+       --card — below the 4.5:1 floor for body text. The two roles genuinely
+       conflict: text needs L >= ~61% here, white-on-surface needs L <= ~50%.
+       No single value satisfies both, so text gets its own token. */
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 0 0% 100%;
+    /* 6.00:1 on --background, 5.44:1 on --card, and it has to clear the TINTED
+       backgrounds too: destructive text sits on bg-destructive/10 in the login
+       and init error boxes (5.19:1) and on bg-destructive/20 in the Banned
+       badge (4.82:1). At 66% those last two were 4.57 and 4.24 — the badge
+       still failed, which is why this is 70 and not the first value that
+       cleared a plain background. */
+    --destructive-emphasis: 0 84% 70%;
+    --success: 160 84% 39%;         /* was #10B981 */
+    --success-foreground: 235 18% 13%;
+    --warning: 38 92% 50%;          /* was #F59E0B */
+    --warning-foreground: 235 18% 13%;
+    --success-emphasis: 160 84% 41%;
+    --warning-emphasis: 38 92% 50%;
+    /* "Seen" double tick. Sits on your own bubble (bg-primary) in both themes: 5.25:1 light, 3.91:1 dark, above the 3:1 a graphic needs. */
+    --read-receipt: 199 100% 80%;
+
+    --border: 222 23% 23%;          /* was #2D3548 */
+    --input: 235 25% 10%;           /* was #131420 */
+    --ring: 251 85% 75%;
+    --control-border: 251 35% 58%;
+
+    /* The sidebar family, aliased onto the palette rather than given its own.
+       shadcn's sidebar primitive references bg-sidebar / bg-sidebar-accent /
+       border-sidebar-border, and none of them were ever defined — so
+       SidebarMenuButton's hover:, active: and data-[active=true]: rules all
+       generated nothing and the app's permanent navigation had no hover, no
+       pressed and no selected highlight at all. The base colour was masked
+       because AppLayout passes bg-input at the call site; the STATES had no
+       fallback. --sidebar-accent is `surface`, whose own comment names it as
+       the token for "hover and selected rows". */
+    --sidebar: var(--input);
+    --sidebar-foreground: var(--foreground);
+    --sidebar-accent: var(--surface);
+    --sidebar-accent-foreground: var(--foreground);
+    --sidebar-border: var(--border);
+    --sidebar-ring: var(--ring);
+
+  }
+}
+
+/* Ensure no yellow backgrounds on scroll */
+/* Pull-to-refresh reloads the whole app — dropping the WASM client, the socket,
+   leader election and any in-flight message — and it is reachable by ordinary
+   use: the message list loads older messages when scrolled near the top, so
+   users are actively encouraged to swipe down there. An overshoot chains to the
+   root scroller and Android Chrome refreshes. `contain` keeps the gesture in
+   the scroller it started in. */
+html, body {
+  overscroll-behavior-y: contain;
+}
+
+html, body, #root {
+  /* Token, not a hardcoded hex with !important. The old rule pinned every surface
+     to the dark background regardless of theme, so a theme toggle could never
+     take effect no matter what the tokens said. */
+  background-color: hsl(var(--background));
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+html {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+body {
+  position: relative;
+}
+
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary-accent) / 0.5);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary-accent) / 0.7);
+}
+
+/* Always visible scrollbar utility class */
+.scrollbar-visible {
+  overflow-y: scroll !important;
+  scrollbar-width: thin !important; /* For Firefox */
+  scrollbar-color: hsl(var(--primary-accent) / 0.5) hsl(var(--muted)) !important; /* For Firefox */
+}
+
+.overflow-y-scroll {
+  overflow-y: scroll !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: hsl(var(--primary-accent) / 0.5) hsl(var(--muted)) !important;
+}
+
+/* Override any potential WebKit default colors */
+*::selection {
+  background-color: hsl(var(--primary-accent) / 0.3);
+  color: inherit;
+}
+
+*::-moz-selection {
+  background-color: hsl(var(--primary-accent) / 0.3);
+  color: inherit;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground font-body antialiased;
+  pointer-events: auto !important;
+  background-image: url('/backgrounds/app-backdrop.webp');
+  background-size: contain !important;
+  background-position: center;
+  background-repeat: no-repeat;
+  min-height: 100dvh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  @apply font-sans;
+}
+
+.glass-panel {
+  @apply bg-card/80 backdrop-blur-sm border border-border shadow-lg;
+}
+
+/* No .animate-in / .animate-out here.
+ *
+ * tailwindcss-animate owns those class names and drives them through
+ * `animation-name: enter/exit` plus the --tw-enter-* custom properties that
+ * fade-in-0, zoom-in-95 and slide-in-from-* set. Redefining them with the
+ * `animation` SHORTHAND reset animation-name, so every one of those modifiers
+ * was computed and never read: dialogs, menus, selects, popovers, tooltips
+ * and sheets all collapsed to a directionless 300ms cross-fade — slower and
+ * flatter than the library's own 150ms default.
+ */
+
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes fade-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Document content.
+ *
+ * These were text-white and text-gray-300, which meant every heading and every
+ * bold run in a workspace document rendered white-on-white in light mode — the
+ * page showed its emoji and its body copy and nothing else. The lint guard
+ * could not see them: it reads JS literals, and these are `@apply` directives
+ * in the stylesheet.
+ */
+.prose {
+  @apply text-foreground;
+}
+
+.prose a {
+  @apply text-primary-accent hover:text-primary-accent/80;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  @apply text-foreground;
+}
+
+.prose ul {
+  @apply text-foreground;
+}
+
+/* The reader's own chat bubble is dark purple in BOTH themes (bg-primary), so the theme's
+ * foreground, which the rules above force onto all prose, is near-black on it in light mode:
+ * 2.18:1, measured by the chat polish harness on an own markdown message. The bubble's own
+ * foreground is the colour that reads there, for the body, headings, lists and links alike. */
+.prose.own-bubble-prose,
+.prose.own-bubble-prose :is(h1, h2, h3, h4, h5, h6, ul, ol, strong, em, code, blockquote, a) {
+  @apply text-primary-foreground;
+}
+
+.prose.own-bubble-prose a {
+  @apply underline;
+}
+
+/* Smooth workspace switching animations */
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary-accent) / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px hsl(var(--primary-accent) / 0);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px hsl(var(--primary-accent) / 0.8);
+  }
+  50% {
+    box-shadow: 0 0 16px hsl(var(--primary-accent));
+  }
+}
+
+.animate-slide-fade-out {
+  animation: fadeOut 0.3s ease-out forwards;
+}
+
+/* .animate-fade-in is generated from tailwind.config's keyframes (opacity
+ * only). It used to be redefined here as `fadeIn`, which also translateX(20px)
+ * — so the landing hero and the incoming-call card slid sideways when the
+ * class name promised a fade. The sliding keyframes live on as
+ * .animate-slide-fade-in for anything that actually wants the movement. */
+.animate-slide-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* Smooth transitions for workspace switching */
+.workspace-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.workspace-item-hover {
+  transition: all 0.2s ease;
+}
+
+.workspace-item-hover:hover {
+  transform: translateX(4px);
+}
+
+/* ========================================
+   Collaboration Cursor Styles
+   ======================================== */
+
+/* Main cursor container - positioned inline */
+/* Honour prefers-reduced-motion.
+ *
+ * Ninety of the app's hundred animations opted out of nothing: pulses, pings,
+ * glows, shakes and every dialog transition ran regardless of the setting.
+ * Motion of that kind is not a preference for people with vestibular disorders,
+ * and neither axe nor Lighthouse reports it, so it stayed invisible.
+ *
+ * 0.01ms rather than `animation: none` — the conventional idiom, so that any
+ * code waiting on `animationend` still receives it. Radix specifically does not
+ * need this (its Presence checks for animationName "none" and unmounts at once;
+ * dialogs were verified to close either way), but not every consumer here is
+ * Radix, and a near-zero duration costs nothing.
+ */
+/* The Animations switch in Settings, expressed as the same clamp the OS
+ * preference gets. It used to toggle a `.reduce-motion` class that no
+ * stylesheet defined, so turning animations off did nothing at all.
+ *
+ * Deliberately a copy of the rules below rather than a shared selector list:
+ * the OS preference must keep working even if this class is never set, and a
+ * user who turns animations back on must not override their own OS setting.
+ * Two independent reasons to stop moving; either one is sufficient.
+ */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+.reduce-motion .animate-spin {
+  animation-duration: 1.5s !important;
+  animation-iteration-count: infinite !important;
+}
+
+/* Lite motion (Settings > Appearance > Animations: Lite, or Auto on a slower
+ * device; see lib/motion-tier.ts). What stays is opacity: an element that
+ * enters or leaves with tailwindcss-animate still fades, but no longer zooms,
+ * slides or spins in, and nothing pulses, pings or bounces for attention.
+ * Spinners keep turning -- they say something is happening, they are not
+ * decoration. Script motion reads the same class (use-motion-tier).
+ */
+/* Opacity-only keyframes in place of tailwindcss-animate's `enter`/`exit`. Not by zeroing the
+ * translate/scale variables: `enter` animates FROM translate(var(--tw-enter-translate-x)) to the
+ * element's own transform, and a centred dialog's own transform is translate(-50%, -50%). Zeroed,
+ * every dialog slid half the screen as it opened -- more motion than Full, and measured live by
+ * permission-matrix-phone.spec.ts as a dialog 100px past a 375px screen. */
+@keyframes lite-enter {
+  from { opacity: var(--tw-enter-opacity, 1); }
+}
+@keyframes lite-exit {
+  to { opacity: var(--tw-exit-opacity, 1); }
+}
+.lite-motion .animate-in {
+  animation-name: lite-enter !important;
+}
+.lite-motion .animate-out {
+  animation-name: lite-exit !important;
+}
+
+/* The motion-safe: forms too: Tailwind names that class `motion-safe:animate-pulse`, which the bare
+ * selector never matched, so a pulse that honoured the OS setting still pulsed under Lite. */
+.lite-motion .animate-pulse,
+.lite-motion .animate-ping,
+.lite-motion .animate-bounce,
+.lite-motion .motion-safe\:animate-pulse,
+.lite-motion .motion-safe\:animate-ping,
+.lite-motion .motion-safe\:animate-bounce {
+  animation: none !important;
+}
+
+/* A footer's answers stay inside their dialog (ui/footer-layout.ts). After the utilities, so it
+ * outranks the Button primitive's whitespace-nowrap; the min-height sits in :where() so a button's
+ * own min-h-* still wins, and only lets a wrapped label grow the button past its fixed h-*. */
+[data-dialog-footer] > * {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  max-width: 100%;
+}
+:where([data-dialog-footer] > *) {
+  min-height: fit-content;
+}
+
+/* The Show Avatars switch. One rule, because every avatar in the app goes
+ * through the same primitive and now carries `data-avatar`. */
+[data-avatars='off'] [data-avatar] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Spinners keep turning, slower.
+   *
+   * They are the only "still working" signal for the operations that actually
+   * take time here — WASM init, workspace load, the P2P handshake — and a
+   * frozen spinner reads as a hung app, which is a worse outcome than the
+   * motion it avoids. A slow, steady rotation is also far gentler than the
+   * pulsing and zooming this block exists to stop. */
+  .animate-spin {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+/* ========================================
+   Tab Notification Dot
+   ======================================== */
+
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  /* The --success token, not a second green. Two different greens meant
+     "there is activity here" was a different colour depending on which
+     component drew it, and this one could never follow a workspace theme. */
+  background: hsl(var(--success));
+  box-shadow: 0 0 6px hsl(var(--success));
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.notification-dot.animate-pulse-green {
+  animation: pulse-glow-green 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow-green {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 6px #22c55e;
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 12px #22c55e, 0 0 20px rgba(34, 197, 94, 0.4);
+  }
+}
+
+/* ========================================
+   Editor Context Menu
+   ======================================== */
+
+.editor-context-menu {
+  position: fixed;
+  /* Tokens, not the pre-migration palette. These were the old hex values --
+     including the retired brand purple below -- so in light mode right-clicking
+     in a live document produced a dark navy menu from a different design era,
+     and the theme editor could never touch it. The collaborator-cursor block
+     above IS deliberately literal, for the reason stated there; this sits on the
+     app surface and has no such excuse. */
+  background: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  animation: context-menu-in 0.15s ease-out;
+}
+
+.editor-context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: hsl(var(--popover-foreground));
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.editor-context-menu__item:hover {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.editor-context-menu__item svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+
+@keyframes context-menu-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+/*
+ * Landing hero scrim.
+ *
+ * The gradient is horizontal so the copy on the left stays readable over the
+ * image on the right — which only works when the two sit side by side. Below md
+ * they stack, the image sits BEHIND the text, and a left-to-right fade leaves the
+ * headline over the busiest part of the photo. Vertical there instead.
+ *
+ * Lives here rather than as an inline style because a media query cannot be
+ * expressed in one, and this is exactly the case that needs one.
+ */
+.landing-scrim {
+  background: linear-gradient(
+    to bottom,
+    hsl(var(--background)) 0%,
+    hsl(var(--background) / 0.92) 55%,
+    hsl(var(--background) / 0.65) 100%
+  );
+}
+
+@media (min-width: 768px) {
+  .landing-scrim {
+    background: linear-gradient(
+      to right,
+      hsl(var(--background)) 0%,
+      hsl(var(--background)) 30%,
+      hsl(var(--background) / 0.7) 60%,
+      hsl(var(--background) / 0.2) 80%,
+      hsl(var(--background) / 0) 100%
+    );
+  }
+}
+
+/* Windows High Contrast / forced-colors.
+ *
+ * The UA replaces every author colour with a system palette, so a control whose
+ * only affordance is `background-color` becomes indistinguishable from plain
+ * text. That is exactly what happened to the primary button: on the landing
+ * page "Sign In" — the main call to action — rendered with no border
+ * while the secondary "Create Account" kept one, so the most important control
+ * looked the least like a button.
+ *
+ * A transparent border is not enough on its own; forced-colors keeps
+ * transparent transparent. The border has to be declared in the system palette,
+ * which is what ButtonText is for.
+ */
+@media (forced-colors: active) {
+  button,
+  [role='button'],
+  a[class*='inline-flex'] {
+    border: 1px solid ButtonText;
+  }
+
+  /* Icons are drawn from currentColor and would otherwise all collapse to the
+     same value as their surrounding text; this keeps them following the
+     system's control colour rather than disappearing into it. */
+  button svg,
+  [role='button'] svg {
+    forced-color-adjust: auto;
+  }
+}
+
+/**
+ * Controls that fade in when their row is hovered.
+ *
+ * `opacity-0 group-hover:opacity-100` was used at eight sites — node actions,
+ * message actions, group role controls, member rows, chat tab close buttons —
+ * and on a touch device it hides them permanently. There is no hover on a
+ * phone, so the reveal never fires and the control is not merely hard to find
+ * but unreachable. That took Edit, Admin Settings and Delete off the node tree,
+ * and reply/edit/delete off every message, for anyone using the installed PWA.
+ * It also hid them from keyboard users: focus moved to a control with zero
+ * opacity and nothing appeared to happen.
+ *
+ * So: hide-until-hover only where hover actually exists, and always reveal on
+ * keyboard focus. `focus-within` matters because several of these sites put the
+ * class on a wrapper around the buttons rather than on the buttons themselves.
+ */
+.reveal-on-hover {
+  transition: opacity 200ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .reveal-on-hover {
+    opacity: 0;
+  }
+
+  .group:hover .reveal-on-hover {
+    opacity: 1;
+  }
+}
+
+.reveal-on-hover:focus-visible,
+.reveal-on-hover:focus-within {
+  opacity: 1;
+}
+
+/**
+ * The WCAG 2.2 minimum target size, in pixels because it is a floor.
+ *
+ * Icon buttons were given `h-6 w-6` with comments stating "the BUTTON is 24px,
+ * the WCAG 2.2 target-size floor". Tailwind's `6` is 1.5rem, and the appearance
+ * default sets the document root to 14px — so those buttons render at **21px**,
+ * and the comment asserting otherwise had been wrong since the day it was
+ * written. check-mobile-layout measured 21x21 on both password toggles and the
+ * dialog close button.
+ *
+ * This is the same root cause as the illegible `text-xs`: every rem-based size
+ * in the app is 87.5% of its nominal value, so any rule expressed in rem that
+ * is meant as a MINIMUM silently is not one. A floor belongs in the unit the
+ * standard is written in.
+ *
+ * `min-*` rather than fixed size, so a control that is legitimately larger
+ * stays larger, and so a user who raises the font size still grows the target.
+ */
+.tap-target {
+  min-width: 24px;
+  min-height: 24px;
+}
+
+/* A phone toast must clear the fixed header.
+ *
+ * Toasts come from the top on small viewports because at the bottom they sat on
+ * the join form's submit button. They then sat on the TOP BAR instead, and a CI
+ * probe reported the account avatar as `covered by li.group` -- a Sonner toast,
+ * which renders each toast as an <li> whose first class is `group`. While one
+ * was up, Profile, Settings and Sign Out were untappable.
+ *
+ * Set as a CSS variable rather than through Sonner's `offset` prop. That prop
+ * accepts a string, and a browser probe measured `--offset-top: 32px` with it
+ * set -- the default -- so the value was not reaching the DOM.
+ *
+ * `!important` because Sonner writes `--offset-top` as an INLINE style, which a
+ * stylesheet rule cannot outrank without it. That was measured too: the first
+ * version of this block had no `!important` and changed nothing at all, which
+ * is precisely the failure a jsdom test cannot see and a browser measurement
+ * can. Measured by scripts/check-toast-clears-header.mjs.
+ */
+@media (max-width: 767px) {
+  [data-sonner-toaster] {
+    /* BOTH variables. Below its own breakpoint Sonner's stylesheet positions
+       the toaster with `top: var(--mobile-offset-top)`, not `--offset-top` --
+       so overriding only the latter changed the computed value and moved
+       nothing. Measured: --offset-top resolved to the calc and the toast stayed
+       at y=16. */
+    --offset-top: calc(
+      var(--app-header-height, 3.5rem) + var(--offline-banner-height, 0px) + 0.5rem
+    ) !important;
+    --mobile-offset-top: calc(
+      var(--app-header-height, 3.5rem) + var(--offline-banner-height, 0px) + 0.5rem
+    ) !important;
+  }
+}
+
+/* A legal page printed or saved as a PDF is black on white whatever the screen theme is. The theme
+   tokens are not redeclared here: the contrast gates read each one exactly twice, light then dark. */
+@media print {
+  .legal-print, .legal-print * {
+    color: black !important;
+    background: white !important;
+    border-color: gray !important;
+  }
+}

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- interactive-widget=resizes-content: without it the layout viewport keeps
+         its full height when the on-screen keyboard opens, so `h-dvh` does not
+         shrink and the chat shell — which is overflow-hidden with the composer
+         as its last flex child — leaves that composer underneath the keyboard.
+         dvh accounts for retractable browser chrome, not for the keyboard. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
+
+    <title>Citadel Workspace — Post-Quantum Secure Collaboration</title>
+    <meta
+      name="description"
+      content="Citadel is a post-quantum secure, peer-to-peer collaborative workspace. Chat, share files and edit documents together over end-to-end encrypted connections built on lattice-based cryptography."
+    />
+    <meta name="author" content="Avarok Cybersecurity" />
+    <link rel="canonical" href="https://citadel.avarok.net/" />
+    <meta name="robots" content="index, follow" />
+    <meta name="color-scheme" content="dark light" />
+
+    <!-- Open Graph / social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Citadel Workspace" />
+    <meta property="og:title" content="Citadel Workspace — Post-Quantum Secure Collaboration" />
+    <meta
+      property="og:description"
+      content="A post-quantum secure, peer-to-peer collaborative workspace. End-to-end encrypted chat, file sharing and live documents."
+    />
+    <meta property="og:url" content="https://citadel.avarok.net/" />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:alt" content="The Citadel Workspace landing page" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Citadel Workspace — Post-Quantum Secure Collaboration" />
+    <meta
+      name="twitter:description"
+      content="A post-quantum secure, peer-to-peer collaborative workspace. End-to-end encrypted chat, file sharing and live documents."
+    />
+    <meta name="twitter:image" content="/og-image.png" />
+
+    <!--
+      The landing hero is a CSS background, so the browser cannot discover it until
+      it has downloaded and parsed the stylesheet AND laid out the element that
+      references it. That late discovery made it the Largest Contentful Paint.
+      Preloading hoists the request to the start of the page load.
+    -->
+    <link rel="preload" as="image" href="/backgrounds/landing-hero.webp" fetchpriority="high" />
+
+    <!-- PWA. The <link rel="manifest"> is injected by vite-plugin-pwa at build time.
+         theme-color drives the OS titlebar/status bar of the installed window.
+
+         The app's default background, not the brand purple. This value is what
+         paints before any script runs; ThemeColorSync then keeps it in step with
+         the active theme. A brand-coloured value here would flash purple and
+         resolve to the surface colour on every single launch. -->
+    <meta name="theme-color" content="#1B1C27" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- Retained alongside the standard name above: older iOS Safari only honours
+         the apple- prefixed form. Chrome logs the apple- one as deprecated. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- `default`, NOT `black-translucent`.
+
+         black-translucent makes the web view fill the whole screen and sit
+         UNDER the status bar. This shell is built from `h-screen` and two
+         `fixed top-0` bars, so nothing reserves that space: on an installed
+         iPhone the top bar rendered beneath the clock and battery. Living with
+         it immersively would mean an inset-aware layout throughout
+         (viewport-fit=cover plus env(safe-area-inset-*) on every fixed edge),
+         which is a layout change this shell is not built for.
+
+         `default` makes iOS reserve the status bar itself, so 100vh excludes it
+         and the layout is correct with no changes. Modern iOS also tints that
+         bar from theme-color, which now follows the active theme rather than
+         being a fixed purple — so it matches the app in light and dark. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Citadel" />
+
+    <!--
+      Structured data. This is a single-page app behind an authentication wall, so
+      the landing page is the only indexable surface; describing it as a
+      SoftwareApplication is what lets a search result show more than a title and
+      a snippet.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Citadel Workspace",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": "A post-quantum secure, peer-to-peer collaborative workspace with end-to-end encrypted chat, file sharing and live documents.",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Avarok Cybersecurity",
+          "url": "https://avarok.net/"
+        },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <!-- Filled in by the hosting nginx when the operator publishes a loopback agent origin
+         (LOOPBACK_AGENT_ORIGIN); empty means "reach the agent through same-origin /ws". -->
+    <meta name="citadel-loopback-agent" content="wss://local.avarok.net:12345" />
+    <script type="module" crossorigin src="/assets/index-CvYdAl1C.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-data-BtCKqmoB.js">
+    <link rel="modulepreload" crossorigin href="/assets/app-services-D4ntF2NK.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-CNoLRRKw.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-ui-Dgk_v-El.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-icons-CRVPvxY7.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-query-BPYXtB68.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-CW0T4mWD.css">
+  <link rel="manifest" href="/manifest.webmanifest"></head>
+
+  <body>
+    <div id="root"></div>
+    <!--
+      window.wasmDebugLog is installed by setupWasmDebugBridge() in
+      src/lib/wasm-debug-bridge.ts, which doInit() calls as its first action -
+      before the WASM client is created, so it is always in place before any
+      WASM code can call it. Do not re-add an inline definition here: production
+      CSP is script-src 'self' 'wasm-unsafe-eval' with no 'unsafe-inline' (see
+      docker/ui/nginx.conf.template in the parent repo), so an inline script in
+      this file cannot run in a shipped build. Debug wiring belongs in modules.
+
+      The JSON-LD block above is exempt: it is type application/ld+json, which is
+      data rather than an executable script, and CSP's script-src does not apply.
+    -->
+  </body>
+</html>

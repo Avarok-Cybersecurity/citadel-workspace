@@ -8,9 +8,10 @@
  * documented `git config core.hooksPath .githooks` and nobody had run it, so its pre-push hook
  * had never fired once. The UI repo had no hooks at all.
  *
- * The parent's root `prepare` script installs both (npm runs it on install); the UI's own
- * `prepare` installs its hooks in a standalone clone. Git also silently skips a hook that is not
- * executable, so the mode is checked too.
+ * The root `prepare` script installs them (npm runs it on install). The UI was a submodule with
+ * hooks of its own until it was folded into citadel-workspaces/; it is now judged by these, so the
+ * parent's hooks are required and a submodule's are checked only if it tracks some. Git also
+ * silently skips a hook that is not executable, so the mode is checked too.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -34,8 +35,8 @@ const submodules = readFileSync(join(ROOT, '.gitmodules'), 'utf8')
   .filter(Boolean);
 
 const repos = ['.', ...submodules].filter((repo) => existsSync(join(ROOT, repo, HOOKS)));
-if (!repos.includes('.') || !repos.includes('citadel-workspaces')) {
-  console.error(`FAIL: expected tracked ${HOOKS}/ in the parent and in citadel-workspaces; found it in: ${repos.join(', ') || 'none'}.`);
+if (!repos.includes('.')) {
+  console.error(`FAIL: expected tracked ${HOOKS}/ in the parent; found it in: ${repos.join(', ') || 'none'}.`);
   process.exit(1);
 }
 

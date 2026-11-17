@@ -1,0 +1,19 @@
+{
+  "source": "citadel-docs a1be9e3 docs/edit-commands.md, Requests (version 6): the request record each ribbon control sends, opcode first, then its fields",
+  "controls": {
+    "cut": [{ "command": { "name": "cut" }, "bytes": [51] }],
+    "selectAll": [{ "command": { "name": "selectAll" }, "bytes": [49] }],
+    "header": [{ "command": { "name": "editHeaderFooter", "furniture": "header", "section": 0, "which": "default" }, "bytes": [52, 0, 0, 0] }],
+    "evenPagesFooter": [{ "command": { "name": "editHeaderFooter", "furniture": "footer", "section": 2, "which": "evenPages" }, "bytes": [52, 1, 2, 2] }],
+    "footnote": [
+      { "command": { "name": "insertNewFootnote" }, "bytes": [37] },
+      { "command": { "name": "goToFootnote", "id": 300 }, "bytes": [53, 172, 2] }
+    ],
+    "returnToBody": [{ "command": { "name": "returnToBody" }, "bytes": [54] }],
+    "bullets": [{ "command": { "name": "setNumberingKind", "kind": "bullet", "level": 0 }, "bytes": [25, 0, 0] }],
+    "upperRomanAtLevel3": [{ "command": { "name": "setNumberingKind", "kind": "upperRoman", "level": 3 }, "bytes": [25, 5, 3] }],
+    "noList": [{ "command": { "name": "clearNumbering" }, "bytes": [12] }],
+    "indent": [{ "command": { "name": "indent" }, "bytes": [13] }],
+    "outdent": [{ "command": { "name": "outdent" }, "bytes": [14] }]
+  }
+}

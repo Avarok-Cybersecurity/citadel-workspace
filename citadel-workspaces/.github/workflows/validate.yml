@@ -1,0 +1,1321 @@
+name: Validate PR
+
+on:
+  pull_request:
+  push:
+    # This repo's default branch is `master`. This said `main`, which does not exist
+    # here, alongside a feature branch that has since been deleted -- so a push to the
+    # default branch ran NOTHING, and only pull_request events were ever validated.
+    branches: ["master"]
+
+concurrency:
+  # One live run per PR branch, and one per pushed branch. This keyed pushes on run_id, which is
+  # unique, so every merge to master started a full 57-job validation that nothing superseded:
+  # on 2026-09-28 six of them (~280 queued jobs) sat ahead of the parent's deploy for an hour.
+  # The newest master push is the only one whose result matters.
+  group: validate-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PARENT_REPO: Avarok-Cybersecurity/citadel-workspace
+  # The FALLBACK parent revision, used only when the parent has no branch matching the
+  # one under test here — see the `parent-ref` job, which does the resolving.
+  #
+  # It tracks the parent's default branch. It was once pinned to a feature branch
+  # ('u64-to-bigint-optimization', later 'misc-fixes'), so this submodule's CI validated
+  # against whatever that branch happened to contain — which drifts, and eventually
+  # stops existing. A check here is only meaningful against the parent revision this
+  # code will actually be integrated into.
+  PARENT_BRANCH: master
+  SKIP_WASM_BUILD: "1"
+  # Match parent repo's directory name so docker containers get expected names
+  # (e.g., citadel-workspace-server-1 instead of parent-server-1)
+  COMPOSE_PROJECT_NAME: citadel-workspace
+
+jobs:
+  # Jobs whose runs-on is the long `vars.CITADEL_MAC_RUNNER` expression may run on
+  # the self-hosted Apple Silicon runners (`apple-48gb-metal`, two slots shared
+  # with the parent, agent and SDK repositories). They are the ones that need
+  # neither Docker, apt nor sudo: the typecheck matrix routes only its
+  # integration-tests leg, because the citadel-workspaces leg builds WASM in
+  # `docker compose` and installs Chromium with apt. Unset, the org variable sends
+  # every one of them back to ubuntu-24.04. The same-repo clause is mandatory:
+  # this repository is public, and a fork's pull request must never execute on
+  # that machine. The parent's scripts/check-mac-runner-is-fork-safe.mjs, run by
+  # the lint job below, refuses any other spelling.
+  # Which revision of the parent supplies this repo's build layout and gate scripts.
+  #
+  # Pinning this to the parent's default branch makes a coordinated change across the
+  # two repos UNMERGEABLE. The parent's 250-line gate, for instance, carries an
+  # allowance table keyed to THIS repo's files, and that table cannot describe the old
+  # and the new file lengths at once. So this repo could not go green until the parent
+  # merged the new table, and the parent could not go green until it pinned the new
+  # files: each waiting on the other, with no merge order that works.
+  #
+  # Preferring a parent branch of the SAME NAME breaks the cycle -- the two halves of
+  # one change validate against each other -- and anything with no counterpart branch
+  # falls back to the default exactly as before.
+  parent-ref:
+    name: Resolve parent ref
+    timeout-minutes: 5
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-24.04' }}
+    outputs:
+      ref: ${{ steps.pick.outputs.ref }}
+    steps:
+      - id: pick
+        env:
+          # Passed as environment, never interpolated into the script body: the branch
+          # name is attacker-controlled on a fork PR, and an expression expanded inside
+          # `run` is a shell-injection sink.
+          CANDIDATE: ${{ github.head_ref || github.ref_name }}
+          FALLBACK: ${{ env.PARENT_BRANCH }}
+          PARENT: ${{ env.PARENT_REPO }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ref="$FALLBACK"
+          if [ -n "${CANDIDATE:-}" ] && gh api "repos/$PARENT/branches/$CANDIDATE" >/dev/null 2>&1; then
+            ref="$CANDIDATE"
+          fi
+          # The branch's COMMIT, resolved once. Every job used to check the branch name out on
+          # its own, so a parent merge mid-run gave different jobs different parents; now that
+          # one job builds the stack and fifty load it, that mismatch fails every load
+          # (ci-stack.sh refuses an image built from another checkout), and so does a rerun.
+          sha="$(gh api "repos/$PARENT/commits/$ref" --jq .sha)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::could not resolve $PARENT@$ref to a commit (got '$sha')"; exit 1; }
+          echo "ref=$sha" >> "$GITHUB_OUTPUT"
+          echo "Parent $PARENT will be checked out at '$ref' = $sha (branch under test: '${CANDIDATE:-none}', fallback: '$FALLBACK')."
+
+  unit-tests:
+    needs: parent-ref
+    name: Unit Tests
+    # Observed the same work as the parent job, 6m there; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 25
+    # GitHub-hosted, never the shared Mac: this job's results depend on wall-clock time (test
+    # timeouts, reply budgets), and the Mac is shared with other jobs and other organisations.
+    # A 1.4 s test hit its 5 s timeout there at load 76 (2026-10-16). Owner: "anything perf
+    # sensitive should be on a github runner".
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: parent
+    steps:
+      - name: Checkout parent repo (workspace structure)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PARENT_REPO }}
+          ref: ${{ needs.parent-ref.outputs.ref }}
+          path: parent
+      - name: Checkout submodule code (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: parent/citadel-workspaces
+      - name: Init citadel-internal-service submodule
+        run: git submodule update --init --recursive citadel-internal-service
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads the same 1154-package
+          # tree; `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          #
+          # The parent's lockfile, because that is what `npm ci` installs from here:
+          # every job checks the parent out into `parent/` and runs with
+          # `working-directory: parent`. All five setup-node steps run AFTER that
+          # checkout, so the path resolves.
+          cache: npm
+          cache-dependency-path: parent/package-lock.json
+      - name: Install Workspace Dependencies
+        run: npm ci
+      - name: Build citadel-internal-service typescript-client
+        run: npm run build
+        working-directory: parent/citadel-internal-service/typescript-client
+      - name: Build citadel-workspace-client-ts
+        run: npm run build
+        working-directory: parent/citadel-workspace-client-ts
+      - name: Run Unit Tests
+        # No `npm install vitest@...` before this. There used to be one, and it
+        # pinned 3.0.7 over the root lockfile's 3.2.7 -- so CI ran a different
+        # test runner from every developer and from the committed lock, while
+        # both logs say only "vitest". A behaviour difference between those
+        # versions reads as "passes locally, fails in CI" with the version never
+        # suspected.
+        #
+        # It is not needed: `npm ci` at the parent root hoists vitest to
+        # `node_modules/vitest`, and `npx vitest` resolves it from there. The two
+        # build steps above are bare `tsc` and touch no install, so nothing was
+        # being compensated for -- worth checking, because removing a redundant
+        # install in this repository previously broke three jobs with exit 127,
+        # and the thing it had been compensating for was a nested `npm ci`.
+        #
+        # The parent enforces this with scripts/check-ci-installs-match-the-lockfile.mjs.
+        run: npx vitest run
+        working-directory: parent/citadel-workspaces
+
+  chat-polish:
+    needs: parent-ref
+    name: ${{ matrix.gate.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The UI sweep joined this job when it outgrew the typecheck job: with the file manager,
+        # breadcrumb and Lite-motion checks (2026-10-17) it reached 300 Chromium checks, about
+        # 2.5 minutes alone, and the typecheck job's 15-minute cap cut it off mid-run -- the same
+        # way chat polish was cut off before it moved here.
+        gate:
+        # The whole command, not a script name to splice in: check-every-gate-is-invoked.mjs
+        # reads the workflow text for `npm run <gate>`, and this is the text each leg runs.
+          - { name: Chat polish geometry, run: 'npm run check:chat-polish' }
+          # The chat's pictures, viewer and always-accept question at 375px too, under Full and Lite motion.
+          - { name: Chat files geometry, run: 'npm run check:chat-files' }
+          # The switcher's signed-out account row and the sign-in it opens, at 375px too, under Full and Lite motion.
+          - { name: Account switch geometry, run: 'npm run check:account-switch' }
+          - { name: UI sweep geometry, run: 'npm run check:ui-sweep' }
+          # Text sharpness on pixels: the shipped editor at 1x and 2x, against fillText.
+          - { name: Docs text crispness, run: 'npm run check:docs-crispness' }
+          # The Docs pane while it loads (never empty; Lite and reduced motion) and the save status
+          # in every state (no control moves; phone width keeps its row), on the shipped host.
+          - { name: Docs pane states, run: 'npm run check:docs-pane-states' }
+          # An installed app in its page zone on the shipped runtime (worker, OffscreenCanvas, the
+          # SDK's hello-canvas): the canvas is the zone at 1x and 2x and the app's card covers it;
+          # a release that fails its check shows the host's words over the zone instead.
+          - { name: App zone geometry, run: 'npm run check:app-zone' }
+          # The Calendar's grids and views on the shipped engine: every day reached by keyboard through
+          # one roving tab stop, 44px targets and no sideways scroll at 375px, axe clean at rest.
+          - { name: Calendar grid and views, run: 'npm run check:calendar-grid' }
+          # Frame times scrolling the 500-page bench document at 1x on a GitHub runner (never the
+          # shared Mac), ONLYOFFICE's own condition: at most its 5% of frames past 16.7 ms and its
+          # p95 of 16.8 ms. A traced second pass is uploaded per frame (the step after the gate).
+          - { name: Docs scroll frames, run: 'npm run check:cdoc-scroll-perf' }
+    # jsdom has no layout, so a hover card lying across the rows above it, or a message pressed
+    # against the bubble over it, passes every unit test. This serves the real components and
+    # asserts bounding boxes, in Chromium (the engine this job installs).
+    # Measured: the gate itself took about 4 minutes (10:26 to 10:30) in run 113773787106, and
+    # setup is another 3-4; 15 is roughly twice that. It bounds a hang, not performance.
+    # Its own job, not a step of the typecheck job: that job is capped at 15 minutes for a
+    # sub-minute typecheck, and this step cut it off.
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: parent
+    steps:
+      - name: Checkout parent repo (workspace structure)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PARENT_REPO }}
+          ref: ${{ needs.parent-ref.outputs.ref }}
+          path: parent
+      - name: Checkout submodule code (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: parent/citadel-workspaces
+      - name: Init citadel-internal-service submodule
+        run: git submodule update --init --recursive citadel-internal-service
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: parent/package-lock.json
+      - name: Install Workspace Dependencies
+        run: npm ci
+      - name: Build citadel-internal-service typescript-client
+        run: npm run build
+        working-directory: parent/citadel-internal-service/typescript-client
+      - name: Build citadel-workspace-client-ts
+        run: npm run build
+        working-directory: parent/citadel-workspace-client-ts
+      - name: Install Chromium
+        # The one browser install (its action.yml says what it caches and why).
+        uses: ./parent/citadel-workspaces/.github/actions/install-chromium
+        with:
+          working-directory: parent/citadel-workspaces
+      - name: ${{ matrix.gate.name }}
+        run: ${{ matrix.gate.run }}
+        env:
+          POLISH_ENGINES: chromium
+        working-directory: parent/citadel-workspaces
+      - name: Upload the scroll pass's frames
+        # Where each frame went (main thread, workers, events), pass or fail: what a red row is read from.
+        if: ${{ always() && matrix.gate.name == 'Docs scroll frames' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: scroll-frames
+          path: parent/citadel-workspaces/scroll-frames.json
+          if-no-files-found: error
+          retention-days: 14
+
+  typecheck:
+    # This job brings the Docker stack up too (it needs the generated WASM
+    # bindings), so it is expensive by the same measure as the two below and
+    # must wait for the lint that can refute the PR in 60 seconds.
+    needs: [parent-ref, lint]
+    name: TypeScript Type Check - ${{ matrix.project }}
+    # Observed the same work as the parent job, under a minute there; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 15
+    runs-on: >-
+      ${{ matrix.project == 'integration-tests'
+          && vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: citadel-workspaces
+            path: citadel-workspaces
+          - project: integration-tests
+            path: citadel-workspaces/integration-tests
+    defaults:
+      run:
+        working-directory: parent
+    steps:
+      - name: Checkout parent repo (workspace structure)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PARENT_REPO }}
+          ref: ${{ needs.parent-ref.outputs.ref }}
+          path: parent
+      - name: Checkout submodule code (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: parent/citadel-workspaces
+      - name: Init citadel-internal-service submodule
+        run: git submodule update --init --recursive citadel-internal-service
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads the same 1154-package
+          # tree; `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          #
+          # The parent's lockfile, because that is what `npm ci` installs from here:
+          # every job checks the parent out into `parent/` and runs with
+          # `working-directory: parent`. All five setup-node steps run AFTER that
+          # checkout, so the path resolves.
+          cache: npm
+          cache-dependency-path: parent/package-lock.json
+      - name: Install Workspace Dependencies
+        run: npm ci
+      - name: Build citadel-internal-service typescript-client
+        run: npm run build
+        working-directory: parent/citadel-internal-service/typescript-client
+      - name: Build citadel-workspace-client-ts
+        run: npm run build
+        working-directory: parent/citadel-workspace-client-ts
+      - name: Run Type Check
+        run: |
+          if [ "${{ matrix.project }}" = "citadel-workspaces" ]; then
+            npx tsc -p ${{ matrix.path }}/tsconfig.app.json --noEmit
+          elif [ "${{ matrix.project }}" = "integration-tests" ]; then
+            mkdir -p ${{ matrix.path }}/node_modules
+            ln -sf ${{ github.workspace }}/parent/node_modules/playwright ${{ matrix.path }}/node_modules/playwright
+            npm run typecheck -w cw-integration-tests
+          fi
+      # These gates lived ONLY in the parent repo's workflow, so a PR opened
+      # against this repository — which is where essentially all UI work happens
+      # — could regress the installable PWA, the offline shell, the
+      # accessibility score or the landing critical path with nothing noticing.
+      # Each one fails silently in production: a broken manifest field simply
+      # stops the browser offering to install, and a chunk pulled onto the first
+      # paint is invisible until someone measures.
+      # WITHOUT THIS, EVERY GATE BELOW FAILS BEFORE IT MEASURES ANYTHING.
+      #
+      # They all begin with `vite build`, and that build embeds the wasm-pack
+      # glue `citadel_internal_service_wasm_client.js`, which is NOT git-tracked
+      # (typescript-client/.gitignore:13). It is produced by the
+      # `sync-wasm-client` one-shot container in docker-compose.yml.
+      #
+      # The gates were copied here from the parent repo's workflow without the
+      # step that pays for their input, so `vite build` died with
+      # "Could not resolve ../citadel_internal_service_wasm_client.js" and named
+      # the importer rather than the cause. The parent's own comment warns about
+      # exactly this -- it puts these gates in the job that generates the
+      # artefacts, "not in the typecheck matrix", because there it does not
+      # exist. This job IS the typecheck matrix, so it has to generate them.
+      # A base-image manifest pull happens before any RUN, so the retry gate on
+      # RUN fetches cannot see it. A 502 from registry-1.docker.io resolving
+      # `FROM rust:...` kills the job with no test signal -- the exact shape
+      # check-base-image-pulls-retry.mjs exists to prevent, and it caught the
+      # step below being added without this one.
+      #
+      # No step-level `working-directory`, so this runs in the job default
+      # `parent`, where the parent repo's scripts/ lives. The two older
+      # pre-pull steps in this file say `../scripts/` because they override the
+      # directory to parent/citadel-workspaces; copying their path here would
+      # have looked right and resolved to nothing.
+      - name: Pull base images (retried)
+        if: matrix.project == 'citadel-workspaces'
+        run: ./scripts/pull-base-images.sh
+
+      - name: Generate WASM artifacts (required for the production build)
+        if: matrix.project == 'citadel-workspaces'
+        env:
+          WORKSPACE_MASTER_PASSWORD: 'ci-prod-build'
+          INTERNAL_SERVICE_PORT: '12345'
+        # --exit-code-from: without it compose exits 0 even when the one-shot container fails,
+        # so a sync that died half-way (it wipes the WASM output first) read as a green step.
+        run: docker compose up --build --exit-code-from sync-wasm-client sync-wasm-client
+
+      # sync-wasm-client runs as root and bind-mounts this tree read-write. It
+      # runs a Vite build of its own, so it leaves `citadel-workspaces/dist/`
+      # owned by root -- and the next step's `vite build` runs as `runner` and
+      # cannot write into it:
+      #
+      #   Unable to write the service worker file.
+      #   'EACCES: permission denied, open .../citadel-workspaces/dist/sw.js.map'
+      #
+      # Removing rather than chowning: `dist/` is build output with no inputs in
+      # it, the next step regenerates it entirely, and a chown would leave a
+      # half-root tree if the container's layout ever changes. The container
+      # writing into a host tree is the same hazard that has poisoned
+      # `node_modules` here before; this bounds it to one directory.
+      #
+      # The path is relative to the job's `defaults.run.working-directory:
+      # parent`, NOT to the workspace root -- the opposite of the step-level
+      # `working-directory:` rule two steps up. The first version of this step
+      # said `parent/citadel-workspaces/dist`, which resolved to
+      # `parent/parent/...`; `rm -rf` on a path that does not exist succeeds
+      # silently, so the step went green and the EACCES came back unchanged.
+      # A cleanup that cannot fail is the same defect as a gate that cannot
+      # fail, so this one verifies the directory is gone.
+      - name: Reclaim the tree the WASM container wrote into
+        if: matrix.project == 'citadel-workspaces'
+        run: |
+          sudo rm -rf citadel-workspaces/dist
+          if [ -e citadel-workspaces/dist ]; then
+            echo "::error::citadel-workspaces/dist still exists after removal"
+            exit 1
+          fi
+          echo "reclaimed: citadel-workspaces/dist is gone"
+
+      - name: Landing bundle budget
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run build && npm run check:bundle
+        working-directory: parent/citadel-workspaces
+
+      - name: Hand the build to the browser checks
+        # pwa-browser-checks runs Chromium against exactly this dist/, in its own job; see there.
+        if: matrix.project == 'citadel-workspaces'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwa-dist
+          path: parent/citadel-workspaces/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Source maps
+        # Runs here because it reads dist/, which the bundle-budget step above
+        # has just built. It had an npm script and no CI invocation, so it had
+        # never run anywhere.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:sourcemaps
+        working-directory: parent/citadel-workspaces
+
+      - name: PWA installability
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:pwa
+        working-directory: parent/citadel-workspaces
+
+      - name: Lighthouse baselines
+        # Accessibility and SEO are held at 100 because they are rule checks, not
+        # measurements. Performance has a loose floor: a shared runner is slower
+        # and noisier than a laptop, and a flaky gate is worse than no gate
+        # because people learn to re-run it without reading it.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:lighthouse
+        working-directory: parent/citadel-workspaces
+
+      # Delegates to the parent repo's gate rather than reimplementing it.
+      #
+      # This step carried its own bash copy of the 250-line rule with its own
+      # SKIP_FILES list, and the two drifted: `lib/connection/service.ts` is
+      # 252 lines and is recorded in scripts/check-file-length.mjs as a held
+      # exception, but was absent from the list here -- so this repo failed a
+      # file the parent passes, on a rule both are supposed to enforce.
+      #
+      # The parent's version is also the stricter one: it pins each exception
+      # to an EXACT line count (`['lib/connection/service.ts', 252]`), so a
+      # held file cannot quietly grow, where a name-only skip list lets it
+      # grow forever. Two implementations of one rule drift toward the weaker.
+      - name: Enforce 250-line file limit
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-file-length.mjs
+
+      # Also delegated to the parent. Half the contract this gate enforces --
+      # the Vite dev proxy's `target:` scheme -- lives in THIS repo, so a
+      # change here can break the agent handshake for every container path
+      # while the parent's own CI is not running. Enforcing it only there
+      # would be the usual mistake: one gate, reading one of the two repos
+      # that can violate it.
+      - name: The agent's TLS mode matches every proxy that fronts it
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-agent-tls-matches-its-proxies.mjs
+
+      # index.html's meta tag is half of this contract and lives in THIS repo,
+      # so a change here can leave a hosted deployment dialling nothing while
+      # the parent's CI is not running.
+      - name: The loopback agent origin is wired end to end
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-the-loopback-agent-origin-is-wired.mjs
+
+  pwa-browser-checks:
+    # The four checks that drive Chromium against the production build, split out of the
+    # typecheck job. That job's citadel-workspaces leg ran 11-13 minutes of its 15 on a good
+    # day (median 11.6, p90 12.9 over UI runs 2026-10-14..22) -- the WASM container alone is
+    # ~5 -- and its last steps installed Chromium from the Azure apt mirror. On 2026-10-22 the
+    # mirror ran at ~40 KB/s and run 39843446695 hit the cap inside that install twice.
+    # Here the same work has its own budget: setup ~1 minute, the install ~30 s warm, the
+    # checks ~1.5 minutes (Mobile layout ~76 s of it). The build leaves with the typecheck job
+    # (artifact pwa-dist), so nothing is built twice and these measure the same bytes.
+    needs: [parent-ref, typecheck]
+    name: PWA and layout checks in Chromium
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: parent
+    steps:
+      - name: Checkout parent repo (workspace structure)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PARENT_REPO }}
+          ref: ${{ needs.parent-ref.outputs.ref }}
+          path: parent
+      - name: Checkout submodule code (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: parent/citadel-workspaces
+      - name: Init citadel-internal-service submodule
+        # npm ci installs every workspace, and one of them lives in this submodule.
+        run: git submodule update --init --recursive citadel-internal-service
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: parent/package-lock.json
+      - name: Install Workspace Dependencies
+        run: npm ci
+      - name: Take the build the typecheck job made
+        uses: actions/download-artifact@v4
+        with:
+          name: pwa-dist
+          path: parent/citadel-workspaces/dist
+      - name: Install Chromium
+        # The one browser install (its action.yml says what it caches and why).
+        uses: ./parent/citadel-workspaces/.github/actions/install-chromium
+        with:
+          working-directory: parent/citadel-workspaces
+
+      - name: PWA offline behaviour
+        # The app tells the user it will load without a connection. Nothing
+        # verified that promise until this: a precache that stopped covering the
+        # shell would leave an installed app opening to a blank page offline.
+        run: npm run check:pwa-offline
+        working-directory: parent/citadel-workspaces
+
+      - name: PWA update flow
+        # The upgrade half of the lifecycle, and the half that fails silently:
+        # an installed worker keeps serving its cached bundle by design, so a
+        # broken update path produces no error and no complaint — the app just
+        # stops changing. The unit test beside PwaUpdatePrompt mocks the
+        # register hook, proving the component reacts to needRefresh but never
+        # that anything sets it.
+        run: npm run check:pwa-update
+        working-directory: parent/citadel-workspaces
+
+      - name: Reduced motion
+        # Neither axe nor Lighthouse reports motion, so ninety of the app's
+        # hundred animations opted out of prefers-reduced-motion unnoticed.
+        # Also checks that suppressing motion did not suppress the dialogs the
+        # motion was attached to — a failure only reduced-motion users would see.
+        run: npm run check:reduced-motion
+        working-directory: parent/citadel-workspaces
+
+      - name: Mobile layout
+        # axe measures colour, names and roles — not size. Three controls
+        # shipped under the WCAG 2.2 24px target floor, including the close
+        # button on every dialog in the app, with every a11y gate green.
+        run: npm run check:mobile
+        working-directory: parent/citadel-workspaces
+
+  lint:
+    needs: parent-ref
+    name: ESLint - ${{ matrix.project }}
+    # Observed the same work as the parent job, 1m there; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 15
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: citadel-workspaces
+            path: citadel-workspaces
+          - project: integration-tests
+            path: citadel-workspaces/integration-tests
+    defaults:
+      run:
+        working-directory: parent
+    steps:
+      - name: Checkout parent repo (workspace structure)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PARENT_REPO }}
+          ref: ${{ needs.parent-ref.outputs.ref }}
+          path: parent
+      - name: Checkout submodule code (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: parent/citadel-workspaces
+      - name: Init citadel-internal-service submodule
+        run: git submodule update --init --recursive citadel-internal-service
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads the same 1154-package
+          # tree; `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          #
+          # The parent's lockfile, because that is what `npm ci` installs from here:
+          # every job checks the parent out into `parent/` and runs with
+          # `working-directory: parent`. All five setup-node steps run AFTER that
+          # checkout, so the path resolves.
+          cache: npm
+          cache-dependency-path: parent/package-lock.json
+      - name: Install Workspace Dependencies
+        run: npm ci
+      - name: Build citadel-internal-service typescript-client
+        # A bare build, matching the unit-tests and typecheck jobs above.
+        #
+        # This alone said `npm ci && npm run build`. `citadel-internal-service/
+        # typescript-client` is a member of the ROOT npm workspace, so that nested
+        # install re-resolved it from its own tracked lockfile -- which pins uuid
+        # 9.0.1 and ws 8.18.3 against the root's 13.0.2 and 8.21.3 -- and unhoisted
+        # the root's devDependencies on the way past.
+        #
+        # Everything below it existed to undo that: a pinned `npm install
+        # eslint@9.39.2` over the lockfile's version, and three `ln -sf` calls
+        # putting @eslint/js, globals and typescript-eslint back where node
+        # resolution would have found them anyway. All three are gone, because the
+        # thing they compensated for is gone. Verified rather than assumed: with a
+        # plain root `npm ci` and none of them, the member resolves all four
+        # packages from the root and `eslint . --max-warnings 0` exits 0.
+        #
+        # The parent forbids both patterns -- check-no-nested-npm-ci-in-workspaces
+        # and check-ci-runs-lockfile-versions -- but reads only its OWN workflows,
+        # so this file was never scanned. docs/ROBUSTNESS.md records deleting this
+        # exact `eslint@9.39.2` line from the parent; it survived here.
+        run: npm run build
+        working-directory: parent/citadel-internal-service/typescript-client
+      - name: Build citadel-workspace-client-ts
+        run: npm run build
+        working-directory: parent/citadel-workspace-client-ts
+      - name: Run ESLint
+        run: ${{ github.workspace }}/parent/node_modules/.bin/eslint . --max-warnings 0
+        working-directory: parent/${{ matrix.path }}
+
+      - name: Every declaration carries a type
+        # The parent runs this on every pointer bump and nothing ran it here, so
+        # #146 merged 58 untyped declarations and the release PR found them.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-explicit-types.mjs
+        working-directory: parent/citadel-workspaces
+
+      # Static gates that need no build, no browser and no running stack.
+      #
+      # `check:spec-copy` had an npm script and NO CI invocation, so it had
+      # never run anywhere -- the parent repo has check-every-gate-is-invoked
+      # for its own gates and this submodule has no equivalent. Five more
+      # (check:event-pairs, :sourcemaps, :a11y, :agent-down, :types,
+      # :toast-header) are in the same position but need a build or a browser;
+      # they are recorded in docs rather than wired blindly here.
+      - name: Every gate is invoked by something
+        # check:spec-copy had an npm script, a careful header, and no CI
+        # invocation, so it had never run from the day it was written. The
+        # parent repo has had this check since the same thing happened there.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:gates-invoked
+        working-directory: parent/citadel-workspaces
+
+      - name: Every event has an emitter and a listener
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:event-pairs
+        working-directory: parent/citadel-workspaces
+
+      - name: People are drawn by the shared avatar
+        # Eighteen views drew an initials-only circle of their own and dropped the picture.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:people-avatars
+        working-directory: parent/citadel-workspaces
+
+      - name: Spec locators match real app copy
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:spec-copy
+        working-directory: parent/citadel-workspaces
+      - name: Debug log arguments are cheap
+        # debugLog is a noop in production but its ARGUMENTS are still
+        # evaluated: one site hashed every byte of every inbound P2P message
+        # for a logger that discards it.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:debug-args
+        working-directory: parent/citadel-workspaces
+
+      - name: Assertions can fail
+        # An audit found three that could not: `toBeTruthy()` on a record (an
+        # object is always truthy), a URL assertion that held before the click,
+        # and `not.toContainText(marker)` where marker embeds `Date.now()`. Two of
+        # those shapes are decidable from the text; the third needs a control.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:assertions
+        working-directory: parent/citadel-workspaces
+
+      - name: A captured console line is not automatically a failure
+        # The reconnection specs capture `'ILM'` on purpose -- a delivery failure
+        # with no ILM lines has nothing to diagnose from -- and four of the five
+        # then reused that list to decide what was an error, so every
+        # informational router line became a critical UX failure.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:captured-vs-failed
+        working-directory: parent/citadel-workspaces
+
+      - name: Parent checkouts all take the resolved ref
+        # Five jobs check the parent out to run ITS gate scripts against this PR.
+        # While that ref was hardcoded to the parent's default branch, a change
+        # spanning both repos could not be merged in either order. A sixth site
+        # added later with the old form would be silent: the job passes, against
+        # the wrong parent revision.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:parent-ref
+        working-directory: parent/citadel-workspaces
+
+      - name: Every browser install goes through the one action
+        # Seven inline copies drifted: one had no wait for the dpkg lock, and it failed twice on
+        # 2026-10-22 on "Could not get lock /var/lib/dpkg/lock-frontend". The action also holds
+        # the browser and apt caches, so a direct script call would skip them. The parent runs
+        # this on its own workflows too.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:browser-installs
+        working-directory: parent/citadel-workspaces
+
+      - name: The browser install waits for apt's locks and keeps its packages
+        # Fakes for fuser, sudo, npx, timeout and sleep; no root. Each lock case is also run
+        # with the wait removed, and each apt-archive case with the redirect removed, and must
+        # fail there.
+        if: matrix.project == 'citadel-workspaces'
+        run: bash scripts/ci/install-chromium.test.sh
+        working-directory: parent/citadel-workspaces
+
+      - name: No fork's pull request can reach the self-hosted Mac
+        if: matrix.project == 'citadel-workspaces'
+        # The parent's gate, run from the parent checkout: it reads this
+        # repository's workflow at parent/citadel-workspaces/.github/workflows.
+        run: node scripts/check-mac-runner-is-fork-safe.mjs && node --test scripts/lib/mac-runner-routing.test.mjs
+
+  # The integration stack, built ONCE per run -- the parent's integration-stack job and its
+  # scripts/ci-stack.sh, in this repo's parent/ layout. Every integration and Playwright leg
+  # used to build the whole stack itself in Start Services: ~22 of each leg's minutes there
+  # (two release Rust compiles and the WASM sync), repeated in 50 legs that also queued for the
+  # org's shared runner pool. Each leg now loads these images and refuses any not built from
+  # its own checkout (source identity, this run, parent revision: `ci-stack.sh load`).
+  #
+  # The server and agent images depend only on the parent and agent commits, which a UI pull
+  # request never changes, so those two are cached by that backend identity: saved by pushes to
+  # master, restored by every run on the same parent commit, and proved before use
+  # (`ci-stack.sh reuse`). The UI and the WASM sync are built every run.
+  #
+  # `needs: parent-ref` only: this is the critical path, so it does not wait for the cheap
+  # gates; the test legs below still wait for all of them (check-expensive-jobs-wait-for-cheap-
+  # ones.mjs exempts this job by name, and only while it runs `ci-stack.sh build` and no test).
+  integration-stack:
+    needs: parent-ref
+    name: Integration stack - ${{ matrix.service }}
+    # The parent's leg: the agent's release compile is 16m43s; this bounds a hang.
+    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [sync-wasm-client, server, internal-service, ui]
+    defaults:
+      run:
+        working-directory: parent
+    # The env Start Services had, so compose interpolates the same build args everywhere.
+    env:
+      INTERNAL_SERVICE_PORT: '12345'
+      WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+    steps:
+      - name: Checkout parent repo (workspace structure)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PARENT_REPO }}
+          ref: ${{ needs.parent-ref.outputs.ref }}
+          path: parent
+      - name: Checkout submodule code (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: parent/citadel-workspaces
+      - name: Init citadel-internal-service submodule
+        run: git submodule update --init --recursive citadel-internal-service
+      - name: Free Disk Space
+        # The server and agent images are the ~5.6 GB `dev` stage (toolchain plus target/).
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
+          df -h
+      - name: Backend cache key
+        id: cache-key
+        if: matrix.service == 'server' || matrix.service == 'internal-service'
+        run: |
+          key="$(./scripts/ci-stack.sh cache-key ${{ matrix.service }})"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore the image built from these backend commits
+        id: cache
+        if: steps.cache-key.outputs.key != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ci-stack-cache/${{ matrix.service }}.tar.zst
+          key: ${{ steps.cache-key.outputs.key }}
+      - name: Pull base images (retried)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ../scripts/pull-base-images.sh
+        # Step-level working-directory is relative to the workspace root (see the test jobs).
+        working-directory: parent/citadel-workspaces
+      - name: Build the image
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./scripts/ci-stack.sh build ${{ matrix.service }} "$RUNNER_TEMP/ci-stack"
+      - name: Reuse the cached image, after proving where it came from
+        if: steps.cache.outputs.cache-hit == 'true'
+        timeout-minutes: 15
+        run: ./scripts/ci-stack.sh reuse ${{ matrix.service }} "$RUNNER_TEMP/ci-stack-cache/${{ matrix.service }}.tar.zst" "$RUNNER_TEMP/ci-stack"
+      # Master only: a pull request's cache is visible to that pull request alone, and two
+      # ~2 GB entries per PR would evict the npm and browser caches every job relies on.
+      - name: Keep the image for later runs on these backend commits
+        if: steps.cache-key.outputs.key != '' && steps.cache.outputs.cache-hit != 'true' && github.event_name == 'push'
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-stack-cache"
+          ln "$RUNNER_TEMP/ci-stack/${{ matrix.service }}.tar.zst" "$RUNNER_TEMP/ci-stack-cache/${{ matrix.service }}.tar.zst"
+      - name: Save the image to the cache
+        if: steps.cache-key.outputs.key != '' && steps.cache.outputs.cache-hit != 'true' && github.event_name == 'push'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ci-stack-cache/${{ matrix.service }}.tar.zst
+          key: ${{ steps.cache-key.outputs.key }}
+      - name: Run the WASM sync once, for every job
+        if: matrix.service == 'sync-wasm-client'
+        timeout-minutes: 20
+        run: ./scripts/ci-stack.sh sync-products "$RUNNER_TEMP/ci-stack"
+      - name: Dump the sync's log on failure
+        if: failure() && matrix.service == 'sync-wasm-client'
+        run: docker compose logs sync-wasm-client 2>&1 | tail -200
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-stack-${{ matrix.service }}
+          path: ${{ runner.temp }}/ci-stack/
+          if-no-files-found: error
+          # zstd already; zipping it again costs time and saves nothing.
+          compression-level: 0
+          # Long enough to re-run a failed leg; the images are run-scoped and expire on their own.
+          retention-days: 3
+
+  playwright-tests:
+    # The cheap gates first. Both of these bring up the full Docker stack --
+    # a cold `cargo build --release` of the server kernel AND the internal
+    # service, per leg, across 47 integration legs and 3 Playwright shards.
+    # Gated only on `parent-ref`, a PR that fails ESLint in 60 seconds still
+    # paid for all fifty of them.
+    #
+    # The parent workflow has gated its equivalents this way for some time
+    # (`needs: [crate-coverage, lint, typecheck, …]`); this one did not, and
+    # `check-expensive-jobs-wait-for-cheap-ones` could not say so because it
+    # read the parent's workflow file alone.
+    needs: [parent-ref, lint, typecheck, unit-tests, integration-stack]
+    # The @playwright/test suite under integration-tests/src/tests-pw, which ran in
+    # no job at all — those specs were compiled by the typecheck job and then never
+    # executed against a running stack. Sharded rather than one job per spec, so
+    # adding a spec needs no matrix edit. Mirrors the parent repo's job.
+    name: Playwright - shard ${{ matrix.shard }}
+    # Observed the same work as the parent job, 41m there; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 80
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    defaults:
+      run:
+        working-directory: parent
+    steps:
+      - name: Checkout parent repo (workspace structure)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PARENT_REPO }}
+          ref: ${{ needs.parent-ref.outputs.ref }}
+          path: parent
+      - name: Checkout submodule code (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: parent/citadel-workspaces
+      - name: Init citadel-internal-service submodule
+        run: git submodule update --init --recursive citadel-internal-service
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
+          # Best effort: this frees cache, it does not build anything. apt takes a
+          # lock, and unattended-upgrades holds one for minutes after boot — the
+          # failure that killed test:crud in this same workflow. A cleanup that
+          # cannot run is not a reason to fail the build. Preventive: no run has
+          # failed here, but the mechanism is one already proven live in this file.
+          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
+          df -h
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads the same 1154-package
+          # tree; `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          #
+          # The parent's lockfile, because that is what `npm ci` installs from here:
+          # every job checks the parent out into `parent/` and runs with
+          # `working-directory: parent`. All five setup-node steps run AFTER that
+          # checkout, so the path resolves.
+          cache: npm
+          cache-dependency-path: parent/package-lock.json
+      - name: Install Dependencies
+        # Root install first, and before `playwright install` — see the long note
+        # on the integration-tests job for why both orderings matter.
+        run: npm ci
+      - name: Install Playwright Browsers
+        # The one browser install (its action.yml says what it caches and why).
+        uses: ./parent/citadel-workspaces/.github/actions/install-chromium
+        with:
+          working-directory: parent
+      - name: Symlink workspace deps for integration-tests
+        run: |
+          mkdir -p citadel-workspaces/integration-tests/node_modules
+          ln -sf ${{ github.workspace }}/parent/node_modules/playwright \
+                 citadel-workspaces/integration-tests/node_modules/playwright
+          ln -sf ${{ github.workspace }}/parent/node_modules/@playwright \
+                 citadel-workspaces/integration-tests/node_modules/@playwright
+      # The stack integration-stack built for this run: no image build here and no WASM sync.
+      # The base-image pulls (and their retries) moved with the builds.
+      - name: Download the stack this run built
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ci-stack-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/ci-stack
+      - name: Load the stack, and prove it was built from this checkout
+        # Loading ~12 GB of layers; minutes, not tens of them. A hang fails the step.
+        timeout-minutes: 15
+        run: ./scripts/ci-stack.sh load "$RUNNER_TEMP/ci-stack"
+      - name: Start Services
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+        run: docker compose up -d --no-build --wait
+      - name: Dump Service Logs on Start Failure
+        if: failure()
+        run: |
+          docker compose logs sync-wasm-client 2>&1 | tail -200
+          docker compose logs server 2>&1 | tail -50
+          docker compose logs internal-service 2>&1 | tail -50
+      - name: Clean Docker Build Cache
+        run: |
+          docker builder prune -af
+          docker image prune -af
+          df -h
+      - name: Run Playwright Tests
+        env:
+          IN_CI: 'true'
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+          INTERNAL_SERVICE_PORT: '12345'
+        run: npx playwright test --shard=${{ matrix.shard }}/3
+        working-directory: parent/citadel-workspaces/integration-tests
+      # AFTER the test step, deliberately.
+      #
+      # `Dump Service Logs on Start Failure` above only ever fires for a stack
+      # that fails to START: steps run in order, so by the time a TEST fails
+      # that step has already been skipped. Six P2P specs failed in run
+      # 34050229807 -- registration, both call specs, screen share, member-list,
+      # and three reconnection legs -- and the jobs carried no backend log at
+      # all, so the one line that separates "the request never arrived" from
+      # "it arrived and was not answered" was not available. The parent
+      # workflow has had this step for some time; this repository did not.
+      - name: Dump Service Logs on Test Failure
+        if: failure()
+        run: |
+          # The UI is a service too. Run 36246578839 died on "Services did not become alive":
+          # server and internal-service healthy, the UI's port closed -- and neither step logged
+          # the UI, so its OOM, crash or compile error was invisible.
+          echo "=== ui: state (OOMKilled, exit code, restarts) ==="
+          docker inspect --format 'status={{.State.Status}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} restarts={{.RestartCount}}' "$(docker compose ps -aq ui)" 2>&1 || true
+          echo "=== ui (tail) ==="
+          docker compose logs -t ui 2>&1 | tail -120 || true
+          echo "=== server: membership and refusal decisions ==="
+          docker compose logs -t server 2>&1 \
+            | grep -E "first workspace member|awaits initialization|promoted to Admin|Refusing" \
+            | tail -40 || true
+          echo "=== server (tail, ratchet noise dropped) ==="
+          docker compose logs -t server 2>&1 \
+            | grep -vE "ratchet_manager\.rs|endpoint_crypto_container" | tail -120
+          # The P2P causal chain, which a blind tail cannot show.
+          #
+          # Run 33347976897 (file-manager) needed exactly this and did not have
+          # it: Alice's service logged `sink.send() SUCCEEDED` for every message
+          # after a file transfer while the peer received none of them, and the
+          # one line that separates "the bytes never arrived" from "they arrived
+          # and were not delivered" -- `[PeerChannelCreated] Received P2P
+          # message!` -- was pushed out of the tail by ratchet_manager INFO
+          # spam, which fills all 120 lines on its own.
+          echo "=== internal-service: P2P send/receive chain ==="
+          docker compose logs -t internal-service 2>&1 \
+            | grep -E "\[P2P-[A-Z-]+\]|\[Peer[A-Za-z]+\]|\[PostRegister\]|\[UDP-NEGOTIATION\]|Refusing |Auto-accepted inbound REVFS|Failed to auto-accept" \
+            | tail -80 || true
+          echo "=== internal-service: warnings and errors ==="
+          docker compose logs -t internal-service 2>&1 \
+            | grep -E "WARN|ERROR" | grep -vE "ratchet_manager\.rs" | tail -60 || true
+          echo "=== internal-service (tail, ratchet noise dropped) ==="
+          docker compose logs -t internal-service 2>&1 \
+            | grep -vE "ratchet_manager\.rs|endpoint_crypto_container" | tail -120
+      - name: Upload Playwright Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-shard-${{ matrix.shard }}
+          path: |
+            parent/citadel-workspaces/integration-tests/playwright-report/
+            parent/citadel-workspaces/integration-tests/test-results/
+
+  integration-tests:
+    # The cheap gates first. Both of these bring up the full Docker stack --
+    # a cold `cargo build --release` of the server kernel AND the internal
+    # service, per leg, across 47 integration legs and 3 Playwright shards.
+    # Gated only on `parent-ref`, a PR that fails ESLint in 60 seconds still
+    # paid for all fifty of them.
+    #
+    # The parent workflow has gated its equivalents this way for some time
+    # (`needs: [crate-coverage, lint, typecheck, …]`); this one did not, and
+    # `check-expensive-jobs-wait-for-cheap-ones` could not say so because it
+    # read the parent's workflow file alone.
+    needs: [parent-ref, lint, typecheck, unit-tests, integration-stack]
+    name: Integration Test - ${{ matrix.test }}
+    # Observed the same work as the parent job, 26m there; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 55
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - test: test:p2p
+            artifact: p2p
+          - test: test:live-doc
+            artifact: live-doc
+          - test: test:group
+            artifact: group
+          - test: test:group-multiuser
+            artifact: group-multiuser
+          - test: test:crud
+            artifact: crud
+          - test: test:prev-sessions
+            artifact: prev-sessions
+          - test: test:file-transfer
+            artifact: file-transfer
+          - test: test:offline
+            artifact: offline
+          - test: test:hard-disconnect
+            artifact: hard-disconnect
+          - test: test:permissions
+            artifact: permissions
+          - test: test:admin-modal
+            artifact: admin-modal
+          - test: test:security
+            artifact: security
+          - test: test:topbar
+            artifact: topbar
+          - test: test:p2p-types
+            artifact: p2p-types
+          - test: test:settings-controls
+            artifact: settings-controls
+          - test: test:directory-actions
+            artifact: directory-actions
+          - test: test:member-mgmt
+            artifact: member-mgmt
+          - test: test:group-extended
+            artifact: group-extended
+          - test: test:files-extended
+            artifact: files-extended
+          - test: test:mdx-content
+            artifact: mdx-content
+          - test: test:misc
+            artifact: misc
+          - test: test:account-mgmt
+            artifact: account-mgmt
+          - test: test:hierarchy-nav
+            artifact: hierarchy-nav
+          # Previously missing from CI matrix
+          - test: test:settings
+            artifact: settings
+          - test: test:directory
+            artifact: directory
+          - test: test:workspace-init
+            artifact: workspace-init
+          - test: test:notifications
+            artifact: notifications
+          - test: test:tree-structure
+            artifact: tree-structure
+          - test: test:chat-settings
+            artifact: chat-settings
+          - test: test:reconnect-c2s
+            artifact: reconnect-c2s
+          - test: test:reconnect-both-c2s
+            artifact: reconnect-both-c2s
+          - test: test:reconnect-one-c2s
+            artifact: reconnect-one-c2s
+          - test: test:reconnect-p2p-one-c2s
+            artifact: reconnect-p2p-one-c2s
+          - test: test:reconnect-p2p-only
+            artifact: reconnect-p2p-only
+          - test: test:reconnect-chat-level
+            artifact: reconnect-chat-level
+          - test: test:file-manager
+            artifact: file-manager
+          - test: test:native-file-picker
+            artifact: native-file-picker
+          - test: test:office-chat
+            artifact: office-chat
+          - test: test:peer-group
+            artifact: peer-group
+          - test: test:revfs:peer
+            artifact: revfs-peer
+          - test: test:revfs:server
+            artifact: revfs-server
+          - test: test:room-chat
+            artifact: room-chat
+          - test: test:tree-cascade
+            artifact: tree-cascade
+          - test: test:tree-custom-types
+            artifact: tree-custom-types
+          - test: test:tree-deep
+            artifact: tree-deep
+          - test: test:tree-move
+            artifact: tree-move
+          - test: test:tree-permissions
+            artifact: tree-permissions
+          - test: test:tree-validator
+            artifact: tree-validator
+          # One account in several windows (agent 0.8.6): "Open here too", fan-out
+          # to every window, the sealed re-join token, and logout ending all of them.
+          - test: test:multi-window
+            artifact: multi-window
+          # Compute Pool between two members: install a signed app, per-member P2P consent, P2P
+          # vs relay, the denials, and CID routing of IhttpFrameNotification across two tabs.
+          - test: test:apps-compute-pool
+            artifact: apps-compute-pool
+    defaults:
+      run:
+        working-directory: parent
+    steps:
+      - name: Checkout parent repo (workspace structure)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PARENT_REPO }}
+          ref: ${{ needs.parent-ref.outputs.ref }}
+          path: parent
+      - name: Checkout submodule code (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: parent/citadel-workspaces
+      - name: Init citadel-internal-service submodule
+        run: git submodule update --init --recursive citadel-internal-service
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          # Best effort: this frees cache, it does not build anything. apt takes a
+          # lock, and unattended-upgrades holds one for minutes after boot — the
+          # failure that killed test:crud in this same workflow. A cleanup that
+          # cannot run is not a reason to fail the build. Preventive: no run has
+          # failed here, but the mechanism is one already proven live in this file.
+          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
+          df -h
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads the same 1154-package
+          # tree; `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          #
+          # The parent's lockfile, because that is what `npm ci` installs from here:
+          # every job checks the parent out into `parent/` and runs with
+          # `working-directory: parent`. All five setup-node steps run AFTER that
+          # checkout, so the path resolves.
+          cache: npm
+          cache-dependency-path: parent/package-lock.json
+      - name: Install Dependencies
+        # `npm ci` at the workspace root hoists playwright once, instead
+        # of installing it both at root AND in citadel-workspaces/. Two
+        # copies caused `tsc` to see two distinct
+        # `playwright-core/types/types` locations and reject the test
+        # build with "Type X/Browser is not assignable to type Y/Browser"
+        # plus `Property 'toBeVisible' does not exist`. One hoisted copy
+        # makes module resolution coherent. Mirrors the equivalent fix in
+        # the parent repo's validate.yml.
+        #
+        # IMPORTANT: install deps BEFORE `playwright install`. Running
+        # `npx playwright install` first triggers npx to auto-fetch the
+        # *latest* playwright, which downloads chrome-headless-shell for
+        # a different version than the locked one. The test then fails
+        # with "Executable doesn't exist at .../chromium_headless_shell-<v>"
+        # because the installed binary version doesn't match the one
+        # playwright@locked-version expects.
+        run: npm ci
+      - name: Install Playwright Browsers
+        # The one browser install (its action.yml says what it caches and why).
+        uses: ./parent/citadel-workspaces/.github/actions/install-chromium
+        with:
+          working-directory: parent
+      - name: Symlink workspace deps for integration-tests build
+        # `tsc` in integration-tests walks node_modules up the tree
+        # (NodeNext). Symlinking playwright from the workspace-root
+        # node_modules into integration-tests guarantees closest-
+        # resolution lands on the single hoisted copy.
+        run: |
+          mkdir -p citadel-workspaces/integration-tests/node_modules
+          ln -sf ${{ github.workspace }}/parent/node_modules/playwright \
+                 citadel-workspaces/integration-tests/node_modules/playwright
+          ln -sf ${{ github.workspace }}/parent/node_modules/@playwright \
+                 citadel-workspaces/integration-tests/node_modules/@playwright
+      # The stack integration-stack built for this run: no image build here and no WASM sync.
+      # The base-image pulls (and their retries) moved with the builds.
+      - name: Download the stack this run built
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ci-stack-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/ci-stack
+      - name: Load the stack, and prove it was built from this checkout
+        # Loading ~12 GB of layers; minutes, not tens of them. A hang fails the step.
+        timeout-minutes: 15
+        run: ./scripts/ci-stack.sh load "$RUNNER_TEMP/ci-stack"
+      - name: Start Services
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+        run: docker compose up -d --no-build --wait
+      - name: Dump Service Logs on Start Failure
+        if: failure()
+        run: |
+          echo "=== sync-wasm-client logs ==="
+          docker compose logs sync-wasm-client 2>&1 | tail -200
+          echo "=== server logs ==="
+          docker compose logs server 2>&1 | tail -50
+          echo "=== internal-service logs ==="
+          docker compose logs internal-service 2>&1 | tail -50
+      - name: Clean Docker Build Cache
+        run: |
+          docker builder prune -af
+          docker image prune -af
+          df -h
+      # The spec signs the app with a seed it makes and never prints (apps-signing.ts), by
+      # `cargo +<pin> run` of apps/first-party/signer. Built here so the test step's budget is
+      # not spent compiling, with the compiler the app's own rust-toolchain.toml pins.
+      - name: Build the app signer
+        if: matrix.test == 'test:apps-compute-pool'
+        run: |
+          pin="$(sed -n 's/^channel = "\(.*\)"$/\1/p' apps/first-party/compute-pool/rust-toolchain.toml)"
+          test -n "$pin" || { echo "::error::no channel in apps/first-party/compute-pool/rust-toolchain.toml"; exit 1; }
+          rustup toolchain install "$pin" --profile minimal
+          cargo "+$pin" build --locked --release --manifest-path apps/first-party/signer/Cargo.toml
+      - name: Run Integration Test
+        env:
+          IN_CI: 'true'
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+          # Several tests call `restartBackendServices` which spawns
+          # `docker compose` from the test runner; without
+          # INTERNAL_SERVICE_PORT in scope, docker-compose.yml's
+          # `${INTERNAL_SERVICE_PORT:-12345}` works at the compose
+          # level but the test runner's docker compose invocations
+          # would log a warning and (pre-fallback) bake an empty
+          # `--bind '0.0.0.0:'` into the container. Set it here so
+          # the runner inherits the same value Start Services used.
+          INTERNAL_SERVICE_PORT: '12345'
+        run: npm run ${{ matrix.test }}
+        working-directory: parent/citadel-workspaces/integration-tests
+      # AFTER the test step, deliberately.
+      #
+      # `Dump Service Logs on Start Failure` above only ever fires for a stack
+      # that fails to START: steps run in order, so by the time a TEST fails
+      # that step has already been skipped. Six P2P specs failed in run
+      # 34050229807 -- registration, both call specs, screen share, member-list,
+      # and three reconnection legs -- and the jobs carried no backend log at
+      # all, so the one line that separates "the request never arrived" from
+      # "it arrived and was not answered" was not available. The parent
+      # workflow has had this step for some time; this repository did not.
+      - name: Dump Service Logs on Test Failure
+        if: failure()
+        run: |
+          # The UI is a service too. Run 36246578839 died on "Services did not become alive":
+          # server and internal-service healthy, the UI's port closed -- and neither step logged
+          # the UI, so its OOM, crash or compile error was invisible.
+          echo "=== ui: state (OOMKilled, exit code, restarts) ==="
+          docker inspect --format 'status={{.State.Status}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} restarts={{.RestartCount}}' "$(docker compose ps -aq ui)" 2>&1 || true
+          echo "=== ui (tail) ==="
+          docker compose logs -t ui 2>&1 | tail -120 || true
+          echo "=== server: membership and refusal decisions ==="
+          docker compose logs -t server 2>&1 \
+            | grep -E "first workspace member|awaits initialization|promoted to Admin|Refusing" \
+            | tail -40 || true
+          echo "=== server (tail, ratchet noise dropped) ==="
+          docker compose logs -t server 2>&1 \
+            | grep -vE "ratchet_manager\.rs|endpoint_crypto_container" | tail -120
+          # The P2P causal chain, which a blind tail cannot show.
+          #
+          # Run 33347976897 (file-manager) needed exactly this and did not have
+          # it: Alice's service logged `sink.send() SUCCEEDED` for every message
+          # after a file transfer while the peer received none of them, and the
+          # one line that separates "the bytes never arrived" from "they arrived
+          # and were not delivered" -- `[PeerChannelCreated] Received P2P
+          # message!` -- was pushed out of the tail by ratchet_manager INFO
+          # spam, which fills all 120 lines on its own.
+          echo "=== internal-service: P2P send/receive chain ==="
+          docker compose logs -t internal-service 2>&1 \
+            | grep -E "\[P2P-[A-Z-]+\]|\[Peer[A-Za-z]+\]|\[PostRegister\]|\[UDP-NEGOTIATION\]|Refusing |Auto-accepted inbound REVFS|Failed to auto-accept" \
+            | tail -80 || true
+          echo "=== internal-service: warnings and errors ==="
+          docker compose logs -t internal-service 2>&1 \
+            | grep -E "WARN|ERROR" | grep -vE "ratchet_manager\.rs" | tail -60 || true
+          echo "=== internal-service (tail, ratchet noise dropped) ==="
+          docker compose logs -t internal-service 2>&1 \
+            | grep -vE "ratchet_manager\.rs|endpoint_crypto_container" | tail -120
+      - name: Upload Screenshots on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.artifact }}
+          path: parent/citadel-workspaces/integration-tests/screenshots/
+      - name: Upload Trace and Report on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traces-${{ matrix.artifact }}
+          path: |
+            parent/citadel-workspaces/integration-tests/test-results/
+            parent/citadel-workspaces/integration-tests/reports/

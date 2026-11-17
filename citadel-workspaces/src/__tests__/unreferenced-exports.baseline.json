@@ -1,0 +1,8 @@
+[
+  "createEmptyPermissions",
+  "decodeMetadataBytes",
+  "deriveLightPalette",
+  "findRegion",
+  "resetToPreset",
+  "stringToUint8Array"
+]

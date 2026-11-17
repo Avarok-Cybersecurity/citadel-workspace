@@ -1,0 +1,44 @@
+{
+  "timestamp": "2025-12-29T03:22:42.878Z",
+  "testName": "Offline Messaging Test",
+  "results": {
+    "accountCreation": {
+      "user1": true,
+      "user2": true
+    },
+    "p2pRegistration": true,
+    "p2pAccept": true,
+    "initialMessaging": {
+      "user1ToUser2": true,
+      "user2ToUser1": true,
+      "user2ReceivedInitial": false,
+      "user1ReceivedInitial": false
+    },
+    "disconnection": {
+      "user2Disconnected": true,
+      "sessionOrphaned": true
+    },
+    "offlineMessages": {
+      "message1Sent": true,
+      "message2Sent": true,
+      "message3Sent": true
+    },
+    "reconnection": {
+      "user2Reconnected": true,
+      "claimSessionSuccess": true,
+      "p2pChannelEstablished": true
+    },
+    "offlineDelivery": {
+      "message1Received": false,
+      "message2Received": false,
+      "message3Received": false
+    },
+    "postReconnectMessaging": {
+      "user1ToUser2": true,
+      "user2ToUser1": true,
+      "bidirectionalSuccess": false
+    }
+  },
+  "uxIssues": [],
+  "passed": false
+}

@@ -1,0 +1,87 @@
+// The oracle that wrote goldens.json and hundred-pages.bin. Not compiled here: build it as a
+// scratch crate beside a citadel-docs checkout (own CARGO_TARGET_DIR), with
+//   [dependencies] cdoc-paint = { path = "<docs>/crates/cdoc-paint" }
+//   cdoc-layout = { path = "<docs>/crates/cdoc-layout", features = ["test-support"] }
+//   cdoc-model = { path = "<docs>/crates/cdoc-model" }
+// then `cdpl-oracle emit hundred-pages.bin` and `cdpl-oracle report <file.bin>...`.
+//! Scratch oracle: writes a 100-page display list and prints, for each list given, per-page
+//! op counts and checksums computed by cdoc-paint's own decoder.
+use cdoc_layout::{layout, BreakerChoice, LayoutOptions, Params};
+use cdoc_model::{Block, Document, Inline, Paragraph, RunProperties};
+use cdoc_paint::{decode, encode, OpView};
+use std::fmt::Write as _;
+
+const WORDS: [&str; 16] = ["the","display","list","is","one","description","of","every","page","painted","by","canvas","preview","and","file","alike"];
+
+fn document(paragraphs: usize) -> Document {
+    let mut doc = Document::blank();
+    let template = match &doc.sections[0].blocks[0] { Block::Paragraph(p) => p.properties.clone(), Block::Table(_) => unreachable!() };
+    let mut state: u64 = 0x2545_F491_4F6C_DD1D;
+    let mut word = || { state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1); WORDS[usize::try_from(state >> 60).unwrap_or(0)] };
+    doc.sections[0].blocks = (0..paragraphs).map(|_| {
+        let text: Vec<&str> = (0..60).map(|_| word()).collect();
+        Block::Paragraph(Paragraph { properties: template.clone(), inlines: vec![Inline::text(text.join(" "), RunProperties::none())] })
+    }).collect();
+    doc
+}
+
+/// A JSON string literal: every non-ASCII or control character as a \u escape.
+fn json_str(s: &str) -> String {
+    let mut out = String::from("\"");
+    for unit in s.encode_utf16() {
+        match unit { 0x22 => out.push_str("\\\""), 0x5c => out.push_str("\\\\"), 0x20..=0x7e => out.push(char::from(u8::try_from(unit).unwrap())), _ => { let _ = write!(out, "\\u{unit:04x}"); } }
+    }
+    out.push('"');
+    out
+}
+
+fn report(name: &str, bytes: &[u8]) -> String {
+    let view = decode(bytes).expect("decodes");
+    let mut out = format!("{{\"name\":\"{name}\",\"faces\":{},\"pages\":[", view.faces().len());
+    for slot in 0..view.page_count() {
+        let page = view.page(slot).expect("page");
+        let mut c = [0u64; 12];
+        let (mut text_sum, mut glyphs, mut first_pens, mut first_text, mut text_bytes) = (0i64, 0u64, String::new(), String::new(), 0usize);
+        for op in page.ops() {
+            let k = match op {
+                OpView::FillRect { .. } => 0, OpView::StrokeRect { .. } => 1, OpView::Line { .. } => 2,
+                OpView::FillPath { .. } => 3, OpView::StrokePath { .. } => 4,
+                OpView::GlyphRun { head, text, glyphs: g } => {
+                    let mut pen = head.x;
+                    let record = first_pens.is_empty();
+                    if record { first_text = text.to_string(); }
+                    for gl in g { if record { let _ = write!(first_pens, "{pen},"); } text_sum += i64::from(gl.id) + i64::from(gl.cluster) + i64::from(gl.advance) + i64::from(gl.x_offset) + i64::from(gl.y_offset); pen += gl.advance; glyphs += 1; }
+                    if record { let _ = write!(first_pens, "{pen}"); }
+                    text_bytes += text.len();
+                    5 }
+                OpView::Image { .. } => 6, OpView::Link { .. } => 7, OpView::ClipPush(_) => 8, OpView::ClipPop => 9, OpView::SigField { .. } => 10, OpView::CaretLines(_) => 11,
+            };
+            c[k] += 1;
+        }
+        if slot > 0 { out.push(','); }
+        let _ = write!(out, "{{\"number\":{},\"width\":{},\"height\":{},\"counts\":{:?},\"glyphs\":{glyphs},\"textSum\":{text_sum},\"firstRunPens\":[{first_pens}],\"firstRunText\":{},\"textBytes\":{text_bytes}}}", page.number, page.width, page.height, c, json_str(&first_text));
+    }
+    let doc = view.document();
+    let opt = |v: &Option<String>| v.as_ref().map_or_else(|| "null".to_owned(), |s| json_str(s));
+    let _ = write!(out, "],\"document\":{{\"title\":{},\"language\":{},\"outline\":[", opt(&doc.title), opt(&doc.language));
+    for (i, h) in doc.outline.iter().enumerate() {
+        if i > 0 { out.push(','); }
+        let _ = write!(out, "{{\"level\":{},\"page\":{},\"y\":{},\"title\":{}}}", h.level, h.page, i64::from(h.y), json_str(&h.title));
+    }
+    out.push_str("]}}");
+    out
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args[1] == "emit" {
+        let fonts = cdoc_layout::test_support::default_fonts();
+        let mut n = 400;
+        let laid = loop { let l = layout(&document(n), &fonts, &LayoutOptions::word_like(BreakerChoice::KnuthPlass(Params::word_like()))).unwrap(); if l.pages.len() >= 100 { break l; } n += 40; };
+        let bytes = encode(&laid, &fonts).unwrap();
+        std::fs::write(&args[2], &bytes).unwrap();
+        eprintln!("{n} paragraphs, {} pages, {} bytes", laid.pages.len(), bytes.len());
+    } else {
+        for path in &args[2..] { println!("{}", report(path.rsplit('/').next().unwrap(), &std::fs::read(path).unwrap())); }
+    }
+}

@@ -1,0 +1,16 @@
+# Citadel Workspace
+#
+# The landing page is the only public surface. Everything else sits behind
+# authentication and renders nothing useful to a crawler, so those routes are
+# disallowed to keep them out of the index rather than have them indexed as
+# empty pages.
+
+User-agent: *
+Allow: /$
+Disallow: /workspace
+Disallow: /messages
+Disallow: /directory
+Disallow: /groups/
+Disallow: /connect
+
+Sitemap: https://citadel.avarok.net/sitemap.xml

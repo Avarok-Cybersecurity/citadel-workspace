@@ -1,0 +1,592 @@
+{
+ "headings": {
+  "writtenBy": "y-prosemirror prosemirrorJSONToYDoc",
+  "update": "AQzzztqQCQAHAQdkZWZhdWx0AwdoZWFkaW5nBwDzztqQCQAGBADzztqQCQEDT25lKADzztqQCQAFbGV2ZWwBfQGH887akAkAAwdoZWFkaW5nBwDzztqQCQYGBADzztqQCQcDVHdvKADzztqQCQYFbGV2ZWwBfQKH887akAkGAwdoZWFkaW5nBwDzztqQCQwGBADzztqQCQ0DU2l4KADzztqQCQwFbGV2ZWwBfQYA",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "heading",
+     "attrs": {
+      "level": 1
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "One"
+      }
+     ]
+    },
+    {
+     "type": "heading",
+     "attrs": {
+      "level": 2
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "Two"
+      }
+     ]
+    },
+    {
+     "type": "heading",
+     "attrs": {
+      "level": 6
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "Six"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "nestedLists": {
+  "writtenBy": "y-prosemirror prosemirrorJSONToYDoc",
+  "update": "ARSY3vOrCgAHAQdkZWZhdWx0AwpidWxsZXRMaXN0BwCY3vOrCgADCGxpc3RJdGVtBwCY3vOrCgEDCXBhcmFncmFwaAcAmN7zqwoCBgQAmN7zqwoDAWGHmN7zqwoCAwtvcmRlcmVkTGlzdAcAmN7zqwoFAwhsaXN0SXRlbQcAmN7zqwoGAwlwYXJhZ3JhcGgHAJje86sKBwYEAJje86sKCANhLjOHmN7zqwoHAwpidWxsZXRMaXN0BwCY3vOrCgwDCGxpc3RJdGVtBwCY3vOrCg0DCXBhcmFncmFwaAcAmN7zqwoOBgQAmN7zqwoPBGRlZXAoAJje86sKBQVzdGFydAF9A4eY3vOrCgEDCGxpc3RJdGVtBwCY3vOrChUDCXBhcmFncmFwaAcAmN7zqwoWBgQAmN7zqwoXAWIA",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "bulletList",
+     "content": [
+      {
+       "type": "listItem",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "a"
+          }
+         ]
+        },
+        {
+         "type": "orderedList",
+         "attrs": {
+          "start": 3,
+          "type": null
+         },
+         "content": [
+          {
+           "type": "listItem",
+           "content": [
+            {
+             "type": "paragraph",
+             "content": [
+              {
+               "type": "text",
+               "text": "a.3"
+              }
+             ]
+            },
+            {
+             "type": "bulletList",
+             "content": [
+              {
+               "type": "listItem",
+               "content": [
+                {
+                 "type": "paragraph",
+                 "content": [
+                  {
+                   "type": "text",
+                   "text": "deep"
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "listItem",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "b"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "marks": {
+  "writtenBy": "y-prosemirror prosemirrorJSONToYDoc",
+  "update": "ARSj6PSvCAAHAQdkZWZhdWx0AwlwYXJhZ3JhcGgHAKPo9K8IAAYEAKPo9K8IAQZwbGFpbiCGo+j0rwgHBGJvbGQCe32Eo+j0rwgIBGJvbGSGo+j0rwgMBGJvbGQEbnVsbISj6PSvCA0BIIaj6PSvCA4EYm9sZAJ7fYaj6PSvCA8GaXRhbGljAnt9hKPo9K8IEARib3RohqPo9K8IFARib2xkBG51bGyGo+j0rwgVBml0YWxpYwRudWxshKPo9K8IFgEghqPo9K8IFwZzdHJpa2UCe32Eo+j0rwgYBnN0cnVja4aj6PSvCB4Gc3RyaWtlBG51bGyEo+j0rwgfASCGo+j0rwggBGNvZGUCe32Eo+j0rwghBGNvZGWGo+j0rwglBGNvZGUEbnVsbAA=",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "plain "
+      },
+      {
+       "type": "text",
+       "marks": [
+        {
+         "type": "bold"
+        }
+       ],
+       "text": "bold"
+      },
+      {
+       "type": "text",
+       "text": " "
+      },
+      {
+       "type": "text",
+       "marks": [
+        {
+         "type": "bold"
+        },
+        {
+         "type": "italic"
+        }
+       ],
+       "text": "both"
+      },
+      {
+       "type": "text",
+       "text": " "
+      },
+      {
+       "type": "text",
+       "marks": [
+        {
+         "type": "strike"
+        }
+       ],
+       "text": "struck"
+      },
+      {
+       "type": "text",
+       "text": " "
+      },
+      {
+       "type": "text",
+       "marks": [
+        {
+         "type": "code"
+        }
+       ],
+       "text": "code"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "blocks": {
+  "writtenBy": "y-prosemirror prosemirrorJSONToYDoc",
+  "update": "ARLurPGEBwAHAQdkZWZhdWx0AwpibG9ja3F1b3RlBwDurPGEBwADCXBhcmFncmFwaAcA7qzxhAcBBgQA7qzxhAcCBnF1b3RlZIfurPGEBwEDCXBhcmFncmFwaAcA7qzxhAcJBgQA7qzxhAcKBXR3aWNlh+6s8YQHAAMJY29kZUJsb2NrBwDurPGEBxAGBADurPGEBxEbZm4gbWFpbigpIHt9CiAgLy8gdHdvIGxpbmVzKADurPGEBxAIbGFuZ3VhZ2UBdwRydXN0h+6s8YQHEAMOaG9yaXpvbnRhbFJ1bGWH7qzxhAcuAwlwYXJhZ3JhcGgHAO6s8YQHLwYEAO6s8YQHMARsaW5lh+6s8YQHMAMJaGFyZEJyZWFrh+6s8YQHNQYEAO6s8YQHNgVicmVhawA=",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "blockquote",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "quoted"
+        }
+       ]
+      },
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "twice"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "codeBlock",
+     "attrs": {
+      "language": "rust"
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "fn main() {}\n  // two lines"
+      }
+     ]
+    },
+    {
+     "type": "horizontalRule"
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "line"
+      },
+      {
+       "type": "hardBreak"
+      },
+      {
+       "type": "text",
+       "text": "break"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "empty": {
+  "writtenBy": "y-prosemirror prosemirrorJSONToYDoc",
+  "update": "AQHdnpuDCQAHAQdkZWZhdWx0AwlwYXJhZ3JhcGgA",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph"
+    }
+   ]
+  }
+ },
+ "emptyParagraphs": {
+  "writtenBy": "y-prosemirror prosemirrorJSONToYDoc",
+  "update": "AQiOnfveDAAHAQdkZWZhdWx0AwlwYXJhZ3JhcGgHAI6d+94MAAYEAI6d+94MAQFhh46d+94MAAMJcGFyYWdyYXBoh46d+94MAwMJcGFyYWdyYXBoh46d+94MBAMJcGFyYWdyYXBoBwCOnfveDAUGBACOnfveDAYBYgA=",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "a"
+      }
+     ]
+    },
+    {
+     "type": "paragraph"
+    },
+    {
+     "type": "paragraph"
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "b"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "unicodeRtl": {
+  "writtenBy": "y-prosemirror prosemirrorJSONToYDoc",
+  "update": "AQvole2eBwAHAQdkZWZhdWx0AwlwYXJhZ3JhcGgHAOiV7Z4HAAYEAOiV7Z4HAS/Xqdec15XXnSDXoteV15zXnSDigJQg2YXYsdit2KjYpyDYqNin2YTYudin2YTZhYfole2eBwADCXBhcmFncmFwaAcA6JXtngcbBgQA6JXtngccT/Cfkanwn4+94oCN8J+SuyBmYW1pbHkg8J+RqOKAjfCfkanigI3wn5Gn4oCN8J+RpiBmbGFncyDwn4ep8J+HqiBjb21iaW5pbmcgw6kgw7GH6JXtngcbAwlwYXJhZ3JhcGgHAOiV7Z4HUAYGAOiV7Z4HUQZpdGFsaWMCe32E6JXtngdSGG1peGVkIGx0ciDXoteR16jXmdeqIHJ0bIbole2eB2UGaXRhbGljBG51bGwA",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "שלום עולם — مرحبا بالعالم"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "👩🏽‍💻 family 👨‍👩‍👧‍👦 flags 🇩🇪 combining é ñ"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "marks": [
+        {
+         "type": "italic"
+        }
+       ],
+       "text": "mixed ltr עברית rtl"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "sample": {
+  "writtenBy": "y-prosemirror prosemirrorJSONToYDoc",
+  "update": "AQrZzOXsAwAHAQdkZWZhdWx0AwdoZWFkaW5nBwDZzOXsAwAGBADZzOXsAwEEUGxhbigA2czl7AMABWxldmVsAX0Bh9nM5ewDAAMJcGFyYWdyYXBoBwDZzOXsAwcGBADZzOXsAwgFU2hpcCCG2czl7AMNBGJvbGQCe32E2czl7AMOBkZyaWRheYbZzOXsAxQEYm9sZARudWxsAA==",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "heading",
+     "attrs": {
+      "level": 1
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "Plan"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "Ship "
+      },
+      {
+       "type": "text",
+       "marks": [
+        {
+         "type": "bold"
+        }
+       ],
+       "text": "Friday"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "tripNotes": {
+  "writtenBy": "y-prosemirror prosemirrorJSONToYDoc",
+  "update": "AQfVz92fBwAHAQdkZWZhdWx0AwdoZWFkaW5nBwDVz92fBwAGBADVz92fBwEFTm90ZXMoANXP3Z8HAAVsZXZlbAF9AYfVz92fBwADCXBhcmFncmFwaAcA1c/dnwcIBgQA1c/dnwcJF9ep15zXldedIOKAlCDZhdix2K3YqNinAA==",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "heading",
+     "attrs": {
+      "level": 1
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "Notes"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "שלום — مرحبا"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "realEditor": {
+  "writtenBy": "a TipTap Editor with StarterKit and Collaboration, the chat editor’s extension set",
+  "update": "ASiquaXNAgAHAQdkZWZhdWx0AwpidWxsZXRMaXN0BwCquaXNAgADCGxpc3RJdGVtBwCquaXNAgEDCXBhcmFncmFwaAcAqrmlzQICBgQAqrmlzQIDAWGHqrmlzQICAwtvcmRlcmVkTGlzdAcAqrmlzQIFAwhsaXN0SXRlbQcAqrmlzQIGAwlwYXJhZ3JhcGgHAKq5pc0CBwYEAKq5pc0CCANhLjOHqrmlzQIHAwpidWxsZXRMaXN0BwCquaXNAgwDCGxpc3RJdGVtBwCquaXNAg0DCXBhcmFncmFwaAcAqrmlzQIOBgQAqrmlzQIPBGRlZXAoAKq5pc0CBQVzdGFydAF9A4equaXNAgEDCGxpc3RJdGVtBwCquaXNAhUDCXBhcmFncmFwaAcAqrmlzQIWBgQAqrmlzQIXAWKHqrmlzQIAAwlwYXJhZ3JhcGgHAKq5pc0CGQYEAKq5pc0CGgZwbGFpbiCGqrmlzQIgBGJvbGQCe32EqrmlzQIhBGJvbGSGqrmlzQIlBGJvbGQEbnVsbISquaXNAiYBIIaquaXNAicEYm9sZAJ7fYaquaXNAigGaXRhbGljAnt9hKq5pc0CKQRib3Rohqq5pc0CLQRib2xkBG51bGyGqrmlzQIuBml0YWxpYwRudWxshKq5pc0CLwEghqq5pc0CMAZzdHJpa2UCe32EqrmlzQIxBnN0cnVja4aquaXNAjcGc3RyaWtlBG51bGyEqrmlzQI4ASCGqrmlzQI5BGNvZGUCe32EqrmlzQI6BGNvZGWGqrmlzQI+BGNvZGUEbnVsbAA=",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "bulletList",
+     "content": [
+      {
+       "type": "listItem",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "a"
+          }
+         ]
+        },
+        {
+         "type": "orderedList",
+         "attrs": {
+          "start": 3,
+          "type": null
+         },
+         "content": [
+          {
+           "type": "listItem",
+           "content": [
+            {
+             "type": "paragraph",
+             "content": [
+              {
+               "type": "text",
+               "text": "a.3"
+              }
+             ]
+            },
+            {
+             "type": "bulletList",
+             "content": [
+              {
+               "type": "listItem",
+               "content": [
+                {
+                 "type": "paragraph",
+                 "content": [
+                  {
+                   "type": "text",
+                   "text": "deep"
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "listItem",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "b"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "plain "
+      },
+      {
+       "type": "text",
+       "marks": [
+        {
+         "type": "bold"
+        }
+       ],
+       "text": "bold"
+      },
+      {
+       "type": "text",
+       "text": " "
+      },
+      {
+       "type": "text",
+       "marks": [
+        {
+         "type": "bold"
+        },
+        {
+         "type": "italic"
+        }
+       ],
+       "text": "both"
+      },
+      {
+       "type": "text",
+       "text": " "
+      },
+      {
+       "type": "text",
+       "marks": [
+        {
+         "type": "strike"
+        }
+       ],
+       "text": "struck"
+      },
+      {
+       "type": "text",
+       "text": " "
+      },
+      {
+       "type": "text",
+       "marks": [
+        {
+         "type": "code"
+        }
+       ],
+       "text": "code"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "seeded": {
+  "writtenBy": "the earlier \"turn this message into a document\" seed",
+  "update": "AQe63J3bDAAHAQdkZWZhdWx0AwlwYXJhZ3JhcGgHALrcndsMAAYEALrcndsMAQVmaXJzdIe63J3bDAADCXBhcmFncmFwaIe63J3bDAcDCXBhcmFncmFwaAcAutyd2wwIBgQAutyd2wwJBXRoaXJkAA==",
+  "shown": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "first"
+      }
+     ]
+    },
+    {
+     "type": "paragraph"
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "third"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

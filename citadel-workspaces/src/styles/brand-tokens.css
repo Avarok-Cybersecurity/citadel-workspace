@@ -1,0 +1,40 @@
+/*
+ * Logo colours. NOT design tokens.
+ *
+ * The values are the brand kit's (assets/brand/tokens/brand.css in the parent repository):
+ *
+ *               light ground   dark ground
+ *   ink         #1C1D28        #FFFFFF       the C, and the outlined name
+ *   arrow       #6E59A5        #9B87F5       the arrow only
+ *
+ * Kept apart from the semantic tokens in `index.css` for two reasons.
+ *
+ * 1. THE LOGO MUST NOT INHERIT A THEME. A workspace administrator picks any of nine palettes
+ *    and can override them at runtime; binding the mark to `--primary` would let a workspace
+ *    repaint the product's logo, which the guidelines forbid ("Recolour ... the arrow to a
+ *    theme colour").
+ *
+ * 2. `index.css`'s `:root` and `.dark` blocks are parsed positionally by
+ *    theme-foundation.test.ts, check-token-contrast.mjs and check-destructive-contrast.mjs.
+ *
+ * The cut follows the GROUND, and the ground is dark exactly when `.dark` is on the root:
+ * next-themes writes that class (attribute="class"), and index.css paints the dark background
+ * from it. The kit's own brand.css keys off prefers-color-scheme instead; that is right for a
+ * page whose ground follows the OS, and wrong here, where a reader can pick a light theme on a
+ * dark OS. The rule this file used to carry did exactly that: next-themes marks a light theme
+ * with `.light`, not `[data-theme='light']`, so on a dark OS the media query matched and put
+ * #9B87F5 on white at 2.9:1.
+ *
+ * #6E59A5 is 2.9:1 on #1C1D28, under the 3:1 floor for graphics, which is why the dark ground
+ * takes #9B87F5 rather than the same purple.
+ */
+
+:root {
+  --citadel-ink: #1c1d28;
+  --citadel-arrow: #6e59a5;
+}
+
+.dark {
+  --citadel-ink: #ffffff;
+  --citadel-arrow: #9b87f5;
+}

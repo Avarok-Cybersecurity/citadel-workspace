@@ -1,0 +1,47 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# Anchored to the root. A bare `screenshots/` matches the directory at ANY
+# depth, which silently swallowed public/screenshots — shipped assets the PWA
+# manifest points at, so the install card would have 404'd in production.
+/screenshots/*
+integration-tests/screenshots/*
+public/wasm/*
+# Test artifacts (never commit — regenerated on every run)
+test-screenshots/
+/screenshots/
+reports/
+test-results/
+integration-tests/test-results/
+integration-tests/reports/
+integration-tests/screenshots/
+playwright-report/
+integration-tests/playwright-report/
+*.tsbuildinfo
+
+# Local test config (use test.config.example.json as the template)
+integration-tests/test.config.json
+
+# The scroll gate's traced frames (scripts/check-cdoc-scroll-perf.mjs); CI uploads them.
+scroll-frames.json

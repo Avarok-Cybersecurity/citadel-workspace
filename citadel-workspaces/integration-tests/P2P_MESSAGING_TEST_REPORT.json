@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-12-28T18:52:18.612Z",
+  "users": {
+    "user1": "msg_alice_1766947811010",
+    "user2": "msg_bob_1766947811010"
+  },
+  "results": {
+    "accountCreation": {
+      "user1": true,
+      "user2": true
+    },
+    "p2pRegistration": true,
+    "p2pAccept": true,
+    "conversationOpen": {
+      "user1": true,
+      "user2": true
+    },
+    "messaging": {
+      "user1ToUser2": true,
+      "user2ToUser1": true,
+      "user1Received": true,
+      "user2Received": true
+    },
+    "uxChecks": {
+      "timestamps": true,
+      "onlineStatus": true
+    }
+  },
+  "uxIssues": [],
+  "passed": true
+}

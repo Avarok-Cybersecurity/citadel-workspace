@@ -1,0 +1,86 @@
+name: Install Chromium
+description: >-
+  The one browser install in CI, in both repositories: Playwright's Chromium and its system
+  packages via scripts/ci/install-chromium.sh, with the browser and the apt packages restored
+  from and saved to the Actions cache so neither depends on a mirror's speed on the day.
+
+# Why the caches: on 2026-10-22 the Azure apt mirror served the ~21 MB of fonts and X libraries
+# `--with-deps` needs at ~40 KB/s. The install took 5 to 11 minutes and a job capped at 15 ran
+# out inside it (UI run 39843446695, twice). The answer is not a longer cap or another retry:
+# with the packages cached apt downloads nothing, and with the browser cached Playwright
+# downloads nothing.
+#
+# Keys: the browser build and the apt package list are both properties of the RESOLVED
+# playwright version (read from node_modules after `npm ci`, not a lockfile hash, which changes
+# with every unrelated dependency). The packages also depend on the runner image, so their key
+# carries ImageOS and ImageVersion; when the image moves, the previous image's packages are
+# restored and apt fetches only what differs. Saved right after the install, not at job end, so
+# a gate failing later in the job does not throw a good cache away.
+#
+# Linux only. On the self-hosted Mac there is no apt and the browser cache lives on its disk.
+
+inputs:
+  working-directory:
+    description: A directory whose node_modules resolves the LOCKED playwright (run after npm ci).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Cache keys from the resolved playwright and the runner image
+      id: keys
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        echo "debs-dir=${HOME}/.cache/chromium-apt-archives" >>"$GITHUB_OUTPUT"
+        [ "$RUNNER_OS" = Linux ] || exit 0
+        version=$(node -p "require('playwright/package.json').version")
+        if [ -z "${ImageOS:-}" ] || [ -z "${ImageVersion:-}" ]; then
+          echo "::error::ImageOS/ImageVersion unset: not a GitHub-hosted image, so the apt cache has no key"
+          exit 1
+        fi
+        {
+          echo "browsers=ms-playwright-${RUNNER_OS}-${RUNNER_ARCH}-${version}"
+          echo "debs-prefix=chromium-apt-${ImageOS}-${RUNNER_ARCH}-${version}-"
+          echo "debs=chromium-apt-${ImageOS}-${RUNNER_ARCH}-${version}-${ImageVersion}"
+        } >>"$GITHUB_OUTPUT"
+        echo "playwright ${version} on ${ImageOS} ${ImageVersion} (${RUNNER_ARCH})"
+
+    - name: Restore the browser
+      id: browsers
+      if: runner.os == 'Linux'
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ steps.keys.outputs.browsers }}
+
+    - name: Restore the apt packages
+      id: debs
+      if: runner.os == 'Linux'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.keys.outputs.debs-dir }}
+        key: ${{ steps.keys.outputs.debs }}
+        restore-keys: ${{ steps.keys.outputs.debs-prefix }}
+
+    - name: Install Chromium with its system packages
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: bash "$GITHUB_ACTION_PATH/../../../scripts/ci/install-chromium.sh" "$DEBS_DIR"
+      env:
+        DEBS_DIR: ${{ steps.keys.outputs.debs-dir }}
+
+    - name: Save the browser
+      if: runner.os == 'Linux' && steps.browsers.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ steps.keys.outputs.browsers }}
+
+    - name: Save the apt packages
+      if: runner.os == 'Linux' && steps.debs.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.keys.outputs.debs-dir }}
+        key: ${{ steps.keys.outputs.debs }}
