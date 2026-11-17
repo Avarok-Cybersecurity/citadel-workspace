@@ -73,10 +73,17 @@ identity() {
 
 identity_hash() { identity | sha256sum | cut -d' ' -f1; }
 
-# What the server and agent images are built from: every repository but the UI's.
+# What the server and agent images are built from: everything but the UI. The UI is a directory
+# of the parent (it was a submodule until it was folded in), so a UI-only commit moves the
+# parent's HEAD; the parent's line is therefore its top-level tree WITHOUT the UI entry, or every
+# UI change would miss the backend image cache.
 BACKEND_SERVICES=(server internal-service)
 UI_REPO=citadel-workspaces
-backend_identity() { identity | awk -v ui="$UI_REPO" '$1 != ui && index($1, ui "/") != 1'; }
+parent_without_ui() { git ls-tree HEAD | awk -F'\t' -v ui="$UI_REPO" '$2 != ui' | sha256sum | cut -d' ' -f1; }
+backend_identity() {
+  identity | awk -v ui="$UI_REPO" '$1 != "." && $1 != ui && index($1, ui "/") != 1'
+  printf '. tree-without-%s %s\n' "$UI_REPO" "$(parent_without_ui)"
+}
 backend_hash() { backend_identity | sha256sum | cut -d' ' -f1; }
 
 # The labels name commits, so the tracked files must BE those commits. Submodule pointers are

@@ -2,14 +2,12 @@
 /**
  * A clone without `--recurse-submodules` cannot build, and does not say so.
  *
- * Three of the four npm workspace packages live INSIDE submodules —
- * `citadel-workspaces`, `citadel-workspaces/integration-tests` and
- * `citadel-internal-service/typescript-client`. Only
- * `citadel-workspace-client-ts` is in this repository. So a plain
- * `git clone` leaves those directories empty, every one of them missing the
- * package.json that `workspaces` in the root package.json points at, and npm
- * fails on a workspace it cannot resolve rather than on the thing that is
- * actually wrong.
+ * One of the four npm workspace packages lives INSIDE a submodule —
+ * `citadel-internal-service/typescript-client` (the UI ones were too, until the
+ * UI was folded into citadel-workspaces/). So a plain `git clone` leaves it
+ * empty, missing the package.json that `workspaces` in the root package.json
+ * points at, and npm fails on a workspace it cannot resolve rather than on the
+ * thing that is actually wrong.
  *
  * `git clone --recurse-submodules` is the documented first line of the
  * quickstart, and forgetting it is the single easiest way to start badly. This
@@ -57,7 +55,7 @@ if (uninitialised.length > 0) {
   for (const path of uninitialised) console.error(`  - ${path}`);
   console.error(
     '\nRun:  git submodule update --init --recursive\n' +
-      '\nThree of the four npm workspace packages live inside submodules, so ' +
+      '\nAn npm workspace package lives inside a submodule, so ' +
       'npm will fail on a workspace it cannot resolve rather than on this.',
   );
   process.exit(1);

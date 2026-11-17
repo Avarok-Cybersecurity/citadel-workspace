@@ -16,10 +16,9 @@ this directory has been deployed yet; every step below is the operator's.
 ### 1. Tooling and checkout
 
 - Node 22 or later, Rust with the `wasm32-unknown-unknown` target, `wasm-pack`.
-- The parent repository with `citadel-workspaces` and `citadel-internal-service` checked out at
-  the revisions to ship (`git submodule update --init citadel-workspaces citadel-internal-service`).
-  The UI that is built is whatever `citadel-workspaces` has checked out: the onboarding flow is on
-  its `feat/create-workspace` branch until that merges.
+- The parent repository at the revision to ship, with the `citadel-internal-service` submodule
+  checked out (`git submodule update --init citadel-internal-service`). The UI that is built is
+  that revision's `citadel-workspaces/` directory.
 - A Cloudflare API token in a file only you can read (`chmod 600`), with: Account: Workers
   Scripts Edit, D1 Edit; Zone `avarok.net`: Workers Routes Edit. `deploy.sh` reads it from the
   file named by `CITADEL_CF_TOKEN_FILE`. The commands below take it the same way:

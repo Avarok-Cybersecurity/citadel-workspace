@@ -38,6 +38,8 @@ if (baselines.length === 0) {
   process.exit(1);
 }
 
+// Paths are kept relative to this directory (`--relative`, `:./`): it is a subdirectory of the
+// parent since the UI was folded in, and git reports diff paths from the top of the repository.
 const git = (args) =>
   execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
 
@@ -49,7 +51,7 @@ const git = (args) =>
 // all, which git cannot diff -- precisely the state a brand-new ratcheting gate
 // leaves behind. This check reported "all 4 match HEAD" over an untracked file
 // on the day it was written, which is the failure mode it exists to catch.
-const modified = git(['diff', '--name-only', '--', ...baselines])
+const modified = git(['diff', '--relative', '--name-only', '--', ...baselines])
   .split('\n')
   .filter(Boolean);
 
@@ -68,9 +70,9 @@ if (dirty.length > 0) {
       console.error(`    ${file}  (never committed -- git has no record of it at all)`);
       continue;
     }
-    const staged = git(['show', `:${file}`]);
+    const staged = git(['show', `:./${file}`]);
     const changed = existsSync(resolve(repoRoot, file))
-      ? git(['diff', '--numstat', '--', file])
+      ? git(['diff', '--relative', '--numstat', '--', file])
       : '(deleted)';
     console.error(`    ${file}  (${changed.split('\t').slice(0, 2).join(' +/- ')} lines, the staged copy has ${staged.length} bytes)`);
   }

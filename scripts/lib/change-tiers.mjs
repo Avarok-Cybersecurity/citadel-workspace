@@ -1,8 +1,8 @@
 /**
  * Which checks a change set needs, decided from the paths alone. Pure.
  *
- * Paths are relative to the PARENT checkout: a commit in the UI repo passes
- * `citadel-workspaces/<path>`, so one rule covers both repos' hooks.
+ * Paths are relative to the repository root (the UI lives at citadel-workspaces/; it was a
+ * separate repository whose hooks prefixed their paths, until it was folded in).
  *
  *   ui         anything under citadel-workspaces/, or the client-ts package it imports
  *   rust:root  a .rs / Cargo file of the parent's cargo workspace
@@ -23,7 +23,7 @@ const RUST_FILE = /(\.rs|(^|\/)Cargo\.(toml|lock)|(^|\/)rust-toolchain(\.toml)?)
 export function tiersFor(paths, rootCrateDirs) {
   const tiers = new Set();
   for (const path of paths) {
-    if (path === UI || path.startsWith(`${UI}/`) || path.startsWith(`${CLIENT_TS}/`)) tiers.add('ui');
+    if (path.startsWith(`${UI}/`) || path.startsWith(`${CLIENT_TS}/`)) tiers.add('ui');
     else if (path === AGENT || path.startsWith(`${AGENT}/`)) tiers.add('rust:agent');
     else if (RUST_FILE.test(path) && (path === 'Cargo.toml' || path === 'Cargo.lock' || rootCrateDirs.some((d) => path.startsWith(`${d}/`)))) tiers.add('rust:root');
     else tiers.add('parent');
