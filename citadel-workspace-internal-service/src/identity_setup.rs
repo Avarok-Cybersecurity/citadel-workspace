@@ -3,14 +3,15 @@
 //!
 //! How long the unsealed identity stays unlocked is required, as `--bind` and the STUN servers
 //! are: no value is right for every deployment, so the agent refuses to start without it rather
-//! than choosing. The challenge and `/.well-known/citadel` timeouts are protocol constants
-//! (`citadel_identity`), not settings. The store is not a setting either: it follows the account
-//! backend, because the identity derives every identity account's password and must persist
-//! exactly when they do.
+//! than choosing. The challenge and `/.well-known/citadel` timeouts and the signing rate are
+//! protocol constants (`citadel_identity`), not settings. The store is not a setting either: it
+//! follows the account backend, because the identity derives every identity account's password
+//! and must persist exactly when they do.
 
 use crate::server_identity_codec::WorkspaceServerIdentityCodec;
 use citadel_internal_service::kernel::identity::{
     FsIdentityStore, HttpsWellKnownFetch, IdentityConfig, IdentityStore, MemoryIdentityStore,
+    SignLimits,
 };
 use citadel_internal_service::kernel::CitadelWorkspaceService;
 use citadel_internal_service_connector::io_interface::IOInterface;
@@ -71,6 +72,7 @@ pub fn identity_config(
         well_known: Arc::new(well_known),
         codec: Arc::new(WorkspaceServerIdentityCodec),
         unlock_idle,
+        sign_limits: SignLimits::PROTOCOL,
     })
 }
 

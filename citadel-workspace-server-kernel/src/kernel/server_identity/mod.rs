@@ -121,7 +121,7 @@ impl ServerIdentity {
         let doc = WellKnownCitadel {
             v: WELL_KNOWN_VERSION,
             canonical_domain: self.plan.canonical.clone(),
-            citadel_wss: wss,
+            citadel_wss: Some(wss),
             server_key: self.key.public_key().clone(),
             former_domains: self.plan.former.clone(),
             issued_at_s,
