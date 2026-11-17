@@ -1,7 +1,6 @@
 
 import { useEffect, useRef , type MutableRefObject } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { AppLayout } from "./layout/AppLayout";
 import { WorkspaceView } from "./workspace/WorkspaceView";
 import { FileManagerContent } from "./file-manager/FileManagerContent";
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -45,17 +44,9 @@ export const Office: () => JSX.Element = (): JSX.Element => {
 
   // If files section is selected, show file manager
   if (section === "files") {
-    return (
-      <AppLayout>
-        <FileManagerContent />
-      </AppLayout>
-    );
+    return <FileManagerContent />;
   }
 
   // For all other sections, show the integrated workspace view
-  return (
-    <AppLayout>
-      <WorkspaceView nodeId={nodeId} />
-    </AppLayout>
-  );
+  return <WorkspaceView nodeId={nodeId} />;
 };
