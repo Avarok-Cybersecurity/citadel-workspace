@@ -4,9 +4,10 @@ The React front end for Citadel Workspace: a post-quantum secure, peer-to-peer
 collaborative workspace. Chat, file transfer and live documents over end-to-end
 encrypted connections.
 
-This directory is a git submodule of
+This directory is part of
 [`citadel-workspace`](https://github.com/Avarok-Cybersecurity/citadel-workspace),
-which holds the Rust server kernel, the local agent and the deployment.
+which also holds the Rust server kernel, the local agent and the deployment. It was the
+separate `citadel-workspace-ui` repository until it was folded in, history and all.
 
 ## How it fits together
 
@@ -29,7 +30,7 @@ would defeat the point — it would hold every user's ratchet keys.
 
 ## Running it
 
-The submodule is not built on its own. From the **parent** repository:
+It is not built on its own. From the repository root:
 
 ```sh
 docker compose up -d --build --wait   # or: tilt up
@@ -39,7 +40,7 @@ The UI is served on port 5291 with hot reloading, inside the `ui` container.
 
 ## Checks
 
-Run from the parent repository, which owns the gate suite:
+Run from the repository root, which owns the gate suite:
 
 ```sh
 SKIP_WASM_BUILD=1 node scripts/preflight.mjs
