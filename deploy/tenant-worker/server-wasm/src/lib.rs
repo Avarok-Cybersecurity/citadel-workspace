@@ -10,6 +10,8 @@ mod auth_versions;
 mod chat_files;
 mod host_promise;
 mod ice;
+mod identity;
+mod issuer;
 mod links;
 mod sign_in;
 mod storage;
@@ -84,7 +86,8 @@ impl TenantServer {
     /// the tenant plan's path policy (control/path-policy.mjs), required, in the shape of
     /// kernel.toml's `[path_policy]` (`citadel_workspace_server_kernel::path_policy`). `on_exit`
     /// is called with a description of how the node ended, which for a server that should run
-    /// until eviction is always a failure.
+    /// until eviction is always a failure. `identity` is the tenant's server identity, built
+    /// from this same `config_toml` and the object's key seed (see `identity`).
     #[allow(clippy::too_many_arguments)]
     #[wasm_bindgen(constructor)]
     pub fn start(
@@ -102,6 +105,7 @@ impl TenantServer {
         path_policy_json: &str,
         log_filter: &str,
         on_exit: js_sys::Function,
+        identity: &identity::ServerIdentityHost,
     ) -> Result<TenantServer, JsError> {
         tenant_console_log::init(log_filter);
         let config: ServerConfig = toml::from_str(config_toml)
@@ -143,6 +147,7 @@ impl TenantServer {
             usage_meter: usage::meter(usage),
             kernel_ready: Box::new(move |built| *slot.borrow_mut() = Some(built)),
         };
+        let server_identity = identity.shared();
         let (injector, listener) = WasmListener::injected();
         wasm_bindgen_futures::spawn_local(async move {
             let outcome = run_server_on::<WasmIO>(
@@ -162,6 +167,7 @@ impl TenantServer {
                 // then `net.server` calls are answered unavailable (kernel::apps::egress).
                 None,
                 network,
+                server_identity,
             )
             .await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());

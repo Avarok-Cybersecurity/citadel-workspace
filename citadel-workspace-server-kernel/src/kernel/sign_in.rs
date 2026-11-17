@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 pub mod admission;
 pub mod config;
+pub mod name_policy;
 #[cfg(not(target_family = "wasm"))]
 pub mod native;
 pub mod pq;

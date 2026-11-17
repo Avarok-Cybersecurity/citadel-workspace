@@ -940,6 +940,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel-identity"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "hmac",
+ "ml-dsa",
+ "serde",
+ "serde_json",
+ "sha3",
+ "zeroize",
+]
+
+[[package]]
 name = "citadel-ihttp-types"
 version = "0.1.0"
 dependencies = [
@@ -953,6 +966,7 @@ dependencies = [
 name = "citadel-internal-service"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "async-recursion",
  "async-trait",
  "bincode2",
@@ -960,6 +974,7 @@ dependencies = [
  "citadel-app-id",
  "citadel-app-net-policy",
  "citadel-app-sdk-types",
+ "citadel-identity",
  "citadel-ihttp-types",
  "citadel-internal-service-connector",
  "citadel-internal-service-types",
@@ -978,6 +993,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rfd",
+ "rust-argon2",
  "semver",
  "serde",
  "serde_json",
@@ -1100,25 +1116,31 @@ dependencies = [
 
 [[package]]
 name = "citadel-workspace-internal-service"
-version = "0.12.1"
+version = "0.13.0"
 dependencies = [
  "citadel-internal-service",
+ "citadel-internal-service-connector",
+ "citadel-internal-service-test-common",
  "citadel-internal-service-types",
+ "citadel-workspace-server-kernel-test-common",
  "citadel-workspace-types",
  "citadel_logging 0.14.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e)",
  "citadel_sdk",
  "citadel_types",
  "dirs2",
+ "futures",
  "lazy_static",
  "parking_lot",
  "png 0.18.1",
  "serde_json",
  "structopt",
+ "tempfile",
  "tokio 1.49.0",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
  "tray-icon",
+ "uuid",
  "windows-sys 0.61.2",
 ]
 
@@ -1139,6 +1161,7 @@ dependencies = [
  "citadel-app-net-policy",
  "citadel-app-sdk-types",
  "citadel-app-signature",
+ "citadel-identity",
  "citadel-ihttp-types",
  "citadel-internal-service",
  "citadel-internal-service-connector",
@@ -1180,6 +1203,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "cdoc-crdt",
+ "citadel-identity",
  "citadel-internal-service",
  "citadel-internal-service-connector",
  "citadel-internal-service-test-common",
@@ -1837,6 +1861,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
 dependencies = [
  "generic-array",
+ "rand_core 0.6.4",
  "typenum",
 ]
 

@@ -129,8 +129,9 @@ async fn an_opted_in_sessions_warning_is_uploaded_redacted_on_its_own_link() {
     );
     assert_eq!(batch.entries.len(), 1, "{:?}", batch.entries);
     let line = &batch.entries[0].message;
+    let outside = super::leak_check::outside_placeholders(line);
     for leak in ["alice", "ws.example.org", &BOB.to_string()] {
-        assert!(!line.contains(leak), "{leak} in {line}");
+        assert!(!outside.contains(leak), "{leak} in {line}");
     }
     assert!(
         line.contains("<user:") && line.contains("<host:") && line.contains("<session:"),

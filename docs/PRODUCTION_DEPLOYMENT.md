@@ -167,6 +167,38 @@ agent. Nothing on the public host can see a user's keys or decrypted
 messages. That is why the agent is never hosted for other people, and never
 proxied.
 
+## Identity: the server's name and key
+
+The server's `kernel.toml` must carry an `[identity]` section, and the server
+refuses to start without one (`citadel-workspace-server-kernel/src/kernel/server_identity/config.rs`
+documents every key; none has a default, and the name is never taken from
+`bind_addr`).
+
+- **`canonical_domain`** is the name clients reach the server by, canonical
+  (lowercase, no scheme, no trailing `/`, no `:443`). Accounts registered
+  before identities keep their bare names and keep signing in.
+- **`registration_names`** decides which new names register. With
+  `"require_canonical"` every registration is `handle@<canonical_domain>`, and a
+  bare name is refused with `citadel-identity-v1 canonical=<canonical_domain>`.
+  With `"allow_legacy"`, the shipped value until the UI's identity sign-up
+  ships, a bare name registers too. A handle and the same bare name are still
+  reserved against each other, and any other domain is still refused.
+- **`former_domains`** lists names the server answered to before (`[]` for
+  none): still accepted for sign-in and identity bindings, never for
+  registration.
+- **`discovery = "well_known"`** means you serve the kernel's
+  `/.well-known/citadel` over HTTPS from any reverse proxy: set `citadel_wss`
+  (the `wss://` address the document publishes) and `well_known_file`, where
+  the server writes the signed document at every start for the proxy to serve.
+  **`discovery = "pinned"`** is for a server without HTTPS: give users the key
+  fingerprint the server logs at start; clients show the domain as unverified
+  until the post-connect challenge matches the key they were given.
+- **The server key** (`server_key_file`) is a 32-byte seed, mode 0600, made
+  once with `citadel-workspace-server-kernel --init-server-key <path>`. The
+  image's start script runs that on a data volume's first start; the server
+  never makes one. **Back it up and never replace it**: clients pin the key,
+  and a new one makes every one of them refuse the server.
+
 ## Sign-in: post-quantum, security keys, Turnstile
 
 The server's `kernel.toml` must carry a `[sign_in]` section, and the server

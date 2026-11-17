@@ -13,15 +13,15 @@
  */
 import { DurableObject } from "cloudflare:workers";
 import { dispatch, ioFor, tenantFor } from "./control/dispatch.mjs";
-import { config, isWebSocketUpgrade, json, turnConfig, upgradeRequired } from "./control/http.mjs";
+import { config, isWebSocketUpgrade, json, required, turnConfig, upgradeRequired } from "./control/http.mjs";
 import { IceMinter } from "./control/ice.mjs";
 import { Provisioning } from "./control/provisioning.mjs";
 import { Meter, periodAt, relayBytes } from "./control/meter.mjs";
 import { UsageTable } from "./control/usage-table.mjs";
-import { meterSocket } from "./control/sockets.mjs";
+import { acceptSocket } from "./control/sockets.mjs";
 import { enforcedEntitlements, METERING } from "./control/plans.mjs";
 import { limitOf } from "./control/entitlement-limits.mjs";
-import { runMonitor } from "./control/monitor.mjs";
+import { runScheduled } from "./control/scheduled.mjs";
 import { objectStats } from "./control/object-stats.mjs";
 import { authVersions } from "./control/auth-versions.mjs";
 import { TenantSignIn } from "./control/tenant-sign-in.mjs";
@@ -29,6 +29,7 @@ import { newInstance, nodeStorage, startNode } from "./control/tenant-node.mjs";
 import { nextAlarm, TenantTelemetry } from "./control/tenant-telemetry.mjs";
 import { TenantLinks } from "./control/tenant-links.mjs";
 import { SupportStore } from "./control/support-store.mjs";
+import { TenantIdentity } from "./control/tenant-identity.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
 /** Periods `usage()` reports: the current one and the one before, whose final totals the monitor may not have seen. */
@@ -36,10 +37,10 @@ const REPORTED_PERIODS = 2;
 
 // Which face a request is for -- the control plane or a tenant's object -- is decided in
 // `control/dispatch.mjs`; a tenant's object is reached only while the registry says it is active.
-// The Cron trigger (wrangler.toml [triggers]) runs the usage monitor (control/monitor.mjs).
+// The Cron trigger (wrangler.toml [triggers]) runs the identity upgrade and the usage monitor (control/scheduled.mjs).
 export default {
   fetch: (request, env) => dispatch(request, env),
-  scheduled: (_controller, env) => runMonitor(ioFor(env), config(env)),
+  scheduled: (_controller, env) => runScheduled(ioFor(env), config(env)),
 };
 
 export class WorkspaceServer extends DurableObject {
@@ -51,12 +52,14 @@ export class WorkspaceServer extends DurableObject {
     this.accepted = 0;
     // What the control plane gave this tenant (its master password, its entitlements), read before
     // any request is delivered. One key-value entry, apart from the node's `citadel_*` SQL tables.
-    this.provisioning = new Provisioning(ctx.storage);
+    this.provisioning = new Provisioning(ctx.storage, { registrationNames: () => required(env, "REGISTRATION_NAMES") });
     // Metered usage (control/meter.mjs), resumed from this period's persisted totals.
     this.usageTable = new UsageTable(ctx.storage.sql);
     this.meter = null;
     // Sign-in (control/tenant-sign-in.mjs): the OPRF seed, the sign-in settings, the admission check.
     this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, siteKey: () => config(env).turnstileSiteKey, io: { fetch: (u, i) => fetch(u, i) } });
+    // The server identity (control/tenant-identity.mjs): its key seed, and the host the node and /.well-known/citadel share.
+    this.identity = new TenantIdentity(ctx.storage, { random: crypto, kernelConfig: () => this.provisioning.kernelConfig(), wasm: () => (this.wasm ??= newInstance()) });
     // Relay credentials for GetIceServers (control/ice.mjs), gated on the plan and this period's relay.
     this.ice = new IceMinter(turnConfig(env), { fetch: (url, init) => fetch(url, init), nowMs: Date.now }, () => {
       const now = Date.now();
@@ -74,6 +77,7 @@ export class WorkspaceServer extends DurableObject {
     ctx.blockConcurrencyWhile(async () => {
       await this.provisioning.load();
       await this.signIn.load();
+      await this.identity.load();
       for (const purge of this.purges) await purge.load();
       const now = Date.now();
       const period = periodAt(this.provisioning.summary().entitlements, now);
@@ -87,13 +91,31 @@ export class WorkspaceServer extends DurableObject {
     const before = this.provisioning.tenantId();
     await this.provisioning.provision(data, this.server !== null);
     await this.signIn.provisioned(before !== null && before !== data.tenant_id);
+    await this.identity.provisioned(before !== null && before !== data.tenant_id);
     this.#roll(Date.now());
     await this.#arm(false);
+  }
+
+  /** RPC from the identity upgrade (control/identity-upgrade.mjs): provision() again, for an object that predates server identities. */
+  async upgradeIdentity(registry) {
+    const data = this.provisioning.upgradeData(registry, this.identity.seed !== null);
+    return data === null ? "unchanged" : (await this.provision(data), "upgraded");
   }
 
   /** RPC for discovery (dispatch.mjs): whether this workspace requires a check to sign in. */
   admissionRequired() {
     return this.signIn.required();
+  }
+
+  /** RPC for discovery: the `/.well-known/citadel` bytes, or null (logged) without a server key. */
+  wellKnown() {
+    return this.identity.document(Math.floor(Date.now() / 1000));
+  }
+
+  /** RPC from the control plane (tenant-domains.mjs): a custom domain was attached. */
+  async setDomains(identity) {
+    await this.provisioning.setIdentity(identity);
+    this.identity.domainsChanged(this.server !== null);
   }
 
   /** RPC from the control plane (control/support.mjs), once it has verified a signed support request. */
@@ -187,6 +209,7 @@ export class WorkspaceServer extends DurableObject {
         this.exit = outcome;
         console.error(`[tenant] node exited: ${outcome}`);
       },
+      identity: this.identity.host(),
     });
     console.log(`[tenant] node started in ${Date.now() - t0} ms`);
   }
@@ -203,15 +226,9 @@ export class WorkspaceServer extends DurableObject {
 
   async fetch(request) {
     // Stats are an RPC the Worker gates (dispatch.mjs); a request is served only as a socket.
-    if (!isWebSocketUpgrade(request)) {
-      return upgradeRequired();
-    }
-    if (this.exit !== null) {
-      return new Response(`node exited: ${this.exit}`, { status: 503 });
-    }
-    if (!this.provisioning.ready()) {
-      return new Response("this workspace has not been provisioned", { status: 503 });
-    }
+    if (!isWebSocketUpgrade(request)) return upgradeRequired();
+    if (this.exit !== null) return new Response(`node exited: ${this.exit}`, { status: 503 });
+    if (!this.provisioning.ready()) return new Response("this workspace has not been provisioned", { status: 503 });
     this.signIn.serving(tenantFor(new URL(request.url), config(this.env)));
     const limits = enforcedEntitlements(this.provisioning.summary().entitlements);
     this.#roll(Date.now());
@@ -222,28 +239,11 @@ export class WorkspaceServer extends DurableObject {
     }
     await this.#running();
 
-    const [client, server] = Object.values(new WebSocketPair());
-    server.accept();
     this.accepted += 1;
-    const n = this.accepted;
-    // Frames and bytes per connection and per period (control/meter.mjs). CPU is measured outside
-    // the isolate (proof.mjs samples workerd's process CPU at each phase boundary).
-    this.meter.connect(n, Date.now());
-    let peer = null;
-    meterSocket(server, {
-      meter: this.meter,
-      id: n,
-      maxFrameBytes: limits.max_frame_bytes,
-      now: Date.now,
-      onRelease: (record) => {
-        console.log(`[tenant] connection ${n} closed after ${record.open_ms} ms; ${JSON.stringify(record)}`);
-        if (peer !== null) this.signIn.released(peer);
-        if (this.meter.openCount === 0) this.#flush(Date.now());
-      },
+    const client = acceptSocket({
+      node: this.server, signIn: this.signIn, meter: this.meter, id: this.accepted, maxFrameBytes: limits.max_frame_bytes,
+      ip: request.headers.get("cf-connecting-ip"), now: Date.now, onIdle: () => this.#flush(Date.now()),
     });
-    peer = this.server.accept(server);
-    // The client's address, for the admission check's siteverify (control/admission.mjs).
-    this.signIn.connected(peer, request.headers.get("cf-connecting-ip"));
     await this.#arm(false);
     return new Response(null, { status: 101, webSocket: client });
   }

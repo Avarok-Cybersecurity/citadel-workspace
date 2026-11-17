@@ -78,6 +78,21 @@ export function fileRule(pathname) {
   return { cache: "public, no-cache", strict: false };
 }
 
+/** The public landing page: the one page crawlers and answer engines are told about. */
+export const LANDING_PATH = "/";
+
+/**
+ * What the landing page says about itself and nothing else does: the content signals (Cloudflare
+ * otherwise assumes `ai-train=yes`) and its canonical URL (RFC 8288). Every other path is the app
+ * a signed-in person uses, which carries neither.
+ */
+export function landingHeaders(publicOrigin) {
+  return {
+    "content-signal": "ai-train=no, search=yes, ai-input=yes",
+    link: `<${publicOrigin}${LANDING_PATH}>; rel="canonical"`,
+  };
+}
+
 /** The values index.html's empty meta tags are given (nginx's sub_filter lines). */
 export function pageMeta(ui) {
   return {
@@ -136,7 +151,7 @@ function withMeta(response, meta, analyticsToken, route) {
 
 /**
  * A UI request: `assets` is the Worker's static-assets binding, `ui` the deployment's
- * `{loopbackAgent, defaultServer}` (config()).
+ * `{loopbackAgent, defaultServer, webAnalyticsToken, publicOrigin}` (config()).
  */
 export async function serveUi(assets, ui, request) {
   if (!assets) throw new Error("the ASSETS binding is not configured (wrangler.toml [assets])");
@@ -155,6 +170,9 @@ export async function serveUi(assets, ui, request) {
     response.headers.set("cache-control", "no-store");
   }
   if (missing || !isHtml(response)) return response;
+  if (url.pathname === LANDING_PATH) {
+    for (const [name, value] of Object.entries(landingHeaders(ui.publicOrigin))) response.headers.set(name, value);
+  }
   // The page already carries the beacon (above), so the edge must not add a second one; no-transform
   // is the header Cloudflare honours for that. Caching is unchanged.
   if (ui.webAnalyticsToken) response.headers.set("cache-control", `${rule.cache}, no-transform`);

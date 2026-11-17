@@ -116,6 +116,17 @@ else
   echo "  FAIL: a full tenant's INTERNAL_SERVICE_STUN_SERVERS is [$got_stun], not the agents' [$want_stun]"; fails=$((fails+1))
 fi
 
+# And its identity unlock idle, under the same rule and from the same file.
+for key in UnlockIdleSecs:UNLOCK_IDLE; do
+  want=$(python3 scripts/lib/agent-settings.py apps/macos-agent/Info.plist get "CitadelAgentIdentity${key%%:*}" 2>/dev/null || true)
+  got=$(sed -n "s/^INTERNAL_SERVICE_IDENTITY_${key#*:}_SECS=//p" <<<"$out")
+  if [ -n "$want" ] && [ "$got" = "$want" ]; then
+    echo "  ok: a full tenant carries the agent's identity ${key#*:} deploy.sh requires ($got)"
+  else
+    echo "  FAIL: a full tenant's INTERNAL_SERVICE_IDENTITY_${key#*:}_SECS is [$got], not the agents' [$want]"; fails=$((fails+1))
+  fi
+done
+
 # A dry run is what an operator pastes where others can see it. The master password has always
 # been redacted there; the tunnel token was printed in full.
 out=$(TUNNEL_TOKEN=tunnel-token-not-a-placeholder $S --tenant ok9 --topology full --loopback-origin wss://local.avarok.net:12345 --ingress tunnel --domain w.example --dry-run 2>/dev/null || true)

@@ -15,6 +15,7 @@ import { couponFor, couponUnavailable } from "./coupons.mjs";
 import { normaliseCode } from "./coupon-rules.mjs";
 import { malformed, readPaidPlan } from "./plan-request.mjs";
 import { EXHAUSTED, RESERVED } from "./store.mjs";
+import { createdIdentity, slugHost } from "./tenant-domains.mjs";
 
 /** How long a free tenant's reservation holds its slug should the request die mid-way. */
 const FREE_RESERVATION_SECONDS = 300;
@@ -66,8 +67,6 @@ export function readCreate(body) {
   if (body.coupon_code !== undefined && coupon === null) return { error: couponUnavailable() };
   return { plan: { ...plan, ...paid.fields }, token: body.turnstile_token, retry, coupon };
 }
-
-const hostOf = (cfg, slug) => `${slug}.${cfg.controlHost}`;
 
 export async function slugAvailability(io, slug) {
   const checked = checkSlug(slug);
@@ -130,12 +129,13 @@ export async function createTenant(io, cfg, body, ip) {
       tenant_id: row.tenant_id,
       master_password: claim,
       display_name: plan.display_name,
+      identity: createdIdentity(cfg, plan.slug),
       entitlements: entitlements({ ...row, ...active, status: checkoutBound ? "pending" : "active", period_start: null, period_end: null }),
     });
     if (!checkoutBound) {
       if (grant === null) await io.store.activateFree(plan.slug, row.tenant_id);
       else await io.coupons.activateComp(plan.slug, row.tenant_id, grant.id, grant.unlimited, io.nowMs());
-      return json({ slug: plan.slug, status: "active", workspace_host: hostOf(cfg, plan.slug), claim_code: claim }, 201);
+      return json({ slug: plan.slug, status: "active", workspace_host: slugHost(cfg, plan.slug), claim_code: claim }, 201);
     }
     const checkout = await openCheckout(io, cfg, row, now, coupon);
     await io.store.attachCheckout(
@@ -146,7 +146,7 @@ export async function createTenant(io, cfg, body, ip) {
       await seal(RESERVATION_SEAL, reservation, checkout.id, row.tenant_id),
     );
     return json(
-      { slug: plan.slug, status: "pending", workspace_host: hostOf(cfg, plan.slug), checkout_url: checkout.url, reservation_token: reservation },
+      { slug: plan.slug, status: "pending", workspace_host: slugHost(cfg, plan.slug), checkout_url: checkout.url, reservation_token: reservation },
       201,
     );
   } catch (e) {
@@ -188,7 +188,7 @@ export async function tenantStatus(io, cfg, slug, sessionId) {
   if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
   const row = await io.store.holder(slug, io.now());
   if (!row) return refuse("not-found", "no such workspace", 404);
-  const answer = { slug, status: row.status, tier: row.tier, workspace_host: hostOf(cfg, slug) };
+  const answer = { slug, status: row.status, tier: row.tier, workspace_host: slugHost(cfg, slug) };
   if (row.status !== "active" || typeof sessionId !== "string" || sessionId.length < 8 || sessionId.length > 255) {
     return json(answer);
   }

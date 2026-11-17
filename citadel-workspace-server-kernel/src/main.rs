@@ -1,5 +1,6 @@
 use citadel_logging::{info, setup_log};
 use citadel_workspace_server_kernel::config::ServerConfig;
+use citadel_workspace_server_kernel::kernel::server_identity::key_file::init_server_key;
 use citadel_workspace_server_kernel::kernel::sign_in::native::init_sign_in_seed;
 use std::fs;
 use std::path::PathBuf;
@@ -11,13 +12,23 @@ use structopt::StructOpt;
     about = "Used for running a local service for citadel applications"
 )]
 pub struct Options {
-    #[structopt(short, long, parse(from_os_str), required_unless = "init-sign-in-seed")]
+    #[structopt(
+        short,
+        long,
+        parse(from_os_str),
+        required_unless_one = &["init-sign-in-seed", "init-server-key"]
+    )]
     config: Option<PathBuf>,
     /// Create a new post-quantum sign-in seed at this absolute path (mode 0600) and exit. Refuses
     /// to replace one: a new seed locks out every post-quantum account. Run it once, before the
     /// first start; kernel.toml's [sign_in] oprf_seed_file names the same path.
-    #[structopt(long, parse(from_os_str), conflicts_with = "config")]
+    #[structopt(long, parse(from_os_str), conflicts_with_all = &["config", "init-server-key"])]
     init_sign_in_seed: Option<PathBuf>,
+    /// Create this server's identity key seed at this absolute path (mode 0600) and exit.
+    /// Refuses to replace one: a new key makes every client that pinned this server refuse it.
+    /// Run it once, before the first start; kernel.toml's [identity] server_key_file names it.
+    #[structopt(long, parse(from_os_str), conflicts_with = "config")]
+    init_server_key: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -37,9 +48,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!(target: "citadel_workspace_server_kernel", "Created a new sign-in seed at {}", seed.display());
         return Ok(());
     }
+    if let Some(key) = options.init_server_key {
+        init_server_key(&key)?;
+        info!(target: "citadel_workspace_server_kernel", "Created a new server key seed at {}", key.display());
+        return Ok(());
+    }
     let config_path = options
         .config
-        .ok_or("--config is required unless --init-sign-in-seed is given")?;
+        .ok_or("--config is required unless --init-sign-in-seed or --init-server-key is given")?;
 
     let config_content = fs::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read config file {:?}: {}", config_path, e))?;

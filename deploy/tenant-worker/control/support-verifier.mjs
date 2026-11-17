@@ -1,17 +1,10 @@
 /**
  * The ML-DSA-65 checks of signed requests (server-wasm `support.rs` and `admin.rs`, the
  * citadel-support-signature crate), for the control-plane Worker. Rust, not a JS crypto library:
- * the same code the signing tools' formats are defined in.
- *
- * A wasm instance of its own, made on first use: the functions are pure, so one instance per
- * isolate serves every request, and it is never one of the tenants' (worker.mjs).
+ * the same code the signing tools' formats are defined in. The control plane's own wasm instance
+ * (control-wasm.mjs), never one of the tenants'.
  */
-import { instantiate } from "../server-wasm/pkg/instance.mjs";
-import wasm from "../server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
-
-let instance = null;
-
-const verifier = () => (instance ??= instantiate(wasm));
+import { controlWasm as verifier } from "./control-wasm.mjs";
 
 /**
  * `{ ok: true, nonce, expires_at_ms, action, tenant?, query? }` or `{ ok: false, refusal }` for

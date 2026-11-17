@@ -101,6 +101,7 @@ async fn seed_unowned_workspace(kernel: &Kernel, id: &str) -> String {
             members: Vec::new(),
             offices: Vec::new(),
             metadata: Vec::new(),
+            accepted_domains: Vec::new(),
         },
     )
     .await

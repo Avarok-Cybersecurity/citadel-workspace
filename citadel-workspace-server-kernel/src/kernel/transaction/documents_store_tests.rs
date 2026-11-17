@@ -84,6 +84,7 @@ async fn kernel() -> Kernel {
         members: vec!["admin".to_string()],
         offices: vec![],
         metadata: vec![],
+        accepted_domains: Vec::new(),
     };
     backend
         .insert_workspace(crate::WORKSPACE_ROOT_ID.to_string(), workspace)

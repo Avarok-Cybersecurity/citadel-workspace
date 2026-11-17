@@ -57,6 +57,8 @@ pub fn build(
 }
 
 #[cfg(test)]
+mod leak_check;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod turn_tests;

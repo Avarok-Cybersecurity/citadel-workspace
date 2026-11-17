@@ -692,6 +692,22 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             None => return Err(NetworkError::msg("User not found")),
         };
 
+        if let Some(binding) = update.identity_binding.as_ref() {
+            let stored = match user
+                .metadata
+                .get(crate::kernel::profile_update::IDENTITY_BINDING_KEY)
+            {
+                Some(citadel_workspace_types::structs::MetadataValue::String(text)) => {
+                    Some(text.as_str())
+                }
+                Some(_) => {
+                    return Err(NetworkError::msg("The stored identity binding is not text"))
+                }
+                None => None,
+            };
+            crate::kernel::identity_binding::check_binding_write(binding, user_id, stored)
+                .map_err(NetworkError::msg)?;
+        }
         crate::kernel::profile_update::apply_profile_update(&mut user, update);
 
         // Save the updated user
@@ -894,6 +910,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             members: vec![String::from(user_id)],
             offices: Vec::new(),
             metadata: Default::default(),
+            accepted_domains: Vec::new(),
         };
 
         if let Some(meta_bytes) = metadata {

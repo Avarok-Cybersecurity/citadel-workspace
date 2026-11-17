@@ -34,6 +34,8 @@ env:
   INTERNAL_SERVICE_ALLOWED_ORIGINS: "http://localhost:5291,http://127.0.0.1:5291"
   # Required like the allowlist: the agent will not start without its three STUN servers.
   INTERNAL_SERVICE_STUN_SERVERS: "stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302"
+  # And how long the portable identity stays unlocked, in seconds.
+  INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS: "900"
 
 jobs:
   # Jobs whose runs-on is the long `vars.CITADEL_MAC_RUNNER` expression may run on
@@ -785,6 +787,8 @@ jobs:
         run: node scripts/check-already-registered-predicate-matches-the-agent.mjs
       - name: Every document in docs/ is reachable from its index
         run: node scripts/check-docs-are-listed-in-the-index.mjs
+      - name: The batch-1116 contract fixtures agree with their schemas and known answers
+        run: node scripts/check-batch-contracts.mjs
       - name: The UI recognises the agent's duplicate-connect refusal
         run: node scripts/check-connect-in-progress-matches-the-agent.mjs
       - name: Submodule work is committed, not just pointed at
@@ -799,6 +803,8 @@ jobs:
 
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
+      - name: The release's launch settings are the packaged launcher's
+        run: bash scripts/test-agent-launch-asset.sh
       - name: The Stripe catalogue is derived from the approved tier table
         run: node --test billing/catalogue.test.mjs
       - name: Coupons are the shapes the tier table allows, and Stripe's are derived from them

@@ -5,6 +5,7 @@ pub mod chat_document_test_utils;
 pub mod crdt_test_utils;
 pub mod documents_test_utils;
 pub mod group_channel_test_utils;
+pub mod identity_kat;
 pub mod integration_test_utils;
 pub mod member_test_utils;
 pub mod permission_test_utils;

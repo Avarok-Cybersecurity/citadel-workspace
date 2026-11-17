@@ -86,7 +86,11 @@ pub async fn sign_in(
         .await
 }
 
-/// A unique username for one test.
+/// A unique username for one test, under the test servers' canonical domain.
 pub fn username(tag: &str) -> String {
-    format!("{tag}{}", &uuid::Uuid::new_v4().simple().to_string()[..8])
+    format!(
+        "{tag}{}@{}",
+        &uuid::Uuid::new_v4().simple().to_string()[..8],
+        crate::production_server::TEST_CANONICAL_DOMAIN
+    )
 }

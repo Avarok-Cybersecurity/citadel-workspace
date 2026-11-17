@@ -738,6 +738,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel-identity"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "hmac",
+ "ml-dsa",
+ "serde",
+ "serde_json",
+ "sha3",
+ "zeroize",
+]
+
+[[package]]
 name = "citadel-ihttp-types"
 version = "0.1.0"
 dependencies = [
@@ -802,6 +815,7 @@ dependencies = [
 name = "citadel-tenant-server-wasm"
 version = "0.1.0"
 dependencies = [
+ "citadel-identity",
  "citadel-support-signature",
  "citadel-workspace-server-kernel",
  "citadel-workspace-types",
@@ -809,6 +823,7 @@ dependencies = [
  "js-sys",
  "serde",
  "serde_json",
+ "sha3",
  "tenant-auth-versions",
  "tenant-console-log",
  "toml",
@@ -832,6 +847,7 @@ dependencies = [
  "citadel-app-net-policy",
  "citadel-app-sdk-types",
  "citadel-app-signature",
+ "citadel-identity",
  "citadel-ihttp-types",
  "citadel-workspace-types",
  "citadel_io",

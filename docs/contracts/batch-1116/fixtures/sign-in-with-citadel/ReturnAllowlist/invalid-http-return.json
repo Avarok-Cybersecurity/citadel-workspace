@@ -1,0 +1,20 @@
+{
+  "clients": {
+    "sw-mcp": {
+      "aud": "sw-mcp",
+      "display_name": "synchronized.work MCP",
+      "returns": [
+        "https://work.avarok.net/sign-in/code",
+        "http://127.0.0.1:8080/"
+      ]
+    },
+    "synchronized.work": {
+      "aud": "synchronized.work",
+      "display_name": "synchronized.work",
+      "returns": [
+        "https://synchronized.work/auth/return"
+      ]
+    }
+  },
+  "v": 1
+}

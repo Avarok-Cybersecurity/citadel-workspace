@@ -33,7 +33,19 @@ fn hosted_config() -> ServerConfig {
     config.path_policy = None;
     config.content_base_dir = None;
     config.workspace_master_password = "hosted-kernel-test".to_string();
+    if let Some(identity) = config.identity.as_mut() {
+        identity.server_key_file = None;
+    }
     config
+}
+
+/// The host's identity for `config`: a fixed test seed (never a real key), as a Durable Object
+/// would hand over the one it keeps.
+fn identity(config: &ServerConfig) -> Arc<crate::kernel::server_identity::ServerIdentity> {
+    Arc::new(
+        crate::kernel::server_identity::hosted_identity(config.identity.as_ref(), &[0x42; 32])
+            .expect("the shipped [identity], hosted"),
+    )
 }
 
 type Slot = Arc<Mutex<Option<AsyncWorkspaceServerKernel<StackedRatchet>>>>;
@@ -58,6 +70,7 @@ async fn hosted_with(meter: Arc<dyn UsageMeter>) -> Slot {
         None,
         None,
         None,
+        identity(&config),
     )
     .await
     .expect("the hosted kernel builds");
@@ -113,6 +126,7 @@ async fn a_hosted_kernel_keeps_chat_files_only_as_large_as_its_config_says() {
             None,
             None,
             None,
+            identity(&config),
         )
         .await
     };

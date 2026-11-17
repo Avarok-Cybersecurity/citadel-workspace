@@ -1273,6 +1273,7 @@ mod migration_tests {
             members: vec![],
             offices: vec![],
             metadata: vec![],
+            accepted_domains: Vec::new(),
         }
     }
 
@@ -1553,6 +1554,7 @@ mod workspace_concurrency_tests {
             members: vec![],
             offices: vec![],
             metadata: b"{}".to_vec(),
+            accepted_domains: Vec::new(),
         }
     }
 

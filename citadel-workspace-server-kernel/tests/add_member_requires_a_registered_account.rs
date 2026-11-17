@@ -20,9 +20,9 @@ use futures::StreamExt;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-const ADMIN: &str = "admin0925";
-const REGISTERED: &str = "bob0925";
-const TYPO: &str = "bobb0925";
+const ADMIN: &str = common::test_user!("admin0925");
+const REGISTERED: &str = common::test_user!("bob0925");
+const TYPO: &str = common::test_user!("bobb0925");
 const PASSWORD: &str = "password123";
 const MUST_ANSWER_WITHIN: Duration = Duration::from_secs(90);
 

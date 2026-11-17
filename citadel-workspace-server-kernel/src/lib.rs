@@ -118,6 +118,10 @@ pub mod config {
         /// default; refused by a hosted one, whose host supplies it from the tenant's plan.
         /// See `crate::path_policy`.
         pub path_policy: Option<crate::path_policy::PathPolicyConfig>,
+        /// `[identity]`: the server's canonical domain, former domains and how clients
+        /// discover its key. Required by every server, with no default for any key. See
+        /// `kernel::server_identity::config`.
+        pub identity: Option<crate::kernel::server_identity::config::IdentityConfig>,
     }
 
     /// What server egress must know about the deployment it runs in: the host its pages are
@@ -169,6 +173,7 @@ pub mod config {
                 .field("app_server_egress", &self.app_server_egress)
                 .field("stun_servers", &self.stun_servers)
                 .field("path_policy", &self.path_policy)
+                .field("identity", &self.identity)
                 .finish()
         }
     }
@@ -817,6 +822,7 @@ async fn workspace_kernel(
     server_egress: kernel::apps::egress::ServerEgressHandle,
     storage: kernel::apps::storage_entitlement::StorageEntitlement,
     usage_meter: kernel::apps::usage_meter::UsageMeterHandle,
+    server_identity: std::sync::Arc<kernel::server_identity::ServerIdentity>,
 ) -> Result<kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
     if first_connect_admin {
         citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
@@ -863,7 +869,27 @@ async fn workspace_kernel(
     kernel.set_server_egress(server_egress);
     kernel.set_usage_meter(Some(usage_meter));
     kernel.set_storage_entitlement(Some(storage));
+    kernel.set_server_identity(Some(server_identity));
     Ok(kernel)
+}
+
+/// The admission check a server's node runs: the name rules of its `[identity]` over its own
+/// account store, then the host's check (`admission`), the same for a native and a hosted server.
+fn name_policy(
+    kernel: &kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>,
+    admission: Option<std::sync::Arc<dyn kernel::sign_in::AdmissionPolicy>>,
+) -> Result<std::sync::Arc<dyn kernel::sign_in::AdmissionPolicy>, NetworkError> {
+    let identity = kernel
+        .server_identity()
+        .clone()
+        .ok_or_else(|| NetworkError::msg("the kernel was built without its [identity]"))?;
+    Ok(std::sync::Arc::new(
+        kernel::sign_in::name_policy::NamePolicy::new(
+            identity.plan().clone(),
+            kernel.domain_operations.backend_tx_manager.clone(),
+            admission,
+        ),
+    ))
 }
 
 /// Serve the workspace from a listener the host feeds, on any transport.
@@ -899,8 +925,16 @@ pub async fn run_server_on<T: PlatformOps>(
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
     server_egress: kernel::apps::egress::ServerEgressHandle,
     network: network::HostedNetwork,
+    server_identity: std::sync::Arc<kernel::server_identity::ServerIdentity>,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
+    if kernel::server_identity::config::plan(config.identity.as_ref()).map_err(NetworkError::msg)?
+        != *server_identity.plan()
+    {
+        return Err(NetworkError::msg(
+            "the host's server identity was not built from this kernel.toml's [identity]",
+        ));
+    }
     network::refuse_configured_stun_servers(config.stun_servers.as_deref())?;
     path_policy::refuse_configured_path_policy(config.path_policy.as_ref())?;
     if config.sign_in.is_some() {
@@ -924,8 +958,10 @@ pub async fn run_server_on<T: PlatformOps>(
         chat_document_limit,
         artifact_fetcher,
         server_egress,
+        server_identity,
     )
     .await?;
+    let admission = name_policy(&kernel, sign_in.admission)?;
 
     let node_type =
         NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;
@@ -939,7 +975,7 @@ pub async fn run_server_on<T: PlatformOps>(
         // hosted tenant has open registration too. Post-quantum sign-in as the host names it.
         .with_server_misc_settings(ServerMiscSettings {
             pq_sign_in: sign_in.pq_sign_in,
-            admission: sign_in.admission,
+            admission: Some(admission),
             ..production_server_misc_settings()
         })
         .with_injected_listener(listener)
@@ -961,6 +997,7 @@ pub async fn run_server_on<T: PlatformOps>(
 pub fn production_server_misc_settings() -> ServerMiscSettings {
     ServerMiscSettings {
         allow_transient_connections: false,
+        credential_requirements: kernel::server_identity::credential_requirements(),
         ..Default::default()
     }
 }
@@ -1030,6 +1067,13 @@ pub async fn run_server_with_site_verify(
         site_verify,
     )
     .map_err(NetworkError::msg)?;
+    let issued_at_s = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| NetworkError::msg(format!("the server clock is before 1970: {e}")))?
+        .as_secs();
+    let server_identity =
+        kernel::server_identity::key_file::native_identity(config.identity.as_ref(), issued_at_s)
+            .map_err(NetworkError::msg)?;
     let kernel = workspace_kernel(
         &config,
         workspace_structure,
@@ -1051,8 +1095,10 @@ pub async fn run_server_with_site_verify(
         kernel::apps::storage_entitlement::StorageEntitlement::of(&backend_type_for_node_builder),
         // Counted and logged, never billed: a native server has no plan to bill app usage to.
         std::sync::Arc::new(kernel::apps::usage_meter::CountingMeter::default()),
+        std::sync::Arc::new(server_identity),
     )
     .await?;
+    let admission = name_policy(&kernel, sign_in.admission)?;
     spawn_purges(kernel.clone());
 
     // `NodeType::server` and `NodeBuilder::build` now return `anyhow::Error`
@@ -1071,7 +1117,7 @@ pub async fn run_server_with_site_verify(
         .with_backend(backend_type_for_node_builder)
         .with_server_misc_settings(ServerMiscSettings {
             pq_sign_in: sign_in.pq_sign_in,
-            admission: sign_in.admission,
+            admission: Some(admission),
             ..production_server_misc_settings()
         });
 
@@ -1519,6 +1565,7 @@ mod server_config_debug_tests {
             chat_attachment_max_bytes: Some(0),
             chat_attachment_max_files_per_node: Some(0),
             sign_in: None,
+            identity: None,
             app_server_egress: None,
             stun_servers: None,
             path_policy: None,

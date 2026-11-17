@@ -41,7 +41,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             {
                 Ok(workspace) => {
                     debug!(target: "citadel", "Workspace found: {:?}", workspace.id);
-                    Ok(WorkspaceProtocolResponse::Workspace(workspace))
+                    Ok(WorkspaceProtocolResponse::Workspace(
+                        super::server_identity::with_accepted_domains(kernel, workspace),
+                    ))
                 }
                 Err(e) => {
                     let error_msg = e.to_string();
@@ -449,8 +451,18 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             show_profile_to_strangers,
             accepts_requests_from_strangers,
             shows_online_status,
+            identity_binding,
         } => {
             use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
+            let identity_binding =
+                match super::server_identity::binding_write(kernel, identity_binding.as_ref()) {
+                    Ok(write) => write,
+                    Err(e) => {
+                        return Ok(WorkspaceProtocolResponse::Error(format!(
+                            "Failed to update user profile: {e}"
+                        )))
+                    }
+                };
             let update = crate::kernel::profile_update::ProfileUpdate {
                 name: name.clone(),
                 avatar_data: avatar_data.clone(),
@@ -459,6 +471,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 show_profile_to_strangers: *show_profile_to_strangers,
                 accepts_requests_from_strangers: *accepts_requests_from_strangers,
                 shows_online_status: *shows_online_status,
+                identity_binding,
             };
             match kernel
                 .domain_ops()
@@ -1183,6 +1196,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::GetIceServers => Ok(kernel.ice_servers_for(actor_user_id).await),
+
+        WorkspaceProtocolRequest::ServerIdentityChallenge(challenge) => Ok(
+            super::server_identity::challenge(kernel, challenge, requester_cid),
+        ),
 
         WorkspaceProtocolRequest::GetSignInSettings => {
             Ok(crate::kernel::sign_in::read(kernel.sign_in_settings()).await)

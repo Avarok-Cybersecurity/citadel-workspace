@@ -1,0 +1,39 @@
+{
+  "cbor_hex": "a2010702a4666167656e747381676167656e742d37666f6e6c696e65f568757365726e616d65782e33666f72696674636b76706f793272682e6d6163626f6f6b2d70726f4073796e6368726f6e697a65642e776f726b6a6465766963655f63696419d001",
+  "model": {
+    "$map": [
+      [
+        1,
+        7
+      ],
+      [
+        2,
+        {
+          "$map": [
+            [
+              "agents",
+              [
+                "agent-7"
+              ]
+            ],
+            [
+              "online",
+              true
+            ],
+            [
+              "username",
+              "3foriftckvpoy2rh.macbook-pro@synchronized.work"
+            ],
+            [
+              "device_cid",
+              53249
+            ]
+          ]
+        }
+      ]
+    ]
+  },
+  "name": "07-presence",
+  "signed": false,
+  "typ": 7
+}

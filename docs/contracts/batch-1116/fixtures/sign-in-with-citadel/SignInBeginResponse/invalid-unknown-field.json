@@ -1,0 +1,10 @@
+{
+  "attempt": "UFFSU1RVVldYWVpbXF1eXw",
+  "aud": "sw-mcp",
+  "display_name": "synchronized.work MCP",
+  "expires_in_s": 300,
+  "issuer": "work.avarok.net",
+  "nonce": "MDEyMzQ1Njc4OTo7PD0-P0BBQkNERUZHSElKS0xNTk8",
+  "origin": "https://work.avarok.net",
+  "v": 1
+}
