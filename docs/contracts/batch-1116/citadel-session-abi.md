@@ -69,6 +69,13 @@ shape fixture each; the fixture-coverage test is the gate.
   `AppSessionMessage`; connect/disconnect become `AppSessionState`.
 - Hard limits in the agent, independent of the host's: one session per key above, ≤ 2 servers per
   install, `body ≤ 1 MiB`.
+- **Servers must accept the username.** Added 2026-11-17 (coordinator's decision): the username
+  above stays as written, so it is longer than the SDK's default `max_username_length` of 37 bytes.
+  A server that accepts app sessions, and any server that accepts V2 identity accounts (whose
+  `handle@domain` names are as long), must register with `max_username_length` raised above 37,
+  up to `MAX_USERNAME_BYTES` (identity-api §1). The workspace server does this in
+  `server_identity::credential_requirements()`. A server left at the default refuses the
+  account's registration, and the open fails.
 
 ## 5. Tests (plan §4 H2 row)
 

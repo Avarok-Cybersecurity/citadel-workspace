@@ -208,6 +208,13 @@ if declares_service internal-service; then
         echo "    INTERNAL_SERVICE_STUN_SERVERS=stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302"
         exit 1
     fi
+    # How long the portable identity stays unlocked, on the same reasoning.
+    if [[ -z "$(deploy_setting INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS)" ]]; then
+        echo "ERROR: INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS is unset or empty."
+        echo "  Set it to a whole number of seconds above zero, e.g. the value in .env.example:"
+        echo "    INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS=900"
+        exit 1
+    fi
 fi
 
 # The hosted UI's one off-origin socket, on exactly the same reasoning.

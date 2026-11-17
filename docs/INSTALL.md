@@ -96,8 +96,8 @@ cp .env.example .env          # then edit it
 docker compose -f docker-compose.production.yml up -d --wait
 ```
 
-`.env` must set **four** variables, and a deployment that serves the UI a
-**fifth**. None has a default, and the stack will not come up without them —
+`.env` must set **five** variables, and a deployment that serves the UI a
+**sixth**. None has a default, and the stack will not come up without them —
 `--wait` fails while you look for a reason.
 
 `WORKSPACE_MASTER_PASSWORD`. The server refuses to start if it is missing or
@@ -114,6 +114,10 @@ commas, that the agent learns its public address from for peer-to-peer connectio
 `stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302` (the value in
 `.env.example`). Three, because the agent classifies its NAT by comparing three answers. The
 agent exits at startup without it rather than falling back to a list nobody chose.
+
+`INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS`. How long the agent's unsealed portable identity
+stays in memory after its last use, in whole seconds above zero (`.env.example` gives 900). The
+agent exits at startup without it.
 
 `LOOPBACK_AGENT_ORIGIN` — required by `./deploy.sh` whenever the deployment
 serves the UI (a server-only tenant does not). A publicly served UI has no
