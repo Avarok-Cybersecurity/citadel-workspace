@@ -43,14 +43,14 @@ fn section(toml: &str) -> NativeSignInConfig {
 
 fn none(seed: &Path) -> String {
     format!(
-        "oprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nadmission = \"none\"\n",
+        "oprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nsecurity_key_rp_id = \"localhost\"\nadmission = \"none\"\n",
         seed.display()
     )
 }
 
 fn turnstile(dir: &Path) -> String {
     format!(
-        "oprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nadmission = \"turnstile\"\n\
+        "oprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nsecurity_key_rp_id = \"localhost\"\nadmission = \"turnstile\"\n\
          turnstile_secret_env = \"TS_SECRET\"\nturnstile_site_key = \"1x00000000000000000000AA\"\n\
          turnstile_hostnames = [\"example.com\"]\nturnstile_cdata = \"acme\"\n\
          settings_file = \"{}\"\n",
@@ -122,7 +122,7 @@ fn a_seed_that_is_missing_short_long_shared_or_a_link_is_refused() {
 fn the_cost_is_a_preset_or_three_numbers_and_never_below_the_floor() {
     let seed = dir().join("oprf-seed");
     let base = format!(
-        "oprf_seed_file = \"{}\"\nadmission = \"none\"\n",
+        "oprf_seed_file = \"{}\"\nsecurity_key_rp_id = \"localhost\"\nadmission = \"none\"\n",
         seed.display()
     );
     for (ksf, expect) in [
@@ -154,7 +154,7 @@ fn admission_must_be_named_and_none_takes_no_turnstile_keys() {
     let seed = dir.join("oprf-seed");
     let unnamed = refusal(
         &format!(
-            "oprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\n",
+            "oprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nsecurity_key_rp_id = \"localhost\"\n",
             seed.display()
         ),
         None,

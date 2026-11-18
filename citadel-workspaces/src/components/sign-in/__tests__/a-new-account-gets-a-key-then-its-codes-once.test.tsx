@@ -96,12 +96,15 @@ describe('after an account is created', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses a key without PRF support before the server hears of it', async () => {
+  it('refuses a key without PRF support, declining the server\'s Enrol challenge, and adds nothing', async () => {
     h.w.authenticator.prfMode = 'none';
     renderSteps(CODES);
     fireEvent.click(screen.getByTestId('add-security-key-continue'));
+    // The key is made inside the prompt's gesture, when the server's Enrol challenge asks for it.
+    fireEvent.click(await screen.findByTestId('security-key-continue'));
     expect(await screen.findByTestId('add-security-key-error')).toHaveTextContent(PRF_COPY.notAdded);
-    expect(h.w.agent.sent).toEqual([]);
+    expect(h.w.agent.sent.map(([variant]) => variant)).toEqual(['SignInManagement', 'SecurityKeyDecline']);
+    expect(alice.keys).toEqual([]);
   });
 
   it('says up front when this browser cannot make a key that signs in, and still lets the codes come', async () => {

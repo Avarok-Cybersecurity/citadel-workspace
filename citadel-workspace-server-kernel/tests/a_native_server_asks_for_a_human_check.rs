@@ -95,7 +95,7 @@ async fn server(required: bool, siteverify: Arc<Siteverify>) -> std::net::Socket
 
 fn turnstile_config(dir: &Path, settings: &Path) -> String {
     format!(
-        "[sign_in]\noprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nadmission = \"turnstile\"\n\
+        "[sign_in]\noprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nsecurity_key_rp_id = \"localhost\"\nadmission = \"turnstile\"\n\
          turnstile_secret_env = \"{SECRET_ENV}\"\nturnstile_site_key = \"{SITE_KEY}\"\n\
          turnstile_hostnames = [\"example.com\"]\nturnstile_cdata = \"acme\"\n\
          settings_file = \"{}\"\n",

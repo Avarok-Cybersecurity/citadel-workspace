@@ -6,6 +6,7 @@
 //! [sign_in]
 //! oprf_seed_file = "/data/server/sign-in/oprf-seed"   # made by --init-sign-in-seed, mode 0600
 //! ksf = "owasp-floor"            # or ksf_mem_kib / ksf_iterations / ksf_lanes, all three
+//! security_key_rp_id = "work.example.com"  # the WebAuthn relying party; permanent for every key
 //! admission = "none"             # or "turnstile", with the five keys below
 //! # turnstile_secret_env = "TURNSTILE_SECRET"   # the NAME of the variable holding the secret
 //! # turnstile_site_key = "0x4AAAAAAA..."        # the widget's PUBLIC site key
@@ -43,6 +44,7 @@ pub struct NativeSignInConfig {
     pub ksf_mem_kib: Option<u32>,
     pub ksf_iterations: Option<u32>,
     pub ksf_lanes: Option<u32>,
+    pub security_key_rp_id: Option<String>,
     pub admission: Option<AdmissionMode>,
     pub turnstile_secret_env: Option<String>,
     pub turnstile_site_key: Option<String>,
@@ -66,6 +68,8 @@ pub struct TurnstilePlan {
 pub struct SignInPlan {
     pub seed_file: PathBuf,
     pub ksf: KsfParams,
+    /// The domain the server's browser clients are served from (the SDK checks its shape).
+    pub security_key_rp_id: String,
     pub turnstile: Option<TurnstilePlan>,
 }
 
@@ -170,10 +174,15 @@ fn turnstile(config: &NativeSignInConfig) -> Result<TurnstilePlan, String> {
 pub fn plan(config: Option<&NativeSignInConfig>) -> Result<SignInPlan, String> {
     let config = config.ok_or(
         "kernel.toml has no [sign_in] section; a native server must say how people sign in \
-         (oprf_seed_file, ksf and admission -- see docker/workspace-server/kernel.toml)",
+         (oprf_seed_file, ksf, security_key_rp_id and admission -- see \
+         docker/workspace-server/kernel.toml)",
     )?;
     let seed_file = absolute("oprf_seed_file", config.oprf_seed_file.as_ref())?;
     let ksf = ksf(config)?;
+    let security_key_rp_id = config.security_key_rp_id.clone().ok_or(
+        "[sign_in] security_key_rp_id is required: the WebAuthn relying party the server's \
+         security keys are scoped to (the domain its browser clients are served from)",
+    )?;
     let turnstile = match config.admission {
         None => return Err("[sign_in] admission is required: \"none\" or \"turnstile\"".into()),
         Some(AdmissionMode::Turnstile) => Some(turnstile(config)?),
@@ -199,6 +208,7 @@ pub fn plan(config: Option<&NativeSignInConfig>) -> Result<SignInPlan, String> {
     Ok(SignInPlan {
         seed_file,
         ksf,
+        security_key_rp_id,
         turnstile,
     })
 }

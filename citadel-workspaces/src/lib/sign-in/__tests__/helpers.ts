@@ -69,7 +69,7 @@ export async function enrolKey(w: World, account: { cid: bigint; username: strin
   });
   try {
     await addSecurityKey(w.deps, {
-      account: { tenant: 'bench.work.avarok.net', cid: account.cid, username: account.username }, label, existingCredentialIds: [],
+      account: { tenant: 'bench.work.avarok.net', cid: account.cid, username: account.username }, label,
     }, { password: Array.from(new TextEncoder().encode(account.password)), security_key: true });
   } finally {
     stop();

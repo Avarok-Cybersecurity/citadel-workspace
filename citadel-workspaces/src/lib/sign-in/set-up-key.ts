@@ -20,11 +20,10 @@ export interface KeySetUp {
   /** How the account signs in once the key is added. */
   policy: KeyPolicy;
   stepUp: StepUp;
-  existingCredentialIds: number[][];
 }
 
 export async function setUpSecurityKey(deps: SignInDeps, req: KeySetUp): Promise<void> {
-  await addSecurityKey(deps, { account: req.account, label: req.label, existingCredentialIds: req.existingCredentialIds }, req.stepUp);
+  await addSecurityKey(deps, { account: req.account, label: req.label }, req.stepUp);
   await manageSignIn(deps.send, req.account.cid, { SetSignInPolicy: { policy: req.policy } }, { ...req.stepUp, security_key: true });
   try {
     await saveHint(deps.store, { ...req.account, keyFirst: req.policy === 'KeyOnly' });

@@ -30,7 +30,7 @@ pub fn native_sign_in(
 ) -> Result<HostedSignIn, String> {
     let plan = plan(config)?;
     let seed = read_seed(&plan.seed_file)?;
-    let pq = pq_sign_in_settings(seed.as_ref(), plan.ksf)?;
+    let pq = pq_sign_in_settings(seed.as_ref(), plan.ksf, &plan.security_key_rp_id)?;
     let Some(turnstile) = plan.turnstile else {
         log::warn!(target: "citadel", "Sign-in: post-quantum, with no human check (admission = \"none\"); the admin's \"require a human check\" switch stays off");
         return Ok(HostedSignIn {

@@ -213,6 +213,12 @@ documents every key; none has a default).
   depends on it, so a new seed locks all of them out.
 - **`ksf = "owasp-floor"`** is the Argon2id cost browsers stretch passwords
   with, the same as the hosted tenants'.
+- **`security_key_rp_id`** is the WebAuthn relying party ID your security keys
+  are scoped to, and the server names it in every sign-in challenge. Set it to
+  the domain your UI is served from (`work.example.com`). The shipped
+  `kernel.toml` names `localhost`, the development stack's UI, so a deployment
+  served from anywhere else must change it before anyone enrols a key. It is
+  permanent: a key enrolled under one ID never signs in under another.
 - **`admission = "none"`** (the shipped value) means no human check, and the
   admin's "Require a human check" switch cannot be turned on. For
   `admission = "turnstile"`, set `turnstile_secret_env` to the NAME of an

@@ -66,6 +66,11 @@ ARGON_TIME_COST = "1"
 PQ_KSF_MEM_KIB = "19456"
 PQ_KSF_ITERATIONS = "2"
 PQ_KSF_LANES = "1"
+# The WebAuthn relying party ID every tenant's security keys are scoped to, named in every sign-in
+# challenge. Permanent: a key enrolled under one ID never signs in under another. It is the ID the
+# UI has always enrolled keys under on work.avarok.net and every <slug>.work.avarok.net
+# (citadel-workspaces/src/lib/passkey/rp-id.ts PRODUCTION_RP_ID; a UI test holds the two equal).
+PQ_SECURITY_KEY_RP_ID = "work.avarok.net"
 LOG_FILTER = "citadel=warn"
 # The STUN servers each tenant's node learns its NAT mapping from (server-wasm `TenantServer`):
 # required, at least three distinct host:port endpoints, with no default list.

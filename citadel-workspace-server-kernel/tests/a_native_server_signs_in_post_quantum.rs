@@ -72,7 +72,6 @@ async fn a_security_key_is_enrolled_and_then_required() {
             .await?;
         let conn = sign_in(&remote, &user, password()).await?;
         let add = SignInManagementOp::AddSecurityKey {
-            credential_id: CREDENTIAL.to_vec(),
             label: "YubiKey".into(),
         };
         let added = conn

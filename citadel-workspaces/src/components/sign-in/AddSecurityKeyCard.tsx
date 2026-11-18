@@ -48,7 +48,7 @@ export function AddSecurityKeyCard({ account, stepUp, title, body, onFinished }:
   const add = (): void => {
     setBusy(true);
     setError(null);
-    setUpSecurityKey(browserSignInDeps(), { account, label: label.trim(), policy, stepUp, existingCredentialIds: [] })
+    setUpSecurityKey(browserSignInDeps(), { account, label: label.trim(), policy, stepUp })
       .then((): void => onFinished(true))
       .catch((failure: unknown): void => setError(keyFailureCopy(failure)))
       .finally((): void => setBusy(false));

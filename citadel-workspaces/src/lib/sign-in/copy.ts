@@ -4,7 +4,7 @@
  */
 import { PasskeyError } from '@/lib/passkey/authenticator';
 import { describeFailure } from '@/lib/failure-message';
-import { CANCELLED_REASON } from './key-answer';
+import { ALREADY_ENROLLED_REASON, CANCELLED_REASON, NOT_ADDED_REASON } from './key-answer';
 import { SignInManagementError } from './management';
 import type { SecurityKeyPurpose, SignInPolicy } from './types';
 
@@ -68,16 +68,8 @@ export const SIGN_IN_COPY: {
  * manager gives none can never sign in; it is refused, never enrolled.
  */
 export const PRF_COPY: { readonly notAdded: string; readonly unavailableHere: string } = {
-  // Checked 2026-10-04: Windows Hello gives PRF only on Windows 11 24H2/25H2 from the February 2026
-  // update (KB5077181) with Chrome/Edge 147+ or Firefox 148+; hmac-secret security keys work on any
-  // Windows; iCloud Keychain from macOS 15 / iOS 18.
-  notAdded:
-    "This passkey can't sign you in to Citadel, so it was not added to your account. Citadel derives your " +
-    "post-quantum sign-in key from the passkey's PRF feature, and the passkey manager you chose didn't " +
-    'provide it. Your password still works. To add a passkey on Windows, use a security key such as a ' +
-    'YubiKey 5, or Windows Hello on Windows 11 with the February 2026 update or later and a current ' +
-    'Chrome, Edge or Firefox. On a Mac or iPhone, iCloud Keychain works. You can delete the unused ' +
-    'passkey from your passkey manager.',
+  // Kept in key-answer.ts: a key being added declines its Enrol challenge with it.
+  notAdded: NOT_ADDED_REASON,
   unavailableHere:
     "This browser can't make a passkey that signs in to Citadel: it doesn't support the PRF feature Citadel " +
     'uses to derive your post-quantum sign-in key. Your password still works. To add a passkey, open ' +
@@ -101,13 +93,20 @@ export const POLICY_COPY: Record<SignInPolicy, { label: string; detail: string }
 export const secondsLeftCopy = (seconds: number): string =>
   seconds === 1 ? '1 second left' : `${seconds} seconds left`;
 
+/** The agent's SDK refused to ask this server for a key: it is too old to enrol one, or has not enabled keys. */
+export const SERVER_CANNOT_ENROL_KEYS: string =
+  'This workspace server must be updated before you can add a security key. Your password still works.';
+
 /** What to tell the user when adding or using a key failed: the server's own words when it refused. */
 export function keyFailureCopy(error: unknown): string {
   if (error instanceof PasskeyError) {
     if (error.failure === 'unsupported') return PRF_COPY.notAdded;
     if (error.failure === 'cancelled') return CANCELLED_REASON;
-    if (error.failure === 'already-enrolled') return 'That key is already set up for this account.';
+    if (error.failure === 'already-enrolled') return ALREADY_ENROLLED_REASON;
   }
-  if (error instanceof SignInManagementError) return error.message;
+  if (error instanceof SignInManagementError) {
+    if (error.reason === 'server_cannot_enrol_security_keys') return SERVER_CANNOT_ENROL_KEYS;
+    return error.message;
+  }
   return describeFailure(error, "That didn't work. Try again.");
 }

@@ -21,7 +21,7 @@ import type { AddedKey } from '@/lib/sign-in/enrol-key';
 import {
   type Listing, listingOf, withKeyAdded, withKeyRemoved, withKeyRenamed, withNewCodes, withPolicy,
 } from '@/lib/sign-in/listing';
-import type { AccountRef, SignInCredential, SignInManagementOp, SignInManagementOutcome, SignInPolicy, StepUp } from '@/lib/sign-in/types';
+import type { AccountRef, SignInManagementOp, SignInManagementOutcome, SignInPolicy, StepUp } from '@/lib/sign-in/types';
 
 export interface SignInKeys {
   available: boolean;
@@ -79,9 +79,6 @@ export function useSignInKeys(requestStepUp: StepUpRequest): SignInKeys {
   /** Apply a change's effect to what is on screen. */
   const apply = (next: (l: Listing) => Listing): void => setListing((l: Listing | null) => (l ? next(l) : l));
 
-  const existingIds = (): number[][] =>
-    (listing?.keys ?? []).flatMap((c: SignInCredential) => (c.credential_id ? [c.credential_id] : []));
-
   return {
     available, account, listing, busy, message, freshCodes,
     forgetCodes: (): void => setFreshCodes(null),
@@ -92,7 +89,7 @@ export function useSignInKeys(requestStepUp: StepUpRequest): SignInKeys {
     add: async (label: string): Promise<boolean> => {
       if (!account) return false;
       const added: AddedKey | null = await request(
-        (deps: SignInDeps, stepUp: StepUp): Promise<AddedKey> => addSecurityKey(deps, { account, label, existingCredentialIds: existingIds() }, stepUp),
+        (deps: SignInDeps, stepUp: StepUp): Promise<AddedKey> => addSecurityKey(deps, { account, label }, stepUp),
         `${label} can now sign in to ${account.username}.`);
       if (added) apply((l: Listing) => withKeyAdded(l, added, label, Date.now()));
       return added !== null;

@@ -36,6 +36,14 @@ export function ksfParams(env) {
   };
 }
 
+/**
+ * The WebAuthn relying party the node's security keys are scoped to. Required, with no default:
+ * a key enrolled under one ID can never sign in under another. The node checks its shape.
+ */
+export function securityKeyRpId(env) {
+  return required(env, "PQ_SECURITY_KEY_RP_ID");
+}
+
 export class TenantSignIn {
   /**
    * `random` is the CSPRNG (`crypto`); `turnstile()` the configured check and `siteKey()` the

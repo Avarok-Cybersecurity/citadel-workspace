@@ -1,7 +1,12 @@
-//! Post-quantum sign-in's server settings, built from an OPRF seed and the Argon2id cost clients
-//! stretch a password factor with. The one builder both hosts use: the native server
-//! (`native::resolve`, from kernel.toml's `[sign_in]`) and the Durable Object (server-wasm
-//! `PqSignIn`, from the object's stored seed and `PQ_KSF_*`).
+//! Post-quantum sign-in's server settings, built from an OPRF seed, the Argon2id cost clients
+//! stretch a password factor with, and the WebAuthn relying party the server's security keys are
+//! scoped to. The one builder both hosts use: the native server (`native::resolve`, from
+//! kernel.toml's `[sign_in]`) and the Durable Object (server-wasm `PqSignIn`, from the object's
+//! stored seed, `PQ_KSF_*` and `PQ_SECURITY_KEY_RP_ID`).
+//!
+//! The relying party has no default. A key enrolled under one ID can never sign in under another,
+//! and the server names it in every challenge, so it must be the ID the server's browser clients
+//! have always used (`citadel-workspaces/src/lib/passkey/rp-id.ts`).
 
 use super::{KsfParams, OprfSeed, PqAuthServerSettings};
 
@@ -18,13 +23,18 @@ pub fn ksf_preset(name: &str) -> Option<KsfParams> {
     (name == KSF_PRESET_OWASP_FLOOR).then_some(KsfParams::FLOOR)
 }
 
-/// The settings for `seed` and `ksf`, or why there are none. The seed is never printed: neither
-/// here nor by `OprfSeed`'s `Debug`.
-pub fn pq_sign_in_settings(seed: &[u8], ksf: KsfParams) -> Result<PqAuthServerSettings, String> {
+/// The settings for `seed`, `ksf` and `security_key_rp_id`, or why there are none. The seed is
+/// never printed: neither here nor by `OprfSeed`'s `Debug`.
+pub fn pq_sign_in_settings(
+    seed: &[u8],
+    ksf: KsfParams,
+    security_key_rp_id: &str,
+) -> Result<PqAuthServerSettings, String> {
     let seed: [u8; OPRF_SEED_BYTES] = seed
         .try_into()
         .map_err(|_| format!("the OPRF seed is not {OPRF_SEED_BYTES} bytes"))?;
     PqAuthServerSettings::new(OprfSeed::from_bytes(seed), ksf)
+        .and_then(|settings| settings.with_security_key_rp_id(security_key_rp_id))
         .map_err(|e| format!("post-quantum sign-in settings: {e}"))
 }
 
@@ -32,13 +42,33 @@ pub fn pq_sign_in_settings(seed: &[u8], ksf: KsfParams) -> Result<PqAuthServerSe
 mod tests {
     use super::*;
 
+    /// The relying party these tests' settings name; any bare domain would do.
+    const RP_ID: &str = "localhost";
+
     #[test]
     fn a_seed_of_any_other_length_is_refused() {
         for len in [0, 31, 33, 64] {
-            let refused = pq_sign_in_settings(&vec![7; len], KsfParams::FLOOR).unwrap_err();
+            let refused = pq_sign_in_settings(&vec![7; len], KsfParams::FLOOR, RP_ID).unwrap_err();
             assert!(refused.contains("32 bytes"), "{len}: {refused}");
         }
-        assert!(pq_sign_in_settings(&[7; 32], KsfParams::FLOOR).is_ok());
+        assert!(pq_sign_in_settings(&[7; 32], KsfParams::FLOOR, RP_ID).is_ok());
+    }
+
+    #[test]
+    fn the_relying_party_is_named_in_every_settings_and_must_be_a_bare_domain() {
+        let settings = pq_sign_in_settings(&[7; 32], KsfParams::FLOOR, "work.avarok.net").unwrap();
+        assert_eq!(settings.security_key_rp_id(), Some("work.avarok.net"));
+        for refused in [
+            "",
+            "https://work.avarok.net",
+            "work.avarok.net:443",
+            "Work.Avarok.Net",
+        ] {
+            assert!(
+                pq_sign_in_settings(&[7; 32], KsfParams::FLOOR, refused).is_err(),
+                "{refused:?} was accepted as a relying party"
+            );
+        }
     }
 
     #[test]
@@ -47,7 +77,7 @@ mod tests {
             mem_kib: 1024,
             ..KsfParams::FLOOR
         };
-        assert!(pq_sign_in_settings(&[7; 32], weak).is_err());
+        assert!(pq_sign_in_settings(&[7; 32], weak, RP_ID).is_err());
     }
 
     #[test]

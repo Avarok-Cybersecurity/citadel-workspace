@@ -88,6 +88,14 @@ oprf_seed_file = "/data/server/sign-in/oprf-seed"
 # cost the hosted tenants use (deploy/tenant-worker/wrangler.toml PQ_KSF_*).
 # Or set all three of ksf_mem_kib, ksf_iterations and ksf_lanes instead.
 ksf = "owasp-floor"
+# The WebAuthn relying party ID the server's security keys are scoped to, named
+# in every sign-in challenge. It must be the domain the UI is served from (or a
+# registrable suffix of it), and it is permanent: a key enrolled under one ID
+# never signs in under another. "localhost" is this stack's UI
+# (http://localhost:5291), as citadel-workspaces/src/lib/passkey/rp-id.ts
+# resolves it there; a server whose UI is served from work.example.com names
+# "work.example.com".
+security_key_rp_id = "localhost"
 # "none": no human check, and the admin's "Require a human check" switch cannot
 # be turned on. "turnstile": the check runs whenever an admin turns it on; it
 # then needs every key below.

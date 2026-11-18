@@ -2,9 +2,10 @@
  * A key whose authenticator gives no PRF output cannot derive the account's
  * post-quantum key, so it can never sign in. Live (2026-10-04, Windows): Windows
  * Hello made the passkey, reported no PRF, and the user read one sentence about
- * an "extension". It must be refused before anything is enrolled, before the
- * passkey is even made when the browser already says it has no PRF, and with a
- * reason and a next step the user can act on.
+ * an "extension". It must be refused before anything is enrolled -- before the
+ * server is even asked when the browser already says it has no PRF, and right
+ * after the ceremony, declining the server's Enrol challenge, otherwise -- with
+ * a reason and a next step the user can act on.
  *
  * Doubled at the I/O seams only: the agent (fake-agent.ts) and the
  * authenticator (passkey fakes), as in keys-are-enrolled-and-proved-by-prf.
@@ -13,13 +14,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PasskeyError } from '@/lib/passkey/authenticator';
 import { addSecurityKey } from '../enrol-key';
 import { keyFailureCopy, PRF_COPY } from '../copy';
+import { NOT_ADDED_REASON } from '../key-answer';
+import { SignInManagementError } from '../management';
 import { world, type World } from './helpers';
 import type { FakeAccount } from './fake-agent';
 
 let w: World;
 let alice: FakeAccount;
 const add = (): Promise<unknown> => addSecurityKey(w.deps, {
-  account: { tenant: 'bench.work.avarok.net', cid: alice.cid, username: 'alice' }, label: 'Windows Hello', existingCredentialIds: [],
+  account: { tenant: 'bench.work.avarok.net', cid: alice.cid, username: 'alice' }, label: 'Windows Hello',
 }, { password: Array.from(new TextEncoder().encode(alice.password)), security_key: true });
 
 beforeEach(() => { w = world(true); alice = w.agent.account('alice'); });
@@ -35,10 +38,11 @@ describe('a key that cannot give PRF output', () => {
 
   it('is refused after the ceremony, never enrolled, and the browser is asked to forget it', async () => {
     w.authenticator.prfMode = 'none';
-    await expect(add()).rejects.toEqual(new PasskeyError('unsupported'));
+    await expect(add()).rejects.toEqual(new SignInManagementError(NOT_ADDED_REASON, null));
     expect(w.authenticator.createCalls).toHaveLength(1);
+    expect(w.authenticator.getCalls).toEqual([]);
     expect(w.authenticator.signalled).toHaveLength(1);
-    expect(w.agent.sent).toEqual([]);
+    expect(w.agent.sent.map(([variant]) => variant)).toEqual(['SignInManagement', 'SecurityKeyDecline']);
     expect(alice.keys).toEqual([]);
   });
 

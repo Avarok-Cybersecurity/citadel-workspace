@@ -37,8 +37,9 @@ extern "C" {
     fn admit(this: &SignInHost, request_json: &str) -> Result<js_sys::Promise, JsValue>;
 }
 
-/// Post-quantum sign-in for this tenant: its OPRF seed and the Argon2id cost clients stretch a
-/// password factor with. The seed is copied in once and never leaves; nothing here prints it.
+/// Post-quantum sign-in for this tenant: its OPRF seed, the Argon2id cost clients stretch a
+/// password factor with, and the WebAuthn relying party its security keys are scoped to
+/// (`PQ_SECURITY_KEY_RP_ID`). The seed is copied in once and never leaves; nothing here prints it.
 /// Built by the kernel's `pq_sign_in_settings`, the same builder a native server uses.
 #[wasm_bindgen]
 pub struct PqSignIn(PqAuthServerSettings);
@@ -51,13 +52,14 @@ impl PqSignIn {
         mem_kib: u32,
         iterations: u32,
         lanes: u32,
+        security_key_rp_id: &str,
     ) -> Result<PqSignIn, JsError> {
         let ksf = KsfParams {
             mem_kib,
             iterations,
             lanes,
         };
-        pq_sign_in_settings(oprf_seed, ksf)
+        pq_sign_in_settings(oprf_seed, ksf, security_key_rp_id)
             .map(Self)
             .map_err(|e| JsError::new(&e))
     }
