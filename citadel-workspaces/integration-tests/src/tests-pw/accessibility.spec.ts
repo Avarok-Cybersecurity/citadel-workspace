@@ -599,12 +599,34 @@ test.describe.serial('Accessibility (authenticated surfaces)', () => {
   // the page and the first control inside the content area, every time you
   // navigated. axe stays silent because its `region` rule is moderate impact,
   // below the serious/critical threshold this suite fails on.
+  //
+  // Entered FROM a page that holds focus, which is the case that broke: one
+  // shell spans every page, so only <main> changes, and the directory's search
+  // box (focused on mount) is removed with it. Chromium resumes Tab from where
+  // that box was, so without the shell restarting focus the first Tab went into
+  // <main> -- the workspace's breadcrumb, or the directory's own next control
+  // when it landed before the change committed (run 44190289145, 3 of 3).
   test('the workspace can be entered without tabbing through the sidebar', async () => {
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/directory');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await expect(page.getByRole('heading', { name: 'User Directory' })).toBeVisible({ timeout: 30_000 });
+    await expect(
+      page.getByRole('main').getByRole('textbox').first(),
+      'premise: the outgoing page holds focus inside <main>',
+    ).toBeFocused();
+
     await page.evaluate(() => {
       window.history.pushState({}, '', '/workspace');
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
     await expect(page.getByTestId('sidebar-toggle')).toBeVisible({ timeout: 30_000 });
+    // The workspace's OWN content. Everything else waited for below belongs to
+    // the shell, which never left, so it is attached before the page changes.
+    await expect(
+      page.getByRole('main').getByRole('navigation', { name: 'Breadcrumb' }),
+    ).toBeVisible({ timeout: 30_000 });
 
     // Structure a screen reader can navigate by.
     await expect(page.getByRole('main')).toBeAttached();
