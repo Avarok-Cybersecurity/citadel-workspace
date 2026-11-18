@@ -45,9 +45,10 @@ describe('a server at 0.12.2', () => {
     w.deps.rpId = 'localhost';
     alice.policy = 'PasswordAndKey';
     await manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryCodes', STEP_UP);
+    // One get() per ceremony: the enrolment's, under the relying party the server named, then the
+    // step-up's, under this page's because a 0.12.2 server names none.
     const asked: string[] = w.authenticator.getCalls.map((g) => g.rpId);
-    expect(asked[0]).toBe(FAKE_RP_ID);
-    expect(asked[asked.length - 1]).toBe('localhost');
+    expect(asked).toEqual([FAKE_RP_ID, 'localhost']);
   });
 
   it('any other refusal reads in the agent\'s own words', () => {
