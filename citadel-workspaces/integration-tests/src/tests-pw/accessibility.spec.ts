@@ -613,7 +613,7 @@ test.describe.serial('Accessibility (authenticated surfaces)', () => {
     });
     await expect(page.getByRole('heading', { name: 'User Directory' })).toBeVisible({ timeout: 30_000 });
     await expect(
-      page.getByRole('main').getByRole('textbox').first(),
+      page.getByRole('main').getByRole('combobox', { name: /search users/i }),
       'premise: the outgoing page holds focus inside <main>',
     ).toBeFocused();
 
