@@ -35,6 +35,11 @@ license = "AGPL-3.0-or-later"
 [profile.release]
 overflow-checks = true
 
+# Argon2 at the shipped cost, optimised in debug and test builds. Cargo ignores a dependency's
+# [profile], so the SDK's copy never reaches this workspace. Why: citadel-internal-service/Cargo.toml.
+[profile.dev.package.rust-argon2]
+opt-level = 3
+
 [workspace.dependencies]
 # Workspace-specific packages
 citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }

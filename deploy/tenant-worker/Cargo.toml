@@ -29,6 +29,11 @@ opt-level = 3
 lto = true
 codegen-units = 1
 
+# Argon2 at the shipped cost, optimised in debug and test builds (storage-compat hashes natively).
+# Cargo ignores a dependency's [profile]. Why: ../../citadel-internal-service/Cargo.toml.
+[profile.dev.package.rust-argon2]
+opt-level = 3
+
 # quinn-proto 0.11.19 plus quinn-rs/quinn#2660 (re-arm the loss-detection timer when a path
 # validation fails; upstream issue #2658), which otherwise panics debug builds in
 # `pto_time_and_space` when a relay fallback provokes a failed migration. A `[patch]` applies only

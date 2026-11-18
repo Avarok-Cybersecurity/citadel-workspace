@@ -35,6 +35,10 @@ license = "AGPL-3.0-or-later"
 [profile.release]
 overflow-checks = true
 
+# Argon2 optimised in debug builds; mirrors the root Cargo.toml. Why: citadel-internal-service/Cargo.toml.
+[profile.dev.package.rust-argon2]
+opt-level = 3
+
 [workspace.dependencies]
 # Workspace-specific packages
 citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }
