@@ -20,7 +20,7 @@
  * shell's background hooks.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useNavigate, type NavigateFunction } from 'react-router-dom';
 import type { ReactNode } from 'react';
@@ -84,7 +84,9 @@ describe('a page change inside the workspace shell', () => {
   it('restarts focus before the skip link when the outgoing page held it', async () => {
     await renderAtDirectory();
     const search: HTMLElement = screen.getByRole('textbox', { name: 'Search users' });
-    expect(search, 'premise: the outgoing page holds focus').toHaveFocus();
+    // Waited for: the page is revealed by Suspense outside act, so its mount
+    // effect (the focus) can run after the heading is found.
+    await waitFor((): void => { expect(search, 'premise: the outgoing page holds focus').toHaveFocus(); });
 
     await goToWorkspace();
     expect(search.isConnected, 'premise: the change removed the focused element').toBe(false);
