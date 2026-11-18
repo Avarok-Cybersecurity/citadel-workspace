@@ -1,26 +1,45 @@
-/** Asking the agent to install the downloaded update and restart (`UpdateApply`). */
-import { useCallback, useState } from 'react';
+/**
+ * "Restart to update" for a component: the window's one restart (lib/agent-update/
+ * restart-controller.ts) over the live clock, agent and socket.
+ */
+import { useCallback, useSyncExternalStore } from 'react';
 import { askUpdater } from '@/lib/agent-update/requests';
-import { describeFailure } from '@/lib/failure-message';
-import { CONNECTION_LOST } from '@/lib/websocket/request-response';
+import { eventEmitter } from '@/lib/event-emitter';
+import { updaterSettings, type UpdaterSettings } from '@/lib/agent-update/update-state';
+import { dismissRestart, restartPhase, restartToUpdate, type AgentNow, type RestartPorts } from '@/lib/agent-update/restart-controller';
+import type { RestartPhase } from '@/lib/agent-update/restart-flow';
 
-export type RestartPhase = { kind: 'idle' } | { kind: 'restarting' } | { kind: 'failed'; message: string };
+export type { RestartPhase };
 
 export interface RestartControl {
   phase: RestartPhase;
-  apply: () => void;
+  /** Install `target` over `from`, the version the agent runs. */
+  apply: (target: string, from: string) => void;
+  /** Put an outcome away. */
+  dismiss: () => void;
 }
 
+function agentNow(): AgentNow {
+  const settings: UpdaterSettings | null = updaterSettings.get();
+  return { current: settings !== null && settings.current !== '' ? settings.current : null, lastError: settings?.lastError ?? null };
+}
+
+const LIVE_PORTS: RestartPorts = {
+  now: (): number => Date.now(),
+  after: (ms: number, run: () => void): (() => void) => {
+    const timer: ReturnType<typeof setTimeout> = setTimeout(run, ms);
+    return (): void => clearTimeout(timer);
+  },
+  ask: (variant: 'UpdateApply' | 'UpdateGetStatus') => askUpdater(variant),
+  onReconnect: (run: () => void): (() => void) => eventEmitter.on('on-ws-connection-success', run),
+  watchAgent: (run: (now: AgentNow) => void): (() => void) => updaterSettings.subscribe((): void => run(agentNow())),
+  agentNow,
+};
+
 export function useRestartToUpdate(): RestartControl {
-  const [phase, setPhase] = useState<RestartPhase>({ kind: 'idle' });
-  const apply: () => void = useCallback((): void => {
-    setPhase({ kind: 'restarting' });
-    askUpdater('UpdateApply')
-      .then((status): void => { if (status.last_error) setPhase({ kind: 'failed', message: status.last_error }); })
-      // The agent restarting closes the socket before it can answer: that is the success case.
-      .catch((e: unknown): void => {
-        if (!String(e).includes(CONNECTION_LOST)) setPhase({ kind: 'failed', message: describeFailure(e, 'The update did not start.') });
-      });
+  const phase: RestartPhase = useSyncExternalStore(restartPhase.subscribe, restartPhase.get);
+  const apply: (target: string, from: string) => void = useCallback((target: string, from: string): void => {
+    restartToUpdate(target, from, LIVE_PORTS);
   }, []);
-  return { phase, apply };
+  return { phase, apply, dismiss: dismissRestart };
 }

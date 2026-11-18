@@ -152,7 +152,7 @@ nor Linux or Windows rendering; scenarios that pin a motion tier keep it.
 | `check-third-party-images-are-pinned.mjs` | A third-party image in a compose file must name a version, not float. |
 | `check-token-contrast.mjs` | Every semantic foreground must clear WCAG AA on the surface it names. |
 | `check-transfer-cap-parity.mjs` | The inline-upload byte cap is declared in two languages and nothing bound them. |
-| `check-ui-builds-see-the-catalogue.mjs` | Every container that runs the UI's vite config can read the app catalogue. |
+| `check-ui-builds-see-the-catalogue.mjs` | Every container that runs the UI's vite config can read the parent files it reads: the app catalogue, and the agent crate's Cargo.toml (its version is /version.json's `agent`). |
 | `check-ui-is-not-a-nested-repo.mjs` | citadel-workspaces/ belongs to this repository, not to a nested one. |
 | `check-ui-mounts-serve-cdoc.mjs` | Every file the Citadel Docs runtime and the Calendar load is inside a directory the dev UI container mounts. |
 | `check-validation-aggregate-is-complete.mjs` | The "Validation passed" job must depend on every other job in validate.yml, and must run even when one of them fails. |

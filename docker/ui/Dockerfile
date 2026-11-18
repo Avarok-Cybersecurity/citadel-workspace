@@ -128,6 +128,8 @@ RUN npm run build --workspace=citadel-workspace-client-ts
 # Now build the UI itself. NODE_ENV is set only now: before the install it would skip the
 # devDependencies the builds need.
 COPY citadel-workspaces citadel-workspaces
+# The agent release this build ships with: vite.config.ts writes its version into /version.json.
+COPY citadel-workspace-internal-service/Cargo.toml citadel-workspace-internal-service/Cargo.toml
 # The global app catalogue, which the build ships at /apps/catalogue.json (src/build/app-catalogue-asset.ts).
 COPY apps/catalogue apps/catalogue
 ENV NODE_ENV=production

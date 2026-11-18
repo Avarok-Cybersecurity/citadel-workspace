@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 /**
- * Every container that runs the UI's vite config can read the app catalogue.
+ * Every container that runs the UI's vite config can read the parent files it reads: the app
+ * catalogue, and the agent crate's Cargo.toml (its version is /version.json's `agent`).
  *
- * vite.config.ts reads the parent's apps/catalogue/catalogue.json relative to
- * the UI directory and fails the build when it is missing, by design. The
- * market stream mounted it into the `ui` service and copied it into
- * docker/ui/Dockerfile, but not into `sync-wasm-client`, which also runs
- * `vite build` over a mounted citadel-workspaces/: the sync died with
- * "ENOENT /workspace/apps/catalogue/catalogue.json" and every integration job
- * behind it went with it.
+ * vite.config.ts reads each relative to the UI directory and fails the build when one is
+ * missing, by design. The market stream mounted the catalogue into the `ui` service and copied
+ * it into docker/ui/Dockerfile, but not into `sync-wasm-client`, which also runs `vite build`
+ * over a mounted citadel-workspaces/: the sync died with
+ * "ENOENT /workspace/apps/catalogue/catalogue.json" and every integration job behind it went
+ * with it.
  *
- * The relative path is read from vite.config.ts, so moving the file there moves
- * the requirement here. For each compose service that mounts citadel-workspaces/
- * (or a path under it), the UI root inside the container is derived from that
- * mount and the catalogue directory must be mounted at the same relative place.
- * For each Dockerfile that COPYs the whole citadel-workspaces/, the catalogue
- * must be COPY'd to the same relative place beside it.
+ * The relative paths are read from vite.config.ts (every `path.resolve(__dirname, '../…')`), so
+ * moving a file there moves the requirement here. For each compose service that mounts
+ * citadel-workspaces/ (or a path under it), the UI root inside the container is derived from
+ * that mount and each file's directory must be mounted at the same relative place. For each
+ * Dockerfile that COPYs the whole citadel-workspaces/, each file (or its directory) must be
+ * COPY'd to the same relative place beside it.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
@@ -32,11 +32,12 @@ const fail = (message) => {
   process.exit(1);
 };
 
-const resolved = read(VITE).match(/path\.resolve\(__dirname,\s*'([^']*catalogue\.json)'\)/);
-if (!resolved) fail(`${VITE} no longer reads catalogue.json via path.resolve(__dirname, ...); its shape changed.`);
-const fromUi = posix.dirname(resolved[1]);
-const hostDir = posix.normalize(posix.join(UI, fromUi));
-if (!existsSync(join(ROOT, hostDir, 'catalogue.json'))) fail(`${hostDir}/catalogue.json, which ${VITE} reads, does not exist.`);
+const reads = [...read(VITE).matchAll(/path\.resolve\(__dirname,\s*'(\.\.\/[^']+)'\)/g)].map((m) => {
+  const file = posix.normalize(posix.join(UI, m[1]));
+  return { file, dir: posix.dirname(file), fromUi: posix.dirname(m[1]) };
+});
+if (!reads.some((r) => r.file.endsWith('catalogue.json'))) fail(`${VITE} no longer reads catalogue.json via path.resolve(__dirname, '../...'); its shape changed.`);
+for (const { file } of reads) if (!existsSync(join(ROOT, file))) fail(`${file}, which ${VITE} reads, does not exist.`);
 
 const problems = [];
 let services = 0;
@@ -64,9 +65,10 @@ for (const file of COMPOSE_FILES.filter((f) => existsSync(join(ROOT, f)))) {
     if (roots.size === 0) continue;
     services += 1;
     for (const root of roots) {
-      const want = posix.normalize(posix.join(root, fromUi));
-      const ok = mounts.some((m) => m.source === hostDir && m.target === want);
-      if (!ok) problems.push(`${file}: ${name} mounts ${UI}/ at ${root} but not ./${hostDir} at ${want}`);
+      for (const { dir, fromUi } of reads) {
+        const want = posix.normalize(posix.join(root, fromUi));
+        if (!mounts.some((m) => m.source === dir && m.target === want)) problems.push(`${file}: ${name} mounts ${UI}/ at ${root} but not ./${dir} at ${want}`);
+      }
     }
   }
 }
@@ -83,11 +85,12 @@ for (const file of [...dockerfilesUnder('docker'), ...dockerfilesUnder('deploy')
     source: posix.normalize(m[1].replace(/^\.\//, '')).replace(/\/$/, ''),
     dest: m[2].replace(/\/$/, ''),
   }));
-  for (const { source, dest } of copies.filter((c) => c.source === UI)) {
+  for (const { dest } of copies.filter((c) => c.source === UI)) {
     dockerfiles += 1;
-    const want = posix.normalize(posix.join(posix.dirname(dest), hostDir));
-    if (!copies.some((c) => c.source === hostDir && posix.normalize(c.dest) === want)) {
-      problems.push(`${file}: COPYs ${UI} to ${dest} but not ${hostDir} to ${want}`);
+    for (const { file: needed, dir } of reads) {
+      const beside = (source) => posix.normalize(posix.join(posix.dirname(dest), source));
+      const ok = copies.some((c) => (c.source === dir || c.source === needed) && posix.normalize(c.dest) === beside(c.source));
+      if (!ok) problems.push(`${file}: COPYs ${UI} to ${dest} but not ${needed} (or ${dir}/) beside it`);
     }
   }
 }
@@ -95,10 +98,10 @@ for (const file of [...dockerfilesUnder('docker'), ...dockerfilesUnder('deploy')
 if (services + dockerfiles < 3) fail(`found ${services} service(s) and ${dockerfiles} Dockerfile COPY(s) of ${UI}/; the files changed shape, so nothing was checked.`);
 
 if (problems.length > 0) {
-  console.error(`A container that runs ${VITE} cannot read ${hostDir}/catalogue.json:\n`);
+  console.error(`A container that runs ${VITE} cannot read a file it reads:\n`);
   for (const p of problems) console.error(`  ${p}`);
-  console.error('\nThe UI build fails without it, deliberately. Mount or COPY the catalogue beside the UI.');
+  console.error('\nThe UI build fails without them, deliberately. Mount or COPY each beside the UI.');
   process.exit(1);
 }
 
-console.log(`  ${services} compose service(s) and ${dockerfiles} Dockerfile(s) running the UI see ${hostDir}/  ok`);
+console.log(`  ${services} compose service(s) and ${dockerfiles} Dockerfile(s) running the UI see ${reads.map((r) => r.file).join(', ')}  ok`);

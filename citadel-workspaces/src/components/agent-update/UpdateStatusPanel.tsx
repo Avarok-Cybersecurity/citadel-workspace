@@ -8,6 +8,9 @@ import type { UpdateView } from '@/lib/agent-update/update-view';
 import { CheckNowButton } from './CheckNowButton';
 import { ReleaseNotes } from './ReleaseNotes';
 import { RestartToUpdate } from './RestartToUpdate';
+import { RestartOutcome } from './RestartOutcome';
+import { downloadFor } from '@/lib/agent-update/banner-model';
+import { agentPlatformCandidates, installerFamily } from '@/lib/agent-download';
 import type { RestartControl } from './use-restart-to-update';
 
 export interface UpdateStatusPanelProps {
@@ -75,9 +78,11 @@ function Ready({ settings, restart, update }: { settings: UpdaterSettings; resta
           ? 'The agent installs this by itself the next time no account is signed in. To install it now, restart the agent: that signs out every account on this computer.'
           : 'Automatic installs are off, so this waits for you. Restarting the agent installs it and signs out every account on this computer.'}
       </p>
-      <RestartToUpdate version={update.latest} restart={restart} />
-      {restart.phase.kind === 'restarting' && <p className="text-sm text-muted-foreground">Restarting the agent…</p>}
-      {restart.phase.kind === 'failed' && <p className="text-sm text-destructive-emphasis">{restart.phase.message}</p>}
+      <RestartToUpdate version={update.latest} from={settings.current} restart={restart} />
+      <div aria-live="polite">
+        {restart.phase.kind === 'restarting' && <p className="text-sm text-muted-foreground">Restarting the agent…</p>}
+        <RestartOutcome phase={restart.phase} downloadUrl={(v: string): string => downloadFor(v, update, installerFamily(agentPlatformCandidates()))} />
+      </div>
     </div>
   );
 }

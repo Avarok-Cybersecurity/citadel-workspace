@@ -110,6 +110,18 @@ check(!UpdateSteps.isAgentDownload(URL(fileURLWithPath: "/tmp/Citadel-Agent.dmg"
 check(!UpdateSteps.isAgentDownload(downloads.appendingPathComponent("../../x/Citadel-Agent.dmg")), "nor one that climbs out")
 check(!UpdateSteps.isAgentDownload(downloads.appendingPathComponent("0.9.0/Other.dmg")), "nor another name")
 
+// Two apps (the old and the new, during an update) and the agent write one log: nobody's lines
+// may overwrite anybody's.
+let shared = scratch.appendingPathComponent("agent.log")
+do {
+    let first = try LogFile(at: shared), second = try LogFile(at: shared)
+    first.write("one from the old app")
+    second.write("two from the new app")
+    first.write("three from the old app")
+    let lines = try String(contentsOf: shared, encoding: .utf8).split(separator: "\n").map { $0.split(separator: "]", maxSplits: 1).last.map { $0.trimmingCharacters(in: .whitespaces) } ?? "" }
+    check(lines == ["one from the old app", "two from the new app", "three from the old app"], "two handles on the log both append, in order")
+} catch { fail("log: \(error)") }
+
 let args = CommandLine.arguments
 if args.count == 3 {
     let source = URL(fileURLWithPath: args[1]), version = args[2]
