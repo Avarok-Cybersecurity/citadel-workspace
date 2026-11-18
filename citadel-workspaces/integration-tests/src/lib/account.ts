@@ -7,6 +7,7 @@ import type { CreateAccountOptions } from './types.js';
 import { config } from './config.js';
 import { closeAnyModals, waitForWorkspaceLoaded } from './modals.js';
 import { waitForRegistrationToSettle } from './post-registration.js';
+import { awaitRegistrationOutcome, REGISTRATION_OUTCOME_BUDGET_MS } from './registration-outcome.js';
 import { takeScreenshot } from './screenshots.js';
 import { clearBrowserStorage, waitForAppReady } from './browser.js';
 import { isVisibleWithin } from './utils.js';
@@ -129,20 +130,13 @@ export async function createAccount(page: Page, username: string, options: Creat
 
       await submitBtn.click();
       // Registration is a server round trip, so this genuinely has to wait — but
-      // for the OUTCOME, not for a fixed 8s. Exactly one of two things follows:
-      // the Initialize Workspace modal (this is the first account on the server)
-      // or navigation into the workspace. Racing them returns as soon as either
-      // lands, and still fails loudly if neither does.
-      await Promise.race([
-        page.locator('input#masterPassword').waitFor({ state: 'visible', timeout: 30_000 }),
-        page.waitForURL(/\/(workspace|office)/, { timeout: 30_000 }),
-        // A refused registration produces NEITHER of the above, so without this
-        // arm the helper sat out the full 30s and then another 45s downstream.
-        rejection.then((r) => (r.kind === 'rejected' ? undefined : new Promise<never>(() => {}))),
-      ]).catch(() => {
-        // Neither arrived; waitForWorkspaceLoaded below reports the real failure
-        // with more context than a timeout here would.
-      });
+      // for the OUTCOME, not for a fixed 8s. See registration-outcome.ts for the
+      // signals; it reports when none arrives, and the checks below report why.
+      await awaitRegistrationOutcome(
+        page,
+        rejection.then((r) => r.kind === 'rejected'),
+        REGISTRATION_OUTCOME_BUDGET_MS,
+      );
     }
   }
 
