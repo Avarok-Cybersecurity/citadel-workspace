@@ -25,6 +25,8 @@ import { useTreeKeyboard, type TreeKeyboard } from './useTreeKeyboard';
 /** The glide and the arrivals that finish with it, with as long again for a slow commit before them. */
 const PROBE_MS: number = MOTION_SECONDS.layout * 1000 * 2;
 
+const NO_PEEKS: ReadonlySet<string> = new Set<string>();
+
 interface FocusedTreeProps {
   nodes: Readonly<Record<string, DomainNode>>;
   root: DomainNode;
@@ -44,12 +46,19 @@ export function FocusedTree({ nodes, root, selectedId, isMobile, actions, canAdd
     (): FocusedView => focusedView({ nodes, children: index, selectedId, root }),
     [nodes, index, selectedId, root],
   );
-  const [peeked, setPeeked] = useState<ReadonlySet<string>>(new Set());
+  const [peeked, setPeeked] = useState<ReadonlySet<string>>(NO_PEEKS);
   const [stackOpen, setStackOpen] = useState<boolean>(false);
+  // Reset while rendering the selection, not in an effect after it: every row glides from the commit
+  // that moves it, and a second commit a frame later re-renders and re-measures them all mid-glide --
+  // on a slow CPU, a frame long enough to carry the glide nearly to its end in one step.
+  const [viewOf, setViewOf] = useState<string>(view.selected.id);
+  if (viewOf !== view.selected.id) {
+    setViewOf(view.selected.id);
+    setPeeked(NO_PEEKS);
+    setStackOpen(false);
+  }
   const selectedBefore: MutableRefObject<string> = useRef<string>(view.selected.id);
   useEffect((): void => {
-    setPeeked(new Set());
-    setStackOpen(false);
     if (selectedBefore.current === view.selected.id) return;
     selectedBefore.current = view.selected.id;
     // A selection is the transition Auto watches: one that drops frames moves the rest of this page to lite.

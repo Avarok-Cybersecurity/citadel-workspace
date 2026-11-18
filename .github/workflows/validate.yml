@@ -61,6 +61,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the agent-v* tags and the history between them
+      - uses: ./.github/actions/no-nested-ui-repo
       - run: node --test scripts/lib/agent-release-decision.test.mjs
       - run: node --test scripts/lib/lock-closure.test.mjs
       - run: node scripts/agent-release-state.mjs --pr
@@ -89,6 +90,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: ./.github/actions/rust-toolchain
       - name: Run Cargo Fmt
         run: cargo fmt -p ${{ matrix.crate }} --check
@@ -117,6 +119,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: ./.github/actions/rust-toolchain
       - name: Run Cargo Clippy
         run: cargo clippy -p ${{ matrix.crate }} -- -D warnings
@@ -137,6 +140,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - uses: ./.github/actions/no-nested-ui-repo
       # The toolchain the other Rust gate jobs set up; a self-hosted runner has its own
       # RUSTUP_HOME, not the hosted image's preinstalled toolchain.
       - uses: ./.github/actions/rust-toolchain
@@ -161,6 +165,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: ./.github/actions/rust-toolchain
       - run: cargo fmt --manifest-path tools/telemetry-read/Cargo.toml --check
       - run: cargo clippy --locked --all-targets --manifest-path tools/telemetry-read/Cargo.toml -- -D warnings
@@ -183,6 +188,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: ./.github/actions/rust-toolchain
       - uses: taiki-e/install-action@nextest
       # The compiler apps/sdk-fixtures/rust-toolchain.toml pins (it also governs harness/): the
@@ -281,6 +287,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: ./.github/actions/rust-toolchain
       - run: cargo fmt --manifest-path tools/control-request/Cargo.toml --check
       - run: cargo clippy --locked --all-targets --manifest-path tools/control-request/Cargo.toml -- -D warnings
@@ -303,6 +310,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       # Dependencies only (rust-cache drops this workspace's own crates before saving), keyed on
       # the toolchain and every Cargo.lock/Cargo.toml. Most of this job's 40 minutes (run
       # 38056778313) is recompiling unchanged dependencies twice -- vendored OpenSSL among them,
@@ -368,6 +376,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -388,6 +397,8 @@ jobs:
         run: node --test scripts/lib/publish-validation-decision.test.mjs
       - name: Preflight derives CI's gates, tiers a change, and plans merge previews correctly
         run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/merge-preview-planning.test.mjs
+      - name: The flaky-spec report counts only attempts that failed
+        run: node --test scripts/lib/retry-passes.test.mjs
       - name: The stack's loopback STUN answers as RFC 5389 says
         run: node --test docker/stun/stun-wire.test.mjs
       - name: Check the docs' commands resolve
@@ -435,6 +446,8 @@ jobs:
         # and called the rest optional -- but INTERNAL_SERVICE_ALLOWED_ORIGINS
         # is also required, so the documented quickstart could not come up.
         run: node scripts/check-install-doc-names-required-env.mjs
+      - name: Every checkout drops the folded UI submodule's leftovers
+        run: node scripts/check-checkouts-drop-the-nested-ui-repo.mjs
       - name: Check every subscribed event has an emitter
         run: node citadel-workspaces/scripts/check-event-listeners-have-emitters.mjs
       - name: Check destructive text clears AA on every background
@@ -953,6 +966,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: ./.github/actions/rust-toolchain
       - name: Run Cargo Fmt
         run: cargo fmt --all --check
@@ -986,6 +1000,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - name: Free Disk Space
         uses: ./.github/actions/free-runner-disk
       - uses: ./.github/actions/rust-toolchain
@@ -1035,6 +1050,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - name: Free Disk Space
         uses: ./.github/actions/free-runner-disk
       - uses: ./.github/actions/rust-toolchain
@@ -1080,6 +1096,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -1140,6 +1157,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -1205,6 +1223,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -1626,6 +1645,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -1683,6 +1703,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - name: Free Disk Space
         uses: ./.github/actions/free-runner-disk
       - name: Pull base images (retried)
@@ -1860,6 +1881,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - name: Free Disk Space
         uses: ./.github/actions/free-runner-disk
       - uses: actions/setup-node@v4
@@ -2069,6 +2091,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - name: Free Disk Space
         uses: ./.github/actions/free-runner-disk
       - uses: actions/setup-node@v4
@@ -2263,6 +2286,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/no-nested-ui-repo
 
       - name: Build fixture images
         run: |
@@ -2523,6 +2547,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - name: Free Disk Space
         uses: ./.github/actions/free-runner-disk
       # BEFORE the sync container runs, not after.
@@ -2920,6 +2945,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
       - name: Set up Node for the production-bundle gates
         uses: actions/setup-node@v4
         with:

@@ -67,6 +67,7 @@ const ENVIRONMENT = [
   check('submodules are populated', 'node', ['scripts/check-submodules-are-populated.mjs'], ROOT, tag('env')),
   check('hooks are installed', 'node', ['scripts/check-hooks-are-installed.mjs'], ROOT, tag('env')),
   check('node matches CI', 'node', ['scripts/check-node-matches-ci.mjs'], ROOT, tag('env')),
+  check('UI is not a nested repo', 'node', ['scripts/check-ui-is-not-a-nested-repo.mjs'], ROOT, tag('env')),
 ];
 
 let plan;

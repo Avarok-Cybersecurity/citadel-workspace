@@ -9,6 +9,11 @@ import type { EnrolDeps } from './enrol-key';
 export interface SignInDeps extends EnrolDeps {
   /** The agent's CID-0 LocalDB: public sign-in hints and legacy records only. */
   store: PasskeyStore;
+  /**
+   * The relying party this page's legacy local records are filed under. A key
+   * ceremony uses the one its challenge names instead: the server's.
+   */
+  rpId: string;
 }
 
 export function browserSignInDeps(): SignInDeps {

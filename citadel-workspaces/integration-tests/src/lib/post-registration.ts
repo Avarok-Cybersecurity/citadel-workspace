@@ -41,6 +41,9 @@ export async function waitForRegistrationToSettle(page: Page): Promise<void> {
   );
 }
 
+/** The app's "Secure your account" card (PostRegistrationSteps). */
+export const POST_REGISTRATION_CARD = 'post-registration';
+
 const STEP_BUDGET_MS = 30_000;
 
 /**
@@ -58,7 +61,7 @@ async function walkPostRegistrationSteps(page: Page): Promise<boolean> {
     .waitForURL(/\/(workspace|office)/, { timeout: STEP_BUDGET_MS })
     .then(() => true)
     .catch(() => false);
-  const card = page.getByTestId('post-registration');
+  const card = page.getByTestId(POST_REGISTRATION_CARD);
   for (;;) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) return entered;

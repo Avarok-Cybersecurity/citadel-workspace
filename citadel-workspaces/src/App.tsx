@@ -5,12 +5,12 @@ import { PromptDialogProvider } from "@/components/shared/prompt-dialog";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter } from "react-router-dom";
+import { AppRoutes, ROUTER_FUTURE } from "./app-routes";
 import WorkspaceApp from "./components/WorkspaceApp";
 import { DocumentTitle } from './components/DocumentTitle';
 import { useSendFailureToasts } from '@/hooks/use-send-failure-toasts';
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
-import { RouteFallback } from "./components/RouteFallback";
 import { PwaUpdatePrompt } from "./components/pwa/PwaUpdatePrompt";
 import { ThemeColorSync } from "./components/theme/ThemeColorSync";
 import { OfflineBanner } from "./components/pwa/OfflineBanner";
@@ -20,44 +20,12 @@ import { SecurityKeyPromptHost } from "./components/sign-in/SecurityKeyPromptHos
 import { CallLayer } from "./components/call/CallLayer";
 import { OngoingCallBar } from "./components/call/OngoingCallBar";
 
-// Landing is the route almost every session starts on, so it is imported eagerly:
-// code-splitting it would only add a network round trip before first paint.
-import Landing from "./pages/Landing";
-
-/**
- * Every other route is split out. Nothing here was split before, so a visitor to
- * the landing page downloaded the workspace shell, the group chat page, the file
- * manager and the collaborative editor (TipTap + Yjs + ProseMirror) before it
- * could render — none of which that page uses.
- */
-const Office: LazyExoticComponent<() => JSX.Element> = lazy((): Promise<{ default: never; } | { default: () => JSX.Element; }> =>
-  import("@/components/Office").then(m => ({ default: m.Office }))
-);
-const Messages: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages/Messages"));
 // Off the landing critical path (check-bundle-budget): both leave a workspace whose session ended,
 // asking about unsaved editor text first, which only an open workspace can have.
 const SessionEndedWatcher: LazyExoticComponent<() => null> = lazy(() => import("./components/SessionEndedWatcher").then((m) => ({ default: m.SessionEndedWatcher })));
 const ServerReconnectWatcher: LazyExoticComponent<() => null> = lazy(() => import("./components/ServerReconnectWatcher").then((m) => ({ default: m.ServerReconnectWatcher })));
 const SignInNeededWatcher: LazyExoticComponent<() => JSX.Element | null> = lazy(() => import("./components/SignInNeededWatcher").then((m) => ({ default: m.SignInNeededWatcher })));
 const AgentUpdateWatcher: LazyExoticComponent<() => JSX.Element | null> = lazy(() => import("./components/agent-update/AgentUpdateWatcher").then((m) => ({ default: m.AgentUpdateWatcher })));
-const Connect: LazyExoticComponent<() => JSX.Element> = lazy((): Promise<{ default: never; } | { default: () => JSX.Element; }> =>
-  import("./pages/Connect").then(m => ({ default: m.Connect }))
-);
-const UserDirectory: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages/UserDirectory"));
-const GroupChatPage: LazyExoticComponent<() => JSX.Element> = lazy((): Promise<{ default: never; } | { default: () => JSX.Element; }> =>
-  import("./pages/GroupChatPage").then(m => ({ default: m.GroupChatPage }))
-);
-const Agent: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages/Agent"));
-const NotFound: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages/NotFound"));
-// Lazy too: only the protected routes mount it, and its start-up claim path
-// (retry, takeover offer) has no business on the landing page's critical path.
-const WorkspaceLoader: LazyExoticComponent<React.FC<{ children: React.ReactNode }>> = lazy((): Promise<{ default: React.FC<{ children: React.ReactNode }> }> =>
-  import("./components/ui/workspace-loader").then(m => ({ default: m.WorkspaceLoader }))
-);
-// Split like the rest: the landing page must not pay for the create-workspace
-// flow, and nothing on it is needed until someone chooses to set one up.
-const CreateWorkspace: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages/CreateWorkspace"));
-const Legal: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages/Legal"));
 
 const queryClient: QueryClient = new QueryClient();
 
@@ -109,20 +77,13 @@ const App: () => JSX.Element = (): JSX.Element => {
             <PersistFailureNotice />
             <PeerRefusalNotice />
             <SecurityKeyPromptHost />
-            {/*
-              Opt into the v7 behaviours now. Both were logging deprecation
-              warnings on every boot; adopting them here means the eventual
-              react-router v7 upgrade is a version bump rather than a behaviour
-              change, and the console stays clean enough that a real warning
-              is noticeable.
-            */}
             {/* Wraps the router, not a route: a ringing call has to be
                 answerable from wherever the user happens to be, and a call must
                 survive navigating between rooms rather than dying with the
                 page that started it. */}
             <CallLayer>
             <BrowserRouter
-              future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+              future={ROUTER_FUTURE}
             >
               <DocumentTitle />
               <Suspense fallback={null}><ServerReconnectWatcher /><SessionEndedWatcher /><SignInNeededWatcher /><AgentUpdateWatcher /></Suspense>
@@ -132,52 +93,7 @@ const App: () => JSX.Element = (): JSX.Element => {
                   so its useNavigate() threw on every render and took the whole
                   app down to the error boundary. */}
               <OngoingCallBar />
-              <Suspense fallback={<RouteFallback />}>
-                <Routes>
-                  {/* Public routes that don't require workspace data */}
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/connect" element={<Connect />} />
-                  <Route path="/create" element={<CreateWorkspace />} />
-                  <Route path="/create/done" element={<CreateWorkspace />} />
-                  <Route path="/legal/:doc" element={<Legal />} />
-                  <Route path="/agent" element={<Agent />} />
-
-                  {/* Protected routes that require workspace data to be loaded */}
-                  <Route
-                    path="/workspace"
-                    element={
-                      <WorkspaceLoader>
-                        <Office />
-                      </WorkspaceLoader>
-                    }
-                  />
-                  <Route
-                    path="/messages"
-                    element={
-                      <WorkspaceLoader>
-                        <Messages />
-                      </WorkspaceLoader>
-                    }
-                  />
-                  <Route
-                    path="/directory"
-                    element={
-                      <WorkspaceLoader>
-                        <UserDirectory />
-                      </WorkspaceLoader>
-                    }
-                  />
-                  <Route
-                    path="/groups/:groupId"
-                    element={
-                      <WorkspaceLoader>
-                        <GroupChatPage />
-                      </WorkspaceLoader>
-                    }
-                  />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
+              <AppRoutes />
             </BrowserRouter>
             </CallLayer>
           </WorkspaceApp>

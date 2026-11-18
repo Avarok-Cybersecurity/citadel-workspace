@@ -28,7 +28,6 @@ import { PeerGroupChat } from '@/components/chat/PeerGroupChat';
 import { useGroupConversations } from '@/hooks/use-group-conversations';
 import type { GroupConversation } from '@/types/group';
 import { connectionManager } from '@/lib/connection';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { debugLog } from '@/lib/debug-config';
 import { groupGoneMessage, type GoneMessage } from '@/lib/group-conversations/group-gone-message';
 import type { NavigateFunction } from 'react-router';
@@ -154,16 +153,13 @@ export function GroupChatPage(): JSX.Element {
 
   if (!group) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-full bg-background">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-accent" />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center h-full bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-accent" />
+      </div>
     );
   }
 
   return (
-    <AppLayout>
       <div className="flex flex-col h-full bg-background">
       {/* The route had no h1 at all, so heading navigation opened at level 2
           with no page title. Messages.tsx solved exactly this and the group
@@ -227,7 +223,6 @@ export function GroupChatPage(): JSX.Element {
         onDeleteGroup={onDeleteGroup}
       />
       </div>
-    </AppLayout>
   );
 }
 

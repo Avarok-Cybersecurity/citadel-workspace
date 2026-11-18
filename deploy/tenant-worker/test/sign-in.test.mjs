@@ -8,11 +8,13 @@ import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { ensureOprfSeed, OPRF_SEED_BYTES, OPRF_SEED_KEY } from "../control/oprf-seed.mjs";
 import { SIGN_IN_SETTINGS_KEY } from "../control/admission.mjs";
-import { ksfParams } from "../control/tenant-sign-in.mjs";
+import { ksfParams, securityKeyRpId } from "../control/tenant-sign-in.mjs";
 import { freeTenant, objectStats, openSocket, production, until } from "./helpers.mjs";
 import { instantiate } from "../server-wasm/pkg/instance.mjs";
 import wasm from "../server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
 
+/** Any bare domain: what these checks of the seed and cost pass for the relying party. */
+const RP_ID = "work.avarok.net";
 const hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 const storedSeed = (object) => runInDurableObject(object, (instance) => instance.ctx.storage.get(OPRF_SEED_KEY));
 
@@ -102,15 +104,30 @@ describe("the KSF parameters", () => {
   });
 
   it("as wrangler.toml deploys them, are ones the node accepts", () => {
-    const ksf = ksfParams(production().vars);
-    expect(() => new (instantiate(wasm).PqSignIn)(new Uint8Array(32), ksf.memKib, ksf.iterations, ksf.lanes)).not.toThrow();
+    const vars = production().vars;
+    const ksf = ksfParams(vars);
+    expect(() => new (instantiate(wasm).PqSignIn)(new Uint8Array(32), ksf.memKib, ksf.iterations, ksf.lanes, securityKeyRpId(vars))).not.toThrow();
   });
 
   it("below the SDK's floor, or with a seed of the wrong size, are refused by the node's own check", () => {
     const node = instantiate(wasm);
-    expect(() => new node.PqSignIn(new Uint8Array(32), 1024, 1, 1)).toThrow(/floor/);
-    expect(() => new node.PqSignIn(new Uint8Array(31), 19456, 2, 1)).toThrow(/32 bytes/);
-    expect(() => new node.PqSignIn(new Uint8Array(32), 19456, 2, 1)).not.toThrow();
+    expect(() => new node.PqSignIn(new Uint8Array(32), 1024, 1, 1, RP_ID)).toThrow(/floor/);
+    expect(() => new node.PqSignIn(new Uint8Array(31), 19456, 2, 1, RP_ID)).toThrow(/32 bytes/);
+    expect(() => new node.PqSignIn(new Uint8Array(32), 19456, 2, 1, RP_ID)).not.toThrow();
+  });
+});
+
+describe("the security-key relying party", () => {
+  it("is read from the vars and may not be missing", () => {
+    expect(securityKeyRpId({ PQ_SECURITY_KEY_RP_ID: "work.avarok.net" })).toBe("work.avarok.net");
+    expect(() => securityKeyRpId({})).toThrow(/PQ_SECURITY_KEY_RP_ID/);
+  });
+
+  it("is a bare domain, or the node will not start", () => {
+    const node = instantiate(wasm);
+    for (const bad of ["", "https://work.avarok.net", "work.avarok.net:443", "Work.Avarok.Net"]) {
+      expect(() => new node.PqSignIn(new Uint8Array(32), 19456, 2, 1, bad), bad).toThrow(/relying party/);
+    }
   });
 });
 

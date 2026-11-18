@@ -3,21 +3,6 @@
 version = 4
 
 [[package]]
-name = "addr2line"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b"
-dependencies = [
- "gimli",
-]
-
-[[package]]
-name = "adler2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
-
-[[package]]
 name = "aead"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -266,7 +251,7 @@ dependencies = [
 [[package]]
 name = "async_ip"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -348,21 +333,6 @@ name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
-
-[[package]]
-name = "backtrace"
-version = "0.3.76"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb531853791a215d7c62a30daf0dde835f381ab5de4589cfe7c649d2cbe92bd6"
-dependencies = [
- "addr2line",
- "cfg-if 1.0.5",
- "libc",
- "miniz_oxide",
- "object",
- "rustc-demangle",
- "windows-link",
-]
 
 [[package]]
 name = "base16ct"
@@ -868,8 +838,8 @@ dependencies = [
  "structopt",
  "subtle",
  "tempfile",
- "tokio 1.53.1",
- "tokio-stream 0.1.19",
+ "tokio",
+ "tokio-stream",
  "toml",
  "uuid",
  "zeroize",
@@ -897,7 +867,7 @@ dependencies = [
 [[package]]
 name = "citadel_crypt"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "arrayvec",
  "async-trait",
@@ -910,6 +880,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "citadel_io",
+ "citadel_negotiation",
  "citadel_pqcrypto",
  "citadel_types",
  "futures",
@@ -930,7 +901,7 @@ dependencies = [
 [[package]]
 name = "citadel_io"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "bytes",
  "citadel_io_macros",
@@ -939,12 +910,9 @@ dependencies = [
  "parking_lot",
  "rand 0.8.8",
  "serde",
- "tokio 1.36.0",
- "tokio 1.53.1",
- "tokio-stream 0.1.14",
- "tokio-stream 0.1.19",
- "tokio-util 0.7.10",
- "tokio-util 0.7.19",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
  "url",
  "wasmtimer",
 ]
@@ -952,7 +920,7 @@ dependencies = [
 [[package]]
 name = "citadel_io_macros"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -962,7 +930,7 @@ dependencies = [
 [[package]]
 name = "citadel_logging"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "tracing",
  "tracing-subscriber",
@@ -971,15 +939,26 @@ dependencies = [
 [[package]]
 name = "citadel_media"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "bytes",
 ]
 
 [[package]]
+name = "citadel_negotiation"
+version = "0.14.0"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
+dependencies = [
+ "bincode",
+ "citadel_types",
+ "serde",
+ "sha3",
+]
+
+[[package]]
 name = "citadel_pqcrypto"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "aes-gcm",
  "ascon-aead",
@@ -1007,7 +986,7 @@ dependencies = [
 [[package]]
 name = "citadel_proto"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1021,6 +1000,7 @@ dependencies = [
  "citadel_crypt",
  "citadel_io",
  "citadel_logging",
+ "citadel_negotiation",
  "citadel_pqcrypto",
  "citadel_treekem",
  "citadel_types",
@@ -1050,13 +1030,14 @@ dependencies = [
 [[package]]
 name = "citadel_sdk"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "anyhow",
  "bytes",
  "citadel_io",
  "citadel_logging",
  "citadel_media",
+ "citadel_negotiation",
  "citadel_proto",
  "citadel_types",
  "citadel_user",
@@ -1071,12 +1052,13 @@ dependencies = [
 [[package]]
 name = "citadel_treekem"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "arrayvec",
  "bincode",
  "blake3",
  "chacha20poly1305",
+ "citadel_io",
  "citadel_pqcrypto",
  "citadel_types",
  "rand 0.8.8",
@@ -1089,7 +1071,7 @@ dependencies = [
 [[package]]
 name = "citadel_types"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "bincode",
  "bytes",
@@ -1108,7 +1090,7 @@ dependencies = [
 [[package]]
 name = "citadel_user"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1117,6 +1099,7 @@ dependencies = [
  "chrono",
  "citadel_crypt",
  "citadel_io",
+ "citadel_negotiation",
  "citadel_pqcrypto",
  "citadel_types",
  "dirs2",
@@ -1140,7 +1123,7 @@ dependencies = [
 [[package]]
 name = "citadel_wire"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "anyhow",
  "async-trait-with-sync",
@@ -1659,16 +1642,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dns-parser"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4d33be9473d06f75f58220f71f7a9317aca647dc061dbd3c361b0bef505fbea"
-dependencies = [
- "byteorder",
- "quick-error",
-]
-
-[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2072,12 +2045,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gimli"
-version = "0.32.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
-
-[[package]]
 name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2108,8 +2075,8 @@ dependencies = [
  "http",
  "indexmap",
  "slab",
- "tokio 1.53.1",
- "tokio-util 0.7.19",
+ "tokio",
+ "tokio-util",
  "tracing",
 ]
 
@@ -2357,7 +2324,7 @@ dependencies = [
  "itoa",
  "pin-project-lite",
  "smallvec",
- "tokio 1.53.1",
+ "tokio",
  "want",
 ]
 
@@ -2371,7 +2338,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "rustls",
- "tokio 1.53.1",
+ "tokio",
  "tokio-rustls",
  "tower-service",
  "webpki-roots",
@@ -2395,7 +2362,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "socket2",
- "tokio 1.53.1",
+ "tokio",
  "tower-service",
  "tracing",
 ]
@@ -2549,7 +2516,7 @@ dependencies = [
  "hyper-util",
  "log",
  "rand 0.10.3",
- "tokio 1.53.1",
+ "tokio",
  "url",
  "xmltree",
 ]
@@ -2903,15 +2870,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
-name = "miniz_oxide"
-version = "0.8.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
-dependencies = [
- "adler2",
-]
-
-[[package]]
 name = "mio"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2979,7 +2937,7 @@ dependencies = [
 [[package]]
 name = "netbeam"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=f419b95e#f419b95ee113792d1363cdee2b9481bf2fabdb5f"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3105,15 +3063,6 @@ checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
 dependencies = [
  "hermit-abi 0.5.3",
  "libc",
-]
-
-[[package]]
-name = "object"
-version = "0.37.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
-dependencies = [
- "memchr",
 ]
 
 [[package]]
@@ -3452,12 +3401,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "quick-error"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
-
-[[package]]
 name = "quinn"
 version = "0.11.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3472,7 +3415,7 @@ dependencies = [
  "rustls",
  "socket2",
  "thiserror 2.0.20",
- "tokio 1.53.1",
+ "tokio",
  "tracing",
  "web-time",
 ]
@@ -3744,7 +3687,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sync_wrapper",
- "tokio 1.53.1",
+ "tokio",
  "tokio-rustls",
  "tower",
  "tower-http",
@@ -3816,12 +3759,6 @@ dependencies = [
  "crossbeam-utils",
  "serde",
 ]
-
-[[package]]
-name = "rustc-demangle"
-version = "0.1.28"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b74b56ffa8bb2830709a538c2cbcae9aa062db0d2a42563bfb09bdaae44020eb"
 
 [[package]]
 name = "rustc-hash"
@@ -4312,8 +4249,8 @@ dependencies = [
  "sha2",
  "smallvec",
  "thiserror 2.0.20",
- "tokio 1.53.1",
- "tokio-stream 0.1.19",
+ "tokio",
+ "tokio-stream",
  "tracing",
  "url",
 ]
@@ -4352,7 +4289,7 @@ dependencies = [
  "sqlx-postgres",
  "sqlx-sqlite",
  "syn 2.0.119",
- "tokio 1.53.1",
+ "tokio",
  "url",
 ]
 
@@ -4547,7 +4484,7 @@ dependencies = [
  "ring",
  "subtle",
  "thiserror 1.0.69",
- "tokio 1.53.1",
+ "tokio",
  "url",
  "webrtc-util",
 ]
@@ -4801,18 +4738,6 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokio"
-version = "1.36.0"
-source = "git+https://github.com/second-state/wasi_tokio.git?branch=v1.36.x#9ecb42d137be73e51d010e5669e31cfe028739bc"
-dependencies = [
- "backtrace",
- "bytes",
- "pin-project-lite",
- "tokio-macros 2.2.0",
- "wasmedge_wasi_socket",
-]
-
-[[package]]
-name = "tokio"
 version = "1.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed"
@@ -4824,18 +4749,8 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
- "tokio-macros 2.7.2",
+ "tokio-macros",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "tokio-macros"
-version = "2.2.0"
-source = "git+https://github.com/second-state/wasi_tokio.git?branch=v1.36.x#9ecb42d137be73e51d010e5669e31cfe028739bc"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -4856,17 +4771,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0c85f2c3ef0b1cd58b36682f4b17aaa995f0e5db534d85692b4903abce21f67"
 dependencies = [
  "rustls",
- "tokio 1.53.1",
-]
-
-[[package]]
-name = "tokio-stream"
-version = "0.1.14"
-source = "git+https://github.com/second-state/wasi_tokio.git?branch=v1.36.x#9ecb42d137be73e51d010e5669e31cfe028739bc"
-dependencies = [
- "futures-core",
- "pin-project-lite",
- "tokio 1.36.0",
+ "tokio",
 ]
 
 [[package]]
@@ -4877,7 +4782,7 @@ checksum = "a3d06f0b082ba57c26b79407372e57cf2a1e28124f78e9479fe80322cf53420b"
 dependencies = [
  "futures-core",
  "pin-project-lite",
- "tokio 1.53.1",
+ "tokio",
 ]
 
 [[package]]
@@ -4888,21 +4793,8 @@ checksum = "d25a406cddcc431a75d3d9afc6a7c0f7428d4891dd973e4d54c56b46127bf857"
 dependencies = [
  "futures-util",
  "log",
- "tokio 1.53.1",
+ "tokio",
  "tungstenite",
-]
-
-[[package]]
-name = "tokio-util"
-version = "0.7.10"
-source = "git+https://github.com/second-state/wasi_tokio.git?branch=v1.36.x#9ecb42d137be73e51d010e5669e31cfe028739bc"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-sink",
- "pin-project-lite",
- "tokio 1.36.0",
- "tracing",
 ]
 
 [[package]]
@@ -4917,7 +4809,7 @@ dependencies = [
  "libc",
  "pin-project-lite",
  "slab",
- "tokio 1.53.1",
+ "tokio",
 ]
 
 [[package]]
@@ -4971,7 +4863,7 @@ dependencies = [
  "futures-util",
  "pin-project-lite",
  "sync_wrapper",
- "tokio 1.53.1",
+ "tokio",
  "tower-layer",
  "tower-service",
 ]
@@ -5356,18 +5248,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmedge_wasi_socket"
-version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92f497b1ae9b1929be4532ee2fc87ea9a8fa67485e02c7af730c2faf54e58521"
-dependencies = [
- "bytes",
- "dns-parser",
- "libc",
- "rand 0.8.8",
-]
-
-[[package]]
 name = "wasmtimer"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5435,7 +5315,7 @@ dependencies = [
  "nix",
  "rand 0.8.8",
  "thiserror 1.0.69",
- "tokio 1.53.1",
+ "tokio",
  "winapi 0.3.9",
 ]
 

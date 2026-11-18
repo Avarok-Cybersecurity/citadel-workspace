@@ -12,19 +12,27 @@ import { onSocketLost } from '../websocket/socket-loss';
 import { eventEmitter } from '@/lib/event-emitter';
 import { extensionFor, watchKeyChallenges } from './challenge-watch';
 import type { Send } from './key-answer';
+import type { FailureReason } from 'citadel-workspace-client-ts';
 import type { SignInManagementOp, SignInManagementOutcome, StepUp } from './types';
 
 /** The server's own round trip, before any touch extends it. */
 export const MANAGEMENT_TIMEOUT_MS: 30000 = 30000;
 
 export class SignInManagementError extends Error {
-  constructor(message: string) {
+  /** What the agent said the UI can act on (SignInManagementFailure.reason), or null. */
+  readonly reason: FailureReason | null;
+  constructor(message: string, reason: FailureReason | null) {
     super(message);
     this.name = 'SignInManagementError';
+    this.reason = reason;
   }
 }
 
-interface Answer { request_id?: unknown; outcome?: unknown; message?: unknown }
+interface Answer { request_id?: unknown; outcome?: unknown; message?: unknown; reason?: unknown }
+
+/** A Rust `None` arrives as an absent field (wasm-none-is-undefined); either reads as no reason. */
+const reasonOf = (failure: Answer): FailureReason | null =>
+  typeof failure.reason === 'string' ? (failure.reason as FailureReason) : null;
 
 function answerOf(message: unknown, variant: string, requestId: string): Answer | null {
   if (!message || typeof message !== 'object') return null;
@@ -48,11 +56,11 @@ export function manageSignIn(
     };
     const arm = (ms: number): void => {
       clearTimeout(timer);
-      timer = setTimeout((): void => { finish(); reject(new SignInManagementError('The agent did not answer in time.')); }, ms);
+      timer = setTimeout((): void => { finish(); reject(new SignInManagementError('The agent did not answer in time.', null)); }, ms);
     };
     const onDisconnected = (): void => {
       finish();
-      reject(new SignInManagementError('The connection to the Citadel agent was lost.'));
+      reject(new SignInManagementError('The connection to the Citadel agent was lost.', null));
     };
     const onMessage = (message: unknown): void => {
       const extension: number | null = extensionFor(message, requestId, MANAGEMENT_TIMEOUT_MS);
@@ -60,7 +68,7 @@ export function manageSignIn(
       const success: Answer | null = answerOf(message, 'SignInManagementSuccess', requestId);
       if (success) { finish(); resolve(success.outcome as SignInManagementOutcome); return; }
       const failure: Answer | null = answerOf(message, 'SignInManagementFailure', requestId);
-      if (failure) { finish(); reject(new SignInManagementError(String(failure.message))); }
+      if (failure) { finish(); reject(new SignInManagementError(String(failure.message), reasonOf(failure))); }
     };
     eventEmitter.on('websocket-message', onMessage);
     const stopListeningForLoss: () => void = onSocketLost(onDisconnected);

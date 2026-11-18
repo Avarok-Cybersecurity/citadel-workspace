@@ -1,5 +1,7 @@
 /**
- * Answering one security-key challenge: a WebAuthn get() with the PRF
+ * Answering one security-key challenge: the ceremony it names, for the relying
+ * party the server named -- a WebAuthn get() of an allowed key, or for a key
+ * being added create() and then get() of the new credential -- with the PRF
  * extension evaluated at the challenge's salt, then the PRF output to the agent.
  *
  * The key's assertion signature is not used and not sent: the agent derives an
@@ -10,6 +12,7 @@
 import { requestResponse } from '@/lib/websocket/request-response';
 import { type Assertion, type AuthenticatorPort, PasskeyError } from '@/lib/passkey/authenticator';
 import { type Bytes, bytesEqual, copyBytes, randomBytes } from '@/lib/passkey/bytes';
+import { registerSecurityKey } from './enrol-key';
 import type { SecurityKeyChallengeNotification } from './types';
 
 export const PRF_OUTPUT_BYTES: 32 = 32;
@@ -19,15 +22,33 @@ export const KEY_ANSWER_TIMEOUT_MS: 10000 = 10000;
 export const NO_PRF_REASON: string =
   "This passkey can't sign you in: its passkey manager didn't provide the PRF output Citadel needs to derive " +
   'your post-quantum sign-in key. Use your password, or a passkey or security key that supports PRF.';
+/** A key being added gave no PRF output: what the user is told, and why nothing was added. */
+// Checked 2026-10-04: Windows Hello gives PRF only on Windows 11 24H2/25H2 from the February 2026
+// update (KB5077181) with Chrome/Edge 147+ or Firefox 148+; hmac-secret security keys work on any
+// Windows; iCloud Keychain from macOS 15 / iOS 18.
+export const NOT_ADDED_REASON: string =
+  "This passkey can't sign you in to Citadel, so it was not added to your account. Citadel derives your " +
+  "post-quantum sign-in key from the passkey's PRF feature, and the passkey manager you chose didn't " +
+  'provide it. Your password still works. To add a passkey on Windows, use a security key such as a ' +
+  'YubiKey 5, or Windows Hello on Windows 11 with the February 2026 update or later and a current ' +
+  'Chrome, Edge or Firefox. On a Mac or iPhone, iCloud Keychain works. You can delete the unused ' +
+  'passkey from your passkey manager.';
 export const CANCELLED_REASON: string = 'The security key request was cancelled.';
+export const ALREADY_ENROLLED_REASON: string = 'That key is already set up for this account.';
 
 export type Send = (request: Record<string, unknown>) => Promise<void>;
 
 export interface KeyAnswerDeps {
   authenticator: AuthenticatorPort;
+  /** This page's own relying party: used only when a 0.12.2 server names none, as every page did then. */
   rpId: string;
+  rpName: string;
   send: Send;
 }
+
+/** The relying party a ceremony runs under: the server's, or this page's for a server that names none. */
+const relyingParty = (deps: KeyAnswerDeps, challenge: SecurityKeyChallengeNotification): string =>
+  challenge.rp_id ?? deps.rpId;
 
 export type KeyAnswerResult =
   | { kind: 'answered' }
@@ -45,22 +66,34 @@ export async function declineKeyChallenge(deps: Pick<KeyAnswerDeps, 'send'>, cha
   return { kind: 'declined', reason };
 }
 
+/** The keys get() may use: the allowed ones, or the one a Register ceremony just made. */
+async function allowedKeys(deps: KeyAnswerDeps, challenge: SecurityKeyChallengeNotification): Promise<Bytes[]> {
+  const { ceremony } = challenge;
+  if ('Authenticate' in ceremony) return asBytes(ceremony.Authenticate.credential_ids);
+  const { user_id, user_name, exclude_credential_ids } = ceremony.Register;
+  return [await registerSecurityKey(deps, {
+    rpId: relyingParty(deps, challenge), userId: user_id, userName: user_name, excludeCredentialIds: exclude_credential_ids,
+  })];
+}
+
 async function touch(deps: KeyAnswerDeps, challenge: SecurityKeyChallengeNotification): Promise<Assertion | string> {
-  const allowed: Bytes[] = asBytes(challenge.allowed_credential_ids);
-  if (allowed.length === 0) return NO_PRF_REASON;
   const salt: Bytes = copyBytes(Uint8Array.from(challenge.prf_salt));
+  const noPrf: string = 'Register' in challenge.ceremony ? NOT_ADDED_REASON : NO_PRF_REASON;
   try {
+    const allowed: Bytes[] = await allowedKeys(deps, challenge);
+    if (allowed.length === 0) return noPrf;
     const assertion: Assertion = await deps.authenticator.get({
-      rpId: deps.rpId,
+      rpId: relyingParty(deps, challenge),
       // Not verified by anyone: the classical assertion is not part of the proof.
       challenge: randomBytes(32),
       allow: allowed.map((id: Bytes) => ({ id, transports: [], prfSalt: salt })),
     });
     if (!allowed.some((id: Bytes) => bytesEqual(id, assertion.credentialId))) return CANCELLED_REASON;
-    if (!assertion.prfFirst || assertion.prfFirst.byteLength !== PRF_OUTPUT_BYTES) return NO_PRF_REASON;
+    if (!assertion.prfFirst || assertion.prfFirst.byteLength !== PRF_OUTPUT_BYTES) return noPrf;
     return assertion;
   } catch (error) {
-    if (error instanceof PasskeyError && error.failure === 'unsupported') return NO_PRF_REASON;
+    if (error instanceof PasskeyError && error.failure === 'unsupported') return noPrf;
+    if (error instanceof PasskeyError && error.failure === 'already-enrolled') return ALREADY_ENROLLED_REASON;
     return CANCELLED_REASON;
   }
 }

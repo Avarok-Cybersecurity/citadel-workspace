@@ -195,7 +195,10 @@ stored value that is not 32 bytes stops the object rather than being replaced. L
 are upgraded at their next login and cannot go back: rolling the Worker back below this release
 locks out every account that signed in since.
 `PQ_KSF_*` in `wrangler.toml` is the Argon2id cost clients stretch a password factor with; the
-node refuses anything below the SDK's floor. The monitor counts accounts by auth-record version (AUTH-CENSUS.md).
+node refuses anything below the SDK's floor. `PQ_SECURITY_KEY_RP_ID` is the WebAuthn relying party every tenant's
+security keys are scoped to; the node names it in every sign-in challenge and will not start without
+it. It is permanent (a key enrolled under one ID never signs in under another), so it stays
+`work.avarok.net`, the ID the UI has enrolled every key under (`rp-id.ts`; a UI test holds them equal). The monitor counts accounts by auth-record version (AUTH-CENSUS.md).
 
 ## Server identities: the one-time upgrade
 

@@ -18,6 +18,8 @@ export interface World {
   answers: KeyAnswerResult[];
   /** Stop touching the key. */
   stop: () => void;
+  /** The world's own user touches the key whenever asked; nobody else may answer too. */
+  touching: boolean;
 }
 
 export function world(touchWhenAsked: boolean): World {
@@ -39,7 +41,7 @@ export function world(touchWhenAsked: boolean): World {
     }
   };
   const stop: () => void = touchWhenAsked ? subscribeChallenges(onChange) : (): void => undefined;
-  return { agent, authenticator, deps, answers, stop };
+  return { agent, authenticator, deps, answers, stop, touching: touchWhenAsked };
 }
 
 export const flush = (): Promise<void> => new Promise<void>((r) => setTimeout(r, 0));
@@ -59,9 +61,13 @@ export const lastChallenge = (): SecurityKeyChallengeNotification | undefined =>
 /**
  * Enrol a key for an account through the real enrolment, touching it when the
  * server asks, without leaving anything subscribed for the test that follows.
+ *
+ * In a world whose user already touches the key, that user answers: a second
+ * answerer would run a second create() and get() whose get() can land after
+ * the enrolment has returned, inside whatever ceremony the test runs next.
  */
 export async function enrolKey(w: World, account: { cid: bigint; username: string; password: string }, label: string = 'YubiKey'): Promise<void> {
-  const stop: () => void = subscribeChallenges((): void => {
+  const stop: () => void = w.touching ? (): void => undefined : subscribeChallenges((): void => {
     for (const c of openChallenges()) {
       settleChallenge(c.challenge_id);
       void answerKeyChallenge(w.deps, c);
@@ -69,7 +75,7 @@ export async function enrolKey(w: World, account: { cid: bigint; username: strin
   });
   try {
     await addSecurityKey(w.deps, {
-      account: { tenant: 'bench.work.avarok.net', cid: account.cid, username: account.username }, label, existingCredentialIds: [],
+      account: { tenant: 'bench.work.avarok.net', cid: account.cid, username: account.username }, label,
     }, { password: Array.from(new TextEncoder().encode(account.password)), security_key: true });
   } finally {
     stop();

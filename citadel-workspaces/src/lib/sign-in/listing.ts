@@ -33,7 +33,7 @@ export function listingOf(outcome: SignInManagementOutcome): Listing {
 export const withKeyAdded = (l: Listing, added: AddedKey, label: string, nowMs: number): Listing => ({
   ...l,
   keys: [...l.keys, {
-    id: added.id, kind: 'SecurityKey', label, credential_id: added.credentialId,
+    id: added.id, kind: 'SecurityKey', label, credential_id: null,
     created_ms: BigInt(nowMs), last_used_ms: null, consumed: false,
   }],
 });

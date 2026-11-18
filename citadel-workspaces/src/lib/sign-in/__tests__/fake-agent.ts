@@ -13,6 +13,7 @@
 import { eventEmitter } from '@/lib/event-emitter';
 import { toBase64Url } from '@/lib/passkey/bytes';
 import { FakeAdmission } from './fake-admission';
+import { accepts, type Ceremony, FAKE_RP_ID } from './fake-ceremony';
 import type { SignInCredential, SignInPolicy } from '../types';
 
 type Req = Record<string, unknown>;
@@ -20,7 +21,6 @@ const PRF_SALT: number[] = Array.from({ length: 32 }, (_v: unknown, i: number) =
 const TOUCH_WINDOW_MS: 60000 = 60000;
 /** Where a fake account is registered unless a test says otherwise. */
 export const FAKE_SERVER: string = 'bench.work.avarok.net';
-
 export interface FakeAccount {
   username: string;
   cid: bigint;
@@ -33,7 +33,7 @@ export interface FakeAccount {
   consumed: string[];
 }
 
-interface Pending { requestId: string; resolve: (prf: { credentialId: number[]; prf: number[] } | string) => void; allowed: number[][] }
+interface Pending { requestId: string; resolve: (prf: { credentialId: number[]; prf: number[] } | string) => void; ceremony: Ceremony }
 
 export class FakeAgent {
   readonly sent: Array<[string, Req]> = [];
@@ -42,6 +42,8 @@ export class FakeAgent {
   readonly recoverySessions: Set<bigint> = new Set<bigint>();
   /** The workspace's human-check requirement, enforced on Connect and Register. */
   readonly admission: FakeAdmission = new FakeAdmission();
+  /** A 0.12.2 server: it names no relying party, and the SDK will not ask it to enrol a key. */
+  serverAt0122: boolean = false;
   private readonly pending: Map<string, Pending> = new Map<string, Pending>();
   private nextFactor: number = 10;
   private nextCode: number = 0;
@@ -73,21 +75,21 @@ export class FakeAgent {
   }
 
   /** Ask the window for a touch; resolves with its answer or the decline reason. */
-  private challenge(requestId: string, cid: bigint, purpose: string, allowed: number[][]): Promise<{ credentialId: number[]; prf: number[] } | string> {
+  private challenge(requestId: string, cid: bigint, purpose: string, ceremony: Ceremony): Promise<{ credentialId: number[]; prf: number[] } | string> {
     const challengeId: string = crypto.randomUUID();
     return new Promise((resolve) => {
-      this.pending.set(challengeId, { requestId, resolve, allowed });
+      this.pending.set(challengeId, { requestId, resolve, ceremony });
       this.emit('SecurityKeyChallengeNotification', {
-        cid, request_id: requestId, challenge_id: challengeId, purpose,
+        cid, request_id: requestId, challenge_id: challengeId, purpose, ceremony, ...(this.serverAt0122 ? {} : { rp_id: FAKE_RP_ID }),
         // A u64, which the WASM client hands to JavaScript as a BigInt (serialize_large_number_types_as_bigints).
-        allowed_credential_ids: allowed, prf_salt: PRF_SALT, expires_in_ms: BigInt(TOUCH_WINDOW_MS),
+        prf_salt: PRF_SALT, expires_in_ms: BigInt(TOUCH_WINDOW_MS),
       });
     });
   }
 
   private async proveKey(account: FakeAccount, requestId: string, cid: bigint, purpose: string): Promise<string | null> {
     const answer: { credentialId: number[]; prf: number[] } | string =
-      await this.challenge(requestId, cid, purpose, account.keys.map((k) => k.credentialId));
+      await this.challenge(requestId, cid, purpose, { Authenticate: { credential_ids: account.keys.map((k) => k.credentialId) } });
     if (typeof answer === 'string') return answer;
     const key: FakeAccount['keys'][number] | undefined =
       account.keys.find((k) => toBase64Url(Uint8Array.from(k.credentialId)) === toBase64Url(Uint8Array.from(answer.credentialId)));
@@ -111,8 +113,7 @@ export class FakeAgent {
       { cid: 0n, request_id: body.request_id, challenge_id: body.challenge_id, ...(ok ? {} : { message }) });
     if (!open) { reply(false, 'The challenge is not open'); return; }
     if (variant === 'SecurityKeyDecline') { this.pending.delete(body.challenge_id as string); reply(true, ''); open.resolve(body.reason as string); return; }
-    const id: string = toBase64Url(Uint8Array.from(body.credential_id as number[]));
-    if (!open.allowed.some((a) => toBase64Url(Uint8Array.from(a)) === id)) { reply(false, 'The key that answered is not one this challenge allows'); return; }
+    if (!accepts(open.ceremony, body.credential_id as number[])) { reply(false, 'The key that answered is not one this challenge allows'); return; }
     if ((body.prf_output as number[]).length !== 32) { reply(false, 'A PRF output is 32 bytes'); return; }
     this.pending.delete(body.challenge_id as string);
     reply(true, '');
@@ -187,7 +188,7 @@ export class FakeAgent {
     const cid: bigint = body.cid as bigint;
     const op: unknown = body.op;
     const stepUp: { password: number[] | null; security_key: boolean } = body.step_up as { password: number[] | null; security_key: boolean };
-    const fail = (message: string): void => this.emit('SignInManagementFailure', { cid, request_id: requestId, message });
+    const fail = (message: string, reason?: string): void => this.emit('SignInManagementFailure', { cid, request_id: requestId, message, ...(reason ? { reason } : {}) });
     const ok = (outcome: unknown): void => this.emit('SignInManagementSuccess', { cid, request_id: requestId, outcome });
     const account: FakeAccount | undefined = this.accounts.find((a) => a.cid === cid);
     if (!account) { fail(`Session ${cid} not found`); return; }
@@ -209,12 +210,18 @@ export class FakeAgent {
     }
     if (opName === 'ListCredentials') { ok({ Credentials: { policy: account.policy, credentials: this.credentials(account) } }); return; }
     const args: Req = typeof op === 'string' ? {} : (op as Req)[opName] as Req;
-    if (opName === 'AddSecurityKey') {
-      const credentialId: number[] = args.credential_id as number[];
-      const answer: { credentialId: number[]; prf: number[] } | string = await this.challenge(requestId, cid, 'Enrol', [credentialId]);
+    if (opName === 'AddSecurityKey' && this.serverAt0122) {
+      fail('the server predates enrolling a security key this client creates', 'server_cannot_enrol_security_keys');
+    } else if (opName === 'AddSecurityKey') {
+      // The SDK's Register ceremony: a random user handle, the account's name, and its keys excluded.
+      const register: Ceremony = { Register: {
+        user_id: Array.from(crypto.getRandomValues(new Uint8Array(32))), user_name: account.username,
+        exclude_credential_ids: account.keys.map((k) => k.credentialId),
+      } };
+      const answer: { credentialId: number[]; prf: number[] } | string = await this.challenge(requestId, cid, 'Enrol', register);
       if (typeof answer === 'string') { fail(answer); return; }
       const id: number = this.nextFactor++;
-      account.keys.push({ id, credentialId, label: args.label as string, prf: toBase64Url(Uint8Array.from(answer.prf)) });
+      account.keys.push({ id, credentialId: answer.credentialId, label: args.label as string, prf: toBase64Url(Uint8Array.from(answer.prf)) });
       ok({ Added: { id } });
     } else if (opName === 'RenameCredential') {
       const key: FakeAccount['keys'][number] | undefined = account.keys.find((k) => k.id === args.id);

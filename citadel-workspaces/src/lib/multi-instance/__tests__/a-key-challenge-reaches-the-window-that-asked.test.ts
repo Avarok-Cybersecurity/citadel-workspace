@@ -34,7 +34,7 @@ import { instanceInboundRouter } from '../instance-inbound-router';
 const challenge = (requestId: string): Record<string, unknown> => ({
   SecurityKeyChallengeNotification: {
     cid: 0n, request_id: requestId, challenge_id: 'c-1', purpose: 'SignIn',
-    allowed_credential_ids: [[1, 2]], prf_salt: [9], expires_in_ms: 60000n,
+    rp_id: 'work.avarok.net', ceremony: { Authenticate: { credential_ids: [[1, 2]] } }, prf_salt: [9], expires_in_ms: 60000n,
   },
 });
 const targets = (): unknown[] => channel.forwardToInstance.mock.calls.map((c: unknown[]) => c[0]);

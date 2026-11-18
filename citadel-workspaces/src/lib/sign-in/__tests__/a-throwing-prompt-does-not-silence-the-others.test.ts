@@ -16,7 +16,7 @@ describe('challenge subscribers', () => {
     const stopThrower: () => void = subscribeChallenges((): void => { throw new Error('a broken prompt'); });
     const stopListener: () => void = subscribeChallenges((): void => { heard.push('second'); });
     expect(() => eventEmitter.emit('websocket-message', { SecurityKeyChallengeNotification: {
-      cid: 0n, request_id: 'r-iso', challenge_id: 'c-iso', purpose: 'SignIn', allowed_credential_ids: [[1]], prf_salt: [2], expires_in_ms: 60000,
+      cid: 0n, request_id: 'r-iso', challenge_id: 'c-iso', purpose: 'SignIn', rp_id: 'work.avarok.net', ceremony: { Authenticate: { credential_ids: [[1]] } }, prf_salt: [2], expires_in_ms: 60000,
     } })).not.toThrow();
     expect(heard).toEqual(['second']);
     expect(openChallenges().map((c) => c.challenge_id)).toEqual(['c-iso']);

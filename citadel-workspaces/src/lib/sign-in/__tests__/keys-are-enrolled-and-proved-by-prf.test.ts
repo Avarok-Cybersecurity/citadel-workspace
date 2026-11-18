@@ -10,7 +10,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { PasskeyError } from '@/lib/passkey/authenticator';
 import { addSecurityKey } from '../enrol-key';
-import { CANCELLED_REASON, NO_PRF_REASON } from '../key-answer';
+import { CANCELLED_REASON, NO_PRF_REASON, NOT_ADDED_REASON } from '../key-answer';
+import { toBase64Url } from '@/lib/passkey/bytes';
+import { FAKE_RP_ID } from './fake-ceremony';
 import { manageSignIn, SignInManagementError } from '../management';
 import { openChallenges, watchKeyChallenges } from '../challenge-watch';
 import type { FakeAccount } from './fake-agent';
@@ -26,7 +28,7 @@ const PASSWORD_STEP_UP: { password: number[]; security_key: boolean } =
 async function enrolled(account: FakeAccount): Promise<number> {
   return (await addSecurityKey(w.deps, {
     account: { tenant: 'bench.work.avarok.net', cid: account.cid, username: account.username },
-    label: 'YubiKey', existingCredentialIds: [],
+    label: 'YubiKey',
   }, PASSWORD_STEP_UP)).id;
 }
 
@@ -43,19 +45,44 @@ describe('adding a security key', () => {
     expect((answer.prf_output as number[]).length).toBe(32);
   });
 
-  it('refuses a key without PRF before the agent hears of it', async () => {
+  it('makes the key the server asked for: its relying party, the account, and none of its keys', async () => {
+    w = world(true);
+    const alice: FakeAccount = w.agent.account('alice');
+    await enrolled(alice);
+    await enrolled(alice);
+    const [first, second] = w.authenticator.createCalls;
+    expect([first.rpId, second.rpId]).toEqual([FAKE_RP_ID, FAKE_RP_ID]);
+    expect(second.userName).toBe('alice');
+    expect(first.excludeCredentialIds).toEqual([]);
+    expect(second.excludeCredentialIds.map(toBase64Url)).toEqual([toBase64Url(Uint8Array.from(alice.keys[0].credentialId))]);
+    // The PRF output is asked of the credential just made, under the same relying party.
+    expect(w.authenticator.getCalls.every((g) => g.rpId === FAKE_RP_ID)).toBe(true);
+    expect(alice.keys.map((k) => toBase64Url(Uint8Array.from(k.credentialId))))
+      .toEqual(w.authenticator.getCalls.map((g) => toBase64Url(g.allow[0].id)));
+  });
+
+  it('refuses a key without PRF by declining the Enrol challenge, and enrols nothing', async () => {
     w = world(true);
     const alice: FakeAccount = w.agent.account('alice');
     w.authenticator.prfMode = 'none';
+    await expect(enrolled(alice)).rejects.toEqual(new SignInManagementError(NOT_ADDED_REASON, null));
+    expect(variants(w)).toEqual(['SignInManagement', 'SecurityKeyDecline']);
+    expect(w.authenticator.signalled).toHaveLength(1);
+    expect(alice.keys).toEqual([]);
+  });
+
+  it('is not asked of the server at all when the browser has no PRF', async () => {
+    w = world(true);
+    const alice: FakeAccount = w.agent.account('alice');
+    w.authenticator.browserHasNoPrf = true;
     await expect(enrolled(alice)).rejects.toEqual(new PasskeyError('unsupported'));
     expect(w.agent.sent).toEqual([]);
-    expect(w.authenticator.signalled).toHaveLength(1);
   });
 
   it('shows the server refusing it, word for word', async () => {
     w = world(true);
     const alice: FakeAccount = w.agent.account('alice', 'KeyOnly');
-    await expect(enrolled(alice)).rejects.toEqual(new SignInManagementError('A step-up proof is required'));
+    await expect(enrolled(alice)).rejects.toEqual(new SignInManagementError('A step-up proof is required', null));
   });
 });
 
@@ -67,7 +94,7 @@ describe('answering a challenge', () => {
     alice.policy = 'PasswordAndKey';
     w.authenticator.prfMode = 'none';
     await expect(manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryCodes', PASSWORD_STEP_UP))
-      .rejects.toEqual(new SignInManagementError(NO_PRF_REASON));
+      .rejects.toEqual(new SignInManagementError(NO_PRF_REASON, null));
     expect(variants(w).slice(-2)).toEqual(['SignInManagement', 'SecurityKeyDecline']);
   });
 
@@ -78,7 +105,7 @@ describe('answering a challenge', () => {
     alice.policy = 'PasswordAndKey';
     w.authenticator.cancelNext = true;
     await expect(manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryCodes', PASSWORD_STEP_UP))
-      .rejects.toEqual(new SignInManagementError(CANCELLED_REASON));
+      .rejects.toEqual(new SignInManagementError(CANCELLED_REASON, null));
   });
 
   it('is refused for another key\'s PRF output (the wrong key)', async () => {
@@ -88,7 +115,7 @@ describe('answering a challenge', () => {
     alice.policy = 'PasswordAndKey';
     alice.keys[0].prf = 'not-this-keys-prf';
     await expect(manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryCodes', PASSWORD_STEP_UP))
-      .rejects.toEqual(new SignInManagementError('authentication failed'));
+      .rejects.toEqual(new SignInManagementError('authentication failed', null));
   });
 });
 
@@ -98,7 +125,7 @@ describe('which window shows a challenge', () => {
     const unwatch: () => void = watchKeyChallenges('my-connect');
     const challenge = (requestId: string): Record<string, unknown> => ({ SecurityKeyChallengeNotification: {
       cid: 0n, request_id: requestId, challenge_id: `c-${requestId}`, purpose: 'SignIn',
-      allowed_credential_ids: [[1]], prf_salt: [2], expires_in_ms: 60000n,
+      rp_id: FAKE_RP_ID, ceremony: { Authenticate: { credential_ids: [[1]] } }, prf_salt: [2], expires_in_ms: 60000n,
     } });
     eventEmitter.emit('websocket-message', challenge('another-windows-connect'));
     expect(openChallenges()).toEqual([]);

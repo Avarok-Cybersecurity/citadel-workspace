@@ -35,6 +35,11 @@ license = "AGPL-3.0-or-later"
 [profile.release]
 overflow-checks = true
 
+# Argon2 at the shipped cost, optimised in debug and test builds. Cargo ignores a dependency's
+# [profile], so the SDK's copy never reaches this workspace. Why: citadel-internal-service/Cargo.toml.
+[profile.dev.package.rust-argon2]
+opt-level = 3
+
 [workspace.dependencies]
 # Workspace-specific packages
 citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }
@@ -53,14 +58,14 @@ cdoc-crdt = { git = "https://github.com/Avarok-Cybersecurity/citadel-docs", rev 
 # Secondary package (for dev purposes, use the local path at ./citadel-internal-service)
 
 # Avarok deps
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "f419b95e" }
-citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "f419b95e" }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "cdaa0555" }
+citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "cdaa0555" }
 # Dev-only: the credential-mirror test reads MIN/MAX_{PASSWORD,USERNAME,NAME}_LENGTH
 # directly, so a client-side mirror cannot drift from the SDK unnoticed.
-citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "f419b95e" }
-citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "f419b95e" }
+citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "cdaa0555" }
+citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "cdaa0555" }
 # The SDK's runtime shim: `spawn`, timers and clocks that work on native and on wasm32 alike.
-citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "f419b95e", default-features = false }
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "cdaa0555", default-features = false }
 
 # Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
 #citadel_sdk = { path = "../Citadel-Protocol/citadel_sdk" }

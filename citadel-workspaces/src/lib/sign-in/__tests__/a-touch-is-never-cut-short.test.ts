@@ -14,7 +14,7 @@ import { awaitConnectOutcome, type ConnectOutcome } from '@/lib/connection/await
 import { manageSignIn, MANAGEMENT_TIMEOUT_MS } from '../management';
 
 const challengeFor = (requestId: string): Record<string, unknown> => ({ SecurityKeyChallengeNotification: {
-  cid: 0n, request_id: requestId, challenge_id: 'c', purpose: 'SignIn', allowed_credential_ids: [[1]], prf_salt: [2], expires_in_ms: 60000,
+  cid: 0n, request_id: requestId, challenge_id: 'c', purpose: 'SignIn', rp_id: 'work.avarok.net', ceremony: { Authenticate: { credential_ids: [[1]] } }, prf_salt: [2], expires_in_ms: 60000,
 } });
 
 beforeEach(() => { vi.useFakeTimers(); });

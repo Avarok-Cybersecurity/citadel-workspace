@@ -102,7 +102,7 @@ pub fn sign_in_dir() -> PathBuf {
 /// `[sign_in]` for a server with post-quantum sign-in and no human check, its seed in `dir`.
 pub fn sign_in_without_admission(dir: &Path) -> String {
     format!(
-        "[sign_in]\noprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nadmission = \"none\"\n",
+        "[sign_in]\noprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nsecurity_key_rp_id = \"localhost\"\nadmission = \"none\"\n",
         dir.join("oprf-seed").display()
     )
 }
