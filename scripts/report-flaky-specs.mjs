@@ -26,6 +26,7 @@
  * miss does not.
  */
 import { readFileSync, existsSync } from 'node:fs';
+import { retryPasses } from './lib/retry-passes.mjs';
 
 const report = process.argv[2] ?? 'reports/results.json';
 
@@ -39,26 +40,17 @@ if (!existsSync(report)) {
   process.exit(1);
 }
 
-const results = JSON.parse(readFileSync(report, 'utf8'));
-const flaky = [];
+const { flaky, rerun } = retryPasses(JSON.parse(readFileSync(report, 'utf8')));
 
-const walk = (suite) => {
-  for (const spec of suite.specs ?? []) {
-    for (const test of spec.tests ?? []) {
-      // Playwright's own definition: expected outcome, reached after >1 attempt.
-      const attempts = test.results?.length ?? 0;
-      if (test.status === 'flaky' || (attempts > 1 && test.status === 'expected')) {
-        const failed = (test.results ?? []).filter((r) => r.status !== 'passed').length;
-        flaky.push({ title: spec.title, file: spec.file ?? suite.file, attempts, failed });
-      }
-    }
-  }
-  for (const child of suite.suites ?? []) walk(child);
-};
-for (const suite of results.suites ?? []) walk(suite);
+if (rerun.length > 0) {
+  // Not flaky: a serial block retries as a whole, so these ran again behind another test's failure.
+  console.log(`${rerun.length} spec(s) ran twice only because their serial block retried after another test failed:`);
+  for (const r of rerun) console.log(`  ${r.file} — ${r.title}`);
+  console.log('');
+}
 
 if (flaky.length === 0) {
-  console.log(`No spec needed a retry (${report}).`);
+  console.log(`No spec passed only after a failed attempt (${report}).`);
   process.exit(0);
 }
 

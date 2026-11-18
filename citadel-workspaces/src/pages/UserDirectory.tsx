@@ -17,7 +17,6 @@ import { type MemberDisplay } from './MemberListItem';
 import { UserProfileCard } from './UserProfileCard';
 import { ConnectionRequestDialog } from './ConnectionRequestDialog';
 import { useDomainMembers } from '@/hooks/use-domain-members';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { useRegisteredPeers } from '@/hooks';
 import { usePeerDiscovery  , type Peer } from '@/components/p2p/usePeerDiscovery';
 import type { NavigateFunction } from 'react-router';
@@ -148,7 +147,6 @@ export const UserDirectory: () => JSX.Element = (): JSX.Element => {
   };
 
   return (
-    <AppLayout>
     <div className="container mx-auto p-4 md:p-6 max-w-6xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground mb-2">User Directory</h1>
@@ -231,7 +229,6 @@ export const UserDirectory: () => JSX.Element = (): JSX.Element => {
         onSend={sendConnectionRequest}
       />
     </div>
-    </AppLayout>
   );
 };
 

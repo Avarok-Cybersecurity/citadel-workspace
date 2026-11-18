@@ -1,0 +1,31 @@
+name: No nested UI repository
+description: >
+  Runs right after actions/checkout. citadel-workspaces/ was a submodule before it was folded into
+  plain files, and a persistent runner keeps the submodule's gitfile (citadel-workspaces/.git) and
+  its module directory (.git/modules/citadel-workspaces): checkout's clean removes neither. With
+  them present, git run inside the UI reads the dead submodule, and every UI gate that lists files
+  with git judges a stale snapshot. This removes both, then fails the job if any nested repository
+  remains (scripts/check-ui-is-not-a-nested-repo.mjs).
+runs:
+  using: composite
+  steps:
+    - name: Remove the folded UI submodule's leftovers
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -f citadel-workspaces/.git ]; then
+          echo "removing stale gitfile citadel-workspaces/.git: $(cat citadel-workspaces/.git)"
+          rm -f citadel-workspaces/.git
+        fi
+        modules="$(git rev-parse --git-common-dir)/modules/citadel-workspaces"
+        if [ -e "$modules" ]; then
+          echo "removing stale module directory $modules"
+          rm -rf "$modules"
+        fi
+        if git config --local --get-regexp '^submodule\.citadel-workspaces\.' >/dev/null; then
+          echo 'removing stale submodule.citadel-workspaces config'
+          git config --local --remove-section submodule.citadel-workspaces
+        fi
+    - name: The UI is not a nested repository
+      shell: bash
+      run: node scripts/check-ui-is-not-a-nested-repo.mjs

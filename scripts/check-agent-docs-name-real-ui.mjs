@@ -15,7 +15,7 @@
  * This checks the two claims that can be checked mechanically:
  *
  *   - a `data-testid` named in an agent doc must exist in the UI;
- *   - a `http://localhost:5291/<path>` must match a route in App.tsx.
+ *   - a `http://localhost:5291/<path>` must match a route in app-routes.tsx.
  *
  * Visible copy is deliberately NOT checked. Agent docs quote fragments and
  * paraphrases, and a gate that demanded exact matches would either be noisy or
@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const AGENTS = join(ROOT, '.claude', 'agents');
 const UI_SRC = join(ROOT, 'citadel-workspaces', 'src');
-const APP = join(UI_SRC, 'App.tsx');
+const APP = join(UI_SRC, 'app-routes.tsx');
 
 if (!existsSync(AGENTS)) {
   console.error('FAIL: no .claude/agents directory — nothing to check.');
@@ -85,7 +85,7 @@ for (const name of docs) {
     );
     if (!matches) {
       problems.push(
-        `${name}: names ${path}, which App.tsx does not route — it falls through to NotFound`,
+        `${name}: names ${path}, which app-routes.tsx does not route — it falls through to NotFound`,
       );
     }
   }

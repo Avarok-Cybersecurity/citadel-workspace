@@ -13,6 +13,8 @@ import { FilesSection } from "./sidebar/FilesSection";
 import { AdminSettingsSection } from "./sidebar/AdminSettingsSection";
 import { TermsGate } from "@/components/terms/TermsGate";
 import { CalendarInBackground } from "@/components/calendar/background/CalendarInBackground";
+import { CloseMobileSidebarOnPageChange } from "./close-mobile-sidebar-on-page-change";
+import { PageChangeFocusTarget } from "./page-change-focus-target";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -36,6 +38,7 @@ export const AppLayout = ({ children }: AppLayoutProps): JSX.Element => {
           the status bar for us but not the bottom inset, and the value is 0
           everywhere else. */}
       <AppHeaderHeightVar />
+      <CloseMobileSidebarOnPageChange />
       {/* The shell states that it mounted. scripts/lib/app-mounted.mjs asks for
           `sign-in-button`, `create-account-button` or this -- the first two exist
           only on the landing page, so before this testid existed the third arm of
@@ -43,6 +46,8 @@ export const AppLayout = ({ children }: AppLayoutProps): JSX.Element => {
           app anywhere past login. The two live arms hid it: the union kept working
           on the one page it was used on. */}
       <div data-testid="app-shell" className="h-[var(--app-height,100dvh)] pb-[env(safe-area-inset-bottom)] flex w-full bg-background text-foreground overflow-hidden">
+        {/* Before the skip link: a page change that took focus with it restarts here. */}
+        <PageChangeFocusTarget />
         {/*
           First tab stop, visible only once focused. The workspace renders 43
           tabbable controls and had NO landmarks at all, so reaching the content

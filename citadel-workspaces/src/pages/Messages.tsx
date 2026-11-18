@@ -1,7 +1,6 @@
 import { isPlaceholderName } from '@/lib/peer-display';
 import { useSelfName, type SelfName } from '@/hooks/use-self-name';
 import { selfCid } from '@/lib/tab-identity';
-import { AppLayout } from "@/components/layout/AppLayout";
 import { P2PPeerList } from "@/components/p2p/P2PPeerList";
 import { P2PChat } from "@/components/p2p/P2PChat";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -60,7 +59,6 @@ const Messages: () => JSX.Element = (): JSX.Element => {
   };
 
   return (
-    <AppLayout>
       <div className="flex h-full">
         {/* Conversation List.
             Master-detail below `md`: one pane at a time, because a 288px list
@@ -155,7 +153,6 @@ const Messages: () => JSX.Element = (): JSX.Element => {
           )}
         </div>
       </div>
-    </AppLayout>
   );
 };
 
