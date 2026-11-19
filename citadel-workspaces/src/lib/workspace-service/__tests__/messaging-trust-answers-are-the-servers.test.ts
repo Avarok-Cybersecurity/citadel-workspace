@@ -7,19 +7,19 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import type { MessagingTrustSettings } from 'citadel-workspace-client-ts';
 import { checkMessagingTrust, getMessagingTrustSettings, setMyMessagingTrust, setWorkspaceMessagingTrust } from '../messaging-trust-operations';
 import type { ProtocolSender } from '../workspace-operations';
 
-type Sender = ProtocolSender & { sent: WorkspaceProtocolRequestTS[] };
+type Sender = ProtocolSender & { sent: WorkspaceProtocolRequest[] };
 
 function sender(answers: unknown[]): Sender {
-  const sent: WorkspaceProtocolRequestTS[] = [];
+  const sent: WorkspaceProtocolRequest[] = [];
   return {
     sent,
     currentCid: 7n,
-    sendProtocolRequest: vi.fn(async (request: WorkspaceProtocolRequestTS): Promise<void> => {
+    sendProtocolRequest: vi.fn(async (request: WorkspaceProtocolRequest): Promise<void> => {
       sent.push(request);
       for (const response of answers) setTimeout(() => eventEmitter.emit('workspace:raw-response', response), 0);
     }),

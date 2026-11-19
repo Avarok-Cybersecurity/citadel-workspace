@@ -12,7 +12,7 @@ import { useDomainMembers, type DomainMembers } from '@/hooks/use-domain-members
 import { useRoleTable } from '@/hooks/use-workspace-roles';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { actorRole } from '@/lib/workspace-roles/role-ladder';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 export interface RoleLadder {
   table: WorkspaceRoles | null;

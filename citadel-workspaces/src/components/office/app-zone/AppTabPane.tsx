@@ -12,7 +12,6 @@ import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
 import { glueTab, mountFor, type GlueTabLoader, type GlueTabProps } from '@/lib/citadel-apps/first-party/registry';
 import { usePermission } from '@/hooks/use-permission';
 import { permits } from '@/hooks/use-permission-result';
-import { Permission } from '@/contexts/PermissionsContext';
 import { AppZoneContext, type AppTabMount, type AppZoneEnvironment, type AppZoneHandle, type AppZoneRuntime, type ZoneHost } from './app-zone-environment';
 import { useGlueBinding, type GlueBinding } from './use-glue-binding';
 import { AppZoneRequired, type PlaceholderView } from './AppZoneRequired';
@@ -56,7 +55,7 @@ function TabRuntimeHost({ runtime, view, reasonFor, tabId, nodeId, me }: TabRunt
 function GlueTabHost({ runtime, load, tab }: { runtime: AppZoneRuntime; load: GlueTabLoader; tab: AppTabMount }): JSX.Element {
   const binding: GlueBinding = useGlueBinding(runtime, tab);
   const props: Omit<GlueTabProps, 'glue' | 'mayEditNode'> = tab;
-  const edit: ReturnType<typeof usePermission> = usePermission(tab.nodeId, Permission.EditMdx);
+  const edit: ReturnType<typeof usePermission> = usePermission(tab.nodeId, 'EditMdx');
   const [loaded, setLoaded] = useState<{ Tab: ComponentType<GlueTabProps> } | 'loading' | 'failed'>('loading');
   useEffect(() => {
     let live: boolean = true;

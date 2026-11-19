@@ -7,19 +7,25 @@
  * menu for Loading..." after another tab reopened a session). Pure: the request/response
  * plumbing lives in user-service.
  */
-export interface AccountIdentity {
+/** The name a session's account goes by. Not the agent's `AccountIdentity` (a portable identity). */
+export interface AccountName {
   username: string;
   fullName: string;
 }
 
-type Accounts = Map<unknown, unknown> | Record<string, unknown>;
+/**
+ * `Accounts.accounts` as it arrives, not yet read: the generated type says `Record<string, ...>`,
+ * but the map is keyed by a u64 CID and the WASM client (serde-wasm-bindgen) hands it over as a
+ * `Map` with bigint keys, so both are taken.
+ */
+type AccountMap = Map<unknown, unknown> | Record<string, unknown>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** The agent's map of accounts: a JS Map from the WASM client (bigint keys), or an object. */
-function accountFor(accounts: Accounts, cid: bigint): unknown {
+function accountFor(accounts: AccountMap, cid: bigint): unknown {
   if (accounts instanceof Map) {
     for (const [key, value] of accounts) if (String(key) === cid.toString()) return value;
     return undefined;
@@ -27,7 +33,7 @@ function accountFor(accounts: Accounts, cid: bigint): unknown {
   return accounts[cid.toString()];
 }
 
-export function readAccountIdentity(message: unknown, requestId: string, cid: bigint): AccountIdentity | undefined {
+export function readAccountIdentity(message: unknown, requestId: string, cid: bigint): AccountName | undefined {
   const unwrapped: unknown = isRecord(message) && isRecord(message.Response) ? message.Response : message;
   if (!isRecord(unwrapped)) return undefined;
   const body: unknown = unwrapped.GetAccountInformationResponse;

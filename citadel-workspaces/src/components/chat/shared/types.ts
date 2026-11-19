@@ -11,8 +11,8 @@ export interface BaseChatMessage {
   sender_name: string;
 }
 
-/** Message status for delivery tracking */
-export type MessageStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+/** Message status for delivery tracking: the agent's generated `MessageStatus`. */
+export type { MessageStatus } from 'citadel-workspace-client-ts';
 
 /** Presence status options */
 export type PresenceStatus = 'online' | 'away' | 'offline' | 'custom';

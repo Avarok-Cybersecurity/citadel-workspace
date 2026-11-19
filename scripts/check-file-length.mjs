@@ -89,10 +89,6 @@ const SKIP = new Map([
   // Two data-testid attributes, so the integration suite's readiness probe can
   // stop keying on button copy — see ROBUSTNESS round 168.
   ['types/messaging-layer.ts', 438],
-  // 275: Lane P's 282 (`ChatAttachments`, the request a node channel's files travel in) less what
-  // Lane T moved to node-tab-requests.ts. Each request variant is one line of this hand-kept mirror
-  // of the generated union.
-  ['types/workspace-protocol.ts', 275],
   // Not written here: a byte-for-byte copy of citadel-app-sdk-types' generated ABI
   // constants (every op's arguments and reply), held to its source by the UI's
   // generated-drift test. Splitting it would break that equality; it changes only
@@ -103,7 +99,8 @@ const SKIP = new Map([
   // 423: TOPIC_ENVELOPE_TAG and TOPIC_ENVELOPE_OVERHEAD, which the agent caps a topic's group by.
   // 430: storage.node.authored, its KV_BACKEND_CAPABILITY row and the KvListAuthored op
   // (Calendar design §3.3.1).
-  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 430],
+  // 434: HTTP_METHODS, rendered from HttpMethod::ALL so the host stops restating the methods.
+  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 434],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {

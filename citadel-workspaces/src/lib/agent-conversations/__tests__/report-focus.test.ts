@@ -4,8 +4,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { createFocusReporter, type FocusDeps, type FocusReporter } from '../report-focus';
+import type { ConfigCommand } from 'citadel-workspace-client-ts';
 
-type Said = { session_cid: bigint; peer_cid: bigint | null; focused: boolean };
+type Said = Extract<ConfigCommand, { ReportFocus: unknown }>['ReportFocus'];
 
 function rig(hosts: boolean): { deps: FocusDeps; said: Said[]; state: { front: boolean; peer: bigint | null; failNext: boolean } } {
   const said: Said[] = [];

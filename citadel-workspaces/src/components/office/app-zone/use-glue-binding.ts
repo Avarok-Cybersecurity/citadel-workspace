@@ -7,14 +7,14 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { pageAppNotices } from '@/lib/citadel-apps/app-notices';
 import type { RosterMember } from '@/lib/citadel-apps/runtime/first-party-ports';
-import type { TreeNode } from '@/lib/citadel-apps/runtime/nodes-port';
+import type { PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
 import type { AppTabMount, AppZoneRuntime, GlueBound, GlueHandle } from './app-zone-environment';
 
 export type GlueBinding = { kind: 'binding' } | GlueBound;
 
 export function useGlueBinding(runtime: AppZoneRuntime, tab: AppTabMount): GlueBinding {
   const { state } = useWorkspace();
-  const tree: MutableRefObject<Readonly<Record<string, TreeNode>>> = useRef<Readonly<Record<string, TreeNode>>>(state.nodes);
+  const tree: MutableRefObject<Readonly<Record<string, PageNode>>> = useRef<Readonly<Record<string, PageNode>>>(state.nodes);
   const roster: MutableRefObject<readonly RosterMember[]> = useRef<readonly RosterMember[]>(Object.values(state.members));
   tree.current = state.nodes;
   roster.current = Object.values(state.members);

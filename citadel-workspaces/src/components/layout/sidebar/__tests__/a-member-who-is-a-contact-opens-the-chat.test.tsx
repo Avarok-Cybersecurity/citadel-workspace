@@ -11,7 +11,7 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { MemberListItems } from '../MemberListItems';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 afterEach(cleanup);
 

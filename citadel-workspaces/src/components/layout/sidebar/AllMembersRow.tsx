@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/compon
 import { MemberAvatar } from '@/components/shared/MemberAvatar';
 import { MemberRoleBadge } from '@/components/shared/MemberRoleBadge';
 import { blocksForMember } from '@/lib/member-access';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { MemberActionItems } from './MemberActionItems';
 import type { MemberActionBlocks } from './member-actions-gate';
 

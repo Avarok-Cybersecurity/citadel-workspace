@@ -14,7 +14,7 @@ import { MessagingLayerType } from '@/types/messaging-layer';
 import type { PeerPresence } from '@/lib/p2p';
 import { PAUSE_COPY } from '@/lib/p2p-pause/pause-copy';
 import type { PeerPathReport } from '@/types/ice-servers';
-import type { SupervisorState } from '@/types/agent-supervisor';
+import type { SupervisorPhase } from '@/types/agent-supervisor';
 import { ConnectionPathLabel } from './ConnectionPathLabel';
 
 interface P2PChatHeaderProps {
@@ -30,7 +30,7 @@ interface P2PChatHeaderProps {
   /** How messages reach the peer now; shown only while the link is up. */
   connectionRoute: PeerPathReport | null;
   /** What the agent's supervisor says it is doing about the link; shown even while it is down. */
-  supervisor: SupervisorState | null;
+  supervisor: SupervisorPhase | null;
   onSettingsClick: () => void;
   /** The storage you share with this peer, in the file manager; null until you are registered peers. */
   onOpenFiles: (() => void) | null;

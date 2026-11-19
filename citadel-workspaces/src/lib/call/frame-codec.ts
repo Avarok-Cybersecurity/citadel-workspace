@@ -8,6 +8,7 @@
  * at the wrong speed. Both are silent, and both are testable here.
  */
 
+import type { AgentRequestBody } from '@/types/agent-request';
 import {
   CALL_FLAG_DISCARDABLE,
   CALL_FLAG_KEYFRAME,
@@ -19,15 +20,12 @@ import {
   CALL_TRACK_SCREEN,
 } from '@/types/p2p-commands';
 
-/** A frame as the Rust transport expects it. */
-export interface WireFrame {
-  track: number;
-  kind: number;
-  /** Microseconds since capture start. u32 on the wire — see wrapTimestamp. */
-  timestamp: number;
-  flags: number;
-  payload: Uint8Array;
-}
+/**
+ * A frame as the Rust transport expects it: the generated `MediaSend` body less its addressing,
+ * with the payload still bytes (it becomes `number[]` only as the request is built).
+ * `timestamp` is microseconds since capture start, a u32 on the wire — see wrapTimestamp.
+ */
+export type WireFrame = Omit<AgentRequestBody<'MediaSend'>, 'request_id' | 'cid' | 'peer_cid' | 'payload'> & { payload: Uint8Array };
 
 /**
  * WebCodecs timestamps are microseconds in a JS number; the wire carries u32.

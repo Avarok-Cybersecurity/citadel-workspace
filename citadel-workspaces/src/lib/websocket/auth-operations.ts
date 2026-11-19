@@ -14,9 +14,9 @@ import { resolveServerAddress } from '../address-resolver';
 import { instanceManager } from '../multi-instance';
 import { stringToBytes } from '../utils/encoding-utils';
 import type { PreSharedKey } from '@avarok/citadel-protocol-types';
-import type { HeaderObfuscatorSettings } from '@/lib/security-utils';
+import type { AgentRequestBody } from '@/types/agent-request';
 import { connectFactorFields } from '../sign-in/factors';
-import type { ConnectFactorFields, SignInFactors } from '../sign-in/types';
+import type { SignInFactors } from '../sign-in/types';
 
 export interface AuthConfig {
   init: () => Promise<void>;
@@ -74,7 +74,7 @@ export class AuthOperations {
     // Use provided settings or defaults (snake_case from SessionSecuritySettings)
     const settings: SessionSecuritySettings = sessionSecuritySettings ?? getDefaultSecuritySettings();
 
-    const connectOptions: ConnectFactorFields & { request_id: string; username: string; server_address: string; connect_mode: { Standard: { force_login: boolean; }; }; udp_mode: string; keep_alive_timeout: null; session_security_settings: { security_level: string; secrecy_mode: string; header_obfuscator_settings: HeaderObfuscatorSettings; crypto_params: { encryption_algorithm: string; kem_algorithm: string; sig_algorithm: string; }; }; } = {
+    const connectOptions: AgentRequestBody<'Connect'> = {
       request_id: requestId,
       username,
       server_address: serverAddress.trim(),
@@ -83,6 +83,7 @@ export class AuthOperations {
       connect_mode: { Standard: { force_login: true } },
       udp_mode: "Disabled",
       keep_alive_timeout: null,
+      server_password: null,
       session_security_settings: {
         security_level: settings.security_level,
         secrecy_mode: settings.secrecy_mode,
@@ -91,7 +92,7 @@ export class AuthOperations {
       },
     };
 
-    const connectRequest: { Connect: ConnectFactorFields & { request_id: string; username: string; server_address: string; connect_mode: { Standard: { force_login: boolean; }; }; udp_mode: string; keep_alive_timeout: null; session_security_settings: { security_level: string; secrecy_mode: string; header_obfuscator_settings: HeaderObfuscatorSettings; crypto_params: { encryption_algorithm: string; kem_algorithm: string; sig_algorithm: string; }; }; }; } = { Connect: connectOptions };
+    const connectRequest: { Connect: AgentRequestBody<'Connect'> } = { Connect: connectOptions };
 
     debugLog('AuthOperations', `[Connect] Sending Connect request with request_id: ${requestId}`);
     debugLog('AuthOperations', `[Connect] isLeader: ${instanceManager.isLeader}`);
@@ -125,7 +126,7 @@ export class AuthOperations {
     // Use provided settings or defaults (snake_case from SessionSecuritySettings)
     const settings: SessionSecuritySettings = sessionSecuritySettings ?? getDefaultSecuritySettings();
 
-    const registerOptions: { request_id: string; server_addr: string; full_name: string; username: string; proposed_password: number[]; connect_after_register: boolean; session_security_settings: { security_level: string; secrecy_mode: string; header_obfuscator_settings: HeaderObfuscatorSettings; crypto_params: { encryption_algorithm: string; kem_algorithm: string; sig_algorithm: string; }; }; server_password: { passwords: number[][]; } | null; admission_token: string | null; } = {
+    const registerOptions: AgentRequestBody<'Register'> = {
       request_id: requestId,
       server_addr: resolvedAddr,
       full_name: fullName,
@@ -168,7 +169,7 @@ export class AuthOperations {
       server_password: registerOptions.server_password ? '<redacted>' : null,
     });
 
-    const registerRequest: { Register: { request_id: string; server_addr: string; full_name: string; username: string; proposed_password: number[]; connect_after_register: boolean; session_security_settings: { security_level: string; secrecy_mode: string; header_obfuscator_settings: HeaderObfuscatorSettings; crypto_params: { encryption_algorithm: string; kem_algorithm: string; sig_algorithm: string; }; }; server_password: { passwords: number[][]; } | null; admission_token: string | null; }; } = { Register: registerOptions };
+    const registerRequest: { Register: AgentRequestBody<'Register'> } = { Register: registerOptions };
 
     debugLog('AuthOperations', `[Register] isLeader: ${instanceManager.isLeader}`);
 

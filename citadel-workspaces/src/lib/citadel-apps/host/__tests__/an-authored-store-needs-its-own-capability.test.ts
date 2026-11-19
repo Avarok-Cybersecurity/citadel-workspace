@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import type { Capability } from '../capabilities';
 import { findOp, type OpEntry } from '../ops';
 import { parseArgs } from '../op-args';
+import type { KvListAuthored } from '@/lib/citadel-apps/sdk/generated/KvListAuthored';
 
 const held = (...caps: Capability[]): ReadonlySet<Capability> => new Set<Capability>(caps);
 const kvSet: OpEntry = findOp('storage', 2) as OpEntry;
@@ -25,7 +26,7 @@ describe('an author’s store on a node', () => {
 
   it('lists every author’s keys only with storage.node.authored, and reaches the server', () => {
     expect(listAuthored.name).toBe('KvListAuthored');
-    const args: { node_id: string; prefix: string; cursor: null; } = { node_id: 'room', prefix: 'cal/', cursor: null };
+    const args: KvListAuthored = { node_id: 'room', prefix: 'cal/', cursor: null };
     expect(listAuthored.admits(args, held('storage.node'))).toBe(false);
     expect(listAuthored.admits(args, held('storage.node.authored'))).toBe(true);
     expect(listAuthored.server(args)).toBe(true);

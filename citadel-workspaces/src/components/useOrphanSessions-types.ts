@@ -7,7 +7,7 @@
  */
 import type { SignInRequest } from '@/lib/sessions/sign-in-request';
 import type { Dispatch, SetStateAction } from 'react';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import type { DisconnectAction } from './DisconnectConfirmModal';
 import type { DisconnectStatus } from './LoadingModal';
 import type { OrphanSessionWithWorkspace } from './useOrphanSessions';
@@ -15,8 +15,8 @@ import type { notificationService } from '@/lib/notification-service';
 
 export interface UseOrphanSessionsResult {
   sessions: OrphanSessionWithWorkspace[];
-  disconnectTarget: { session: ActiveSession; workspaceName: string } | null;
-  setDisconnectTarget: Dispatch<SetStateAction<{ session: ActiveSession; workspaceName: string } | null>>;
+  disconnectTarget: { session: SessionInformation; workspaceName: string } | null;
+  setDisconnectTarget: Dispatch<SetStateAction<{ session: SessionInformation; workspaceName: string } | null>>;
   glowingSessionCid: bigint | null;
   notificationCounts: Map<string, number>;
   loadingModal: { open: boolean; status: DisconnectStatus; workspaceName: string; errorMessage?: string };

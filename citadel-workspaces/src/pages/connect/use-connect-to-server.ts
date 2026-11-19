@@ -28,7 +28,8 @@ import { postAuthSetup } from '@/lib/post-auth-setup';
 import { setSelectedUser } from '@/lib/tab-context';
 import { instanceManager, instanceChannel } from '@/lib/multi-instance';
 import { debugLog } from '@/lib/debug-config';
-import type { ActiveSession, StoredSession } from '@/types/session-types';
+import type { StoredSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { sessionIsOnServer } from '@/lib/sessions/same-server';
 
 /** How long to wait for auto-connect to produce a session before giving up. */
@@ -39,17 +40,17 @@ export type ConnectOutcome =
   | { kind: 'connected'; cid: bigint }
   | { kind: 'needs-sign-in'; reason: string };
 
-async function findSessionForServer(serverAddress: string): Promise<ActiveSession | null> {
+async function findSessionForServer(serverAddress: string): Promise<SessionInformation | null> {
   connectionManager.invalidateSessionCache();
-  const sessions: ActiveSession[] = await connectionManager.getActiveSessions();
+  const sessions: SessionInformation[] = await connectionManager.getActiveSessions();
   return sessions.find((s) => sessionIsOnServer(s, serverAddress)) ?? null;
 }
 
-async function waitForSession(serverAddress: string): Promise<ActiveSession | null> {
+async function waitForSession(serverAddress: string): Promise<SessionInformation | null> {
   const deadline: number = Date.now() + RECONNECT_WAIT_MS;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, RECONNECT_POLL_MS));
-    const found: ActiveSession | null = await findSessionForServer(serverAddress);
+    const found: SessionInformation | null = await findSessionForServer(serverAddress);
     if (found) return found;
   }
   return null;
@@ -61,7 +62,7 @@ async function waitForSession(serverAddress: string): Promise<ActiveSession | nu
  * Connect page's old claim branch omitted, leaving the tab's identity for the
  * loader to guess at from `activeSessions[0]`.
  */
-async function adoptSession(session: ActiveSession): Promise<void> {
+async function adoptSession(session: SessionInformation): Promise<void> {
   const outcome: ClaimOutcome = await claimSessionForThisTab(session.cid);
   if (outcome.status === 'owned-by-another-tab') {
     // Thrown rather than toasted: this is a module function with no toast in
@@ -93,7 +94,7 @@ async function adoptSession(session: ActiveSession): Promise<void> {
 }
 
 export async function connectToServer(serverAddress: string): Promise<ConnectOutcome> {
-  const live: ActiveSession | null = await findSessionForServer(serverAddress);
+  const live: SessionInformation | null = await findSessionForServer(serverAddress);
   if (live) {
     await adoptSession(live);
     return { kind: 'connected', cid: live.cid };
@@ -121,7 +122,7 @@ export async function connectToServer(serverAddress: string): Promise<ConnectOut
   debugLog('Connect', `No live session for ${serverAddress}; asking auto-connect to re-establish one`);
   await connectionManager.triggerAutoConnect();
 
-  const revived: ActiveSession | null = await waitForSession(serverAddress);
+  const revived: SessionInformation | null = await waitForSession(serverAddress);
   if (revived) {
     await adoptSession(revived);
     return { kind: 'connected', cid: revived.cid };

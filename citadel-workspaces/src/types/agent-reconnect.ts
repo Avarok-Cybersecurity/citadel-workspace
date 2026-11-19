@@ -1,45 +1,24 @@
 /**
- * The agent's notifications about its connection to a workspace server.
- *
- * These mirror the agent's `InternalServiceResponse` variants of the same names
- * (citadel-internal-service), which the generated `citadel-workspace-client-ts`
- * bindings do not carry yet. When they do, the interfaces below are replaced by
- * the generated ones and the guards keep their signatures. This is the one place
- * the UI spells them.
+ * The agent's notifications about its connection to a workspace server: the generated
+ * `ServerConnectionLost`, `ServerReconnected` and `ServerReconnectFailed` variants of
+ * `InternalServiceResponse`, read off the wire into those generated shapes.
  *
  * All three name the session in `cid`: the recipient, like MessageNotification,
  * so they are routed to the tab that owns the session (routing-rules.ts). Their
  * `request_id` is always null: they answer no request. A failure is followed by
  * a DisconnectNotification for the session.
  */
+import type { ResponseType, ServerConnectionLost, ServerReconnected, ServerReconnectFailed } from 'citadel-workspace-client-ts';
 import { admissionReasonOf, type AdmissionReason } from '@/lib/admission/refusal';
 
-export interface ServerConnectionLost {
-  cid: bigint;
-  /** Whether the agent is retrying. False means it has given up already. */
-  reconnecting: boolean;
-  request_id: string | null;
-}
+/**
+ * A `ServerReconnectFailed` as read here: `reason_code` narrowed to the admission codes the UI
+ * acts on (the server's check refused the reconnect, so only a sign-in that passes it brings the
+ * session back), null for every other give-up and from an agent that does not send it.
+ */
+export type ReadServerReconnectFailed = Omit<ServerReconnectFailed, 'reason_code'> & { reason_code: AdmissionReason | null };
 
-export interface ServerReconnected {
-  cid: bigint;
-  request_id: string | null;
-}
-
-export interface ServerReconnectFailed {
-  cid: bigint;
-  reason: string;
-  request_id: string | null;
-  /**
-   * The server's admission check (Turnstile) refused the reconnect: only a sign-in that
-   * passes the check brings the session back. Null for every other give-up, and from an
-   * agent that does not send it.
-   */
-  reason_code: AdmissionReason | null;
-}
-
-export const AGENT_RECONNECT_NOTIFICATIONS: readonly ['ServerConnectionLost', 'ServerReconnected', 'ServerReconnectFailed'] =
-  ['ServerConnectionLost', 'ServerReconnected', 'ServerReconnectFailed'] as const;
+export const AGENT_RECONNECT_NOTIFICATIONS = ['ServerConnectionLost', 'ServerReconnected', 'ServerReconnectFailed'] as const satisfies readonly ResponseType[];
 
 export type AgentReconnectNotification = (typeof AGENT_RECONNECT_NOTIFICATIONS)[number];
 
@@ -78,7 +57,7 @@ export function readServerReconnected(message: unknown): ServerReconnected | nul
   return body ? { cid: body.cid, request_id: body.request_id } : null;
 }
 
-export function readServerReconnectFailed(message: unknown): ServerReconnectFailed | null {
+export function readServerReconnectFailed(message: unknown): ReadServerReconnectFailed | null {
   const body: (Record<string, unknown> & { cid: bigint; request_id: string | null }) | null = bodyOf(message, 'ServerReconnectFailed');
   const reason: unknown = body?.reason;
   return body && typeof reason === 'string'
@@ -92,6 +71,6 @@ export function readAgentReconnectEvent(message: unknown): AgentReconnectEvent |
   if (lost) return { kind: 'lost', cid: lost.cid, reconnecting: lost.reconnecting };
   const back: ServerReconnected | null = readServerReconnected(message);
   if (back) return { kind: 'reconnected', cid: back.cid };
-  const failed: ServerReconnectFailed | null = readServerReconnectFailed(message);
+  const failed: ReadServerReconnectFailed | null = readServerReconnectFailed(message);
   return failed ? { kind: 'failed', cid: failed.cid, reason: failed.reason, reasonCode: failed.reason_code } : null;
 }

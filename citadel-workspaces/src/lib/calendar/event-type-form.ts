@@ -5,13 +5,13 @@
  * booker needs to be told about (a choice question with no options cannot be answered).
  */
 import type { BookingRules } from './generated/BookingRules';
-import type { CivilDate } from './generated/CivilDate';
 import type { ColorToken } from './generated/ColorToken';
 import type { DateRange } from './generated/DateRange';
 import type { EventType } from './generated/EventType';
 import type { Question } from './generated/Question';
 import type { TypeKind } from './generated/TypeKind';
 import { checkKind, kindDraftOf, U16, whole, type KindDraft } from './event-type-kind';
+import type { VariantName } from '@/types/variant-name';
 
 /** `MIN_INCREMENT_MIN` in `slots.rs`. */
 export const MIN_INCREMENT_MIN: number = 5;
@@ -20,7 +20,9 @@ const U32: number = 4_294_967_295;
 
 export const COLOR_TOKENS: readonly ColorToken[] = ['primary', 'success', 'warning', 'destructive_emphasis', 'accent', 'secondary'];
 
-export type RangeDraft = { kind: 'rolling'; days: string } | { kind: 'fixed'; from: CivilDate; to: CivilDate } | { kind: 'indefinite' };
+/** A booking window as the form holds it: the core's `DateRange`, tagged by `kind`, with days as typed. */
+type RangeKind<K extends VariantName<DateRange>> = { kind: K };
+export type RangeDraft = (RangeKind<'rolling'> & { days: string }) | (RangeKind<'fixed'> & Extract<Exclude<DateRange, string>, { fixed: unknown }>['fixed']) | RangeKind<'indefinite'>;
 
 export interface EventTypeDraft extends KindDraft {
   name: string;

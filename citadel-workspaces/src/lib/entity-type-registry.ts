@@ -8,7 +8,7 @@
  */
 
 import type { ComponentType } from 'react';
-import type { TreeSchema, EntityTypeConfig } from 'citadel-workspace-client-ts';
+import type { TreeSchema, EntityTypeConfig, NodeEntityType } from 'citadel-workspace-client-ts';
 import { isVariant } from 'citadel-workspace-client-ts';
 import {
   Building2,
@@ -20,8 +20,7 @@ import {
   Layers,
 } from 'lucide-react';
 
-// Re-export the canonical NodeEntityType
-export type NodeEntityType = "Workspace" | { Child: string };
+export type { NodeEntityType } from 'citadel-workspace-client-ts';
 
 export interface EntityTypeMetadata {
   icon: ComponentType<{ className?: string }>;

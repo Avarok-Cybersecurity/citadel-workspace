@@ -23,11 +23,12 @@ import type { CalChange } from '../generated/CalChange';
 import { calendarPorts, type CalendarPorts } from '../ports';
 import { realEngine } from './engine-rig';
 import type { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
+import type { RequestType, ResponseType } from 'citadel-workspace-client-ts';
 
 const engine: CalendarEngine = realEngine();
 /** The Calendar's topic limits (design 3.5): 1 KiB a message, two a second. */
 const LIMITS: { max_msg_bytes: number; max_msgs_per_s: number; } = { max_msg_bytes: 1024, max_msgs_per_s: 2 };
-const SUCCESS: Readonly<Record<string, string>> = { GroupRequestJoin: 'GroupRequestJoinSuccess', GroupMessage: 'GroupMessageSuccess', GroupLeave: 'GroupLeaveSuccess' };
+const SUCCESS: Readonly<Partial<Record<RequestType, ResponseType>>> = { GroupRequestJoin: 'GroupRequestJoinSuccess', GroupMessage: 'GroupMessageSuccess', GroupLeave: 'GroupLeaveSuccess' };
 const GROUP: { cid: bigint; mgid: bigint; } = { cid: 5n, mgid: 9n };
 
 interface Seat {
@@ -44,7 +45,7 @@ function seat(cid: bigint, username: string): Seat {
     newRequestId: () => `${username}-${++n}`,
     listen: (h) => { handlers.add(h); return () => handlers.delete(h); },
     send: async (request: Record<string, unknown>) => {
-      const [variant, body] = Object.entries(request)[0] as [string, Record<string, unknown>];
+      const [variant, body] = Object.entries(request)[0] as [RequestType, Record<string, unknown>];
       if (variant === 'GroupMessage') messages.push(body.message as number[]);
       queueMicrotask(() => handlers.forEach((h) => h({ [SUCCESS[variant] as string]: { cid, request_id: body.request_id, group_key: GROUP } })));
     },

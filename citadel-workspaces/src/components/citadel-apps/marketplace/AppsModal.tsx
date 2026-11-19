@@ -7,7 +7,6 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Permission } from '@/lib/permissions-service/types';
 import type { AppsModalRequest, TabTarget } from '@/lib/citadel-apps/apps-modal-store';
 import type { ListedApp } from '@/lib/citadel-apps/listing-model';
 import { NOT_AVAILABLE_COPY } from '@/lib/citadel-apps/refusal-copy';
@@ -35,7 +34,7 @@ export function AppsModal({ open, onOpenChange, request, deps, viewer }: AppsMod
   const [linkDismissed, setLinkDismissed] = useState<boolean>(false);
   const linkedId: string | null = request.kind === 'link' && !linkDismissed ? request.link.appId : null;
   const linked: LinkedApp = useLinkedApp(linkedId, data, deps);
-  const manages: boolean = viewer.authority.holds(Permission.AppManage, viewer.rootId) === 'yes';
+  const manages: boolean = viewer.authority.holds('AppManage', viewer.rootId) === 'yes';
   const showing: ListedApp | null = opened ?? (linked.kind === 'found' ? linked.app : null);
   const back = (): void => { setOpened(null); setLinkDismissed(true); };
   const target: TabTarget | null = request.kind === 'tab' ? request.target : null;

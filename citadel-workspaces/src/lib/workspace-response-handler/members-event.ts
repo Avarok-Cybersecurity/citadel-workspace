@@ -21,12 +21,14 @@ export function emitMembers(response: WorkspaceProtocolResponse, connectionInfo:
   //
   // Tolerates the old shape (a bare array) so a client running against a
   // server that predates the field still works, with the domain unknown.
-  type MembersWire = { domain_id?: string | null; members: Record<string, unknown>[]; inherited_from?: Record<string, string>; guests?: string[] };
+  type Members = Extract<WorkspaceProtocolResponse, { Members: unknown }>['Members'];
+  // Every field but the members may be absent from an older server; the members are mapped one by one.
+  type MembersWire = Partial<Omit<Members, 'members'>> & { members: Record<string, unknown>[] };
   const payload: MembersWire | Record<string, unknown>[] = response.Members as MembersWire | Record<string, unknown>[];
   const rawMembers: Record<string, unknown>[] = Array.isArray(payload) ? payload : payload.members;
   const domainId: string | undefined = Array.isArray(payload) ? undefined : payload.domain_id ?? undefined;
   // Absent from a server that predates it, which lists direct members only.
-  const inheritedFrom: Readonly<Record<string, string>> = Array.isArray(payload) ? {} : payload.inherited_from ?? {};
+  const inheritedFrom: Members['inherited_from'] = Array.isArray(payload) ? {} : payload.inherited_from ?? {};
   // Absent from a server that predates booking guests, which has none.
   const guests: readonly string[] = Array.isArray(payload) ? [] : payload.guests ?? [];
 

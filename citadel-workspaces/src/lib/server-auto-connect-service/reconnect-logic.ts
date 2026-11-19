@@ -8,7 +8,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { websocketService } from '@/lib/websocket-service';
 import { instanceManager } from '@/lib/multi-instance';
-import type { StoredSession, ActiveSession, StoredSessions } from '@/types/session-types';
+import type { StoredSession, StoredSessions } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 import { debugLog } from '@/lib/debug-config';
 import type { ActiveSessionsResult } from '@/lib/connection/queries';
@@ -74,7 +75,7 @@ export async function reconnectToDisconnectedSessions(
     );
     return;
   }
-  const activeSessions: ActiveSession[] = result.sessions;
+  const activeSessions: SessionInformation[] = result.sessions;
 
   const activeKeys: Set<string> = new Set<string>();
   debugLog('ServerAutoConnectService', `Active sessions count: ${activeSessions.length}`);

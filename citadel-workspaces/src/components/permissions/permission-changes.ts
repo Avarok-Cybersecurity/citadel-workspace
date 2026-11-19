@@ -4,7 +4,8 @@
  * this, so neither can drift back to diffing against client-side defaults.
  */
 import WorkspaceService from '@/lib/workspace-service';
-import type { PermissionTS, UpdateOperationTS } from '@/types/workspace-protocol';
+import type { UpdateOperation } from 'citadel-workspace-client-ts';
+import type { Permission } from 'citadel-workspace-client-ts';
 
 export interface PermissionChanges {
   added: string[];
@@ -24,9 +25,9 @@ export const changeCount = (changes: PermissionChanges): number => changes.added
 /** Sends `changes` for `userId` at `domainId`; nothing at all when there are none. */
 export async function applyPermissionChanges(userId: string, domainId: string, changes: PermissionChanges): Promise<void> {
   if (changes.added.length > 0) {
-    await WorkspaceService.updateMemberPermissions(userId, domainId, changes.added as PermissionTS[], 'Add' as UpdateOperationTS);
+    await WorkspaceService.updateMemberPermissions(userId, domainId, changes.added as Permission[], 'Add' as UpdateOperation);
   }
   if (changes.removed.length > 0) {
-    await WorkspaceService.updateMemberPermissions(userId, domainId, changes.removed as PermissionTS[], 'Remove' as UpdateOperationTS);
+    await WorkspaceService.updateMemberPermissions(userId, domainId, changes.removed as Permission[], 'Remove' as UpdateOperation);
   }
 }

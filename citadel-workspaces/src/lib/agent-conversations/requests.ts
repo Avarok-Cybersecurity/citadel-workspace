@@ -6,14 +6,13 @@
  * never parses the agent's LocalDB records itself. The payload types are the
  * agent's own, generated from its Rust definitions.
  */
+import type { AgentRequestBody } from '@/types/agent-request';
 import type {
   AccountPreferences,
-  Attachment,
   ConversationMessage,
   ConversationMetadata,
   ConversationPage,
   MessagePatch,
-  MessageType,
 } from 'citadel-internal-service-wasm-client';
 import { requestResponse } from '../websocket/request-response';
 import { TIMEOUT } from '../timeout-constants';
@@ -69,17 +68,8 @@ const touched = (a: Record<string, unknown>): ConversationMessage | null =>
 const matched = (): true => true;
 const done = (): void => undefined;
 
-export interface Outgoing {
-  content: string;
-  message_type: MessageType;
-  reply_to: string | null;
-  mentions: string[] | null;
-  attachments: Attachment[] | null;
-  document_id: string | null;
-  document_title: string | null;
-  /** The chat's security level (chat-advanced-settings), as the agent's `SecurityLevel` names it. */
-  security_level: string;
-}
+/** A send's own fields: the generated `ConversationSend` body, less the addressing `send` adds. */
+export type Outgoing = Omit<AgentRequestBody<'ConversationSend'>, 'request_id' | 'cid' | 'peer_cid'>;
 
 export const agentConversations: {
   /** `requestId` comes back on the send's Appended event, before this answers. */

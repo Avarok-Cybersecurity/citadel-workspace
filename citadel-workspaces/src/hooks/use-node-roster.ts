@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { isForDomain } from '@/lib/workspace-events/is-for-domain';
 import WorkspaceService from '@/lib/workspace-service';
 import { workspaceEvents, type MembersPayload } from '@/lib/workspace-events';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 
 /**
@@ -14,8 +14,8 @@ import { runAsyncSetup } from '@/lib/utils/async-utils';
  * it. Another entity's ListMembers response must never replace this one (is-for-domain). The
  * chat's receipts and header and the node's call roster read this one list, so they agree.
  */
-export function useNodeRoster(nodeId: string | undefined): readonly User[] | null {
-  const [roster, setRoster] = useState<readonly User[] | null>(null);
+export function useNodeRoster(nodeId: string | undefined): readonly WorkspaceMember[] | null {
+  const [roster, setRoster] = useState<readonly WorkspaceMember[] | null>(null);
 
   useEffect(() => {
     setRoster(null);

@@ -29,7 +29,7 @@ import { PausablePeerRow } from "./PausablePeerRow";
 import { useGroupConversations, useRegisteredPeers, useConversationPeers, useEventListener } from '@/hooks';
 import { useDomainMembers } from '@/hooks/use-domain-members';
 import { debugLog } from '@/lib/debug-config';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { MembersSectionModals } from './MembersSectionModals';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import type { RegisteredPeer } from '@/hooks/use-registered-peers';

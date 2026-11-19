@@ -5,7 +5,7 @@
  */
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
-import type { InternalServiceRequest, InternalServiceResponse } from 'citadel-workspace-client-ts';
+import type { ConfigCommand, InternalServiceRequest, InternalServiceResponse } from 'citadel-workspace-client-ts';
 import { P2PMessengerManager } from '@/lib/p2p';
 import { registerConversationSender } from '@/lib/agent-conversations/requests';
 import { registerCapabilityRoute, forgetCapabilities, declareOnLeaderSocket, watchGreeting, type DeclaringClient, type Greeting } from '@/lib/agent-conversations/capabilities';
@@ -26,7 +26,7 @@ export interface HostingAgent {
   focusReports: () => Array<{ session_cid: bigint; peer_cid: bigint | null; focused: boolean }>;
 }
 
-type FocusReport = { session_cid: bigint; peer_cid: bigint | null; focused: boolean };
+type FocusReport = Extract<ConfigCommand, { ReportFocus: unknown }>['ReportFocus'];
 function focusReportOf(request: Record<string, unknown>): FocusReport | null {
   const command: unknown = (request.ConnectionManagement as { management_command?: { ReportFocus?: FocusReport } } | undefined)?.management_command;
   return (command as { ReportFocus?: FocusReport } | undefined)?.ReportFocus ?? null;

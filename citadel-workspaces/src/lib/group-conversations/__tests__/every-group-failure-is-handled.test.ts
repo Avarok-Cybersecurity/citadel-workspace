@@ -88,7 +88,7 @@ describe('the group failure arm', () => {
 
   it('lists every failure variant the wire can carry', () => {
     const missing: string[] = generatedFailureVariants().filter(
-      (v) => !GROUP_FAILURE_VARIANTS.includes(v),
+      (v) => !(GROUP_FAILURE_VARIANTS as readonly string[]).includes(v),
     );
     expect(
       missing,

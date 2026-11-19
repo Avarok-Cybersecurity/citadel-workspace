@@ -12,7 +12,7 @@ import { callCapabilityWhile } from '@/lib/p2p-pause/pause-copy';
 import type { DirectCallBinding } from './hooks/use-direct-call';
 import type { PeerPauseBinding } from './hooks/use-peer-pause';
 import type { ShareLauncher } from '@/components/share/use-share-launcher';
-import type { SupervisorState } from '@/types/agent-supervisor';
+import type { SupervisorPhase } from '@/types/agent-supervisor';
 import type { PeerPathReport } from '@/types/ice-servers';
 import type { ChatPaneStatus } from '@/components/chat/pane/ChatPane';
 import type { ChatPeer } from '@/lib/cdoc/chat/chat-app-ports';
@@ -26,7 +26,7 @@ interface PeerChatTopProps {
   call: DirectCallBinding;
   share: ShareLauncher;
   route: PeerPathReport | null;
-  supervisor: SupervisorState | null;
+  supervisor: SupervisorPhase | null;
 }
 
 export function PeerChatTop({ peer, knowsUsername, status, pause, call, share, route, supervisor }: PeerChatTopProps): JSX.Element {

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { TelemetrySettings } from 'citadel-workspace-client-ts';
 import { usePermission } from '@/hooks/use-permission';
 import { permits } from '@/hooks/use-permission-result';
-import { Permission } from '@/contexts/PermissionsContext';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { telemetryApi } from '@/lib/telemetry/telemetry-api';
 import { describeFailure } from '@/lib/failure-message';
@@ -22,8 +21,8 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
  * `EditWorkspaceConfig`. Without either, nothing of this renders -- the server refuses it anyway.
  */
 export function TelemetrySection(): JSX.Element | null {
-  const canView: boolean = permits(usePermission(WORKSPACE_ROOT_ID, Permission.ViewTelemetry));
-  const canEdit: boolean = permits(usePermission(WORKSPACE_ROOT_ID, Permission.EditWorkspaceConfig));
+  const canView: boolean = permits(usePermission(WORKSPACE_ROOT_ID, 'ViewTelemetry'));
+  const canEdit: boolean = permits(usePermission(WORKSPACE_ROOT_ID, 'EditWorkspaceConfig'));
   const [settings, setSettings] = useState<TelemetrySettings | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [reads, setReads] = useState<number>(0);

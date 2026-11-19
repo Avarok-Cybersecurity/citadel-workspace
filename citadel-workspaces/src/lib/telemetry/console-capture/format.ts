@@ -10,14 +10,11 @@
  * cut in half is a secret the redactor no longer recognises. The agent drops a field over its own
  * bound outright (BROWSER_FIELD_BYTES, citadel-workspace-internal-service/src/telemetry).
  */
-import type { BrowserConsoleSource } from 'citadel-workspace-client-ts';
+import type { BrowserConsoleEntry, BrowserConsoleSource } from 'citadel-workspace-client-ts';
 import { REJECTION_TAG, WINDOW_ERROR_TAG } from '../window-error-tags';
 
-export interface ConsoleLine {
-  readonly source: BrowserConsoleSource;
-  readonly message: string;
-  readonly stack: string | null;
-}
+/** A captured line before it is counted: the agent's entry less its repeat count. */
+export type ConsoleLine = Readonly<Pick<BrowserConsoleEntry, 'source' | 'message' | 'stack'>>;
 
 export type ConsoleLevel = 'error' | 'warn';
 

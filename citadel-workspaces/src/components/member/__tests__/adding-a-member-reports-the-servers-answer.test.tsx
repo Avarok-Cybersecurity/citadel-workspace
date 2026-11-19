@@ -15,7 +15,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import type { WorkspaceRoles } from 'citadel-workspace-client-ts';
 import { WorkspaceContext } from '@/contexts/WorkspaceContext';
 import { resetRoles } from '@/lib/workspace-roles/roles-store';
@@ -43,7 +43,7 @@ vi.mock('@/lib/workspace-service', async () => {
   const { eventEmitter } = await import('@/lib/event-emitter');
   const sender: import('@/lib/workspace-service/workspace-operations').ProtocolSender = {
     currentCid: 1n,
-    sendProtocolRequest: async (request: WorkspaceProtocolRequestTS): Promise<void> => {
+    sendProtocolRequest: async (request: WorkspaceProtocolRequest): Promise<void> => {
       sent.push(request);
       queueMicrotask((): void => { eventEmitter.emit('workspace:raw-response', answer.current); });
     },
@@ -122,7 +122,7 @@ describe('adding a member', () => {
     await submitAdd('bob', vi.fn(), 'office-1');
 
     await waitFor((): void => { expect(sent).toHaveLength(1); });
-    expect(sent[0]).toEqual({ AddMember: { user_id: 'bob', domain_id: 'office-1', role: 'member', metadata: undefined } });
+    expect(sent[0]).toEqual({ AddMember: { user_id: 'bob', domain_id: 'office-1', role: 'member', metadata: null } });
   });
 
   it('closes, says so and refreshes the roster only once the server accepts', async () => {

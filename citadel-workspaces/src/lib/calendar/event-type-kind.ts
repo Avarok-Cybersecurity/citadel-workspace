@@ -7,14 +7,15 @@
  */
 import type { Strategy } from './generated/Strategy';
 import type { TypeKind } from './generated/TypeKind';
+import type { VariantName } from '@/types/variant-name';
 
 /** `MAX_COLLECTIVE_HOSTS` in the core's team.rs: the most hosts one claim fans out to. */
 export const MAX_COLLECTIVE_HOSTS: number = 8;
 /** The largest u16, the core's bound on seats, weights, buffers and lengths. */
 export const U16: number = 65_535;
 
-export type EditableKind = 'one_on_one' | 'group' | 'poll' | 'round_robin' | 'collective';
-export type StrategyName = 'equal' | 'priority' | 'availability';
+export type EditableKind = VariantName<TypeKind>;
+export type StrategyName = VariantName<Strategy>;
 
 /** The kinds one editor offers, never none. */
 export type KindChoice = readonly [EditableKind, ...EditableKind[]];

@@ -1,10 +1,10 @@
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ActiveSession } from "@/types/session-types";
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { getWorkspaceInitials } from "@/lib/workspace-metadata-service";
 
 interface OrphanSessionIconProps {
-  session: ActiveSession;
+  session: SessionInformation;
   workspaceName: string;
   onNavigate: () => void;
   onDisconnect: () => void;
@@ -21,7 +21,7 @@ export const OrphanSessionIcon = ({
   unreadCount = 0,
 }: OrphanSessionIconProps): JSX.Element => {
   const initials: string = getWorkspaceInitials(workspaceName || session.username);
-  const displayName: string = session.full_name || session.username;
+  const displayName: string = session.username;
 
   return (
     <div

@@ -18,7 +18,7 @@ import { getCurrentCid } from '../p2p/current-cid';
 import { narrowWebSocketMessage } from '@/lib/ws-message-boundary';
 import type { BroadcastStateSyncData, WebSocketMessage } from '@/types/ws-message-types';
 import { debugLog } from '@/lib/debug-config';
-import type { Peer, PeerInfoResponse, PeerRegistrationOptions, PendingRequestEntry } from './types';
+import type { Peer, PeerInformation, PeerRegistrationOptions, PendingRequestEntry } from './types';
 import { POLLING_INTERVAL } from './constants';
 import { startPeerPoll, type PeerPoll } from './peer-poll';
 import { followReconnect } from './reconnect-pause';
@@ -171,8 +171,8 @@ export class P2PRegistrationService {
 
   /** One poll round; failures propagate to the poll (see peer-poll.ts). */
   private async checkAndRegisterPeers(options: PeerRegistrationOptions): Promise<void> {
-    const allPeers: PeerInfoResponse[] = await doListAllPeers(this.pendingRequests);
-    const registeredPeers: PeerInfoResponse[] = await doListRegisteredPeersWithRetry(this.pendingRequests);
+    const allPeers: PeerInformation[] = await doListAllPeers(this.pendingRequests);
+    const registeredPeers: PeerInformation[] = await doListRegisteredPeersWithRetry(this.pendingRequests);
     updatePeerMaps(this.allPeers, this.registeredPeers, allPeers, registeredPeers);
     if (options.autoRegisterAll) {
       await doRegisterUnregisteredPeers(this.allPeers, this.pendingRequests);
@@ -183,15 +183,15 @@ export class P2PRegistrationService {
     });
   }
 
-  public async listAllPeers(): Promise<PeerInfoResponse[]> {
+  public async listAllPeers(): Promise<PeerInformation[]> {
     return doListAllPeers(this.pendingRequests);
   }
 
-  public async listRegisteredPeersWithRetry(maxRetries: number = 2): Promise<PeerInfoResponse[]> {
+  public async listRegisteredPeersWithRetry(maxRetries: number = 2): Promise<PeerInformation[]> {
     return doListRegisteredPeersWithRetry(this.pendingRequests, maxRetries);
   }
 
-  public async listRegisteredPeers(): Promise<PeerInfoResponse[]> {
+  public async listRegisteredPeers(): Promise<PeerInformation[]> {
     return doListRegisteredPeers(this.pendingRequests);
   }
 

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { connectionManager } from '@/lib/connection';
-import type { ActiveSession, SignedOutAccount } from '@/types/session-types';
+import type { SignedOutSession } from 'citadel-workspace-client-ts';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 /**
  * Which of the saved accounts are currently connected — and whether that is
@@ -23,15 +24,15 @@ import type { ActiveSession, SignedOutAccount } from '@/types/session-types';
  */
 export interface LiveSessions {
   /** `null` until answered; `[]` only when the answer was "none". */
-  sessions: ActiveSession[] | null;
+  sessions: SessionInformation[] | null;
   /** From the same answer: accounts the agent signed out after a failed reconnect. Empty until answered. */
-  signedOut: SignedOutAccount[];
+  signedOut: SignedOutSession[];
   load: () => Promise<void>;
 }
 
 export function useLiveSessions(): LiveSessions {
-  const [sessions, setSessions] = useState<ActiveSession[] | null>(null);
-  const [signedOut, setSignedOut] = useState<SignedOutAccount[]>([]);
+  const [sessions, setSessions] = useState<SessionInformation[] | null>(null);
+  const [signedOut, setSignedOut] = useState<SignedOutSession[]>([]);
 
   // Stable, so the caller's effect can depend on it rather than suppressing
   // the dependency it actually has.

@@ -4,7 +4,6 @@
  */
 import WorkspaceService from '@/lib/workspace-service';
 import { groupMessagingManager, type GroupMessageEvent } from '@/lib/group-messaging-manager';
-import { GroupMessageTypeTS } from '@/types/workspace-protocol';
 import { armLoadingDeadline, cancelLoadingDeadline } from '@/lib/loading-flag-timeout';
 import { markChannelOpen } from '@/lib/group-conversations/open-channel';
 import { channelSignals, type ChannelSignal } from '@/lib/group-conversations/channel-signals';
@@ -89,7 +88,7 @@ export function nodeChatIO(groupId: string, nodeId: string): NodeChatIO {
         .catch((error: unknown): never => { groupMessagingManager.clearLoadingOlder(groupId); throw error; });
     },
     send: (content: string, kind: 'text' | 'markdown', replyTo: string | null): Promise<void> =>
-      WorkspaceService.sendGroupMessage(groupId, content, kind === 'markdown' ? GroupMessageTypeTS.Markdown : GroupMessageTypeTS.Text, replyTo ?? undefined),
+      WorkspaceService.sendGroupMessage(groupId, content, kind === 'markdown' ? 'Markdown' : 'Text', replyTo ?? undefined),
     edit: (messageId: string, content: string): Promise<void> => WorkspaceService.editGroupMessage(groupId, messageId, content),
     remove: (messageId: string): Promise<void> => WorkspaceService.deleteGroupMessage(groupId, messageId),
     focus: (): (() => void) => markChannelOpen(groupId),

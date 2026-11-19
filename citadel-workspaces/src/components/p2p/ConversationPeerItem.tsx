@@ -7,12 +7,12 @@ import { MemberAvatar } from '@/components/shared/MemberAvatar';
 import { Button } from '@/components/ui/button';
 import { Circle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import type { PeerInfo } from './P2PPeerListHelpers';
+import type { ConversationPeerRow } from './P2PPeerListHelpers';
 import { formatListStamp } from '@/lib/format-time';
 import { formatUnreadCount } from '@/lib/format-unread';
 
 interface ConversationPeerItemProps {
-  peer: PeerInfo;
+  peer: ConversationPeerRow;
   isSelected: boolean;
   onSelect: (cid: string) => void;
 }

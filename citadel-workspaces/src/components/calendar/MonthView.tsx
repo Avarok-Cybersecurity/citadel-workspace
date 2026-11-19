@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { dateKey, sameDate, type GridNav } from '@/lib/calendar/grid-keyboard';
 import { formatDayLong, formatWeekday } from '@/lib/calendar/format';
 import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
-import type { Chip, Placement } from '@/lib/calendar/placement';
+import type { Chip, GridPlacement } from '@/lib/calendar/placement';
 import { EventChip } from './EventChip';
 import { useRovingGrid, type GridHandlers } from './use-roving-grid';
 import type { DayCell, RovingGrid } from '@/components/calendar/use-roving-grid';
@@ -20,7 +20,7 @@ interface MonthViewProps extends GridHandlers {
   days: CivilDate[];
   cursor: CivilDate;
   today: CivilDate;
-  placement: Placement;
+  placement: GridPlacement;
   displayZone: string;
   nodeName: (id: string) => string;
   nav: GridNav;

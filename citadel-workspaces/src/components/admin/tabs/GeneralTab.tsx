@@ -99,7 +99,10 @@ export function GeneralTab({ entityType, entityId, onClose: _onClose }: AdminTab
     setSaving(true);
     try {
       if (entityType === 'workspace') {
-        await WorkspaceService.updateWorkspace(name, description);
+        // UpdateWorkspace demands the master password and this tab has none: the request never
+        // deserialized. A rename is the profile write, gated on the permission instead.
+        if (!state.workspace) throw new Error('No workspace is loaded to rename.');
+        await WorkspaceService.updateWorkspaceProfile(state.workspace.id, { name, description });
       } else {
         await WorkspaceService.updateNode(entityId, { name, description });
       }

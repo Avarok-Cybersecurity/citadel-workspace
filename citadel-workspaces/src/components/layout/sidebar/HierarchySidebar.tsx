@@ -14,7 +14,6 @@ import { TreeNodesSection, type DomainNode } from './TreeNodesSection';
 import { HierarchySidebarModals } from './HierarchySidebarModals';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { usePermission } from '@/hooks/use-permission';
-import { Permission } from '@/contexts/PermissionsContext';
 import { createBlockedReason } from './AddNodeButton';
 import { childTypeChoice, type ChildTypeChoice } from './child-type-choice';
 import { useNewDocument, type NewDocumentFlow } from './use-new-document';
@@ -41,7 +40,7 @@ export function HierarchySidebar(): JSX.Element {
   const [moveNode, setMoveNode] = useState<DomainNode | null>(null);
   const [adminNode, setAdminNode] = useState<DomainNode | null>(null);
   // What the server checks for every CreateNode; see createBlockedReason.
-  const treeEdit: ReturnType<typeof usePermission> = usePermission(WORKSPACE_ROOT_ID, Permission.EditTreeStructure);
+  const treeEdit: ReturnType<typeof usePermission> = usePermission(WORKSPACE_ROOT_ID, 'EditTreeStructure');
 
   // Build flat node list from state
   const nodes: DomainNode[] = useMemo(() => Object.values(state.nodes), [state.nodes]);

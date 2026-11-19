@@ -14,11 +14,11 @@ import type { Event } from '@/lib/calendar/generated/Event';
 import { event, realEngine, utc } from '@/lib/calendar/__tests__/engine-rig';
 import { member, TopicGroup, treeOf, type Member } from '@/lib/calendar/__tests__/tree-rig';
 import { CalendarPane } from '../CalendarPane';
-import type { TreeNode } from '@/lib/citadel-apps/runtime/nodes-port';
+import type { PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
 
 const engine: CalendarEngine = realEngine();
 /** a > b > c. */
-const TREE: Record<string, TreeNode> = treeOf({ a: null, b: 'a', c: 'b' });
+const TREE: Record<string, PageNode> = treeOf({ a: null, b: 'a', c: 'b' });
 const ALL_HANDS: Event = event({
   id: 'all', origin_node: 'a', author: 'amy', title: 'All hands', propagate: { down: true, up_to: null },
   when: { once: { start_ms: utc('2024-07-16T16:00:00Z'), end_ms: utc('2024-07-16T17:00:00Z') } },

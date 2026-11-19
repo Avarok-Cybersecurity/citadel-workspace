@@ -1,18 +1,13 @@
-import type { ActiveSession, PeerSessionInformation } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import type { OrphanSessionWithWorkspace } from '@/components/useOrphanSessions';
 import { sessionIsOnServer } from '@/lib/sessions/same-server';
 
 /** One live session paired with the stored record that names its workspace. */
-interface Paired {
+type Paired = SessionInformation & {
   workspaceName: string;
   storedSessionIndex: number;
   lastAccessed: number;
-  cid: bigint;
-  username: string;
-  server_address: string;
-  full_name?: string;
-  peer_connections?: Record<string, PeerSessionInformation>;
-}
+};
 
 /** Just the fields this pairing needs from a stored session. */
 interface StoredLike {
@@ -31,13 +26,13 @@ interface StoredLike {
  * navbar wants.
  */
 export function withWorkspaceNames(
-  activeSessions: ActiveSession[],
+  activeSessions: SessionInformation[],
   storedSessions: StoredLike[],
-  readLastAccessed: (cid: ActiveSession['cid']) => number,
+  readLastAccessed: (cid: SessionInformation['cid']) => number,
 ): OrphanSessionWithWorkspace[] {
   // A session with no CID is dropped, not rendered.
   //
-  // `ActiveSession.cid` is declared `bigint` and the wire does not always carry
+  // `SessionInformation.cid` is declared `bigint` and the wire does not always carry
   // one. Such a session cannot be navigated to, claimed, or signed out of --
   // every one of those is keyed by CID -- so a chip for it is a control that
   // does nothing. It reached the strip, and pressing sign-out on it called
@@ -47,7 +42,7 @@ export function withWorkspaceNames(
   // Dropping is not the same as emptying. A stale list beats an empty one here
   // and that is why a failed READ is never treated as "no sessions"; this
   // removes only the entries that cannot be acted on.
-  const usable: ActiveSession[] = activeSessions.filter((session) => session.cid !== undefined);
+  const usable: SessionInformation[] = activeSessions.filter((session) => session.cid !== undefined);
 
   const paired: Paired[] = usable.map((activeSession): Paired => {
     const storedIndex: number = storedSessions.findIndex(

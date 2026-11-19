@@ -9,12 +9,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getActiveSessionsResult, type ActiveSessionsResult } from '../queries';
 import { ConnectionState } from '../state-cache';
-import type { SignedOutAccount } from '@/types/session-types';
+import type { SignedOutSession } from 'citadel-workspace-client-ts';
 
 /** Leadership plays no part in what these tests check; a follower's answer keeps it inert. */
 const NOT_LEADING: () => boolean = (): boolean => false;
 
-const alice: SignedOutAccount = { cid: 7n, username: 'alice', reason: 'CID not registered to this node' };
+const alice: SignedOutSession = { cid: 7n, username: 'alice', reason: 'CID not registered to this node' };
 
 function agentAnswering(state: ConnectionState, body: Record<string, unknown>): { io: never; asked: () => number } {
   let asked: number = 0;

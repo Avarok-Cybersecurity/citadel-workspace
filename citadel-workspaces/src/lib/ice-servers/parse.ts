@@ -11,7 +11,8 @@
  * landing page's bundle. Logs are redacted by debug-formatter, which already
  * treats `credential` as a secret.
  */
-import type { IceServer, IceServersAnswer } from '@/types/ice-servers';
+import type { IceServersAnswer } from '@/types/ice-servers';
+import type { IceServer } from 'citadel-workspace-client-ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

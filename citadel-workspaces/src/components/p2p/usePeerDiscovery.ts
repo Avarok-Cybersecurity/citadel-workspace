@@ -18,6 +18,7 @@ import { discoverPeersViaGetSessions, fetchRegisteredPeers, fetchAllPeers } from
 import { connectionRequestSentCopy } from './connection-request-copy';
 import type { WebSocketMessage } from '@/types/ws-message-types';
 import type { StoredSession } from '@/types/session-types';
+import type { PeerRegisterNotification } from 'citadel-workspace-client-ts';
 
 export interface Peer {
   cid: string;
@@ -120,7 +121,7 @@ export function usePeerDiscovery(isOpen: boolean): { peers: Peer[] | null; regis
       const message: WebSocketMessage | null = narrowWebSocketMessage(raw);
       if (!message) return;
       if (hasVariant(message, 'PeerRegisterNotification')) {
-        await peerRegistrationStore.handleIncomingRequest(getVariant(message, 'PeerRegisterNotification') as { cid: bigint; peer_cid: bigint; peer_username?: string });
+        await peerRegistrationStore.handleIncomingRequest(getVariant(message, 'PeerRegisterNotification') as PeerRegisterNotification);
       }
     };
     eventEmitter.on('websocket-message', handleIncomingRegistration);

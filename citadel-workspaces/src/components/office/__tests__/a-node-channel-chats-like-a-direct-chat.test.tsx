@@ -156,7 +156,7 @@ describe('a node channel', () => {
     if (viewport === null) throw new Error('the transcript is no longer in a scroll viewport');
     fireEvent.scroll(viewport, { target: { scrollTop: 0 } });
     await screen.findByText('line 5');
-    expect(channelServer.requests.filter((r) => r.GetGroupMessages?.before_timestamp !== undefined)).toHaveLength(1);
+    expect(channelServer.requests.filter((r) => r.GetGroupMessages?.before_timestamp != null)).toHaveLength(1);
   });
 
   it('keeps what you were writing when you leave and come back', async () => {

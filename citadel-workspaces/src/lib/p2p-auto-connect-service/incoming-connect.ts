@@ -16,14 +16,15 @@ import type { IncomingAnswer } from '@/lib/p2p-pause/pause-rules';
 import type { PeerConnectionInfo } from '@/lib/p2p-auto-connect/types';
 import { chatAdvancedSettings, type ChatSecurityLevel } from '@/lib/p2p/chat-advanced-settings';
 import { offerMeetsMinimum } from '@/lib/p2p/security-level-rank';
+import type { PeerConnectNotification } from 'citadel-workspace-client-ts';
 
 /**
  * A PeerConnectNotification as read here; the level is the one the initiator asked for.
  * `answered_by_agent`: the agent answers this offer itself, for an account it hosts, so the
  * account is reachable with no window showing it. An agent that predates it never sends it.
  */
-export type IncomingOffer = {
-  cid?: bigint; peer_cid?: bigint; session_security_settings?: { security_level?: unknown }; answered_by_agent?: boolean;
+export type IncomingOffer = Partial<Pick<PeerConnectNotification, 'cid' | 'peer_cid' | 'answered_by_agent'>> & {
+  session_security_settings?: { security_level?: unknown };
 };
 
 /** Whether this window sends the answer: never a second one to an offer the agent answers. */

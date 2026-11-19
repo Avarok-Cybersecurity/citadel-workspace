@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { Question } from '@/lib/calendar/generated/Question';
 import type { QuestionKind } from '@/lib/calendar/generated/QuestionKind';
 import { NativeSelect } from './NativeSelect';
+import type { VariantName } from '@/types/variant-name';
 
 interface QuestionsEditorProps {
   questions: Question[];
@@ -18,7 +19,7 @@ interface QuestionsEditorProps {
   onChange: (next: Question[]) => void;
 }
 
-type KindName = 'text' | 'long_text' | 'choice';
+type KindName = VariantName<QuestionKind>;
 const kindName = (k: QuestionKind): KindName => (typeof k === 'object' ? 'choice' : k);
 const KIND_LABEL: Record<KindName, string> = { text: 'Short answer', long_text: 'Paragraph', choice: 'Choose one' };
 

@@ -4,7 +4,7 @@
  */
 import type { Clock } from '@/lib/cdoc/collab/ports';
 import type { ValueStore } from '@/lib/value-store';
-import type { GroupMessage, User } from '@/types/workspace-entities';
+import type { GroupMessage, WorkspaceMember } from '@/types/workspace-entities';
 import type { GroupMessageEvent } from '@/lib/group-messaging-manager';
 import type { ChannelSignal } from '@/lib/group-conversations/channel-signals';
 import { senderUsernameOf } from '@/components/chat/shared/sender-username';
@@ -19,8 +19,8 @@ import type { ChatSelf, StatusPort } from './chat-transport';
 export type Roster = ValueStore<readonly RosterEntry[] | null>;
 
 /** A node's member list as receipts and the header count it; null stays null (not known yet). */
-export function rosterEntries(members: readonly User[] | null): readonly RosterEntry[] | null {
-  return members?.map((user: User): RosterEntry => ({ username: user.username || user.id, displayName: user.displayName, online: user.isOnline })) ?? null;
+export function rosterEntries(members: readonly WorkspaceMember[] | null): readonly RosterEntry[] | null {
+  return members?.map((user: WorkspaceMember): RosterEntry => ({ username: user.username || user.id, displayName: user.displayName, online: user.isOnline })) ?? null;
 }
 
 /** A member's name as the roster has it, else the username the server named them by. */

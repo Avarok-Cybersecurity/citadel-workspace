@@ -7,9 +7,10 @@
  * the live tree and their level from the live schema (`levelLabel`), never from a type name.
  */
 import type { DomainNode, MessagingTrustPolicy } from 'citadel-workspace-client-ts';
+import type { VariantName } from '@/types/variant-name';
 
 /** The workspace's: nobody, everyone, or one node and below. */
-export type WorkspaceTrustChoice = 'Strict' | 'AllTrusted' | 'NodeLevelTrusted';
+export type WorkspaceTrustChoice = VariantName<MessagingTrustPolicy>;
 /** A member's own: the workspace's, one node inside it, or nobody. */
 export type PersonalTrustChoice = 'follow' | 'node' | 'ask';
 

@@ -12,7 +12,7 @@ import { UserPlus, MessageCircle, Users, CheckCircle } from 'lucide-react';
 import { useEventListener } from '@/hooks';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 import { debugLog } from '@/lib/debug-config';
-import { conversationPeerName, conversationPeerUsername, type PeerInfo } from './P2PPeerListHelpers';
+import { conversationPeerName, conversationPeerUsername, type ConversationPeerRow } from './P2PPeerListHelpers';
 import { ConversationPeerItem } from './ConversationPeerItem';
 import { peerDisplayName, peerHandleName, isUnnamedPeer } from '@/lib/peer-display';
 import type { P2PConversation, P2PMessage } from '@/lib/p2p/p2p-types';
@@ -23,7 +23,7 @@ interface P2PPeerListProps {
 }
 
 export function P2PPeerList({ onSelectPeer, selectedPeerCid }: P2PPeerListProps): JSX.Element {
-  const [peers, setPeers] = useState<PeerInfo[]>([]);
+  const [peers, setPeers] = useState<ConversationPeerRow[]>([]);
   const [availablePeers, setAvailablePeers] = useState<Peer[]>([]);
   const [showAvailablePeers, setShowAvailablePeers] = useState(false);
 
@@ -32,7 +32,7 @@ export function P2PPeerList({ onSelectPeer, selectedPeerCid }: P2PPeerListProps)
   const loadPeers: () => void = useCallback((): void => {
     const conversations: P2PConversation[] = messenger.getAllConversations();
     const { allPeers } = p2pRegistrationService.getPeers();
-    const peerList: PeerInfo[] = conversations.map(conv => {
+    const peerList: ConversationPeerRow[] = conversations.map(conv => {
       const lastMessage: P2PMessage = conv.messages[conv.messages.length - 1];
       const peerCidStr: string = conv.peerCid.toString();
       return {

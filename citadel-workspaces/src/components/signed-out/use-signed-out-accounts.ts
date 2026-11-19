@@ -9,12 +9,12 @@
 import { useEffect, useState } from 'react';
 import { connectionManager } from '@/lib/connection';
 import type { ActiveSessionsResult } from '@/lib/connection/queries';
-import type { SignedOutAccount } from '@/types/session-types';
+import type { SignedOutSession } from 'citadel-workspace-client-ts';
 import { debugLog } from '@/lib/debug-config';
 
 /** Empty until the agent has answered, and when it could not be asked: a failure is not a sign-out. */
-export function useSignedOutAccounts(): SignedOutAccount[] {
-  const [accounts, setAccounts] = useState<SignedOutAccount[]>([]);
+export function useSignedOutAccounts(): SignedOutSession[] {
+  const [accounts, setAccounts] = useState<SignedOutSession[]>([]);
   useEffect(() => {
     let live: boolean = true;
     const read = async (): Promise<void> => {

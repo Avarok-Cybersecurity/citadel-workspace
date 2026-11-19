@@ -4,9 +4,9 @@
  * requests it cannot parse. Real: watchGreeting.
  */
 import { describe, expect, it } from 'vitest';
-import { watchGreeting, type AgentCapabilities } from '@/lib/agent-conversations/capabilities';
+import { watchGreeting, type AgentOffers } from '@/lib/agent-conversations/capabilities';
 
-async function offers(greeting: Record<string, unknown>): Promise<AgentCapabilities> {
+async function offers(greeting: Record<string, unknown>): Promise<AgentOffers> {
   const watch: ReturnType<typeof watchGreeting> = watchGreeting();
   watch.observe({ ServiceConnectionAccepted: greeting });
   return watch.offers;

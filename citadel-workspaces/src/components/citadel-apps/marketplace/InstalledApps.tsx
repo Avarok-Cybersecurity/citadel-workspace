@@ -6,7 +6,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { AppInstall, ListingOffer } from 'citadel-workspace-client-ts';
-import { Permission } from '@/lib/permissions-service/types';
 import { findListedApp, type ListedApp } from '@/lib/citadel-apps/listing-model';
 import { scopeSentence } from '@/lib/citadel-apps/scope-sentence';
 import { updateOffer } from '@/lib/citadel-apps/listing-offer';
@@ -43,7 +42,7 @@ export function InstalledApps({ installs, apps, deps, viewer, onChanged, onRemov
   const [busy, setBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const note = (id: string, text: string): void => setNotes((n: Record<string, string>) => ({ ...n, [id]: text }));
-  const manage: boolean = viewer.authority.holds(Permission.AppManage, viewer.rootId) === 'yes';
+  const manage: boolean = viewer.authority.holds('AppManage', viewer.rootId) === 'yes';
 
   const run = async <T,>(id: string, work: () => Promise<AppsResult<T>>, then: (value: T) => void): Promise<void> => {
     setBusy(id);

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as constants from '../permission-constants';
 import { PERMISSION_CATEGORIES } from '../permission-constants';
-import { Permission } from '@/lib/permissions-service/types';
+import { ALL_PERMISSIONS, type Permission } from '@/lib/permissions-service/types';
 
 /**
  * These used to assert a hand-written model that lived in permission-constants
@@ -17,7 +17,7 @@ describe('permission-constants', () => {
     it('covers every permission exactly once', () => {
       const ids: string[] = Object.values(PERMISSION_CATEGORIES).flat().map((p) => p.id);
       expect(new Set(ids).size).toBe(ids.length);
-      expect([...ids].sort()).toEqual([...Object.values(Permission)].sort());
+      expect([...ids].sort()).toEqual([...ALL_PERMISSIONS].sort());
     });
 
     it('gives every permission a label and a description', () => {
@@ -28,12 +28,12 @@ describe('permission-constants', () => {
     });
 
     it('places Manage roles with the other user-management permissions', () => {
-      expect(PERMISSION_CATEGORIES['User Management'].map((p) => p.id)).toContain(Permission.ManageRoles);
+      expect(PERMISSION_CATEGORIES['User Management'].map((p) => p.id)).toContain('ManageRoles');
     });
 
     it('puts every app permission, and only those, under Apps', () => {
       const apps: Permission[] = PERMISSION_CATEGORIES['Apps'].map((p) => p.id);
-      const appVariants: Permission[] = Object.values(Permission).filter((p) => p.startsWith('App'));
+      const appVariants: Permission[] = ALL_PERMISSIONS.filter((p: Permission) => p.startsWith('App'));
       expect(appVariants).toHaveLength(21);
       expect([...apps].sort()).toEqual([...appVariants].sort());
     });

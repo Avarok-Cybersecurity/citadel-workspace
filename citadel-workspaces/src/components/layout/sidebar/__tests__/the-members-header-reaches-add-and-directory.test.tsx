@@ -19,7 +19,6 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { ConfirmDialogProvider } from '@/components/shared/confirm-dialog';
-import { Permission } from '@/contexts/PermissionsContext';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import type { UsePermissionResult } from '@/hooks/use-permission-result';
 
@@ -111,9 +110,9 @@ describe('Add member', () => {
 
   it('asks AddUsers of the domain the add will name', () => {
     renderAt('/workspace?nodeId=office-7');
-    expect(asked).toContainEqual(['office-7', Permission.AddUsers]);
+    expect(asked).toContainEqual(['office-7', 'AddUsers']);
     renderAt('/workspace');
-    expect(asked).toContainEqual([WORKSPACE_ROOT_ID, Permission.AddUsers]);
+    expect(asked).toContainEqual([WORKSPACE_ROOT_ID, 'AddUsers']);
   });
 
   it('is disabled with the reason, not hidden, on a known denial', () => {

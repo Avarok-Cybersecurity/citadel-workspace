@@ -12,7 +12,7 @@ import type { Authority, Tri } from '@/lib/citadel-apps/scope-options';
 
 /** Every permission the marketplace consults: the install and manage grants and each capability's. */
 export const MARKETPLACE_PERMISSIONS: readonly Permission[] = [...new Set<Permission>([
-  Permission.AppManage, Permission.AppInstall, Permission.AppInstallScoped, Permission.UpdateNodeSettings,
+  'AppManage', 'AppInstall', 'AppInstallScoped', 'UpdateNodeSettings',
   ...Object.values(CAPABILITY_COPY).map((c: { installerNeeds: Permission }) => c.installerNeeds),
 ])];
 

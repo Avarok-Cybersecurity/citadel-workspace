@@ -3,7 +3,7 @@
  * with the chat: the peer list, which is on the landing path, needs only the
  * path names in path-copy.ts.
  */
-import type { SupervisorState } from '@/types/agent-supervisor';
+import type { SupervisorPhase } from '@/types/agent-supervisor';
 import type { PeerPathReport } from '@/types/ice-servers';
 import { CONNECTION_PATH_COPY } from './path-copy';
 
@@ -29,7 +29,7 @@ export interface ChatPathLabel {
  * What a supervising agent says comes first: "Reconnecting…" while it heals the
  * link, and "Relayed" when it gave up on a direct path.
  */
-export function chatPathLabel(route: PeerPathReport | null, supervisor: SupervisorState | null): ChatPathLabel | null {
+export function chatPathLabel(route: PeerPathReport | null, supervisor: SupervisorPhase | null): ChatPathLabel | null {
   if (supervisor === 'healing') return { text: CHAT_PATH_COPY.reconnecting, tooltip: CHAT_PATH_COPY.healing, direct: false };
   if (supervisor === 'degraded') return { text: CHAT_PATH_COPY.relayed, tooltip: CHAT_PATH_COPY.degraded, direct: false };
   if (route === null) return null;

@@ -16,36 +16,36 @@
  */
 import { describe, it, expect } from 'vitest';
 import { hasAnswerFor, hasPermission } from '../cache';
-import { Permission, type DomainPermissions } from '../types';
+import { Permission, type DomainPermissionEntry } from '../types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
-function entry(permissions: Permission[]): DomainPermissions {
-  return { role: null, permissions: new Set(permissions) } as unknown as DomainPermissions;
+function entry(permissions: Permission[]): DomainPermissionEntry {
+  return { role: null, permissions: new Set(permissions) } as unknown as DomainPermissionEntry;
 }
 
 describe('whether an answer exists', () => {
   it('is false for a cache nobody has filled', () => {
-    const cache: Map<string, DomainPermissions> = new Map();
+    const cache: Map<string, DomainPermissionEntry> = new Map();
     expect(hasAnswerFor(cache, 'node-1')).toBe(false);
 
     // The whole point: the permission check says the same thing here as it does
     // for a real refusal.
-    expect(hasPermission(cache, 'node-1', Permission.SendMessages)).toBe(false);
+    expect(hasPermission(cache, 'node-1', 'SendMessages')).toBe(false);
   });
 
   it('is not satisfied by the domain alone, because the root can still grant it', () => {
     // The node answered and granted nothing; the root has never been fetched.
     // `hasPermission` says false, and that false is not yet a fact.
-    const cache: Map<string, DomainPermissions> = new Map([['node-1', entry([])]]);
+    const cache: Map<string, DomainPermissionEntry> = new Map([['node-1', entry([])]]);
 
-    expect(hasPermission(cache, 'node-1', Permission.SendMessages)).toBe(false);
+    expect(hasPermission(cache, 'node-1', 'SendMessages')).toBe(false);
     expect(hasAnswerFor(cache, 'node-1')).toBe(false);
   });
 
   it('is true once the chain has answered', () => {
     // The positive control: a version returning false always would satisfy
     // every test above and make every permission unenforceable.
-    const cache: Map<string, DomainPermissions> = new Map([
+    const cache: Map<string, DomainPermissionEntry> = new Map([
       ['node-1', entry([])],
       [WORKSPACE_ROOT_ID, entry([])],
     ]);
@@ -53,14 +53,14 @@ describe('whether an answer exists', () => {
 
     // And an answer that grants nothing, with nothing above it to inherit from,
     // is a real denial.
-    expect(hasPermission(cache, 'node-1', Permission.SendMessages)).toBe(false);
+    expect(hasPermission(cache, 'node-1', 'SendMessages')).toBe(false);
   });
 
   it('counts the workspace root, because the permission check falls back to it', () => {
-    const cache: Map<string, DomainPermissions> = new Map([
-      [WORKSPACE_ROOT_ID, entry([Permission.SendMessages])],
+    const cache: Map<string, DomainPermissionEntry> = new Map([
+      [WORKSPACE_ROOT_ID, entry(['SendMessages'])],
     ]);
     expect(hasAnswerFor(cache, 'node-1')).toBe(true);
-    expect(hasPermission(cache, 'node-1', Permission.SendMessages)).toBe(true);
+    expect(hasPermission(cache, 'node-1', 'SendMessages')).toBe(true);
   });
 });

@@ -1,3 +1,4 @@
+import type { PeerInformation } from 'citadel-workspace-client-ts';
 import { websocketService } from '@/lib/websocket-service';
 import { eventEmitter } from '@/lib/event-emitter';
 import { broadcastChannelService } from '@/lib/broadcast-channel-service';
@@ -22,12 +23,6 @@ interface SessionEntry {
  * both were read as `undefined` on every peer, so the sidebar showed every
  * discovered peer as offline and unnamed. Optional fields kept tsc silent.
  */
-interface PeerEntry {
-  cid: bigint;
-  username?: string | null;
-  name?: string | null;
-  online_status?: boolean;
-}
 
 /**
  * Fallback discovery using GetSessions.
@@ -138,7 +133,7 @@ export async function fetchAllPeers(currentCid: bigint): Promise<Peer[]> {
     ListAllPeers: { request_id: requestId, cid: currentCid }
   };
 
-  const responsePromise: Promise<{ peer_information?: Record<string, PeerEntry>; request_id?: string; }> = new Promise<{ peer_information?: Record<string, PeerEntry>; request_id?: string }>((resolve, reject): void => {
+  const responsePromise: Promise<{ peer_information?: Record<string, PeerInformation>; request_id?: string; }> = new Promise<{ peer_information?: Record<string, PeerInformation>; request_id?: string }>((resolve, reject): void => {
     const timeout: NodeJS.Timeout = setTimeout((): void => {
       broadcastChannelService.clearRequest(requestId);
       reject(new Error('Request timed out'));
@@ -152,7 +147,7 @@ export async function fetchAllPeers(currentCid: bigint): Promise<Peer[]> {
         if (resp.request_id === requestId) {
           clearTimeout(timeout);
           eventEmitter.off('websocket-message', handleMessage);
-          resolve(resp as { peer_information?: Record<string, PeerEntry>; request_id?: string });
+          resolve(resp as { peer_information?: Record<string, PeerInformation>; request_id?: string });
         }
       } else if (hasVariant(message, 'ListAllPeersFailure')) {
         const fail: Record<string, unknown> = getVariant(message, 'ListAllPeersFailure')!;
@@ -168,13 +163,13 @@ export async function fetchAllPeers(currentCid: bigint): Promise<Peer[]> {
   });
 
   await websocketService.sendMessage(request);
-  const response: { peer_information?: Record<string, PeerEntry>; request_id?: string; } = await responsePromise;
+  const response: { peer_information?: Record<string, PeerInformation>; request_id?: string; } = await responsePromise;
 
   // `peer_information` is a Rust HashMap: over the WASM boundary it is a JS Map,
   // and Object.values() on a Map returns [] — so this path found no peers at all
   // and fell through to the GetSessions fallback, which only sees peers on the
   // same internal service.
-  const peerList: PeerEntry[] = wireMapValues<PeerEntry>(response.peer_information, 'peer_information');
+  const peerList: PeerInformation[] = wireMapValues<PeerInformation>(response.peer_information, 'peer_information');
   return peerList
     .filter((p) => p.cid !== currentCid)
     .map((p) => ({

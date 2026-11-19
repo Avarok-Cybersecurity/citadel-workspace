@@ -8,13 +8,11 @@
 import type { RoleDefinition, WorkspaceRoles } from 'citadel-workspace-client-ts';
 import { roleById } from './role-ladder';
 
-export interface RoleDisplay {
-  /** The table id, or the legacy name lower-cased when only the mirror is known. */
-  id: string;
-  name: string;
-  /** `#rrggbb`, or null for the default badge colour. */
-  color: string | null;
-}
+/**
+ * A role as a badge shows it. `id` is the table id, or the legacy name lower-cased when only the
+ * mirror is known; `color` is `#rrggbb`, or null for the default badge colour.
+ */
+export type RoleDisplay = Pick<RoleDefinition, 'id' | 'name' | 'color'>;
 
 /** The legacy mirror's name: 'Admin', or the name a `{ Custom: [name, rank] }` carries. */
 export function legacyRoleName(legacy: unknown): string | null {

@@ -59,7 +59,7 @@ const arrival: AsyncTransferDeps = {
 
 async function arrive(t: FileTransfer): Promise<void> {
   transfers = [...transfers, t];
-  const layer = { type: MessagingLayerType.FileTransferRequest, transfer_id: t.id, file_name: t.fileName, file_size: t.fileSize, file_type: t.fileType, timestamp: t.createdAt } as const;
+  const layer: Parameters<typeof handleTransferRequest>[1] = { type: MessagingLayerType.FileTransferRequest, transfer_id: t.id, file_name: t.fileName, file_size: t.fileSize, file_type: t.fileType, timestamp: t.createdAt };
   await act(async (): Promise<void> => {
     await handleTransferRequest(arrival, layer, t.senderCid, (): boolean => false, async (): Promise<void> => undefined);
   });

@@ -12,6 +12,7 @@
  * Same shape as the annotation flood (round 509), on the same transport.
  */
 import { describe, it, expect, vi } from 'vitest';
+import type { WireFrame } from '@/lib/call/frame-codec';
 
 class StubVideoDecoder {
   state: string = 'configured';
@@ -36,7 +37,7 @@ const { CALL_KIND_VIDEO }: typeof import('@/types/call-signals') = await import(
  * on frame one and asked for nothing: three tests failing because the fixture
  * never reached the path under test.
  */
-const delta: never = { kind: CALL_KIND_VIDEO, flags: 0, track: 1, data: new Uint8Array([1]), timestamp: 0 } as never;
+const delta: WireFrame = { kind: CALL_KIND_VIDEO, flags: 0, track: 1, payload: new Uint8Array([1]), timestamp: 0 };
 
 describe('an un-primed decoder', () => {
   it('asks once for a second of delta frames, not thirty times', () => {

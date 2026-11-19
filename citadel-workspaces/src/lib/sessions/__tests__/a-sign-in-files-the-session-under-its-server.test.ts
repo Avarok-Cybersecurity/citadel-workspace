@@ -6,12 +6,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import { sessionLabel } from '../session-label';
-import type { ActiveSession, StoredSession } from '@/types/session-types';
+import type { StoredSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
-const live: ActiveSession[] = [
+const live: SessionInformation[] = [
   { cid: 7n, username: 'bob0924', server_address: 'wss://bench.work.avarok.net/', server_host: 'bench.work.avarok.net', peer_connections: {} },
   { cid: 8n, username: 'eve0924', server_address: 'wss://acme.work.avarok.net/', server_host: null, peer_connections: {} },
-] as unknown as ActiveSession[];
+] as unknown as SessionInformation[];
 
 const stored: StoredSession = { username: 'bob0924', serverAddress: 'old.work.avarok.net', fullName: 'Bob Brown', lastConnected: 1 } as StoredSession;
 

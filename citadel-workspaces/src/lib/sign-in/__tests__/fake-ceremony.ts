@@ -3,14 +3,13 @@
  * the SDK applies to the key that answers it (citadel_user SecurityKeyCeremony).
  */
 import { toBase64Url } from '@/lib/passkey/bytes';
+import type { SecurityKeyCeremony } from 'citadel-workspace-client-ts';
 
 /** The relying party the fake server names in every challenge, as the hosted one does. */
 export const FAKE_RP_ID: string = 'work.avarok.net';
 
 /** The ceremony a challenge names, in the agent's wire shape. */
-export type Ceremony =
-  | { Authenticate: { credential_ids: number[][] } }
-  | { Register: { user_id: number[]; user_name: string; exclude_credential_ids: number[][] } };
+export type Ceremony = SecurityKeyCeremony;
 
 const idOf = (bytes: number[]): string => toBase64Url(Uint8Array.from(bytes));
 

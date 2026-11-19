@@ -5,7 +5,7 @@
  * list, get tree structure, get tree schema, and server capabilities.
  */
 
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { NodeEntityType, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { workspaceResponseHandler } from '@/lib/workspace-response-handler';
 import { awaitWriteResponse } from './await-write-response';
 import { aboutNode, newChildOf, nodeWithId } from './response-matchers';
@@ -17,20 +17,18 @@ import type { ProtocolSender } from './workspace-operations';
 export async function createNode(
   sender: ProtocolSender,
   parentId: string | null,
-  entityType: { Child: string } | 'Workspace',
+  entityType: NodeEntityType,
   name: string,
   description: string,
-  options?: { mdxContent?: string; metadata?: Uint8Array; isDefault?: boolean },
+  options?: { metadata?: Uint8Array },
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     CreateNode: {
       parent_id: parentId,
       entity_type: entityType,
       name,
       description,
-      mdx_content: options?.mdxContent,
-      metadata: options?.metadata ? Array.from(options.metadata) : undefined,
-      is_default: options?.isDefault,
+      metadata: options?.metadata ? Array.from(options.metadata) : null,
     },
   };
   // Resolves when the SERVER has accepted it, not when the frame leaves.
@@ -60,15 +58,15 @@ export async function updateNode(
     isDefault?: boolean;
   },
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     UpdateNode: {
       node_id: nodeId,
-      name: updates.name,
-      description: updates.description,
-      mdx_content: updates.mdxContent,
-      rules: updates.rules,
-      chat_enabled: updates.chatEnabled,
-      is_default: updates.isDefault,
+      name: updates.name ?? null,
+      description: updates.description ?? null,
+      mdx_content: updates.mdxContent ?? null,
+      rules: updates.rules ?? null,
+      chat_enabled: updates.chatEnabled ?? null,
+      is_default: updates.isDefault ?? null,
     },
   };
   // Resolves when the SERVER has accepted it, not when the frame leaves.
@@ -86,7 +84,7 @@ export async function updateNode(
  * anyone else. Resolves on the server's `Node` answer for this node.
  */
 export async function setMembersVisible(sender: ProtocolSender, nodeId: string, visible: boolean): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = { SetMembersVisible: { node_id: nodeId, visible } };
+  const requestPart: WorkspaceProtocolRequest = { SetMembersVisible: { node_id: nodeId, visible } };
   return awaitWriteResponse('SetMembersVisible', () => sender.sendProtocolRequest(requestPart), nodeWithId(nodeId));
 }
 
@@ -98,7 +96,7 @@ export async function deleteNode(
   nodeId: string,
   cascade: boolean = true
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     DeleteNode: { node_id: nodeId, cascade },
   };
   // Resolves when the SERVER has accepted it, not when the frame leaves.
@@ -117,7 +115,7 @@ export async function deleteNode(
 export async function listNodes(
   sender: ProtocolSender,
   parentId?: string | null,
-  entityTypes?: Array<{ Child: string } | 'Workspace'>,
+  entityTypes?: NodeEntityType[],
 ): Promise<void> {
   // `state.loading.nodes` had no writer at all, so it was permanently false and
   // TreeNodesSection's guard — `if (!isLoading && !treeData)` — fired on every
@@ -126,10 +124,11 @@ export async function listNodes(
   // "Loading..." arm inside that branch is unreachable by construction, which is
   // why it read as correct.
   workspaceResponseHandler.emitLoadingEvent('nodes:loading');
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     ListNodes: {
-      parent_id: parentId,
-      entity_types: entityTypes,
+      parent_id: parentId ?? null,
+      depth: null,
+      entity_types: entityTypes ?? null,
     },
   };
   return sender.sendProtocolRequest(requestPart);
@@ -143,10 +142,10 @@ export async function getTreeStructure(
   rootId?: string,
   maxDepth?: number
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     GetTreeStructure: {
       root_id: rootId ?? null,
-      max_depth: maxDepth,
+      max_depth: maxDepth ?? null,
     },
   };
   return sender.sendProtocolRequest(requestPart);
@@ -156,9 +155,7 @@ export async function getTreeStructure(
  * Get the current tree schema (nesting rules).
  */
 export async function getTreeSchema(sender: ProtocolSender): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
-    GetTreeSchema: null,
-  };
+  const requestPart: WorkspaceProtocolRequest = 'GetTreeSchema';
   return sender.sendProtocolRequest(requestPart);
 }
 
@@ -166,9 +163,7 @@ export async function getTreeSchema(sender: ProtocolSender): Promise<void> {
  * Get server file transfer and storage capabilities
  */
 export async function getServerCapabilities(sender: ProtocolSender): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
-    GetServerCapabilities: null
-  };
+  const requestPart: WorkspaceProtocolRequest = 'GetServerCapabilities';
   return sender.sendProtocolRequest(requestPart);
 }
 
@@ -189,7 +184,7 @@ export async function moveNode(
   nodeId: string,
   newParentId: string | null,
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     MoveNode: {
       node_id: nodeId,
       new_parent_id: newParentId,

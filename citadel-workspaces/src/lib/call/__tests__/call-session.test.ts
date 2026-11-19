@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach  } from 'vitest';
 import { CallSession } from '../call-session';
 import type { CallMediaKinds } from '@/types/call-signals';
+import type { WireFrame } from '@/lib/call/frame-codec';
 
 const stopped: Array<{ stop: ReturnType<typeof vi.fn> }> = [];
 const codecInstances: Array<{ close: ReturnType<typeof vi.fn> }> = [];
@@ -198,7 +199,7 @@ describe('peers', () => {
     const session: CallSession = new CallSession(cbs);
     await session.start({ audio: true, video: true, screen: false });
 
-    const frame: { track: number; kind: number; timestamp: number; flags: number; payload: Uint8Array<ArrayBuffer>; } = { track: 1, kind: 1, timestamp: 0, flags: 1, payload: new Uint8Array([1]) };
+    const frame: WireFrame = { track: 1, kind: 1, timestamp: 0, flags: 1, payload: new Uint8Array([1]) };
     session.acceptFrame(2n, frame);
     session.acceptFrame(2n, frame);
     session.acceptFrame(2n, frame);

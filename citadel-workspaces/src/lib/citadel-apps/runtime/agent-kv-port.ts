@@ -4,6 +4,7 @@
  * (`InternalServiceRequest::AppKv`). The agent offers no atomic batch, so `KvSetMany` here is
  * refused rather than done half-way. Every other backend is the server's (kernel-call-ports.ts).
  */
+import type { AppKvRefusal } from 'citadel-workspace-client-ts';
 import type { OpArgs, OpReplies } from '../sdk/generated/AbiConstants';
 import type { PortAnswer, Refused, StoragePort } from '../host/ports';
 import { agentAsk, answering, bytesOf, type AgentLink, type AgentOutcome, type Json } from './agent-link';
@@ -17,7 +18,8 @@ export interface LocalKvTarget {
 
 type KvResult = { readonly ok: true; readonly result: unknown } | { readonly ok: false; readonly refusal: string };
 
-const LIMITS: ReadonlySet<string> = new Set<string>(['Key', 'Value', 'Quota']);
+/** The refusals that are a limit the app went over; the rest mean the store is unavailable. */
+const LIMITS: ReadonlySet<string> = new Set<AppKvRefusal>(['Key', 'Value', 'Quota']);
 
 function refusalOf(refusal: string): Refused {
   return LIMITS.has(refusal) ? { limit: refusal.toLowerCase() } : { unavailable: `local_${refusal.toLowerCase()}` };

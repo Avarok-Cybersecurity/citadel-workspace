@@ -14,10 +14,11 @@
  * message, but the bubble read `message.error`, which nothing sets — so it said
  * "Transfer failed" and never why.
  */
+import type { ConversationMessage } from 'citadel-workspace-client-ts';
 import type { FileTransfer } from './types';
 import { waitingText } from './send-queue';
 import { isTerminalTransferState } from './transfer-outcome';
-import { fromStoredState, type StoredTransferState } from './stored-state';
+import { fromStoredState } from './stored-state';
 import type { FileTransferState as TransferLifecycleState } from '@/types/messaging-layer';
 
 export const STALE_OFFER_REASON: string = 'Offer expired — ask the sender to send it again.';
@@ -38,11 +39,7 @@ export interface TransferView {
 }
 
 /** The fields of a conversation entry that describe its transfer. */
-export interface TransferMessageFields {
-  transfer_state?: StoredTransferState;
-  transfer_progress?: number;
-  error?: string;
-}
+export type TransferMessageFields = Pick<ConversationMessage, 'transfer_state' | 'transfer_progress' | 'error'>;
 
 const AWAITING_ANSWER: ReadonlySet<TransferLifecycleState> = new Set<TransferLifecycleState>(['queued', 'pending']);
 

@@ -12,7 +12,7 @@ import { debugLog } from '@/lib/debug-config';
 import { INTERVAL } from '@/lib/timeout-constants';
 
 import { Permission, PERMISSION_LABELS } from './types';
-import type { UserRole, DomainPermissions } from './types';
+import type { UserRole, DomainPermissionEntry } from './types';
 import {
   updateCacheEntry,
   hasPermission as cacheHasPermission,
@@ -25,8 +25,8 @@ import {
  */
 export class PermissionsService extends EventListenerManager {
   private static instance: PermissionsService;
-  private cache: Map<string, DomainPermissions> = new Map();
-  private pendingRequests: Map<string, Promise<DomainPermissions>> = new Map();
+  private cache: Map<string, DomainPermissionEntry> = new Map();
+  private pendingRequests: Map<string, Promise<DomainPermissionEntry>> = new Map();
   /**
    * Why the last fetch for a domain did not produce permissions.
    *
@@ -129,15 +129,15 @@ export class PermissionsService extends EventListenerManager {
   /**
    * Fetch permissions for a specific domain.
    */
-  public async fetchPermissions(domainId: string, forceRefresh: boolean = false): Promise<DomainPermissions | null> {
+  public async fetchPermissions(domainId: string, forceRefresh: boolean = false): Promise<DomainPermissionEntry | null> {
     if (!forceRefresh) {
-      const cached: DomainPermissions | undefined = this.cache.get(domainId);
+      const cached: DomainPermissionEntry | undefined = this.cache.get(domainId);
       if (cached && Date.now() - cached.lastUpdated < INTERVAL.PERMISSION_CACHE_MS) {
         return cached;
       }
     }
 
-    const pending: Promise<DomainPermissions> | undefined = this.pendingRequests.get(domainId);
+    const pending: Promise<DomainPermissionEntry> | undefined = this.pendingRequests.get(domainId);
     if (pending) return pending;
 
     const userId: string | null = await this.resolveCurrentUserId();
@@ -147,7 +147,7 @@ export class PermissionsService extends EventListenerManager {
       return null;
     }
 
-    const requestPromise: Promise<DomainPermissions> = requestPermissions(
+    const requestPromise: Promise<DomainPermissionEntry> = requestPermissions(
       domainId, userId, this.cache, this.lastFailure, this.pendingRequests,
     );
 
@@ -179,11 +179,11 @@ export class PermissionsService extends EventListenerManager {
     return permissions.every((p) => this.hasPermission(domainId, p));
   }
 
-  public getPermissions(domainId: string): DomainPermissions | null {
+  public getPermissions(domainId: string): DomainPermissionEntry | null {
     return this.cache.get(domainId) || null;
   }
 
-  public getAllCachedPermissions(): Map<string, DomainPermissions> {
+  public getAllCachedPermissions(): Map<string, DomainPermissionEntry> {
     return new Map(this.cache);
   }
 

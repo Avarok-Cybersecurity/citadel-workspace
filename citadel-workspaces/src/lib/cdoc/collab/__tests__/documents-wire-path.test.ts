@@ -15,7 +15,7 @@ import { reconnectingTo } from '@/lib/reconnect/server-reconnect';
 import { extractRequestId, extractTargetCid } from '@/lib/multi-instance/message-routing';
 import '@/lib/workspace-response-handler';
 import type { ProtocolSender } from '@/lib/workspace-service/workspace-operations';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { workspaceDocumentsTransport } from '../documents-transport';
 import type { DocumentsTransport, LinkState } from '../ports';
 
@@ -27,9 +27,9 @@ function serverPush(to: bigint, response: DocumentsResponse): Record<string, unk
   return { MessageNotification: { message: Array.from(encodeWorkspacePayload(payload)), cid: to, peer_cid: 0n, request_id: 'the-authors-request' } };
 }
 
-function recordingSender(): { sender: ProtocolSender; sent: WorkspaceProtocolRequestTS[] } {
-  const sent: WorkspaceProtocolRequestTS[] = [];
-  return { sent, sender: { currentCid: BOB, sendProtocolRequest: (request: WorkspaceProtocolRequestTS): Promise<void> => { sent.push(request); return Promise.resolve(); } } };
+function recordingSender(): { sender: ProtocolSender; sent: WorkspaceProtocolRequest[] } {
+  const sent: WorkspaceProtocolRequest[] = [];
+  return { sent, sender: { currentCid: BOB, sendProtocolRequest: (request: WorkspaceProtocolRequest): Promise<void> => { sent.push(request); return Promise.resolve(); } } };
 }
 
 const PUSH: DocumentsResponse = { DocumentUpdated: { node_id: 'n1', seq: 9_007_199_254_740_993n, doc_version: 2, update: [0, 255, 7], author_cid: ALICE } };

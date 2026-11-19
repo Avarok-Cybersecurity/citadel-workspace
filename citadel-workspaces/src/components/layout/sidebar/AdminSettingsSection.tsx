@@ -28,7 +28,6 @@ import { ManageSubscriptionDialog } from './ManageSubscriptionDialog';
 import { useWorkspaceAddress } from '@/hooks/use-workspace-address';
 import { usePermission } from '@/hooks/use-permission';
 import { confirms, permits } from '@/hooks/use-permission-result';
-import { Permission } from '@/lib/permissions-service/types';
 import { WorkspaceSettingsDialog } from '@/components/admin/workspace-settings/WorkspaceSettingsDialog';
 
 /**
@@ -48,15 +47,15 @@ export const AdminSettingsSection: () => JSX.Element | null = (): JSX.Element | 
   // The permission the server checks for UpdateWorkspaceProfile, asked of the root and of this
   // workspace, as the appearance editor asks for Themes.
   const workspaceId: string = state.workspace?.id ?? WORKSPACE_ROOT_ID;
-  const rootPermission: ReturnType<typeof usePermission> = usePermission(WORKSPACE_ROOT_ID, Permission.UpdateWorkspace);
-  const ownPermission: ReturnType<typeof usePermission> = usePermission(workspaceId, Permission.UpdateWorkspace);
+  const rootPermission: ReturnType<typeof usePermission> = usePermission(WORKSPACE_ROOT_ID, 'UpdateWorkspace');
+  const ownPermission: ReturnType<typeof usePermission> = usePermission(workspaceId, 'UpdateWorkspace');
   const canEditWorkspace: boolean = permits(rootPermission) || permits(ownPermission);
   // The section CLAIMS administration (its header says Admin), so it waits for a known yes:
   // `confirms`, not `permits`, or every Guest would see it while their answer is on its way.
   // Either permission makes someone an administrator here: ManageRoles for people and roles,
   // EditWorkspaceConfig for the workspace's own settings. Each control inside keeps its own gate.
-  const managesRoles: boolean = confirms(usePermission(WORKSPACE_ROOT_ID, Permission.ManageRoles));
-  const configuresWorkspace: boolean = confirms(usePermission(WORKSPACE_ROOT_ID, Permission.EditWorkspaceConfig));
+  const managesRoles: boolean = confirms(usePermission(WORKSPACE_ROOT_ID, 'ManageRoles'));
+  const configuresWorkspace: boolean = confirms(usePermission(WORKSPACE_ROOT_ID, 'EditWorkspaceConfig'));
   const controlPlaneBase: string | undefined = readControlPlaneBase(document);
   const api: ControlPlane | undefined = useMemo((): ControlPlane | undefined => controlPlaneBase === undefined
     ? undefined

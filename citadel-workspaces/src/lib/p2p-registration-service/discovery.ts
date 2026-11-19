@@ -11,7 +11,8 @@ import { failOnSocketLoss } from '../websocket/request-response';
 import { broadcastChannelService } from '../broadcast-channel-service';
 import { debugLog, debugEnabled } from '@/lib/debug-config';
 import type { InternalServiceRequest } from 'citadel-workspace-client-ts';
-import type { Peer, PeerInfoResponse, PendingRequestEntry } from './types';
+import type { Peer, PendingRequestEntry } from './types';
+import type { PeerInformation } from 'citadel-workspace-client-ts';
 import { PEER_LIST_TIMEOUT } from './constants';
 import { wireMapValues } from '@/lib/wire-map';
 import { assertAgentHoldsSession } from './session-held-gate';
@@ -33,7 +34,7 @@ function assertValidSession(cid: bigint | null): asserts cid is bigint {
  */
 export async function listAllPeers(
   pendingRequests: Map<string, PendingRequestEntry>
-): Promise<PeerInfoResponse[]> {
+): Promise<PeerInformation[]> {
   const currentCid: bigint | null = await getCurrentCid();
   assertValidSession(currentCid);
   await assertAgentHoldsSession(currentCid);
@@ -67,7 +68,7 @@ export async function listAllPeers(
   // `parsePeersResponse` fifty lines below already handles the Map shape: the
   // normalizer existed, was used by the neighbouring function, and was never
   // applied here.
-  return wireMapValues<PeerInfoResponse>(response.peer_information, 'peer_information');
+  return wireMapValues<PeerInformation>(response.peer_information, 'peer_information');
 }
 
 /**
@@ -75,7 +76,7 @@ export async function listAllPeers(
  */
 export async function listRegisteredPeers(
   pendingRequests: Map<string, PendingRequestEntry>
-): Promise<PeerInfoResponse[]> {
+): Promise<PeerInformation[]> {
   debugLog('P2PRegistrationService', '[P2P] listRegisteredPeers: called');
   const currentCid: bigint | null = await getCurrentCid();
   debugLog('P2PRegistrationService', `[P2P] listRegisteredPeers: currentCid=${currentCid?.toString() ?? 'null'}`);
@@ -116,17 +117,17 @@ export async function listRegisteredPeers(
  * Parse the peers response from ListRegisteredPeers.
  * Handles both Map (BigInt keys) and Object (string keys) formats.
  */
-function parsePeersResponse(response: Record<string, unknown>): PeerInfoResponse[] {
-  let peersArray: Array<[string, PeerInfoResponse]> = [];
+function parsePeersResponse(response: Record<string, unknown>): PeerInformation[] {
+  let peersArray: Array<[string, PeerInformation]> = [];
 
   if (response.peers instanceof Map) {
     debugLog('P2PRegistrationService', '[P2P-ListRegisteredPeers] Processing as Map with', response.peers.size, 'entries');
-    (response.peers as Map<unknown, PeerInfoResponse>).forEach((peerInfo, peerCid) => {
+    (response.peers as Map<unknown, PeerInformation>).forEach((peerInfo, peerCid) => {
       peersArray.push([String(peerCid), peerInfo]);
     });
   } else if (response.peers && typeof response.peers === 'object') {
     debugLog('P2PRegistrationService', '[P2P-ListRegisteredPeers] Processing as Object with', Object.keys(response.peers).length, 'keys');
-    peersArray = Object.entries(response.peers) as Array<[string, PeerInfoResponse]>;
+    peersArray = Object.entries(response.peers) as Array<[string, PeerInformation]>;
   } else {
     debugLog('P2PRegistrationService', '[P2P-ListRegisteredPeers] response.peers is null/undefined/not-object');
   }
@@ -136,7 +137,7 @@ function parsePeersResponse(response: Record<string, unknown>): PeerInfoResponse
   return peersArray.map(([peerCid, peerInfo]) => ({
     ...peerInfo,
     cid: BigInt(peerCid),
-    username: peerInfo.username || peerInfo.peer_username || peerInfo.name || undefined
+    username: peerInfo.username || peerInfo.name || null
   }));
 }
 
@@ -148,8 +149,8 @@ function parsePeersResponse(response: Record<string, unknown>): PeerInfoResponse
 export function updatePeerMaps(
   allPeersMap: Map<bigint, Peer>,
   registeredPeersMap: Map<bigint, Peer>,
-  allPeers: PeerInfoResponse[],
-  registeredPeers: PeerInfoResponse[]
+  allPeers: PeerInformation[],
+  registeredPeers: PeerInformation[]
 ): void {
   const preservedUsernames: Map<bigint, string> = new Map<bigint, string>();
   for (const [cid, peer] of allPeersMap) {

@@ -4,8 +4,6 @@
  * Configuration values, LocalDB keys, and type adapter functions.
  */
 
-import type { SessionSecuritySettings as GeneratedSessionSecuritySettings } from '@avarok/citadel-protocol-types';
-import type { SessionSecuritySettings } from '../security-utils';
 import { TIMEOUT, POLLING } from '../timeout-constants';
 
 /** LocalDB key for auto-accept setting */
@@ -38,13 +36,3 @@ export const PEER_REGISTER_TIMEOUT_MS: number = 10000;
 
 /** Timeout for CID resolution via IndexedDB (ms) */
 export const CID_RESOLUTION_TIMEOUT_MS: number = 500;
-
-/**
- * Adapts a locally-defined SessionSecuritySettings to the WASM-generated type.
- * The cast is needed because our local SessionSecuritySettings type (from security-utils)
- * is structurally compatible at runtime but TypeScript cannot verify compatibility
- * with the generated type from @avarok/citadel-protocol-types.
- */
-export function toGeneratedSecuritySettings(settings: SessionSecuritySettings): GeneratedSessionSecuritySettings {
-  return settings as unknown as GeneratedSessionSecuritySettings;
-}

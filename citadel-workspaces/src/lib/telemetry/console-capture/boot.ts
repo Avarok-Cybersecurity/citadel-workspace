@@ -4,7 +4,7 @@
  * The returned function stops it: the console is restored and nothing held is kept.
  */
 import { onServerConsent } from '../consent-feed';
-import { agentCapabilities, type AgentCapabilities } from '@/lib/agent-conversations/capabilities';
+import { agentCapabilities, type AgentOffers } from '@/lib/agent-conversations/capabilities';
 import { sendToAgent } from '@/lib/agent-conversations/sender';
 import { getCurrentCid } from '@/lib/p2p/current-cid';
 import { startConsoleCapture } from './capture';
@@ -20,7 +20,7 @@ export function bootConsoleCapture(): () => void {
     },
     console: window.console,
     onConsent: onServerConsent,
-    agentTakesConsole: (): Promise<boolean> => agentCapabilities().then((c: AgentCapabilities): boolean => c.takesConsole),
+    agentTakesConsole: (): Promise<boolean> => agentCapabilities().then((c: AgentOffers): boolean => c.takesConsole),
     ownCid: getCurrentCid,
     send: sendToAgent,
     newRequestId: (): string => crypto.randomUUID(),

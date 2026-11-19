@@ -10,7 +10,7 @@
  *
  * Pure: the level names come from the caller's workspace state.
  */
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import type { MemberActionBlocks } from '@/components/layout/sidebar/member-actions-gate';
 
 /** Each member, with `accessVia` set when a level above gives them access. */

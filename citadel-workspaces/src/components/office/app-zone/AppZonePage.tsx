@@ -9,7 +9,6 @@ import { eventEmitter } from '@/lib/event-emitter';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { usePermission } from '@/hooks/use-permission';
 import { confirms, permits } from '@/hooks/use-permission-result';
-import { Permission } from '@/contexts/PermissionsContext';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { appLinkUrl, type AppLink } from '@/lib/citadel-apps/app-link';
 import { openAppsModal } from '@/lib/citadel-apps/apps-modal-store';
@@ -27,7 +26,7 @@ interface AppZonePageProps {
 
 export function AppZonePage({ nodeId, runtime, children }: AppZonePageProps): JSX.Element {
   const { state } = useWorkspace();
-  const install: ReturnType<typeof usePermission> = usePermission(WORKSPACE_ROOT_ID, Permission.AppInstall);
+  const install: ReturnType<typeof usePermission> = usePermission(WORKSPACE_ROOT_ID, 'AppInstall');
   // A known yes, a known no, or not known yet -- which shows Install, Ask an admin, or neither.
   const mayInstall: Tri = confirms(install) ? 'yes' : permits(install) ? 'unknown' : 'no';
   const claims: ReturnType<typeof zoneClaims> = useMemo(zoneClaims, []);

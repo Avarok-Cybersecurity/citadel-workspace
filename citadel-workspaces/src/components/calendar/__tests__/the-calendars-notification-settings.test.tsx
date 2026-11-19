@@ -12,10 +12,10 @@ import { decodePrefs, type NotifyPrefs } from '@/lib/calendar/notify-prefs';
 import { realEngine } from '@/lib/calendar/__tests__/engine-rig';
 import { member, TopicGroup, treeOf, type Member } from '@/lib/calendar/__tests__/tree-rig';
 import { CalendarPane } from '../CalendarPane';
-import type { TreeNode } from '@/lib/citadel-apps/runtime/nodes-port';
+import type { PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
 
 const engine: CalendarEngine = realEngine();
-const TREE: Record<string, TreeNode> = treeOf({ a: null });
+const TREE: Record<string, PageNode> = treeOf({ a: null });
 
 beforeEach((): void => {
   vi.useFakeTimers({ toFake: ['Date'] });

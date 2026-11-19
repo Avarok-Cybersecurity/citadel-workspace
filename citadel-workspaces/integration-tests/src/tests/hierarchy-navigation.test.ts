@@ -37,6 +37,7 @@ import {
   type DiagnosticsHandle,
   type TreeSchema,
   type TreeNode,
+  type NestingRule,
   // Test framework
   TestHarness,
   runTestMain,
@@ -265,9 +266,9 @@ async function runTest(): Promise<boolean> {
           { parent_type: 'Charlie', allowed_child_types: ['Delta'] },
           { parent_type: 'Delta', allowed_child_types: ['Epsilon'] },
           { parent_type: 'Epsilon', allowed_child_types: [] },
-        ].reduce((acc, rule) => {
+        ].reduce((acc: NestingRule[], rule: NestingRule) => {
           // Deduplicate rules by parent_type, merging allowed_child_types
-          const existing = acc.find(r => r.parent_type === rule.parent_type);
+          const existing = acc.find((r: NestingRule) => r.parent_type === rule.parent_type);
           if (existing) {
             const mergedTypes = new Set([...existing.allowed_child_types, ...rule.allowed_child_types]);
             existing.allowed_child_types = [...mergedTypes];
@@ -275,7 +276,7 @@ async function runTest(): Promise<boolean> {
             acc.push({ ...rule });
           }
           return acc;
-        }, [] as Array<{ parent_type: string; allowed_child_types: string[] }>),
+        }, [] as NestingRule[]),
       };
 
       console.log('  Updating schema with 5-level hierarchy rules...');

@@ -15,7 +15,7 @@ import { handleGeneratedVariants } from '../workspace-response-handler/generated
 import { eventEmitter } from '../event-emitter';
 import type { MembersPayload } from '../workspace-events';
 import { withAccess, levelName, blocksForMember, inheritedRemoveReason } from '../member-access';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { MemberListItems } from '@/components/layout/sidebar/MemberListItems';

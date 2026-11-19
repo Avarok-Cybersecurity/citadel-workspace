@@ -48,7 +48,7 @@ vi.mock('@/contexts/PermissionsContext', async (importOriginal) => {
         if (state.fetches >= state.succeedFrom) {
           // A new Map identity, as the real provider produces on success.
           state.permissions = new Map(state.permissions).set(domainId, {
-            permissions: new Set([Permission.EditMdx]),
+            permissions: new Set(['EditMdx']),
           });
           return { domainId };
         }
@@ -70,7 +70,7 @@ describe('a permissions fetch that comes back empty', () => {
     state.succeedFrom = 2;
 
     const { result, rerender } = renderHook(() =>
-      usePermission('office-1', Permission.EditMdx),
+      usePermission('office-1', 'EditMdx'),
     );
 
     await waitFor((): void => { expect(state.fetches).toBeGreaterThanOrEqual(2); }, {
@@ -83,7 +83,7 @@ describe('a permissions fetch that comes back empty', () => {
   it('gives up rather than asking forever', async (): Promise<void> => {
     // Never succeeds. The budget is spent and then it stops -- a domain that
     // genuinely cannot be read should not be polled for the life of the page.
-    renderHook(() => usePermission('office-2', Permission.EditMdx));
+    renderHook(() => usePermission('office-2', 'EditMdx'));
 
     await waitFor((): void => { expect(state.fetches).toBeGreaterThanOrEqual(4); }, {
       timeout: 8_000,
@@ -100,7 +100,7 @@ describe('a retry budget that has run out', () => {
     // coming up refused the control for the life of the page — the workspace
     // admin's Edit button, permanently disabled, explaining itself as a denial
     // rather than as an answer that never arrived.
-    const { result, rerender } = renderHook(() => usePermission('office-1', Permission.EditMdx));
+    const { result, rerender } = renderHook(() => usePermission('office-1', 'EditMdx'));
 
     await waitFor((): void => { expect(state.fetches).toBeGreaterThanOrEqual(4); }, {
       timeout: 10_000,
@@ -130,7 +130,7 @@ describe('what a control says when the answer never came', () => {
     // Under a control that looks refused, the user reads it as "you may not do
     // this" -- and CI read it the same way for sixty seconds under the
     // workspace admin's own Edit button.
-    const { result } = renderHook(() => usePermission('office-1', Permission.EditMdx));
+    const { result } = renderHook(() => usePermission('office-1', 'EditMdx'));
 
     await waitFor((): void => { expect(state.fetches).toBeGreaterThanOrEqual(4); }, {
       timeout: 10_000,
@@ -143,7 +143,7 @@ describe('what a control says when the answer never came', () => {
 
   it('still reports a real denial as a denial', async (): Promise<void> => {
     // The budget is not spent, so this is the answer rather than the silence.
-    const { result } = renderHook(() => usePermission('office-1', Permission.EditMdx));
+    const { result } = renderHook(() => usePermission('office-1', 'EditMdx'));
     expect(result.current.reason).toBe('not allowed');
   });
 });
@@ -156,7 +156,7 @@ describe('"we never got an answer" as a value, not a sentence', () => {
     // the surface it guards goes back to telling a workspace owner that an
     // admin set their theme.
     const { result, rerender } = renderHook(() =>
-      usePermission('office-unanswered', Permission.EditMdx),
+      usePermission('office-unanswered', 'EditMdx'),
     );
 
     expect(result.current.unanswered).toBe(false);
@@ -178,7 +178,7 @@ describe('"we never got an answer" as a value, not a sentence', () => {
     // once any budget anywhere had been spent.
     state.succeedFrom = 1;
     const { result, rerender } = renderHook(() =>
-      usePermission('office-answers', Permission.EditMdx),
+      usePermission('office-answers', 'EditMdx'),
     );
 
     await waitFor((): void => {
@@ -197,7 +197,7 @@ describe('a budget spent before the tab knew who it was', () => {
     // never spent again, however long the tab then ran knowing exactly who it
     // was. The reason the control then showed was the FIRST failure, cached,
     // describing a state that had since gone away.
-    const { result, rerender } = renderHook(() => usePermission('office-late', Permission.EditMdx));
+    const { result, rerender } = renderHook(() => usePermission('office-late', 'EditMdx'));
 
     await waitFor((): void => { expect(state.fetches).toBeGreaterThanOrEqual(4); }, {
       timeout: 10_000,
@@ -223,7 +223,7 @@ describe('a budget spent before the tab knew who it was', () => {
     // The negative control. Listening to everything would make the budget
     // meaningless -- it exists so a domain that genuinely cannot be read stops
     // being polled for the life of the page.
-    renderHook(() => usePermission('office-unrelated', Permission.EditMdx));
+    renderHook(() => usePermission('office-unrelated', 'EditMdx'));
 
     await waitFor((): void => { expect(state.fetches).toBeGreaterThanOrEqual(4); }, {
       timeout: 10_000,

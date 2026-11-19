@@ -7,7 +7,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AppsRequest, PeerForMe } from 'citadel-workspace-client-ts';
 import { eventEmitter } from '@/lib/event-emitter';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
+import { viewOf } from '@/test-utils/request-view';
 import {
   getListing, installApp, listCatalogue, listInstalls, protocolAppsTransport, setDisabledForMe, uninstallApp, type InstallsView,
   type AppsResult, type AppsTransport,
@@ -31,8 +32,9 @@ const world = (): FakeKernelWorld => ({
 function overTheWire(fake: FakeAppsKernel, before: unknown[] = []): AppsTransport {
   const sender: ProtocolSender = {
     currentCid: 7n,
-    sendProtocolRequest: vi.fn(async (request: WorkspaceProtocolRequestTS): Promise<void> => {
-      const apps: AppsRequest = request.Apps as AppsRequest;
+    sendProtocolRequest: vi.fn(async (request: WorkspaceProtocolRequest): Promise<void> => {
+      const apps: AppsRequest | undefined = viewOf(request).Apps;
+      if (apps === undefined) throw new Error('the apps transport sent a request that is not Apps');
       fake.requests.push(apps);
       for (const raw of [...before, fake.answer(apps)]) setTimeout(() => eventEmitter.emit('workspace:raw-response', { Apps: raw }), 0);
     }),

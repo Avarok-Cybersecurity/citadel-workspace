@@ -4,7 +4,7 @@
  * it -- after an update, read back from where the server's admission check reads it.
  */
 import type { SignInSettings } from 'citadel-workspace-client-ts';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { awaitWriteResponse } from './await-write-response';
 import type { ProtocolSender } from './workspace-operations';
 
@@ -16,7 +16,7 @@ export function parseSignInSettings(payload: unknown): SignInSettings | null {
 }
 
 /** Sends `request` and resolves with the settings the server answers it with. */
-async function exchange(sender: ProtocolSender, requestType: 'GetSignInSettings' | 'UpdateSignInSettings', request: WorkspaceProtocolRequestTS): Promise<SignInSettings> {
+async function exchange(sender: ProtocolSender, requestType: 'GetSignInSettings' | 'UpdateSignInSettings', request: WorkspaceProtocolRequest): Promise<SignInSettings> {
   let answered: SignInSettings | null = null;
   await awaitWriteResponse(requestType, () => sender.sendProtocolRequest(request), (payload: unknown): boolean => {
     answered = parseSignInSettings(payload);
@@ -27,7 +27,7 @@ async function exchange(sender: ProtocolSender, requestType: 'GetSignInSettings'
 }
 
 export function getSignInSettings(sender: ProtocolSender): Promise<SignInSettings> {
-  return exchange(sender, 'GetSignInSettings', { GetSignInSettings: null });
+  return exchange(sender, 'GetSignInSettings', 'GetSignInSettings');
 }
 
 export function updateSignInSettings(sender: ProtocolSender, settings: SignInSettings): Promise<SignInSettings> {

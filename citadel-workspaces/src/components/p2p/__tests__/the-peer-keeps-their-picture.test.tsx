@@ -19,7 +19,7 @@ import type { ReactElement } from 'react';
 import { WorkspaceProvider, type WorkspaceState } from '@/contexts/WorkspaceContext';
 import { MessagingLayerType } from '@/types/messaging-layer';
 import type { P2PMessage, PeerPresence } from '@/lib/p2p';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { P2PChatHeader } from '../P2PChatHeader';
 import { ConversationPeerItem } from '../ConversationPeerItem';
 import { TextBubble } from '../bubbles/TextBubble';

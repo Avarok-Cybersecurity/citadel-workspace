@@ -26,7 +26,7 @@ const { MemberPermissionsDialog } = await import('../MemberPermissionsDialog');
 import type { WorkspaceState } from '@/contexts/WorkspaceContext';
 import { registerDocumentSync } from '@/lib/document-sync-requests';
 import type { DomainNode, TreeSchema } from '@/components/layout/sidebar/tree-node-types';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 const config = (type: string, label: string): TreeSchema['entity_type_configs'][number] => ({
   type_name: type, icon: 'folder', label, plural_label: `${label}s`, name_placeholder: '', description_placeholder: '',

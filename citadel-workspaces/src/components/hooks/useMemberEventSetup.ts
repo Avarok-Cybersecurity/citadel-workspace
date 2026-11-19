@@ -10,7 +10,7 @@ import { applyOwnMemberRecord } from './merge-current-user';
 import type { MappedMember } from '@/lib/workspace-response-handler/member-mapping';
 import { debugLog } from '@/lib/debug-config';
 import { armLoadingDeadline, cancelLoadingDeadline } from '@/lib/loading-flag-timeout';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { isForDomain } from '@/lib/workspace-events/is-for-domain';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { coalesce, type Coalesced } from '@/lib/coalesce';
@@ -99,7 +99,7 @@ export function useMemberEventSetup({ setState }: UseMemberEventSetupProps): voi
           //
           // Members with no stable identifier are skipped (not keyed under
           // Math.random()), so repeated `members:loaded` cannot add phantoms.
-          const membersRecord: Record<string, import('@/types/workspace-entities').User> = {};
+          const membersRecord: Record<string, import('@/types/workspace-entities').WorkspaceMember> = {};
           if (payload.members) {
             for (const m of payload.members) {
               const member: MappedMember = m as unknown as MappedMember;
@@ -127,8 +127,8 @@ export function useMemberEventSetup({ setState }: UseMemberEventSetupProps): voi
             }
           }
 
-          const ownRecord: User | undefined = prev.currentUser
-            ? Object.values(membersRecord).find((m: User): boolean => m.username === prev.currentUser?.username)
+          const ownRecord: WorkspaceMember | undefined = prev.currentUser
+            ? Object.values(membersRecord).find((m: WorkspaceMember): boolean => m.username === prev.currentUser?.username)
             : undefined;
           if (ownRecord) {
             // So other members' clients read the choice this device obeys.

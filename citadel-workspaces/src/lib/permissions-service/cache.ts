@@ -6,8 +6,8 @@
  */
 
 import { debugLog } from '@/lib/debug-config';
-import { Permission, PERMISSION_LABELS } from './types';
-import type { UserRole, DomainPermissions } from './types';
+import { ALL_PERMISSIONS, PERMISSION_LABELS, type Permission } from './types';
+import type { UserRole, DomainPermissionEntry } from './types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
 /**
@@ -17,7 +17,7 @@ import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
  * loop over the permissions of one domain — so checking a member's grants allocated one array
  * per permission. Hoisted: the enum does not change at runtime.
  */
-const KNOWN_PERMISSIONS: Set<Permission> = new Set(Object.values(Permission));
+const KNOWN_PERMISSIONS: Set<Permission> = new Set(ALL_PERMISSIONS);
 
 /**
  * Parse raw permission strings into a Permission Set, filtering unknown values.
@@ -36,7 +36,7 @@ export function parsePermissionSet(permissions: string[]): Set<Permission> {
  * Update the cache entry for a domain.
  */
 export function updateCacheEntry(
-  cache: Map<string, DomainPermissions>,
+  cache: Map<string, DomainPermissionEntry>,
   domainId: string,
   role: UserRole,
   permissions: string[],
@@ -57,7 +57,7 @@ export function updateCacheEntry(
  * Check if user has a specific permission for a domain.
  *
  * Checks in order:
- * 1. Exact domain cache entry - explicit Permission.All wildcard
+ * 1. Exact domain cache entry - explicit 'All' wildcard
  * 2. Exact domain cache entry - specific permission in set
  * 3. Hierarchy fallback - traverse to 'workspace-root' for inherited permissions
  *
@@ -66,22 +66,22 @@ export function updateCacheEntry(
  * stripped is not all-powerful, and an Owner does not hold ConfigureSystem.
  */
 export function hasPermission(
-  cache: Map<string, DomainPermissions>,
+  cache: Map<string, DomainPermissionEntry>,
   domainId: string,
   permission: Permission,
 ): boolean {
-  const cached: DomainPermissions | undefined = cache.get(domainId);
+  const cached: DomainPermissionEntry | undefined = cache.get(domainId);
 
   if (cached) {
-    if (cached.permissions.has(Permission.All)) return true;
+    if (cached.permissions.has('All')) return true;
     if (cached.permissions.has(permission)) return true;
   }
 
   // Hierarchy fallback: check workspace-root for inherited permissions
   if (domainId !== WORKSPACE_ROOT_ID) {
-    const root: DomainPermissions | undefined = cache.get(WORKSPACE_ROOT_ID);
+    const root: DomainPermissionEntry | undefined = cache.get(WORKSPACE_ROOT_ID);
     if (root) {
-      if (root.permissions.has(Permission.All)) return true;
+      if (root.permissions.has('All')) return true;
       return root.permissions.has(permission);
     }
   }
@@ -112,7 +112,7 @@ export function hasPermission(
  * without the root behind it.
  */
 export function hasAnswerFor(
-  cache: Map<string, DomainPermissions>,
+  cache: Map<string, DomainPermissionEntry>,
   domainId: string,
 ): boolean {
   if (domainId === WORKSPACE_ROOT_ID) return cache.has(WORKSPACE_ROOT_ID);
@@ -127,11 +127,11 @@ export function hasAnswerFor(
  * Get reason message for denied permission.
  */
 export function getDeniedReason(
-  cache: Map<string, DomainPermissions>,
+  cache: Map<string, DomainPermissionEntry>,
   domainId: string,
   permission: Permission,
 ): string {
-  const cached: DomainPermissions | undefined = cache.get(domainId);
+  const cached: DomainPermissionEntry | undefined = cache.get(domainId);
   if (!cached) {
     return 'Permissions have not been loaded for this domain';
   }

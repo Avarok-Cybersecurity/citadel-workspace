@@ -42,7 +42,7 @@ export async function handleIncomingRegistrationWithCid(
       readAutoAccept: getAutoAcceptSetting,
       accept: (r: IncomingRegistration): Promise<void> => acceptRegistrationRequest(r.peerCid, r.peerUsername, pendingRequests),
       ask: (r: IncomingRegistration): Promise<void> => peerRegistrationStore.handleIncomingRequest({
-        cid: r.recipientCid, peer_cid: r.peerCid, peer_username: r.peerUsername,
+        cid: r.recipientCid, peer_cid: r.peerCid, peer_username: r.peerUsername ?? '',
       }),
       decline: (r: IncomingRegistration): Promise<void> => sendRegistrationDecline(r.recipientCid, r.peerCid),
     },
