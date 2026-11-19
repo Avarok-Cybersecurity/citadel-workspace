@@ -25,6 +25,12 @@ export interface VersionManifest {
   readonly entry: string;
   readonly seq: number;
   readonly minSeq?: number;
+  /**
+   * The agent release this build ships with: citadel-workspace-internal-service's crate version,
+   * which the Deploy's "The site and the download agree" job holds equal to the latest release.
+   * What the agent-update banner names (agent-update/released-agent.ts).
+   */
+  readonly agent: string;
 }
 
 export function versionManifest(manifest: VersionManifest): string {
@@ -41,6 +47,15 @@ export function readDeployedSeqs(body: unknown): { seq: number | null; minSeq: n
   if (typeof body !== 'object' || body === null) return { seq: null, minSeq: null };
   const fields: Record<string, unknown> = body as Record<string, unknown>;
   return { seq: seqField(fields, 'seq'), minSeq: seqField(fields, 'minSeq') };
+}
+
+const AGENT_VERSION: RegExp = /^\d+\.\d+\.\d+$/;
+
+/** The agent release the deployed build names, or null for a manifest without one (or not a manifest). */
+export function readDeployedAgent(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const agent: unknown = (body as Record<string, unknown>).agent;
+  return typeof agent === 'string' && AGENT_VERSION.test(agent) ? agent : null;
 }
 
 /** The deployed entry, or null for anything that is not a manifest (a 404 page, the SPA shell). */

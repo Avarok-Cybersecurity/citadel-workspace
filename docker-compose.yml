@@ -25,6 +25,8 @@ services:
       - ./citadel-workspaces:/workspace/citadel-workspaces:rw
       # Step 9's `vite build` reads the global app catalogue beside the UI (vite.config.ts).
       - ./apps/catalogue:/workspace/apps/catalogue:ro
+      # ...and the agent crate, whose version step 9 writes into /version.json (vite.config.ts).
+      - ./citadel-workspace-internal-service:/workspace/citadel-workspace-internal-service:ro
       # The root of the npm workspace, read-only: the sync installs with `npm ci` from this
       # lockfile instead of resolving ranges against the live registry (an upstream publish
       # broke Publish ui that way on 2026-10-12). The four members' manifests arrive through
@@ -301,6 +303,8 @@ services:
       - ./citadel-workspaces/vendor:/app/vendor:ro
       # The global app catalogue, served at /apps/catalogue.json (src/build/app-catalogue-asset.ts).
       - ./apps/catalogue:/apps/catalogue:ro
+      # The agent crate, whose version a `vite build` here writes into /version.json (vite.config.ts).
+      - ./citadel-workspace-internal-service:/citadel-workspace-internal-service:ro
 
       # Mount config files (read-write for hot reload)
       - ./citadel-workspaces/vite.config.ts:/app/vite.config.ts:rw

@@ -13,7 +13,7 @@ export const RESTART_WARNING: string =
  * "Restart to update": says what it costs, then asks the agent to install. Shared by the banner and the
  * Updates tab, so the warning and the request have one home. Disabled while the agent restarts.
  */
-export function RestartToUpdate({ version, restart }: { version: string; restart: RestartControl }): JSX.Element {
+export function RestartToUpdate({ version, from, restart }: { version: string; from: string; restart: RestartControl }): JSX.Element {
   return (
     <>
       <AlertDialog>
@@ -28,7 +28,7 @@ export function RestartToUpdate({ version, restart }: { version: string; restart
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction data-testid="agent-update-confirm" onClick={restart.apply}>Restart and sign out</AlertDialogAction>
+            <AlertDialogAction data-testid="agent-update-confirm" onClick={(): void => restart.apply(version, from)}>Restart and sign out</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
