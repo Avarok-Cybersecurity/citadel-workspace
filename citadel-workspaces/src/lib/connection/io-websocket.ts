@@ -19,7 +19,8 @@ import { persistJSON, parsePersistedJSON } from '../storage-utils';
 import { formatForDebug } from '../debug-formatter';
 import { stringToBytes, bytesToString } from '../utils/encoding-utils';
 import type { SessionSecuritySettings } from '../p2p-registration-service';
-import type { StoredSession, StoredSessions, GetSessionsRequest, GetSessionsResponse } from '@/types/session-types';
+import type { StoredSession, StoredSessions } from '@/types/session-types';
+import type { GetSessionsResponse, InternalServiceRequest } from 'citadel-workspace-client-ts';
 import type { ConnectionIntent, PendingRequest } from './types';
 import { SESSION_STORAGE_KEY } from '@/types/session-types';
 import { debugLog, debugEnabled } from '@/lib/debug-config';
@@ -215,7 +216,7 @@ export class ConnectionIOWebSocket {
     pendingRequests: Map<string, PendingRequest>,
     timeoutMs: number
   ): Promise<GetSessionsResponse> {
-    const request: GetSessionsRequest = { request_id: requestId };
+    const request: Extract<InternalServiceRequest, { GetSessions: unknown }>['GetSessions'] = { request_id: requestId };
 
     const responsePromise: Promise<GetSessionsResponse> = new Promise<GetSessionsResponse>((resolve, reject) => {
       pendingRequests.set(requestId, { resolve: resolve as (value: unknown) => void, reject });

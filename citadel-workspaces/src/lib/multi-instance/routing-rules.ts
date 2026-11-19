@@ -8,7 +8,7 @@
 import { INTERVAL } from '../timeout-constants';
 import type { ResponseType } from 'citadel-workspace-client-ts';
 import { SUPERVISOR_NOTIFICATION } from '@/types/agent-supervisor';
-import { AGENT_RECONNECT_NOTIFICATIONS, type AgentReconnectNotification } from '@/types/agent-reconnect';
+import { AGENT_RECONNECT_NOTIFICATIONS } from '@/types/agent-reconnect';
 
 // Message types that should be broadcast to all instances.
 //
@@ -35,7 +35,7 @@ export const REQUEST_TRACKING_TIMEOUT_MS: number = INTERVAL.REQUEST_TRACKING_MS;
  * These messages have a request_id that belongs to the SENDER, but the message
  * should be delivered to the RECIPIENT (identified by the 'cid' field).
  */
-export const CID_ROUTED_NOTIFICATIONS: Set<ResponseType | AgentReconnectNotification | typeof SUPERVISOR_NOTIFICATION> = new Set<ResponseType | AgentReconnectNotification | typeof SUPERVISOR_NOTIFICATION>([
+export const CID_ROUTED_NOTIFICATIONS: Set<ResponseType> = new Set<ResponseType>([
   'PeerRegisterNotification',         // cid = recipient, request_id = sender's
   'PeerConnectNotification',          // cid = recipient, request_id = sender's
   'MessageNotification',              // cid = recipient, request_id = sender's (from SendMessage)

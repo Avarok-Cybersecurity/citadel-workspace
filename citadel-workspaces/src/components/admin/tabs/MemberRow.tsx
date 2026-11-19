@@ -7,7 +7,6 @@ import type { RoleDefinition } from 'citadel-workspace-client-ts';
 import { Button } from '@/components/ui/button';
 import { inheritedRemoveReason } from '@/lib/member-access';
 import { grantsPermission } from '@/lib/workspace-roles/role-ladder';
-import { Permission } from '@/lib/permissions-service/types';
 import { MemberAvatar } from '@/components/shared/MemberAvatar';
 import { BlockedReason } from '@/components/shared/BlockedReason';
 import { RoleDot } from '@/components/permissions/RoleDot';
@@ -150,7 +149,7 @@ export function MemberRow({
                   value={role.id}
                   // A role that cannot manage roles demotes the last member who can, and the
                   // server refuses it. Their current role stays selectable to keep it visible.
-                  disabled={rules.isOnlyManager && !grantsPermission(role, Permission.ManageRoles)}
+                  disabled={rules.isOnlyManager && !grantsPermission(role, 'ManageRoles')}
                   data-testid={`member-role-option-${role.id}`}
                 >
                   <div className="flex items-center gap-2">

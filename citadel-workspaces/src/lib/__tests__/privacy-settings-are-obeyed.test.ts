@@ -13,6 +13,7 @@ import type { PrivacySettings } from '@/lib/privacy-settings';
 import { PresenceManager } from '@/lib/p2p/presence-manager';
 import { markMessagesAsRead } from '@/lib/p2p/messenger-compatibility';
 import { greetAs } from '@/lib/agent-conversations/__tests__/agent-greeting';
+import type { ConversationMessage } from 'citadel-workspace-client-ts';
 import {
   DEFAULT_PRIVACY_SETTINGS,
   PRIVACY_ENFORCEMENT,
@@ -132,13 +133,14 @@ describe('read receipts', () => {
    * message, so their unread badge has to clear. Only the ack, the part that
    * tells the sender, is theirs to withhold.
    */
-  async function markRead(sendReadReceipts: boolean): Promise<{ sendMessageAck: ReturnType<typeof vi.fn>; message: { id: string; senderCid: bigint; status: "delivered"; }; conversation: { messages: { id: string; senderCid: bigint; status: "delivered"; }[]; unreadCount: number; }; }> {
+  type Seen = Pick<ConversationMessage, 'id' | 'senderCid' | 'status'>;
+  async function markRead(sendReadReceipts: boolean): Promise<{ sendMessageAck: ReturnType<typeof vi.fn>; message: Seen; conversation: { messages: Seen[]; unreadCount: number; }; }> {
     savePrivacySettings({ ...DEFAULT_PRIVACY_SETTINGS, sendReadReceipts });
     await greetAs('older');
 
-    const message: { id: string; senderCid: bigint; status: "delivered"; } = { id: 'm1', senderCid: 7n, status: 'delivered' as const };
-    const conversation: { messages: { id: string; senderCid: bigint; status: "delivered"; }[]; unreadCount: number; } = { messages: [message], unreadCount: 1 };
-    const conversationManager: { getConversation: () => { messages: { id: string; senderCid: bigint; status: "delivered"; }[]; unreadCount: number; }; } = { getConversation: (): { messages: { id: string; senderCid: bigint; status: "delivered"; }[]; unreadCount: number; } => conversation };
+    const message: Seen = { id: 'm1', senderCid: 7n, status: 'delivered' };
+    const conversation: { messages: Seen[]; unreadCount: number; } = { messages: [message], unreadCount: 1 };
+    const conversationManager: { getConversation: () => { messages: Seen[]; unreadCount: number; }; } = { getConversation: (): { messages: Seen[]; unreadCount: number; } => conversation };
     const sendMessageAck: ReturnType<typeof vi.fn> = vi.fn((): Promise<void> => Promise.resolve());
 
     await markMessagesAsRead(

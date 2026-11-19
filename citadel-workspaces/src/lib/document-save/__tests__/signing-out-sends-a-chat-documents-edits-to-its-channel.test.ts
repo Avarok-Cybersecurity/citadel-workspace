@@ -11,7 +11,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentsRequest } from 'citadel-workspace-client-ts';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
+import { viewOf } from '@/test-utils/request-view';
 import type { HeldEditsPrompt } from '../leave-held-edits-prompt';
 import type { EditorSession } from '@/lib/cdoc/editor/editor-session';
 import { createEditorOpener } from '@/lib/cdoc/editor/editor-opener';
@@ -19,12 +20,12 @@ import { inProcessRuntime, type TestRuntime } from '@/lib/cdoc/__tests__/wasm-ri
 import type { EditorOrigin } from '@/lib/cdoc/editor/controller';
 
 const store: Map<string, unknown> = vi.hoisted((): Map<string, unknown> => new Map<string, unknown>());
-const sent: WorkspaceProtocolRequestTS[] = vi.hoisted((): WorkspaceProtocolRequestTS[] => []);
+const sent: WorkspaceProtocolRequest[] = vi.hoisted((): WorkspaceProtocolRequest[] => []);
 const loads: { count: number } = vi.hoisted((): { count: number } => ({ count: 0 }));
 vi.mock('@/lib/storage-utils', async () => (await import('@/lib/cdoc/collab/__tests__/doubles/memory-storage')).memoryStorageUtils(store));
 vi.mock('@/lib/cdoc/collab/instance-locks', async () => ({ browserInstanceLocks: (await import('@/lib/cdoc/collab/__tests__/doubles/memory-device')).memoryLocks }));
 vi.mock('@/lib/workspace-service', () => ({
-  default: { currentCid: 7n, sendProtocolRequest: (request: WorkspaceProtocolRequestTS): Promise<void> => { sent.push(request); return Promise.resolve(); } },
+  default: { currentCid: 7n, sendProtocolRequest: (request: WorkspaceProtocolRequest): Promise<void> => { sent.push(request); return Promise.resolve(); } },
 }));
 vi.mock('@/lib/cdoc/runtime-loader', async (): Promise<{ loadCdocRuntime: () => Promise<TestRuntime>; }> => {
   const { inProcessRuntime } = await import('@/lib/cdoc/__tests__/wasm-rig');
@@ -48,9 +49,9 @@ interface Addressed { readonly chatDoc: string | null; readonly request: string;
 
 /** Each request sent: which chat document's envelope it went in (null: a page's), what it is, and the node it names. */
 function addressed(): Addressed[] {
-  return sent.map((sentRequest: WorkspaceProtocolRequestTS): Addressed => {
-    const envelope: { chat_doc: string; request: DocumentsRequest } | undefined = 'ChatDocuments' in sentRequest ? sentRequest.ChatDocuments : undefined;
-    const inner: DocumentsRequest | undefined = envelope?.request ?? ('Documents' in sentRequest ? sentRequest.Documents : undefined);
+  return sent.map((sentRequest: WorkspaceProtocolRequest): Addressed => {
+    const envelope: { chat_doc: string; request: DocumentsRequest } | undefined = viewOf(sentRequest).ChatDocuments;
+    const inner: DocumentsRequest | undefined = envelope?.request ?? viewOf(sentRequest).Documents;
     const [request, body]: [string, unknown] = inner === undefined ? ['not a documents request', null] : Object.entries(inner)[0];
     return { chatDoc: envelope?.chat_doc ?? null, request, nodeId: (body as { node_id?: unknown } | null)?.node_id };
   });

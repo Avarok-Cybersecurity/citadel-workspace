@@ -3,7 +3,6 @@ import { peerRegistrationStore } from '@/lib/peer-registration-store';
 import type { OutgoingPeerRequest } from '@/lib/peer-registration-store/types';
 import { websocketService } from '@/lib/websocket-service';
 import { getDefaultSecuritySettings } from '@/lib/security-utils';
-import { toGeneratedSecuritySettings } from '@/lib/p2p-registration-service/constants';
 import { debugLog } from '@/lib/debug-config';
 
 export type PeerRegisterRequest = Extract<InternalServiceRequest, { PeerRegister: unknown }>;
@@ -22,7 +21,7 @@ export function peerRegisterRequest(requestId: string, ownCid: bigint, peerCid: 
       request_id: requestId,
       cid: ownCid,
       peer_cid: peerCid,
-      session_security_settings: toGeneratedSecuritySettings(getDefaultSecuritySettings()),
+      session_security_settings: getDefaultSecuritySettings(),
       connect_after_register: false,
       peer_session_password: null,
     },

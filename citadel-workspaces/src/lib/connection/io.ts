@@ -5,7 +5,8 @@
  * Follows SBIO principle - all I/O is routed through this class.
  */
 
-import type { StoredSessions, GetSessionsResponse } from '@/types/session-types';
+import type { StoredSessions } from '@/types/session-types';
+import type { GetSessionsResponse } from 'citadel-workspace-client-ts';
 import type { SessionSecuritySettings } from '../p2p-registration-service';
 import type { ConnectionIntent, TabSelectionContext, PendingRequest } from './types';
 import { ConnectionIOWebSocket } from './io-websocket';

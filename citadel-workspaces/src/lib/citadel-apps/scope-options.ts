@@ -55,10 +55,10 @@ export function scopeOption(choice: ScopeChoice, ctx: ScopeContext): ScopeOption
   if (choice === 'workspace' && !audienceIsEveryone(ctx.audience)) return off('Only some people may use this app, so it cannot be installed for everyone.');
   const domain: string = choice === 'node' || choice === 'node_tree' ? (ctx.nodeId as string) : ctx.rootId;
   const checks: ReadonlyArray<readonly [Permission, string]> = choice === 'self'
-    ? [[Permission.AppInstall, ctx.rootId]]
+    ? [['AppInstall', ctx.rootId]]
     : choice === 'users'
-      ? [[Permission.AppInstallScoped, ctx.rootId]]
-      : [[Permission.AppInstallScoped, ctx.rootId], [Permission.UpdateNodeSettings, domain]];
+      ? [['AppInstallScoped', ctx.rootId]]
+      : [['AppInstallScoped', ctx.rootId], ['UpdateNodeSettings', domain]];
   const reason: string | null = permissionReason(ctx, checks);
   return reason === null ? { choice, enabled: true, reason: null } : off(reason);
 }

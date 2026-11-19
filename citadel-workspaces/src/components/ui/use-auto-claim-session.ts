@@ -26,7 +26,7 @@ import { describeFailure } from '@/lib/failure-message';
 import { TIMEOUT } from '@/lib/timeout-constants';
 import type { useToast } from '@/hooks/use-toast';
 import type { CurrentConnectionInfo } from '@/lib/connection/types';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 interface AutoClaimOptions {
   isDevMode: boolean;
@@ -100,7 +100,7 @@ useEffect(() => {
           // Only when the record is CID-only -- which it is when a bare
           // ConnectSuccess wrote it and nothing filled in the rest.
           const { ok, sessions } = await connectionManager.getActiveSessionsResult();
-          const session: ActiveSession | undefined = sessions.find(s => s.cid === currentConnection.cid);
+          const session: SessionInformation | undefined = sessions.find(s => s.cid === currentConnection.cid);
           if (session) {
             await setSelectedUser({
               selectedUsername: session.username,
@@ -155,7 +155,7 @@ useEffect(() => {
         activeSessions: () => connectionManager.getActiveSessionsResult(),
         selection: getSelectedUser,
         clearSelection: clearSelectedUser,
-        select: (session: ActiveSession) => setSelectedUser({
+        select: (session: SessionInformation) => setSelectedUser({
           selectedUsername: session.username,
           selectedServerAddress: session.server_address,
           selectedCid: session.cid,

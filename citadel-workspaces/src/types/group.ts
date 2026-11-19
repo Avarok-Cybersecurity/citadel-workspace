@@ -18,8 +18,6 @@ export type {
   GroupMember,
   GroupSettings,
   GroupConversation,
-  GroupMessage,
-  GroupMessageType,
   GroupMemberWithRole,
   CreateGroupState,
 } from './group-entities';

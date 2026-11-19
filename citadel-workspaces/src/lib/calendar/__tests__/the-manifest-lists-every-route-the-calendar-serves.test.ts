@@ -13,10 +13,10 @@ import { resolve } from 'node:path';
 import type { Route } from '@/lib/citadel-apps/sdk/generated/Route';
 import { calendarRoutes } from '../calendar-endpoint';
 import { realEngine } from './engine-rig';
+import type { CapabilityRequest } from 'citadel-workspace-client-ts';
 
 const MANIFEST: string = resolve(__dirname, '../../../../../apps/first-party/calendar/manifest.json');
 
-interface CapabilityRequest { cap: string; routes?: string[] }
 
 function servedInManifest(): string[] {
   const manifest: { capabilities: CapabilityRequest[] } = JSON.parse(readFileSync(MANIFEST, 'utf8')) as { capabilities: CapabilityRequest[] };

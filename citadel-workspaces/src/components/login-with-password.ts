@@ -21,7 +21,8 @@ import { setSelectedUser } from "@/lib/tab-context";
 import { debugLog } from '@/lib/debug-config';
 import { awaitConnectOutcome, type ConnectOutcome } from '@/lib/connection/await-connect-outcome';
 import { mapSecuritySettings, type SessionSecuritySettings } from '@/lib/security-utils';
-import type { StoredSessions, StoredSession, ActiveSession } from '@/types/session-types';
+import type { StoredSessions, StoredSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { sessionLabel, type SessionLabel } from '@/lib/sessions/session-label';
 import type { SecuritySettingsState } from './useLoginHandler';
 import { watchKeyChallenges } from '@/lib/sign-in/challenge-watch';
@@ -63,7 +64,7 @@ export async function loginWithPassword(
   const server: string = requireSignInServer(agentAccounts, username, scope, storedSession?.serverAddress.trim() || null);
   const labelFor = async (cid: bigint): Promise<SessionLabel> => {
     connectionManager.invalidateSessionCache();
-    const live: ActiveSession[] = await connectionManager.getActiveSessions();
+    const live: SessionInformation[] = await connectionManager.getActiveSessions();
     return sessionLabel(cid, username.trim(), live, storedSession);
   };
 
@@ -106,9 +107,9 @@ export async function loginWithPassword(
       await ctx.redirect({ cid: outcome.cid, username: username.trim(), server_address: serverAddress });
       return { kind: 'redirected' };
     }
-    let sessions: ActiveSession[];
+    let sessions: SessionInformation[];
     try { sessions = await connectionManager.getActiveSessions(); } catch { throw new Error(outcome.message); }
-    const match: ActiveSession | undefined = sessions.find(s => s.username === username.trim());
+    const match: SessionInformation | undefined = sessions.find(s => s.username === username.trim());
     if (match?.cid === undefined) throw new Error(outcome.message);
     await ctx.redirect({ cid: match.cid, username: match.username ?? username.trim(), server_address: match.server_address });
     return { kind: 'redirected' };

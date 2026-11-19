@@ -18,10 +18,11 @@ import { INTRO, WORKING_HOURS } from './booking-fixture';
 import { choice, engine, member, NOW, SLOT, type Member } from './booking-rig';
 import { IhttpRelay } from './ihttp-relay';
 import type { Booking } from '@/lib/calendar/generated/Booking';
+import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
 
 const WORKSHOP: EventType = { ...INTRO, id: 'workshop', name: 'Workshop', kind: { group: { seats: 3 } }, durations_min: [30, 60], questions: [] };
 const CLINIC: EventType = { ...WORKSHOP, id: 'clinic', name: 'Clinic' };
-const DAY: { y: number; m: number; d: number; } = { y: 2024, m: 7, d: 16 };
+const DAY: CivilDate = { y: 2024, m: 7, d: 16 };
 const HOUR: Interval = { start_ms: SLOT.start_ms, end_ms: SLOT.start_ms + 3_600_000n };
 const at = (s: Interval): string => `${new Date(Number(s.start_ms)).toISOString()}/${Number(s.end_ms - s.start_ms) / 60_000}`;
 

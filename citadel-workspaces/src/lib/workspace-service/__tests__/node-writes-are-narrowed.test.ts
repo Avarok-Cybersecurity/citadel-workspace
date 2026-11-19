@@ -18,6 +18,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import fg from 'fast-glob';
 import { stripComments } from '@/test-utils/strip-comments';
+import type { RequestKey } from '@/types/workspace-protocol';
 
 /**
  * Request types known to have a broadcast answer. A FLOOR, not the list.
@@ -35,7 +36,7 @@ import { stripComments } from '@/test-utils/strip-comments';
  * answer to the original comment's worry: a derivation that silently shrinks is
  * caught by the floor rather than trusted.
  */
-const KNOWN_BROADCAST_WRITES: Set<string> = new Set([
+const KNOWN_BROADCAST_WRITES: Set<string> = new Set<RequestKey>([
   'CreateNode',
   'UpdateNode',
   'DeleteNode',

@@ -7,7 +7,7 @@ import { debugLog } from '@/lib/debug-config';
 import type { StoredSession } from '@/types/session-types';
 import { requestResponse } from './websocket/request-response';
 import { TIMEOUT } from './timeout-constants';
-import { readAccountIdentity, type AccountIdentity } from './account-identity';
+import { readAccountIdentity, type AccountName } from './account-identity';
 
 // Interface for user registration information
 export interface UserRegistrationInfo {
@@ -75,14 +75,14 @@ export class UserService {
       // Asked AND answered: this used to send the request, set a "Loading..." placeholder
       // and rely on a response handler that did not exist, so the placeholder stayed.
       const requestId: string = crypto.randomUUID();
-      const identity: AccountIdentity = await requestResponse<AccountIdentity>({
+      const identity: AccountName = await requestResponse<AccountName>({
         request: { GetAccountInformation: { request_id: requestId, cid: BigInt(cid) } },
         requestId,
         sendRequest: (request: unknown): Promise<void> => websocketService.sendMessage(request as Record<string, unknown>),
         timeoutMs: TIMEOUT.SERVER_REQUEST_MS,
         operationName: 'GetAccountInformation',
         matcher: {
-          matchSuccess: (message: Record<string, unknown>): AccountIdentity | undefined => readAccountIdentity(message, requestId, BigInt(cid)),
+          matchSuccess: (message: Record<string, unknown>): AccountName | undefined => readAccountIdentity(message, requestId, BigInt(cid)),
           matchFailure: (): string | undefined => undefined,
         },
       });

@@ -42,7 +42,7 @@ import { listAllPeers, listRegisteredPeers } from '../discovery';
 import { fetchAllPeers, fetchRegisteredPeers } from '@/components/p2p/peer-discovery-requests';
 
 type Pending = Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>;
-const held = (cid: bigint): ActiveSessionsResult['sessions'][number] => ({ cid, username: 'u', server_address: 'a' });
+const held = (cid: bigint): ActiveSessionsResult['sessions'][number] => ({ cid, username: 'u', server_address: 'a', server_host: null, peer_connections: {} });
 
 async function answered<T>(call: (pending: Pending) => Promise<T>): Promise<T> {
   const pending: Pending = new Map();

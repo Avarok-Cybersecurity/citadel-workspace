@@ -15,8 +15,9 @@ import {
 } from '../media-frame-relay';
 import type { ChannelMessage } from '../channel-types';
 import type { LeaderElectionState } from '../channel-leader-election';
+import type { RelayedFrame } from '@/lib/multi-instance/media-frame-relay';
 
-const payload: Record<string, unknown> = {
+const payload: RelayedFrame = {
   cid: 11n, peerCid: 22n, track: 1, kind: 2, timestamp: 33, flags: 1, payload: new Uint8Array([9, 8, 7]),
 };
 

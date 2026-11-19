@@ -20,7 +20,9 @@ import type { UsePermissionResult } from '@/hooks/use-permission-result';
 import WorkspaceService from '@/lib/workspace-service';
 import { eventEmitter } from '@/lib/event-emitter';
 import { decodeNodeApp, encodeNodeApp } from '@/lib/citadel-apps/node-app-metadata';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
+import type { WorkspaceRequestView } from '@/types/workspace-protocol';
+import { viewOf } from '@/test-utils/request-view';
 import { WorkspaceView } from '@/components/workspace/WorkspaceView';
 import { ESTATE, domainNode, renderHierarchy } from './render-hierarchy';
 import type { DomainNode } from '../tree-node-types';
@@ -39,11 +41,11 @@ function Page(): JSX.Element {
   return <WorkspaceView nodeId={new URLSearchParams(location.search).get('nodeId')} />;
 }
 
-function recordRequests(): WorkspaceProtocolRequestTS[] {
-  const sent: WorkspaceProtocolRequestTS[] = [];
-  vi.spyOn(WorkspaceService, 'sendProtocolRequest').mockImplementation(async (request: WorkspaceProtocolRequestTS): Promise<void> => {
-    sent.push(request);
-    const create: WorkspaceProtocolRequestTS['CreateNode'] = request.CreateNode;
+function recordRequests(): WorkspaceRequestView[] {
+  const sent: WorkspaceRequestView[] = [];
+  vi.spyOn(WorkspaceService, 'sendProtocolRequest').mockImplementation(async (request: WorkspaceProtocolRequest): Promise<void> => {
+    sent.push(viewOf(request));
+    const create: WorkspaceRequestView['CreateNode'] = viewOf(request).CreateNode;
     if (create) setTimeout(() => eventEmitter.emit('workspace:raw-response', { Node: { id: 'new-doc', parent_id: create.parent_id, name: create.name } }), 0);
   });
   return sent;
@@ -53,7 +55,7 @@ const PLAN: DomainNode = { ...domainNode('plan', 'alex', 'Floor', [], 'Quarterly
 
 describe('New document', () => {
   it('creates a child at the schema level with the app in its metadata', async () => {
-    const sent: WorkspaceProtocolRequestTS[] = recordRequests();
+    const sent: WorkspaceRequestView[] = recordRequests();
     renderHierarchy(ESTATE, '/workspace?nodeId=alex');
     await userEvent.click(await screen.findByTestId('tree-node-menu-alex'));
     await userEvent.click(await screen.findByTestId('new-document-alex'));
@@ -64,7 +66,7 @@ describe('New document', () => {
     await userEvent.click(within(dialog).getByTestId('new-document-create'));
 
     await waitFor(() => expect(screen.queryByTestId('new-document-dialog')).toBeNull());
-    const create: WorkspaceProtocolRequestTS['CreateNode'] = sent.find((r: WorkspaceProtocolRequestTS) => r.CreateNode)?.CreateNode;
+    const create: WorkspaceRequestView['CreateNode'] = sent.find((r: WorkspaceRequestView) => r.CreateNode)?.CreateNode;
     expect(create).toMatchObject({ parent_id: 'alex', entity_type: { Child: 'Floor' }, name: 'Fire plan' });
     expect(decodeNodeApp(create?.metadata ?? [])).toBe('docs');
   });

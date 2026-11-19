@@ -17,7 +17,6 @@ import { rolesApi } from '@/lib/workspace-roles/roles-api';
 import { columnLock } from '@/lib/workspace-roles/editor-rules';
 import { grantsPermission, mayReassignTo } from '@/lib/workspace-roles/role-ladder';
 import { movedPosition } from '@/lib/workspace-roles/role-positions';
-import { Permission } from '@/lib/permissions-service/types';
 import type { NewRole } from '@/lib/workspace-service/roles-operations';
 import type { RoleDraft } from '@/lib/workspace-roles/role-diff';
 import { deletingDefaultNotice } from '@/lib/workspace-roles/default-role-notice';
@@ -39,7 +38,7 @@ export function RoleListPanel({ table, actor, editor }: RoleListPanelProps): JSX
   const targets: RoleDefinition[] = deleting === null || actor === null
     ? []
     : table.roles.filter((role: RoleDefinition): boolean => mayReassignTo(table, actor, deleting, role));
-  const mayCreate: boolean = actor !== null && grantsPermission(actor, Permission.ManageRoles);
+  const mayCreate: boolean = actor !== null && grantsPermission(actor, 'ManageRoles');
 
   const defaultNotice: string | null = deleting === null ? null : deletingDefaultNotice(table, deleting, reassignTo);
 

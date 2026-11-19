@@ -13,12 +13,13 @@ import userEvent from '@testing-library/user-event';
 import { WorkspaceContext , type WorkspaceState } from '@/contexts/WorkspaceContext';
 import { GeneralTab } from '../GeneralTab';
 import type { UserEvent } from '@testing-library/user-event';
+import type { WorkspaceMetadata } from 'citadel-workspace-client-ts';
 
 vi.mock('@/lib/workspace-service', () => ({
   default: { updateWorkspace: vi.fn(), updateNode: vi.fn() },
 }));
 
-const node: { id: string; name: string; description: string; } = { id: 'n1', name: 'Design', description: 'The design office' };
+const node: Pick<WorkspaceMetadata, 'id' | 'name' | 'description'> = { id: 'n1', name: 'Design', description: 'The design office' };
 
 // Only the pieces GeneralTab reads; the real context type is far larger.
 const ctx = (nodes: Record<string, unknown>): { state: WorkspaceState; } =>

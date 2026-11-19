@@ -209,6 +209,7 @@ export type {
   NestingRule,
   CustomNodeType,
   WorkspaceProtocolResponse,
+  WorkspaceProtocolAnswer,
   CreateNodeResult,
   MoveNodeResult,
   DeleteNodeResult,

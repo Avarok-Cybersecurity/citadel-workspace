@@ -10,7 +10,7 @@ import { eventEmitter } from '@/lib/event-emitter';
 import { getCurrentCid } from '@/lib/p2p/current-cid';
 import { p2pAutoConnectService } from '@/lib/p2p-auto-connect-service';
 import { connectionPathFor } from '@/lib/p2p-auto-connect-service/connection-path';
-import type { PeerConnectPath } from '@/types/ice-servers';
+import type { P2pPathReport } from 'citadel-workspace-client-ts';
 import { P2PMessengerManager } from '@/lib/p2p';
 import { connectionManager } from '@/lib/connection';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
@@ -29,7 +29,7 @@ export interface ConversationPeer {
   /** True, false, or null when the check did not answer. */
   isConnected: boolean | null;
   /** How the connection travels, when the agent has said. */
-  connectionPath: PeerConnectPath | null;
+  connectionPath: P2pPathReport | null;
   unreadCount: number;
   lastMessageTime?: number;
 }

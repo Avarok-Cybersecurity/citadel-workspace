@@ -18,7 +18,6 @@
  *    printed twice.
  */
 import WorkspaceService from '@/lib/workspace-service';
-import { GroupMessageTypeTS } from '@/types/workspace-protocol';
 import { instanceManager } from '@/lib/multi-instance/instance-manager';
 import { groupSendTransport } from './group-send-transport';
 import { sendPeerGroupMessage } from './group-requests';
@@ -33,7 +32,7 @@ export async function sendGroupMessageAnywhere(
   replyTo?: string,
 ): Promise<void> {
   if (groupSendTransport(groupId) !== 'peer') {
-    await WorkspaceService.sendGroupMessage(groupId, content, GroupMessageTypeTS.Text, replyTo);
+    await WorkspaceService.sendGroupMessage(groupId, content, 'Text', replyTo);
     return;
   }
 

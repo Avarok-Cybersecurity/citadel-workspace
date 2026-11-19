@@ -14,75 +14,17 @@ import { nodeAbsentFromWorkspace, openNodeMenu, openSelectedNodeMenu, revealNode
 // Types
 // ============================================================================
 
-export type NodeEntityType = 'Workspace' | { Child: string };
+import type { CustomNodeType, DomainNode, NodeEntityType, TreeNode, TreeSchema, WorkspaceProtocolResponse } from 'citadel-workspace-client-ts';
+export type { CustomNodeType, DomainNode, EntityTypeConfig, NestingRule, NodeEntityType, TreeNode, TreeSchema, WorkspaceProtocolResponse } from 'citadel-workspace-client-ts';
 
-export interface DomainNode {
-  id: string;
-  parent_id: string | null;
-  entity_type: NodeEntityType;
-  depth: number;
-  name: string;
-  description: string;
-  owner_id: string;
-  members: string[];
-  children: string[];
-  mdx_content: string;
-  rules: string | null;
-  chat_enabled: boolean;
-  chat_channel_id: string | null;
-  metadata: number[];
-  allowed_child_types: string[] | null;
-  is_default: boolean;
-  created_at: bigint;
-  updated_at: bigint;
-}
+type ResponseVariant = Exclude<WorkspaceProtocolResponse, string>;
+type ResponseKey = ResponseVariant extends infer V ? (V extends Record<infer K extends string, unknown> ? K : never) : never;
 
-export interface TreeNode {
-  node: DomainNode;
-  children: TreeNode[];
-}
-
-export interface EntityTypeConfig {
-  type_name: string;
-  icon: string;
-  label: string;
-  plural_label: string;
-  name_placeholder: string;
-  description_placeholder: string;
-}
-
-export interface TreeSchema {
-  id: string;
-  name: string;
-  rules: NestingRule[];
-  max_depth: number | null;
-  entity_type_configs: EntityTypeConfig[];
-}
-
-export interface NestingRule {
-  parent_type: string;
-  allowed_child_types: string[];
-}
-
-export interface CustomNodeType {
-  name: string;
-  display_name: string;
-  icon: string | null;
-  allowed_parents: string[];
-}
-
-export interface WorkspaceProtocolResponse {
-  Node?: DomainNode;
-  Nodes?: DomainNode[];
-  TreeStructure?: { root: TreeNode };
-  TreeSchema?: TreeSchema;
-  NodeTypes?: CustomNodeType[];
-  NodeDeleted?: { node_id: string; children_deleted: string[] };
-  NodeMoved?: { node_id: string; old_parent_id: string | null; new_parent_id: string | null };
-  Success?: string;
-  Error?: string;
-  Workspace?: { id: string; name: string };
-}
+/**
+ * One answer as the helpers read it: the generated `WorkspaceProtocolResponse` union, each
+ * variant's body under its own optional key, so `answer?.Node` is typed by the Rust enum.
+ */
+export type WorkspaceProtocolAnswer = { [K in ResponseKey]?: Extract<ResponseVariant, Record<K, unknown>>[K] };
 
 export interface CreateNodeResult {
   success: boolean;
@@ -115,12 +57,12 @@ export interface DeleteNodeResult {
 export async function executeTreeProtocolRequest(
   page: Page,
   request: Record<string, unknown> | string
-): Promise<WorkspaceProtocolResponse | null> {
+): Promise<WorkspaceProtocolAnswer | null> {
   console.log(`  [Protocol] Executing:`, JSON.stringify(request).substring(0, 150));
 
   try {
     const result = await page.evaluate(async (req) => {
-      return new Promise<WorkspaceProtocolResponse>((resolve) => {
+      return new Promise<WorkspaceProtocolAnswer>((resolve) => {
         const timeout = setTimeout(() => {
           resolve({ Error: 'Protocol request timed out after 15s' });
         }, 15000);
@@ -136,7 +78,7 @@ export async function executeTreeProtocolRequest(
           wsService.sendRequest(req)
             .then((response) => {
               clearTimeout(timeout);
-              resolve(response as WorkspaceProtocolResponse);
+              resolve(response as WorkspaceProtocolAnswer);
             })
             .catch((err) => {
               clearTimeout(timeout);
@@ -146,7 +88,7 @@ export async function executeTreeProtocolRequest(
         }
 
         // Alternative: Use custom event-based communication
-        const responseHandler = (event: CustomEvent<WorkspaceProtocolResponse>) => {
+        const responseHandler = (event: CustomEvent<WorkspaceProtocolAnswer>) => {
           clearTimeout(timeout);
           window.removeEventListener('workspace-protocol-response', responseHandler as EventListener);
           resolve(event.detail);

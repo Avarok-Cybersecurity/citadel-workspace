@@ -18,7 +18,7 @@ import WorkspaceService from '@/lib/workspace-service';
 import { workspaceEvents, type MembersPayload } from '@/lib/workspace-events';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 import { debugLog } from '@/lib/debug-config';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { withAccess } from '@/lib/member-access';
 
 /**

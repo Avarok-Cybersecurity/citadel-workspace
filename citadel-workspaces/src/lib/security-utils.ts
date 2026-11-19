@@ -4,29 +4,11 @@
  */
 
 import type { SecuritySettingsValues } from '@/components/SecuritySettings';
+import type { HeaderObfuscatorSettings, SessionSecuritySettings } from '@avarok/citadel-protocol-types';
 import { isVariant } from 'citadel-workspace-client-ts';
 
-/**
- * HeaderObfuscatorSettings - matches Rust enum
- * In Rust: pub enum HeaderObfuscatorSettings { Disabled, Enabled, EnabledWithKey(u128) }
- * Serializes to: "Disabled" | "Enabled" | { EnabledWithKey: number }
- */
-export type HeaderObfuscatorSettings = "Disabled" | "Enabled" | { EnabledWithKey: number };
-
-/**
- * SessionSecuritySettings - matches the Rust struct for protocol-level security configuration
- * Uses snake_case to match Rust serialization
- */
-export interface SessionSecuritySettings {
-  security_level: string;
-  secrecy_mode: string;
-  crypto_params: {
-    encryption_algorithm: string;
-    kem_algorithm: string;
-    sig_algorithm: string;
-  };
-  header_obfuscator_settings: HeaderObfuscatorSettings;
-}
+/** The protocol's own types (citadel_types, generated): `EnabledWithKey` is a u128, so a bigint. */
+export type { HeaderObfuscatorSettings, SessionSecuritySettings };
 
 /**
  * Returns default security settings for sessions
@@ -87,14 +69,14 @@ export function normalizeHeaderObfuscatorSettings(
   // Handle object cases
   if (typeof settings === "object" && settings !== null) {
     // Already properly typed EnabledWithKey object
-    if (isVariant(settings as Record<string, unknown>, 'EnabledWithKey') && typeof (settings as Record<string, unknown>).EnabledWithKey === 'number') {
-      return settings as { EnabledWithKey: number };
+    if (isVariant(settings as Record<string, unknown>, 'EnabledWithKey') && typeof (settings as Record<string, unknown>).EnabledWithKey === 'bigint') {
+      return settings as Extract<HeaderObfuscatorSettings, { EnabledWithKey: bigint }>;
     }
 
     // Record<string, string> case like { EnabledWithKey: "12345" }
     const record: Record<string, string> = settings as Record<string, string>;
     if (record.EnabledWithKey) {
-      return { EnabledWithKey: parseInt(record.EnabledWithKey, 10) };
+      return { EnabledWithKey: BigInt(record.EnabledWithKey) };
     }
 
     // Empty object or unknown structure

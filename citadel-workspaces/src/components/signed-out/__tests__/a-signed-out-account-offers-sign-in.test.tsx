@@ -11,12 +11,12 @@ import userEvent from '@testing-library/user-event';
 import { AccountRow } from '@/components/AccountRows';
 import { SIGNED_OUT_COPY } from '../signed-out-copy';
 import { signedOutReasonFor } from '../signed-out-match';
-import type { SignedOutAccount } from '@/types/session-types';
+import type { SignedOutSession } from 'citadel-workspace-client-ts';
 
 afterEach(cleanup);
 
 const REASON: string = 'CID not registered to this node';
-const LIST: SignedOutAccount[] = [
+const LIST: SignedOutSession[] = [
   { cid: 7n, username: 'alice', reason: REASON },
   { cid: 9n, username: 'bob', reason: 'no answer from the server in 600s' },
 ];

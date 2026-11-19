@@ -31,8 +31,8 @@ export interface DeclaringClient {
   nextResponse<T>(extract: (message: InternalServiceResponse) => T | undefined, timeoutMs: number): Promise<T>;
 }
 
-/** What the leader's agent said it does for this browser. */
-export interface AgentCapabilities {
+/** What the leader's agent said it does for this browser, read off its greeting (`ServiceConnectionAccepted`). */
+export interface AgentOffers {
   agentIlm: boolean;
   /** The agent dials and heals peer links itself (types/agent-supervisor.ts). */
   supervisesP2p: boolean;
@@ -51,7 +51,7 @@ export interface AgentCapabilities {
 }
 
 /** What the leader tells a follower: its agent's capabilities, and `noticesHeard` as it stands. */
-export type LeaderAnswer = AgentCapabilities & { noticesHeard: boolean };
+export type LeaderAnswer = AgentOffers & { noticesHeard: boolean };
 
 /** Set once by the websocket service: which tab this is, and how a follower asks the leader. */
 export interface CapabilityRoute {
@@ -74,12 +74,12 @@ export const noticesHeard: ValueStore<boolean> = createValueStore<boolean>('agen
 /** Watches a new socket's first message, the agent's greeting, for what it offers. */
 export interface Greeting {
   observe: (message: unknown) => void;
-  offers: Promise<AgentCapabilities>;
+  offers: Promise<AgentOffers>;
 }
 
-let decided: Promise<AgentCapabilities> | null = null;
+let decided: Promise<AgentOffers> | null = null;
 let route: CapabilityRoute | null = null;
-let leaderWaiters: Array<(answer: Promise<AgentCapabilities>) => void> = [];
+let leaderWaiters: Array<(answer: Promise<AgentOffers>) => void> = [];
 
 function inner(message: unknown, variant: string): Record<string, unknown> | undefined {
   const m: Record<string, unknown> = (message ?? {}) as Record<string, unknown>;
@@ -88,8 +88,8 @@ function inner(message: unknown, variant: string): Record<string, unknown> | und
 }
 
 export function watchGreeting(): Greeting {
-  let settle: (offers: AgentCapabilities) => void = (): void => undefined;
-  const offers: Promise<AgentCapabilities> = new Promise<AgentCapabilities>((resolve) => { settle = resolve; });
+  let settle: (offers: AgentOffers) => void = (): void => undefined;
+  const offers: Promise<AgentOffers> = new Promise<AgentOffers>((resolve) => { settle = resolve; });
   return {
     offers,
     observe: (message: unknown): void => {
@@ -117,7 +117,7 @@ function declareRequest(requestId: string, hostsApps: boolean): InternalServiceR
   };
 }
 
-/** The AgentCapabilities answering `requestId`, if `message` is it. */
+/** The generated AgentCapabilities answering `requestId`, if `message` is it. */
 function capabilitiesAnswering(message: unknown, requestId: string): Record<string, unknown> | undefined {
   const answer: Record<string, unknown> | undefined = inner(message, 'AgentCapabilities');
   return answer && answer.request_id === requestId ? answer : undefined;
@@ -131,8 +131,8 @@ function bounded<T>(promise: Promise<T>, what: string): Promise<T> {
   });
 }
 
-async function declare(client: DeclaringClient, greeting: Greeting): Promise<AgentCapabilities> {
-  const offers: AgentCapabilities = await bounded(greeting.offers, 'The Citadel agent did not greet this connection');
+async function declare(client: DeclaringClient, greeting: Greeting): Promise<AgentOffers> {
+  const offers: AgentOffers = await bounded(greeting.offers, 'The Citadel agent did not greet this connection');
   supervision.set(offers.supervisesP2p);
   if (!offers.agentIlm) return offers;
   const requestId: string = crypto.randomUUID();
@@ -149,11 +149,11 @@ async function declare(client: DeclaringClient, greeting: Greeting): Promise<Age
 
 /** The leader's socket just opened: declare on it if the agent offers, and let every caller wait for the answer. */
 export function declareOnLeaderSocket(client: DeclaringClient, greeting: Greeting): Promise<boolean> {
-  const caps: Promise<AgentCapabilities> = declare(client, greeting);
+  const caps: Promise<AgentOffers> = declare(client, greeting);
   decided = caps;
   for (const wake of leaderWaiters) wake(caps);
   leaderWaiters = [];
-  return caps.then((c: AgentCapabilities): boolean => c.agentIlm);
+  return caps.then((c: AgentOffers): boolean => c.agentIlm);
 }
 
 /**
@@ -162,7 +162,7 @@ export function declareOnLeaderSocket(client: DeclaringClient, greeting: Greetin
  * nothing is remembered, so the next socket is asked afresh.
  */
 export function leaderSocketFailedToOpen(error: unknown): void {
-  const failed: Promise<AgentCapabilities> = Promise.reject(error instanceof Error ? error : new Error(String(error)));
+  const failed: Promise<AgentOffers> = Promise.reject(error instanceof Error ? error : new Error(String(error)));
   failed.catch((): void => undefined);
   for (const wake of leaderWaiters) wake(failed);
   leaderWaiters = [];
@@ -181,14 +181,14 @@ export function registerCapabilityRoute(r: CapabilityRoute): void {
 }
 
 /** Everything the agent said it does for this browser; waits until it has said. */
-export function agentCapabilities(): Promise<AgentCapabilities> {
+export function agentCapabilities(): Promise<AgentOffers> {
   if (decided) return decided;
   // No websocket service in this context (a test, a page without one): no agent to host anything.
   if (!route) return Promise.resolve({ agentIlm: false, supervisesP2p: false, stagesUploads: false, takesConsole: false, servesApps: false });
   // The leader's own socket has not declared yet: its answer is the one.
-  if (route.isLeader()) return new Promise<AgentCapabilities>((resolve, reject) => { leaderWaiters.push((a) => a.then(resolve, reject)); });
-  const asked: Promise<AgentCapabilities> = route.askLeader().then(
-    ({ noticesHeard: heard, ...caps }: LeaderAnswer): AgentCapabilities => {
+  if (route.isLeader()) return new Promise<AgentOffers>((resolve, reject) => { leaderWaiters.push((a) => a.then(resolve, reject)); });
+  const asked: Promise<AgentOffers> = route.askLeader().then(
+    ({ noticesHeard: heard, ...caps }: LeaderAnswer): AgentOffers => {
       supervision.set(caps.supervisesP2p);
       // Kept current afterwards by the leader's broadcast (notices-heard-relay.ts).
       noticesHeard.set(heard);
@@ -205,22 +205,22 @@ export function agentCapabilities(): Promise<AgentCapabilities> {
 
 /** Whether this browser's messaging goes through the agent. */
 export function agentHostsConversations(): Promise<boolean> {
-  return agentCapabilities().then((c: AgentCapabilities): boolean => c.agentIlm);
+  return agentCapabilities().then((c: AgentOffers): boolean => c.agentIlm);
 }
 
 /** Whether the agent dials and heals this browser's peer links; waits until the agent has said. */
 export function agentSupervisesP2p(): Promise<boolean> {
-  return agentCapabilities().then((c: AgentCapabilities): boolean => c.supervisesP2p);
+  return agentCapabilities().then((c: AgentOffers): boolean => c.supervisesP2p);
 }
 
 /** Whether the agent stages browser files in chunks; waits until the agent has said. */
 export function agentStagesUploads(): Promise<boolean> {
-  return agentCapabilities().then((c: AgentCapabilities): boolean => c.stagesUploads);
+  return agentCapabilities().then((c: AgentOffers): boolean => c.stagesUploads);
 }
 
 /** Whether the agent can open a native file dialog: undefined when it did not say. */
 export function agentNativePicker(): Promise<boolean | undefined> {
-  return agentCapabilities().then((c: AgentCapabilities): boolean | undefined => c.nativePicker);
+  return agentCapabilities().then((c: AgentOffers): boolean | undefined => c.nativePicker);
 }
 
 /** The socket this answer was for is gone; the next socket declares again. */

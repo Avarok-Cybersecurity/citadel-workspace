@@ -8,7 +8,8 @@
 import type { ConnectionState } from './state';
 import { isConnectAlreadyInProgress } from '@/lib/connection/is-connect-in-progress';
 import type { ConnectionIO } from './io';
-import type { StoredSession, ActiveSession } from '@/types/session-types';
+import type { StoredSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { storeSession } from './session-management';
 import {
   HEALTH_CHECK_TIMEOUT_MS,
@@ -24,8 +25,8 @@ import { sessionIsOnServer } from '@/lib/sessions/same-server';
 export async function attemptLeaderConnection(
   state: ConnectionState,
   io: ConnectionIO,
-  getActiveSessions: () => Promise<ActiveSession[]>,
-  doAutoReconnect: (sessions: ActiveSession[]) => Promise<void>,
+  getActiveSessions: () => Promise<SessionInformation[]>,
+  doAutoReconnect: (sessions: SessionInformation[]) => Promise<void>,
 ): Promise<void> {
   if (!state.isInitialized) {
     debugLog('ConnectionService', 'ConnectionManager: Not initialized yet, skipping leader connection');
@@ -36,7 +37,7 @@ export async function attemptLeaderConnection(
     return;
   }
 
-  const activeSessions: ActiveSession[] = await getActiveSessions();
+  const activeSessions: SessionInformation[] = await getActiveSessions();
   await doAutoReconnect(activeSessions);
 }
 
@@ -44,10 +45,10 @@ export async function attemptLeaderConnection(
  * Auto-reconnect to a stored session if appropriate.
  */
 export async function autoReconnect(
-  activeSessions: ActiveSession[],
+  activeSessions: SessionInformation[],
   state: ConnectionState,
   io: ConnectionIO,
-  getActiveSessions: () => Promise<ActiveSession[]>,
+  getActiveSessions: () => Promise<SessionInformation[]>,
   handleSuccessConn: (cid: bigint, shouldUpdate: boolean) => Promise<void>,
 ): Promise<void> {
   if (state.storedSessions.sessions.length === 0) return;
@@ -77,8 +78,8 @@ export async function autoReconnect(
   }
 
   // Check if session is already active
-  const freshActiveSessions: ActiveSession[] = await getActiveSessions();
-  const alreadyActive: ActiveSession | undefined = freshActiveSessions.find(
+  const freshActiveSessions: SessionInformation[] = await getActiveSessions();
+  const alreadyActive: SessionInformation | undefined = freshActiveSessions.find(
     (s) => s.username === session!.username && sessionIsOnServer(s, session!.serverAddress)
   );
 
@@ -97,7 +98,7 @@ export async function autoReconnect(
 }
 
 async function reuseExistingSession(
-  activeSession: ActiveSession,
+  activeSession: SessionInformation,
   session: StoredSession,
   state: ConnectionState,
   io: ConnectionIO,
@@ -121,11 +122,11 @@ async function reuseExistingSession(
 
 async function performAutoReconnect(
   session: StoredSession,
-  activeSessions: ActiveSession[],
+  activeSessions: SessionInformation[],
   state: ConnectionState,
   io: ConnectionIO,
   handleSuccessConn: (cid: bigint, shouldUpdate: boolean) => Promise<void>,
-  getActiveSessions: () => Promise<ActiveSession[]>,
+  getActiveSessions: () => Promise<SessionInformation[]>,
 ): Promise<void> {
   try {
     try {
@@ -164,11 +165,11 @@ async function performAutoReconnect(
 async function handleAutoReconnectError(
   error: unknown,
   session: StoredSession,
-  activeSessions: ActiveSession[],
+  activeSessions: SessionInformation[],
   state: ConnectionState,
   io: ConnectionIO,
   handleSuccessConn: (cid: bigint, shouldUpdate: boolean) => Promise<void>,
-  getActiveSessions: () => Promise<ActiveSession[]>,
+  getActiveSessions: () => Promise<SessionInformation[]>,
 ): Promise<void> {
   io.updateConnectionService({ cid: null, isConnected: false });
   io.broadcastConnectionStatus({ isConnected: false });
@@ -198,7 +199,7 @@ async function handleSessionAlreadyConnectedError(
   session: StoredSession,
   state: ConnectionState,
   io: ConnectionIO,
-  getActiveSessions: () => Promise<ActiveSession[]>,
+  getActiveSessions: () => Promise<SessionInformation[]>,
 ): Promise<void> {
   debugLog('ConnectionService', 'ConnectionManager: Session already connected error - likely stale session');
 
@@ -210,8 +211,8 @@ async function handleSessionAlreadyConnectedError(
   }
 
   try {
-    const sessions: ActiveSession[] = await getActiveSessions();
-    const match: ActiveSession | undefined = sessions.find(
+    const sessions: SessionInformation[] = await getActiveSessions();
+    const match: SessionInformation | undefined = sessions.find(
       (s) => s.username === session.username && sessionIsOnServer(s, session.serverAddress)
     );
     if (match) {

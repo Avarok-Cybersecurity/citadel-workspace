@@ -16,9 +16,10 @@ import { slotRequest } from '@/lib/calendar/slot-list';
 import { hostSlots } from '@/lib/calendar/team-slots';
 import { BookingPage } from '../BookingPage';
 import type { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
+import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
 
 const engine: CalendarEngine = realEngine();
-const TODAY: { y: number; m: number; d: number; } = { y: 2024, m: 7, d: 15 };
+const TODAY: CivilDate = { y: 2024, m: 7, d: 15 };
 const NOW: bigint = utc('2024-07-15T13:30:00Z');
 const BUSY: Interval = { start_ms: utc('2024-07-16T14:00:00Z'), end_ms: utc('2024-07-16T15:00:00Z') };
 const busyFor = (): HostBusy => ({ busy: [BUSY], booked: [] });

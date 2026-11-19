@@ -21,7 +21,7 @@ import { pickSessionToClaim, type SessionChoice } from '@/lib/sessions/pick-sess
 import { calculateBackoffDelay } from '@/lib/utils/retry-utils';
 import { isEndedByTheAgent, type ClaimOutcome } from '@/lib/sessions/claim-session';
 import type { TabUserContext } from '@/lib/tab-context';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 export type StartClaim =
   /** Username and server too: the claimant activates the session, and the activation names them. */
@@ -37,10 +37,10 @@ export type StartClaim =
 export interface StartClaimIO {
   /** True once the connection manager is up; false when it is not (yet). */
   ready: () => Promise<boolean>;
-  activeSessions: () => Promise<{ ok: boolean; sessions: ActiveSession[] }>;
+  activeSessions: () => Promise<{ ok: boolean; sessions: SessionInformation[] }>;
   selection: () => Promise<TabUserContext | null>;
   clearSelection: () => Promise<void>;
-  select: (session: ActiveSession) => Promise<void>;
+  select: (session: SessionInformation) => Promise<void>;
   claim: (cid: bigint) => Promise<ClaimOutcome>;
   /** Drop any cached session list: it still names the session the agent just ended. */
   forgetSessions: () => void;
@@ -54,7 +54,7 @@ export interface StartRetry {
 }
 
 /** The agent's session list, or null when no attempt got an answer. */
-async function reachAgent(io: StartClaimIO, retry: StartRetry): Promise<ActiveSession[] | null> {
+async function reachAgent(io: StartClaimIO, retry: StartRetry): Promise<SessionInformation[] | null> {
   for (let attempt: number = 0; attempt < retry.maxAttempts; attempt++) {
     if (attempt > 0) await io.sleep(calculateBackoffDelay(attempt - 1, retry));
     if (!(await io.ready())) continue;
@@ -65,7 +65,7 @@ async function reachAgent(io: StartClaimIO, retry: StartRetry): Promise<ActiveSe
 }
 
 export async function claimOnStart(io: StartClaimIO, retry: StartRetry): Promise<StartClaim> {
-  const sessions: ActiveSession[] | null = await reachAgent(io, retry);
+  const sessions: SessionInformation[] | null = await reachAgent(io, retry);
   if (sessions === null) return { kind: 'agent-unreachable' };
   if (sessions.length === 0) return { kind: 'nothing-to-claim' };
 

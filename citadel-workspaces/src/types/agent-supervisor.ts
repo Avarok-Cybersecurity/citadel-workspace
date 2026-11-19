@@ -20,13 +20,16 @@
  *   about the account's server link. Path changes are not this notification:
  *   they are the existing PeerPathChangedNotification.
  */
-export const SUPERVISES_P2P_CAPABILITY: 'supervises_p2p' = 'supervises_p2p';
-export const SUPERVISOR_NOTIFICATION: 'SupervisorNotification' = 'SupervisorNotification';
-export const INTEREST_COMMAND: 'Interest' = 'Interest';
+import type { ConfigCommand, DiscriminatorOf, ResponseType, ServiceConnectionAccepted, SupervisorState } from 'citadel-workspace-client-ts';
 
-export type SupervisorState = 'healing' | 'healed' | 'degraded';
+export const SUPERVISES_P2P_CAPABILITY = 'supervises_p2p' as const satisfies keyof ServiceConnectionAccepted;
+export const SUPERVISOR_NOTIFICATION = 'SupervisorNotification' as const satisfies ResponseType;
+export const INTEREST_COMMAND = 'Interest' as const satisfies DiscriminatorOf<ConfigCommand>;
 
-export const WIRE_STATES: Readonly<Record<string, SupervisorState>> = {
+/** What the chat header shows for the generated `SupervisorState` it was sent. */
+export type SupervisorPhase = 'healing' | 'healed' | 'degraded';
+
+export const WIRE_STATES: Readonly<Record<SupervisorState, SupervisorPhase>> = {
   Healing: 'healing',
   Healed: 'healed',
   Degraded: 'degraded',

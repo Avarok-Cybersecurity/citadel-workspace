@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import type { ActiveSessionsResult } from '@/lib/connection/queries';
-import type { SignedOutAccount } from '@/types/session-types';
+import type { SignedOutSession } from 'citadel-workspace-client-ts';
 
 const agent: { answer: ActiveSessionsResult; answered: number } = vi.hoisted(() => ({
   answer: { ok: true, sessions: [], signedOut: [] } as ActiveSessionsResult,
@@ -27,8 +27,8 @@ vi.mock('@/lib/connection', () => ({
 import { SignedOutNotice } from '../SignedOutNotice';
 import { signedOutNotice } from '../signed-out-copy';
 
-const alice: SignedOutAccount = { cid: 7n, username: 'alice', reason: 'CID not registered to this node' };
-const bob: SignedOutAccount = { cid: 9n, username: 'bob', reason: 'no answer from the server in 600s' };
+const alice: SignedOutSession = { cid: 7n, username: 'alice', reason: 'CID not registered to this node' };
+const bob: SignedOutSession = { cid: 9n, username: 'bob', reason: 'no answer from the server in 600s' };
 
 afterEach(cleanup);
 

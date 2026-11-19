@@ -6,6 +6,7 @@
  * CIDs are stored as bigint - no string conversion needed.
  */
 
+import type { Attachment } from 'citadel-workspace-client-ts';
 import { encode as cborEncode, decode as cborDecode } from 'cbor-x';
 import type { MessageType } from './message-protocol';
 import type { MessagingLayer } from './messaging-layer';
@@ -114,13 +115,8 @@ export interface P2PYjsSyncPayload {
   [key: string]: unknown;
 }
 
-export interface P2PAttachment {
-  file_id: string;
-  file_name: string;
-  file_size: number;
-  file_type: string;
-  thumbnail?: string;
-}
+/** An attachment is the agent's generated `Attachment`. */
+export type P2PAttachment = Attachment;
 
 // Call-signalling types live in call-signals.ts; re-exported so existing
 // import sites keep working.

@@ -34,7 +34,7 @@ vi.mock('@/contexts/PermissionsContext', async (importOriginal) => {
       fetchPermissionsForDomain: async (domainId: string): Promise<unknown> => {
         // The answer lands first: a new map (as the real provider's sync produces) and a
         // render, before this fetch resolves.
-        state.permissions = new Map(state.permissions).set(domainId, { permissions: new Set([Permission.ViewContent]) });
+        state.permissions = new Map(state.permissions).set(domainId, { permissions: new Set(['ViewContent']) });
         act((): void => { state.rerender(); });
         await Promise.resolve();
         return { domainId };
@@ -45,7 +45,7 @@ vi.mock('@/contexts/PermissionsContext', async (importOriginal) => {
 
 describe('a denial that lands while its fetch settles', () => {
   it('leaves the hook answered and not loading, so the control is refused', async (): Promise<void> => {
-    const { result, rerender } = renderHook(() => usePermission(DOMAIN, Permission.EditTreeStructure));
+    const { result, rerender } = renderHook(() => usePermission(DOMAIN, 'EditTreeStructure'));
     state.rerender = rerender;
     await waitFor((): void => { expect(state.permissions.has(DOMAIN)).toBe(true); }, { timeout: 3_000 });
     await waitFor((): void => { expect(result.current.loading).toBe(false); }, { timeout: 3_000 });

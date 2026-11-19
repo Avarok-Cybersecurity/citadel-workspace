@@ -13,7 +13,7 @@ import { render, screen } from '@testing-library/react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { MemberListItems } from '../MemberListItems';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 const SIZING: readonly string[] = ['tap-target', 'h-6', 'w-6', 'shrink-0'];
 

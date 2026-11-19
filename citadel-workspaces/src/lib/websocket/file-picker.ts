@@ -4,6 +4,7 @@
  * Handles native file picker dialog operations via the internal service.
  */
 
+import type { PickFileSuccess } from 'citadel-workspace-client-ts';
 import { eventEmitter } from '../event-emitter';
 import { failOnSocketLoss } from './request-response';
 import { debugLog } from '../debug-config';
@@ -14,11 +15,8 @@ export interface FilePickerConfig {
   sendRequest: (request: unknown, requestId?: string) => Promise<void>;
 }
 
-export interface FilePickerResult {
-  file_path: string;
-  file_name: string;
-  file_size: bigint;
-}
+/** A picked file: the generated `PickFileSuccess`, less its addressing. */
+export type FilePickerResult = Omit<PickFileSuccess, 'cid' | 'request_id'>;
 
 export class FilePicker {
   private readonly config: FilePickerConfig;

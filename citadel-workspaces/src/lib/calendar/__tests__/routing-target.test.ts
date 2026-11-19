@@ -5,12 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import { routedTo, type RoutingHere } from '../routing-target';
 import { INTRO } from './booking-fixture';
-import type { ColorToken } from '@/lib/calendar/generated/ColorToken';
-import type { Question } from '@/lib/calendar/generated/Question';
-import type { BookingRules } from '@/lib/calendar/generated/BookingRules';
-import type { Zone } from '@/lib/calendar/generated/Zone';
+import type { EventType } from '@/lib/calendar/generated/EventType';
 
-const DEMO: { id: string; name: string; kind: { round_robin: { hosts: string[]; strategy: "equal"; }; }; durations_min: Array<number>; rules: BookingRules; questions: Array<Question>; color: ColorToken; locked: boolean; zone_lock: Zone | null; } = { ...INTRO, id: 'demo', name: 'Demo', kind: { round_robin: { hosts: ['ana', 'bo'], strategy: 'equal' as const } } };
+const DEMO: EventType = { ...INTRO, id: 'demo', name: 'Demo', kind: { round_robin: { hosts: ['ana', 'bo'], strategy: 'equal' as const } } };
 const here: RoutingHere = { node: 'n1', teams: [DEMO], origin: 'https://w.example', nodeName: (id: string) => (id === 'n2' ? 'Sales' : id) };
 
 describe('a routed booker', () => {

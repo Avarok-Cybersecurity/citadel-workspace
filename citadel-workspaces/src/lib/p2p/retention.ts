@@ -12,7 +12,7 @@
  * common case cheap: nothing older than the cutoff means nothing is read.
  */
 import type { ConversationMetadata, MessagePage, P2PMessage } from './p2p-types';
-import type { Retention } from './chat-advanced-settings';
+import type { RetentionChoice } from './chat-advanced-settings';
 
 const DAY_MS: number = 24 * 60 * 60 * 1000;
 
@@ -29,7 +29,7 @@ export interface RetentionPageIO {
 }
 
 /** The moment the retention period began, or null when every message is kept. */
-export function retentionCutoff(now: number, retention: Retention): number | null {
+export function retentionCutoff(now: number, retention: RetentionChoice): number | null {
   return retention === 'forever' ? null : now - retention * DAY_MS;
 }
 

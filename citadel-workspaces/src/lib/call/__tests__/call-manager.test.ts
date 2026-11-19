@@ -16,6 +16,7 @@ import type { CallCodecCapabilities, CallMediaKinds, CallSignalPayload } from '@
 import type { CallState } from '../call-state';
 import type { CallParticipant } from '@/lib/call/call-state';
 import { DIRECT_CALL } from '../call-state';
+import type { WireFrame } from '@/lib/call/frame-codec';
 
 const AUDIO: CallMediaKinds = { audio: true, video: false, screen: false };
 const VIDEO: CallMediaKinds = { audio: true, video: true, screen: false };
@@ -385,7 +386,7 @@ describe('sending frames', () => {
   let h: Harness;
   beforeEach(() => { h = harness(); });
 
-  const frame: { track: number; kind: number; timestamp: number; flags: number; payload: Uint8Array<ArrayBuffer>; } = { track: 1, kind: 1, timestamp: 0, flags: 1, payload: new Uint8Array([1]) };
+  const frame: WireFrame = { track: 1, kind: 1, timestamp: 0, flags: 1, payload: new Uint8Array([1]) };
 
   it('fans one encoded frame out to every connected participant', async () => {
     // Encode once, send many: an encoder per peer is what makes mesh calls melt

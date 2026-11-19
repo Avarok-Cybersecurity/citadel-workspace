@@ -11,11 +11,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
-const LIVE: ActiveSession[] = [
-  { cid: 7n, username: 'alice0924', server_address: 'wss://bench.work.avarok.net/' },
-  { cid: 8n, username: 'bob0924', server_address: 'wss://bench.work.avarok.net/', server_host: 'bench.work.avarok.net' },
+const LIVE: SessionInformation[] = [
+  { cid: 7n, username: 'alice0924', server_address: 'wss://bench.work.avarok.net/', server_host: null, peer_connections: {} },
+  { cid: 8n, username: 'bob0924', server_address: 'wss://bench.work.avarok.net/', server_host: 'bench.work.avarok.net', peer_connections: {} },
 ];
 
 vi.mock('@/lib/connection', async (importOriginal: () => Promise<{ connectionManager: object }>) => {
@@ -24,7 +24,7 @@ vi.mock('@/lib/connection', async (importOriginal: () => Promise<{ connectionMan
     ...actual,
     connectionManager: Object.assign(Object.create(actual.connectionManager), {
       getStoredSessionsArray: (): [] => [],
-      getActiveSessionsResult: async (): Promise<{ ok: true; sessions: ActiveSession[]; signedOut: [] }> => ({ ok: true, sessions: LIVE, signedOut: [] }),
+      getActiveSessionsResult: async (): Promise<{ ok: true; sessions: SessionInformation[]; signedOut: [] }> => ({ ok: true, sessions: LIVE, signedOut: [] }),
       // A resumed tab: the connection names nobody.
       getConnectionInfo: (): null => null,
       getTabSelectedSession: async (): Promise<null> => null,

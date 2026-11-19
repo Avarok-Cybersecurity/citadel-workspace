@@ -26,7 +26,7 @@ import { useAccountServer } from "./admission/useAccountServer";
 import { useSignInLevel } from "./security/useSignInLevel";
 import { ADMISSION_ACTION } from "@/lib/admission/copy";
 import { useSignedOutAccounts } from "./signed-out/use-signed-out-accounts";
-import type { SignedOutAccount } from "@/types/session-types";
+import type { SignedOutSession } from 'citadel-workspace-client-ts';
 
 interface LoginProps {
   onNext: (connectionId: string) => void;
@@ -47,7 +47,7 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
   // says, and an account the server signed out is told so.
   const [accountServer, setAccountServer] = useState<string | undefined>(undefined);
   const [typed, setTyped] = useState<string>(initialUsername ?? '');
-  const signedOut: SignedOutAccount[] = useSignedOutAccounts();
+  const signedOut: SignedOutSession[] = useSignedOutAccounts();
   const admission: AdmissionGate = useAdmissionGate(ADMISSION_ACTION.signIn, {
     serverAddress: accountServer, reauth: signedOut.some((a) => a.username === typed), accountNamed: typed !== '',
   });

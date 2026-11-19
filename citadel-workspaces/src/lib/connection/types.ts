@@ -6,6 +6,7 @@
  */
 
 import type { SessionSecuritySettings } from '../p2p-registration-service';
+import type { AgentRequestBody } from '@/types/agent-request';
 
 /**
  * Current connection info including CID and user details.
@@ -114,12 +115,7 @@ export interface ClaimSessionIntent {
   onlyIfOrphaned: boolean;
 }
 
-export interface LocalDBSetIntent {
-  type: 'localdb-set';
-  cid: bigint;
-  key: string;
-  value: number[];
-}
+export type LocalDBSetIntent = { type: 'localdb-set' } & Pick<AgentRequestBody<'LocalDBSetKV'>, 'cid' | 'key' | 'value'>;
 
 export interface LocalDBGetIntent {
   type: 'localdb-get';

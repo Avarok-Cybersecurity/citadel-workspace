@@ -1297,6 +1297,14 @@ jobs:
         # bindings make it decidable.
         run: node scripts/check-wire-fields-exist.mjs
         working-directory: citadel-workspaces
+      - name: No hand-written copy of a generated type
+        # A copy drifts silently when the Rust changes; the generated type makes the same drift a
+        # compile error. The sweep that added this found copies already shipped wrong: a rename
+        # without the master password UpdateWorkspace requires (it never deserialized), 'add' for
+        # serde's "Add", a u64 sent as a number, a `full_name` the agent never sends rendered.
+        run: |
+          node --test scripts/lib/hand-copy-scan.test.mjs
+          node scripts/check-no-hand-copies-of-generated-types.mjs
       - name: Connect awaiters handle every answer
         # connect.rs settles a Connect with exactly ConnectSuccess,
         # ConnectFailure and SessionAlreadyActive. An awaiter matching only some

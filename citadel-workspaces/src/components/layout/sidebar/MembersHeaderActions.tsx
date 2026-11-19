@@ -19,7 +19,6 @@
 import { Share2, UserCheck, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePermission } from '@/hooks/use-permission';
-import { Permission } from '@/contexts/PermissionsContext';
 import { addMemberBlockedReason } from './add-member-gate';
 import { BlockedReason } from '@/components/shared/BlockedReason';
 
@@ -39,7 +38,7 @@ const ADD_MEMBER_LABEL: string = 'Add a member by username';
 export function MembersHeaderActions({
   onDiscover, onInvite, onAddMember, domainId,
 }: MembersHeaderActionsProps): JSX.Element {
-  const blockedReason: string | null = addMemberBlockedReason(usePermission(domainId, Permission.AddUsers));
+  const blockedReason: string | null = addMemberBlockedReason(usePermission(domainId, 'AddUsers'));
   return (
     <div className="flex shrink-0 items-center" data-testid="members-header-actions">
       <Button

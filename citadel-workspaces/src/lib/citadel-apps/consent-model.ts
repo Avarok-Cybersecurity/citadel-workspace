@@ -7,7 +7,7 @@
 import type { AppInstall, AppManifest, Capability, CapabilityRequest, PeerConsent } from 'citadel-workspace-client-ts';
 import { PERMISSION_LABELS } from '@/lib/permissions-service/types';
 import { CAPABILITY_COPY, FIRST_PARTY_ONLY, MEMBER_CONSENT_COPY, NETWORK_CAPABILITIES, PEER_METADATA_DISCLOSURE, type Risk } from './capability-copy';
-import type { ConsentPlane } from './member-consent-types';
+import type { ConsentChoice, ConsentPlane } from './member-consent-types';
 import type { Authority } from './scope-options';
 
 export interface ConsentRow {
@@ -134,8 +134,8 @@ export function effectiveForMember(granted: readonly Capability[], consent: Peer
 }
 
 /** The whole answer to send when the member changes one plane; an unanswered plane is sent as not allowed. */
-export function consentWith(consent: PeerConsent | null, plane: ConsentPlane, allowed: boolean): { serve: boolean; call: boolean; topics: boolean } {
-  const base: { serve: boolean; call: boolean; topics: boolean } = { serve: consent?.serve ?? false, call: consent?.call ?? false, topics: consent?.topics ?? false };
+export function consentWith(consent: PeerConsent | null, plane: ConsentPlane, allowed: boolean): ConsentChoice {
+  const base: ConsentChoice = { serve: consent?.serve ?? false, call: consent?.call ?? false, topics: consent?.topics ?? false };
   return { ...base, [plane]: allowed };
 }
 

@@ -8,19 +8,19 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { getSignInSettings, parseSignInSettings, updateSignInSettings } from '../sign-in-settings';
 import type { ProtocolSender } from '../workspace-operations';
 
-type Sender = ProtocolSender & { sent: WorkspaceProtocolRequestTS[] };
+type Sender = ProtocolSender & { sent: WorkspaceProtocolRequest[] };
 
 /** A sender whose server answers each request with `answer(request)`. */
-function sender(answer: (request: WorkspaceProtocolRequestTS) => unknown[]): Sender {
-  const sent: WorkspaceProtocolRequestTS[] = [];
+function sender(answer: (request: WorkspaceProtocolRequest) => unknown[]): Sender {
+  const sent: WorkspaceProtocolRequest[] = [];
   return {
     sent,
     currentCid: 7n,
-    sendProtocolRequest: vi.fn(async (request: WorkspaceProtocolRequestTS): Promise<void> => {
+    sendProtocolRequest: vi.fn(async (request: WorkspaceProtocolRequest): Promise<void> => {
       sent.push(request);
       for (const response of answer(request)) setTimeout(() => eventEmitter.emit('workspace:raw-response', response), 0);
     }),
@@ -31,7 +31,7 @@ describe('the sign-in settings requests', () => {
   it('read: sends GetSignInSettings and resolves with the settings answered', async () => {
     const s: Sender = sender(() => [{ SignInSettings: { require_turnstile_sign_in: true } }]);
     expect(await getSignInSettings(s)).toEqual({ require_turnstile_sign_in: true });
-    expect(s.sent).toEqual([{ GetSignInSettings: null }]);
+    expect(s.sent).toEqual(['GetSignInSettings']);
   });
 
   it('update: sends the settings and resolves with the server\'s answer, not the request', async () => {

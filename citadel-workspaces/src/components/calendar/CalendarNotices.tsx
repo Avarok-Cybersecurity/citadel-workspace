@@ -4,7 +4,7 @@
  * never a guess), and a repeating event with more occurrences than one view expands.
  */
 import { AlertTriangle } from 'lucide-react';
-import type { Placement, Unplaced } from '@/lib/calendar/placement';
+import type { GridPlacement, Unplaced } from '@/lib/calendar/placement';
 import type { EntrySource, LoadState } from '@/lib/calendar/store';
 
 const SOURCE: Record<EntrySource, string> = {
@@ -23,7 +23,7 @@ const REASON: Partial<Record<Unplaced['code'], string>> = {
 
 interface CalendarNoticesProps {
   loads: ReadonlyMap<EntrySource, LoadState>;
-  placement: Placement;
+  placement: GridPlacement;
 }
 
 function Notice({ children }: { children: React.ReactNode }): JSX.Element {

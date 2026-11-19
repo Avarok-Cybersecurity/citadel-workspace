@@ -15,11 +15,9 @@
  * reintroduce exactly the bug this replaces.
  */
 
-/** The backend's group identifier. `mgid` exceeds Number.MAX_SAFE_INTEGER, so both stay bigint. */
-export interface MessageGroupKey {
-  cid: bigint;
-  mgid: bigint;
-}
+/** The backend's group identifier (generated). `mgid` exceeds Number.MAX_SAFE_INTEGER, so both stay bigint. */
+import type { MessageGroupKey } from '@avarok/citadel-protocol-types';
+export type { MessageGroupKey };
 
 const SEPARATOR: string = ':';
 

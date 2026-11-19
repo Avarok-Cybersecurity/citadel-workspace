@@ -23,7 +23,6 @@ import type { ActionGate } from '@/hooks/use-permission-result';
 import WorkspaceService from "@/lib/workspace-service";
 import { NodePane } from "./tabs/NodePane";
 import { usePermission } from '@/hooks/use-permission';
-import { Permission } from "@/contexts/PermissionsContext";
 import { debugLog } from '@/lib/debug-config';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import type { DomainNode } from '@/components/layout/sidebar/tree-node-types';
@@ -73,7 +72,7 @@ export const BaseOffice = ({ title, getInitialContent, nodeId }: BaseOfficeProps
   // Check if user can edit the MDX content using the permissions system
   const edit: ReturnType<typeof usePermission> = usePermission(
     domainId,
-    Permission.EditMdx
+    'EditMdx'
   );
 
   const { isDirty } = useUnsavedMdxGuard({ isEditing, content, ownerId: nodeId ?? WORKSPACE_ROOT_ID });

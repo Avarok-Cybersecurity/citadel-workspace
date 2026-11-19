@@ -5,10 +5,10 @@
 import { useEffect, useState } from 'react';
 import { eventEmitter } from '@/lib/event-emitter';
 import { SUPERVISOR_STATUS_EVENT, supervisorStateFor } from '@/lib/agent-supervisor/status';
-import type { SupervisorState } from '@/types/agent-supervisor';
+import type { SupervisorPhase } from '@/types/agent-supervisor';
 
-export function useSupervisorState(sessionCid: bigint | null, peerCid: bigint): Exclude<SupervisorState, 'healed'> | null {
-  const [state, setState] = useState<Exclude<SupervisorState, 'healed'> | null>(() => supervisorStateFor(sessionCid, peerCid));
+export function useSupervisorState(sessionCid: bigint | null, peerCid: bigint): Exclude<SupervisorPhase, 'healed'> | null {
+  const [state, setState] = useState<Exclude<SupervisorPhase, 'healed'> | null>(() => supervisorStateFor(sessionCid, peerCid));
   useEffect(() => {
     const refresh = (): void => setState(supervisorStateFor(sessionCid, peerCid));
     refresh();

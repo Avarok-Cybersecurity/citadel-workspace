@@ -23,24 +23,27 @@
  * every tab, so the leader, which opens channels for the others, reads the
  * same answer. The values are strings and numbers; nothing here is a BigInt.
  */
+import type { ChatSecurityLevel } from 'citadel-workspace-client-ts';
+import { everyMember } from '@/types/every-member';
 import { higherLevel } from './security-level-rank';
+
+export type { ChatSecurityLevel };
 
 /**
  * The levels a chat can promise. The SDK also has `Ultra` and `Custom(n)`, but
  * the WASM message path (`parse_security_level`) knows only these four and
  * sends anything else at Standard -- offering Ultra would be offering a label.
  */
-export type ChatSecurityLevel = 'Standard' | 'Reinforced' | 'High' | 'Extreme';
-export const CHAT_SECURITY_LEVELS: readonly ChatSecurityLevel[] = ['Standard', 'Reinforced', 'High', 'Extreme'];
+export const CHAT_SECURITY_LEVELS: readonly ChatSecurityLevel[] = everyMember<ChatSecurityLevel>()(['Standard', 'Reinforced', 'High', 'Extreme']);
 
 /** Days a message is kept on this device, or every message kept. */
 export type RetentionDays = 1 | 7 | 30 | 90 | 365;
-export type Retention = RetentionDays | 'forever';
-export const RETENTION_CHOICES: readonly Retention[] = ['forever', 1, 7, 30, 90, 365];
+export type RetentionChoice = RetentionDays | 'forever';
+export const RETENTION_CHOICES: readonly RetentionChoice[] = ['forever', 1, 7, 30, 90, 365];
 
 export interface ChatAdvancedSettings {
   securityLevel: ChatSecurityLevel;
-  retention: Retention;
+  retention: RetentionChoice;
 }
 
 /** What a chat nothing was chosen for does: exactly what every chat did before. */
@@ -71,7 +74,7 @@ function parse(stored: unknown): ChatAdvancedSettings {
   if (record.securityLevel !== undefined && level === undefined) {
     throw new Error(`This chat's saved encryption level (${String(record.securityLevel)}) is not one this version can use`);
   }
-  const retention: Retention | undefined = RETENTION_CHOICES.find((r: Retention): boolean => r === record.retention);
+  const retention: RetentionChoice | undefined = RETENTION_CHOICES.find((r: RetentionChoice): boolean => r === record.retention);
   return {
     securityLevel: level ?? DEFAULT_CHAT_ADVANCED_SETTINGS.securityLevel,
     retention: retention ?? DEFAULT_CHAT_ADVANCED_SETTINGS.retention,

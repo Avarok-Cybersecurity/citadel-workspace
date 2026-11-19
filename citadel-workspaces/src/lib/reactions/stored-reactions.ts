@@ -9,14 +9,14 @@
  * chip that throws while rendering.
  */
 import { encode as cborEncode, decode as cborDecode } from 'cbor-x';
-import type { MessageReaction } from './reaction-state';
+import type { GroupReaction } from 'citadel-workspace-client-ts';
 
 /** The bytes to put in the page, or undefined when there is nothing to keep. */
-export function encodeStoredReactions(list: readonly MessageReaction[] | undefined): number[] | undefined {
+export function encodeStoredReactions(list: readonly GroupReaction[] | undefined): number[] | undefined {
   return list && list.length > 0 ? Array.from(cborEncode(list)) : undefined;
 }
 
-function toReaction(raw: unknown): MessageReaction | null {
+function toReaction(raw: unknown): GroupReaction | null {
   if (!raw || typeof raw !== 'object') return null;
   const r: Record<string, unknown> = raw as Record<string, unknown>;
   if (typeof r.emoji !== 'string' || typeof r.reactorCid !== 'bigint') return null;
@@ -25,12 +25,12 @@ function toReaction(raw: unknown): MessageReaction | null {
 }
 
 /** The reactions a stored page holds; undefined when it holds none or they do not decode. */
-export function decodeStoredReactions(raw: unknown): MessageReaction[] | undefined {
+export function decodeStoredReactions(raw: unknown): GroupReaction[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
   try {
     const decoded: unknown = cborDecode(new Uint8Array(raw as number[]));
     if (!Array.isArray(decoded)) return undefined;
-    const list: MessageReaction[] = decoded.map(toReaction).filter((r): r is MessageReaction => r !== null);
+    const list: GroupReaction[] = decoded.map(toReaction).filter((r): r is GroupReaction => r !== null);
     return list.length > 0 ? list : undefined;
   } catch {
     return undefined;

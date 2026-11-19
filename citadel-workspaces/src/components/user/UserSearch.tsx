@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import type { UserData, UserSearchProps } from './user-search-types';
 import { UserSearchResults, RESULTS_LIST_ID } from './UserSearchResults';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 // Re-export types for backward compatibility
 export type { UserData } from './user-search-types';
@@ -96,7 +96,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
       setSearchFailed(false);
 
       try {
-        const members: User[] = Object.values(state.members || {});
+        const members: WorkspaceMember[] = Object.values(state.members || {});
         // Folded ONCE. `matchesSearch` folds both arguments per call, and this
         // runs over every member on every keystroke -- two normalisations of the
         // same query per member. `exclude` becomes a Set for the same reason:
@@ -161,7 +161,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
   };
 
   const getRecentUsers = (): UserData[] => {
-    const members: User[] = Object.values(state.members || {});
+    const members: WorkspaceMember[] = Object.values(state.members || {});
 
     return members
       .filter(member => !exclude.includes(member.id))

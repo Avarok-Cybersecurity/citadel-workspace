@@ -25,13 +25,13 @@ import {
   CHAT_SECURITY_LEVELS,
   RETENTION_CHOICES,
   type ChatSecurityLevel,
-  type Retention,
+  type RetentionChoice,
 } from '@/lib/p2p/chat-advanced-settings';
 import { useChatAdvancedSettings, type ChatAdvancedControls } from './useChatAdvancedSettings';
 
 const SELECT_CLASS: string = 'bg-surface border border-surface rounded px-2 py-1 text-sm text-foreground/80';
 
-function retentionLabel(r: Retention): string {
+function retentionLabel(r: RetentionChoice): string {
   if (r === 'forever') return 'Keep everything';
   if (r === 1) return '1 day';
   if (r === 365) return '1 year';
@@ -88,12 +88,12 @@ export function ChatSettingsAdvanced({ isOpen, peerCid, peerName }: ChatSettings
             value={settings === null ? '' : String(settings.retention)}
             disabled={settings === null}
             onChange={(e): void => {
-              const chosen: Retention | undefined = RETENTION_CHOICES.find((r: Retention): boolean => String(r) === e.target.value);
+              const chosen: RetentionChoice | undefined = RETENTION_CHOICES.find((r: RetentionChoice): boolean => String(r) === e.target.value);
               if (chosen !== undefined) void changeRetention(chosen);
             }}
           >
             {settings === null && <option value="">Loading…</option>}
-            {RETENTION_CHOICES.map((r: Retention) => <option key={String(r)} value={String(r)}>{retentionLabel(r)}</option>)}
+            {RETENTION_CHOICES.map((r: RetentionChoice) => <option key={String(r)} value={String(r)}>{retentionLabel(r)}</option>)}
           </select>
         </div>
 

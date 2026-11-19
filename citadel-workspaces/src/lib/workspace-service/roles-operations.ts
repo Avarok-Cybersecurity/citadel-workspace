@@ -7,8 +7,7 @@
  * protocol has no request id, so an edit's answer is taken for ours only when it names the role
  * we edited (or, for a create, carries a role by the name we asked for).
  */
-import type {
-  Permission, RoleChange, RoleDefinition, RolesRequest, RolesResponse, WorkspaceRoles,
+import type { RoleChange, RoleDefinition, RolesRequest, RolesResponse, WorkspaceRoles,
 } from 'citadel-workspace-client-ts';
 import { awaitWriteResponse } from './await-write-response';
 import type { ProtocolSender } from './workspace-operations';
@@ -46,12 +45,7 @@ async function exchange(
 
 export const listRoles = (s: ProtocolSender): Promise<WorkspaceRoles> => exchange(s, 'List', listedOf);
 
-export interface NewRole {
-  name: string;
-  permissions: Permission[];
-  position: number;
-  color: string | null;
-}
+export type NewRole = Extract<RolesRequest, { Create: unknown }>['Create'];
 
 export const createRole = (s: ProtocolSender, role: NewRole): Promise<WorkspaceRoles> => {
   const name: string = role.name.trim().toLowerCase();

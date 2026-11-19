@@ -3,7 +3,7 @@
  * accepted the write and rejects with its reason, through the matcher that tells our answer
  * from another member's broadcast of the same node or workspace.
  */
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { storedTabs, type StoredTabs } from '@/lib/node-tabs/tab-list';
 import { APP_TABS_KEY, DEFAULT_APP_TABS_KEY } from '@/lib/node-tabs/tab-keys';
 import type { MetadataSource } from '@/lib/workspace-metadata/metadata-document';
@@ -24,8 +24,11 @@ const metadataOf = (payload: unknown): MetadataSource =>
  */
 export async function writeNodeTabs(sender: ProtocolSender, nodeId: string, appIds: readonly string[] | null): Promise<void> {
   const patch: string = JSON.stringify({ [APP_TABS_KEY]: appIds });
-  const requestPart: WorkspaceProtocolRequestTS = {
-    UpdateNode: { node_id: nodeId, metadata: Array.from(new TextEncoder().encode(patch)) },
+  const requestPart: WorkspaceProtocolRequest = {
+    UpdateNode: {
+      node_id: nodeId, name: null, description: null, mdx_content: null, rules: null, chat_enabled: null, is_default: null,
+      metadata: Array.from(new TextEncoder().encode(patch)),
+    },
   };
   return awaitWriteResponse(
     'UpdateNode',
@@ -37,7 +40,7 @@ export async function writeNodeTabs(sender: ProtocolSender, nodeId: string, appI
 
 /** Set the tabs every node without a list of its own shows. */
 export async function setDefaultAppTabs(sender: ProtocolSender, appIds: readonly string[]): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = { SetDefaultAppTabs: { app_tabs: [...appIds] } };
+  const requestPart: WorkspaceProtocolRequest = { SetDefaultAppTabs: { app_tabs: [...appIds] } };
   return awaitWriteResponse(
     'SetDefaultAppTabs',
     () => sender.sendProtocolRequest(requestPart),

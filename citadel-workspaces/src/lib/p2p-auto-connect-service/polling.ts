@@ -17,8 +17,8 @@ import { getCurrentCid } from './cid-resolver';
 import { linkAdmitted } from './pause-gate';
 import { supervision } from '../agent-conversations/capabilities';
 import type { PeerConnectionInfo } from '@/lib/p2p-auto-connect/types';
-import type { PeerInfoResponse } from '@/lib/p2p-registration-service/types';
-import type { ActiveSession } from '@/types/session-types';
+import type { PeerInformation } from 'citadel-workspace-client-ts';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 /**
  * Start periodic GetSessions polling for backend state sync.
@@ -68,8 +68,8 @@ export function stopBackendPolling(state: AutoConnectState): void {
 export async function refreshFromBackend(state: AutoConnectState, localCid: bigint): Promise<void> {
   try {
     const localCidBigInt: bigint = ensureBigInt(localCid);
-    const sessions: ActiveSession[] = await connectionManager.getActiveSessions();
-    const mySession: ActiveSession | undefined = sessions.find(s => s.cid === localCidBigInt);
+    const sessions: SessionInformation[] = await connectionManager.getActiveSessions();
+    const mySession: SessionInformation | undefined = sessions.find(s => s.cid === localCidBigInt);
 
     const existingPeerMap: Map<bigint, PeerConnectionInfo> = state.getPeerMapForSession(localCidBigInt);
 
@@ -119,7 +119,7 @@ export async function refreshOnlineStatus(state: AutoConnectState, force: boolea
   }
 
   try {
-    const peers: PeerInfoResponse[] = await p2pRegistrationService.listAllPeers();
+    const peers: PeerInformation[] = await p2pRegistrationService.listAllPeers();
     const onlineCids: bigint[] = [];
     const unreportedCids: bigint[] = [];
 

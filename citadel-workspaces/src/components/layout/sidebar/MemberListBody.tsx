@@ -8,7 +8,7 @@ import { useLevelName } from '@/hooks/use-level-name';
 import type { RegisteredPeer } from '@/hooks/use-registered-peers';
 import { useMemberChatOpener, type MemberChatOpener } from './use-member-chat-opener';
 import { useMemberFilesOpener, type MemberFilesOpener } from './use-member-files-opener';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 interface MemberListBodyProps {
   isLoading: boolean;

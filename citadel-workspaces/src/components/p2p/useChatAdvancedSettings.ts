@@ -10,7 +10,7 @@ import {
   DEFAULT_CHAT_ADVANCED_SETTINGS,
   type ChatAdvancedSettings,
   type ChatSecurityLevel,
-  type Retention,
+  type RetentionChoice,
 } from '@/lib/p2p/chat-advanced-settings';
 import { changeChatLevel, chatLevelStatus, type ChatLevelResult } from '@/lib/p2p/chat-level-change';
 import { peerLink, peerPauseStore } from '@/lib/p2p-pause';
@@ -32,7 +32,7 @@ export interface ChatAdvancedControls {
   /** What the last change did, in words; null before any change. */
   status: string | null;
   error: string | null;
-  changeRetention: (retention: Retention) => Promise<void>;
+  changeRetention: (retention: RetentionChoice) => Promise<void>;
   changeSecurityLevel: (level: ChatSecurityLevel) => Promise<void>;
 }
 
@@ -67,7 +67,7 @@ export function useChatAdvancedSettings(isOpen: boolean, peerCid: bigint): ChatA
     return (): void => { cancelled = true; };
   }, [isOpen, peerCid]);
 
-  const changeRetention = async (retention: Retention): Promise<void> => {
+  const changeRetention = async (retention: RetentionChoice): Promise<void> => {
     setError(null);
     try {
       setSettings(await chatAdvancedSettings.set(await ownCid(), peerCid, { retention }));

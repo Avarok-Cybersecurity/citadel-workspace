@@ -11,7 +11,7 @@ import { render, act, cleanup } from '@testing-library/react';
 import { PeerRefusalNotice } from '../PeerRefusalNotice';
 import { eventEmitter } from '@/lib/event-emitter';
 import { WorkspaceContext, useWorkspace } from '@/contexts/WorkspaceContext';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 const toast: ReturnType<typeof vi.fn> = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({
@@ -22,7 +22,7 @@ afterEach((): void => { cleanup(); toast.mockClear(); });
 
 function Harness({ acceptsRequestsFromStrangers }: { acceptsRequestsFromStrangers: boolean | undefined }): JSX.Element {
   const base: ReturnType<typeof useWorkspace>['state'] = useWorkspace().state;
-  const bob: User = {
+  const bob: WorkspaceMember = {
     id: 'bob', username: 'bob', displayName: 'Bob Brown', isOnline: null,
     createdAt: 0, updatedAt: 0, acceptsRequestsFromStrangers,
   };

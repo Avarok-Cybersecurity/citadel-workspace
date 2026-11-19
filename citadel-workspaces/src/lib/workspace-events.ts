@@ -1,7 +1,7 @@
 // Workspace events for WebSocket integration
-import { User } from '../types/workspace-entities';
+import { WorkspaceMember } from '../types/workspace-entities';
 import { notifyEach } from '@/lib/notify-listeners';
-import type { WorkspaceMetadataTS } from '../types/workspace-protocol';
+import type { WorkspaceMetadata } from 'citadel-workspace-client-ts';
 import type { DomainNode, TreeNode, TreeSchema } from '@/components/layout/sidebar/TreeNodesSection';
 import { eventEmitter } from './event-emitter';
 
@@ -27,12 +27,12 @@ export interface WorkspacePayload {
 }
 
 export interface MemberPayload {
-  member: User;
+  member: WorkspaceMember;
   connection: ConnectionInfo;
 }
 
 export interface MembersPayload {
-  members: User[];
+  members: WorkspaceMember[];
   connection: ConnectionInfo;
   /**
    * Which domain this list is for, when the server said. Undefined against a
@@ -54,7 +54,7 @@ export interface MembersPayload {
 }
 
 export interface WorkspacesPayload {
-  workspaces: WorkspaceMetadataTS[];
+  workspaces: WorkspaceMetadata[];
   connection: ConnectionInfo;
 }
 
@@ -93,7 +93,7 @@ export interface WorkspaceEventMap {
   'workspaces:listed': WorkspacesPayload;
   // Member events
   'member:adding': { user_id: string; domain_id?: string; connection: ConnectionInfo };
-  'member:added': { member: User; connection: ConnectionInfo };
+  'member:added': { member: WorkspaceMember; connection: ConnectionInfo };
   'member:loading': { user_id: string; connection: ConnectionInfo };
   'member:updating_role': { user_id: string; connection: ConnectionInfo };
   'member:updating_permissions': { userId: string; domainId: string; connection: ConnectionInfo };

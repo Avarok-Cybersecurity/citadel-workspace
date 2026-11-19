@@ -19,7 +19,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
-import { Permission } from '../types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
 const currentUser: { id: string } = { id: 'alice' };
@@ -50,7 +49,7 @@ function loadPermissionsFor(userId: string): void {
       userId,
       domainId,
       role: 'Member',
-      permissions: [Permission.SendMessages],
+      permissions: ['SendMessages'],
     });
   }
 }

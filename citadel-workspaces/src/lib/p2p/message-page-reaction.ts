@@ -9,7 +9,8 @@
  * rendering. (`findMessageInPages` exists for the same reason on the resend
  * path.) Called under the caller's per-peer lock, like the other mutations.
  */
-import { foldReaction, type MessageReaction, type ReactionChange } from '@/lib/reactions/reaction-state';
+import { foldReaction, type ReactionChange } from '@/lib/reactions/reaction-state';
+import type { GroupReaction } from 'citadel-workspace-client-ts';
 import { tryLoadMetadata, tryLoadMessagePage, saveMessagePage } from './message-page-operations';
 import type { ConversationMetadata, MessagePage, P2PMessage } from './p2p-types';
 
@@ -31,7 +32,7 @@ export async function reactToMessageInPages(
     const index: number = page ? page.messages.findIndex((m) => m.id === messageId) : -1;
     if (!page || index === -1) continue;
 
-    const reactions: MessageReaction[] | null = foldReaction(page.messages[index].reactions, change);
+    const reactions: GroupReaction[] | null = foldReaction(page.messages[index].reactions, change);
     if (!reactions) return { kind: 'no-change' };
     const message: P2PMessage = { ...page.messages[index], reactions };
     page.messages[index] = message;

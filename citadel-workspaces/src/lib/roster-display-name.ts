@@ -9,7 +9,7 @@
  */
 import { isPlaceholderName } from '@/lib/peer-display';
 import { memberDisplayName } from '@/lib/member-names';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 /**
  * The roster's name for `username`, or undefined when it has none better than
@@ -17,10 +17,10 @@ import type { User } from '@/types/workspace-entities';
  * it re-renders when it lands), then every name member-names.ts has learnt from
  * any `Members` response -- a room roster, or a workspace roster since replaced.
  */
-export function rosterDisplayName(members: Record<string, User>, username: string | undefined): string | undefined {
+export function rosterDisplayName(members: Record<string, WorkspaceMember>, username: string | undefined): string | undefined {
   if (!username) return undefined;
-  const member: User | undefined = Object.values(members).find(
-    (m: User) => m.username === username || m.id === username,
+  const member: WorkspaceMember | undefined = Object.values(members).find(
+    (m: WorkspaceMember) => m.username === username || m.id === username,
   );
   const name: string | undefined = member?.displayName?.trim() || memberDisplayName(username);
   return name && name !== username && !isPlaceholderName(name) ? name : undefined;
@@ -28,7 +28,7 @@ export function rosterDisplayName(members: Record<string, User>, username: strin
 
 /** The signed-in person: the roster, then the saved full name, then the username. */
 export function selfDisplayName(
-  members: Record<string, User>,
+  members: Record<string, WorkspaceMember>,
   identity: { username?: string; fullName?: string },
 ): string | undefined {
   const saved: string | undefined = identity.fullName?.trim() || undefined;

@@ -9,13 +9,13 @@ import { describe, it, expect } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
 import { setMembersVisible } from '../node-operations';
 import type { ProtocolSender } from '../workspace-operations';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 
-function recordingSender(): { sender: ProtocolSender; sent: WorkspaceProtocolRequestTS[] } {
-  const sent: WorkspaceProtocolRequestTS[] = [];
+function recordingSender(): { sender: ProtocolSender; sent: WorkspaceProtocolRequest[] } {
+  const sent: WorkspaceProtocolRequest[] = [];
   const sender: ProtocolSender = {
     currentCid: 1n,
-    sendProtocolRequest: async (request: WorkspaceProtocolRequestTS): Promise<void> => { sent.push(request); },
+    sendProtocolRequest: async (request: WorkspaceProtocolRequest): Promise<void> => { sent.push(request); },
   };
   return { sender, sent };
 }

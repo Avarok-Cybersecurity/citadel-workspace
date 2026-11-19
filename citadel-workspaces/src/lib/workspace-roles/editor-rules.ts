@@ -8,7 +8,6 @@
  *     and an unticked one may be ticked only for a permission you hold yourself.
  */
 import type { Permission as WirePermission, RoleDefinition } from 'citadel-workspace-client-ts';
-import { Permission } from '@/lib/permissions-service/types';
 import { draftGrants } from './role-diff';
 import { grantsPermission, isOwnerRole, mayEdit } from './role-ladder';
 
@@ -21,7 +20,7 @@ export const NOT_BELOW_YOU: string = 'Only roles below your own can be changed.'
 export function columnLock(actor: RoleDefinition | null, role: RoleDefinition): string | null {
   if (isOwnerRole(role)) return OWNER_FIXED;
   if (actor === null) return ACTOR_UNKNOWN;
-  if (!grantsPermission(actor, Permission.ManageRoles)) return NEEDS_MANAGE_ROLES;
+  if (!grantsPermission(actor, 'ManageRoles')) return NEEDS_MANAGE_ROLES;
   // What is left of mayEdit is the position: below yours, or you are the Owner.
   return mayEdit(actor, role) ? null : NOT_BELOW_YOU;
 }

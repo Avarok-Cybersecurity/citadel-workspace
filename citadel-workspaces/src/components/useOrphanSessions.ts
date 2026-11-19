@@ -10,7 +10,8 @@ import { heldElsewhereSignIn, type SignInRequest } from '@/lib/sessions/sign-in-
 import { useNavigate } from "react-router-dom";
 import { connectionManager } from "@/lib/connection";
 import { websocketService } from "@/lib/websocket-service";
-import type { ActiveSession, StoredSessions } from "@/types/session-types";
+import type { StoredSessions } from "@/types/session-types";
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import type { DisconnectAction } from "./DisconnectConfirmModal";
 import type { DisconnectStatus } from "./LoadingModal";
 import { useToast } from "@/hooks/use-toast";
@@ -25,7 +26,7 @@ import type { NavigateFunction } from 'react-router';
 import { signOutSession, type SignOutResult, type SignOutTarget } from './sign-out-session';
 import { useConfirm } from './shared/confirm-dialog';
 
-export interface OrphanSessionWithWorkspace extends ActiveSession {
+export interface OrphanSessionWithWorkspace extends SessionInformation {
   workspaceName: string;
   storedSessionIndex: number;
   lastAccessed?: number;
@@ -38,7 +39,7 @@ export function useOrphanSessions(): UseOrphanSessionsResult {
   const [signInRequest, setSignInRequest] = useState<SignInRequest | null>(null);
   const [sessions, setSessions] = useState<OrphanSessionWithWorkspace[]>([]);
   const [disconnectTarget, setDisconnectTarget] = useState<{
-    session: ActiveSession;
+    session: SessionInformation;
     workspaceName: string;
   } | null>(null);
   const { glowing: glowingSessionCid, observe } = useAttentionGlow();

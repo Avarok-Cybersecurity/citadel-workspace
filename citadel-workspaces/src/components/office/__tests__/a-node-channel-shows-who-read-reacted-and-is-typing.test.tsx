@@ -23,7 +23,7 @@ import NotificationService from '@/lib/notification-service';
 import { DEFAULT_PRIVACY_SETTINGS, savePrivacySettings } from '@/lib/privacy-settings';
 import { channelServer, channelMessage } from '@/lib/chat/transport/__tests__/doubles/channel-server';
 import type { ChatSelf } from '@/lib/chat/transport/chat-transport';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import type { Notification } from '@/lib/notification-service/types';
 
 vi.mock('@/lib/workspace-service', async () => ({
@@ -34,10 +34,10 @@ const { NodeChat } = await import('../NodeChat');
 
 const CHANNEL: string = 'c0ffee00-0000-4000-8000-000000000003';
 const SELF: ChatSelf = { cid: 7n, username: 'ada', displayName: 'Ada Lovelace' };
-const member = (username: string, displayName: string, isOnline: boolean | null): User => ({ id: username, username, displayName, isOnline }) as User;
-const ROSTER: User[] = [member('ada', 'Ada Lovelace', true), member('bob', 'Bob Byte', true), member('cy', 'Cy Press', false)];
+const member = (username: string, displayName: string, isOnline: boolean | null): WorkspaceMember => ({ id: username, username, displayName, isOnline }) as WorkspaceMember;
+const ROSTER: WorkspaceMember[] = [member('ada', 'Ada Lovelace', true), member('bob', 'Bob Byte', true), member('cy', 'Cy Press', false)];
 
-async function open(members: User[] | null): Promise<void> {
+async function open(members: WorkspaceMember[] | null): Promise<void> {
   render(
     <ConfirmDialogProvider>
       <NodeChat nodeId="node-design" channelId={CHANNEL} channelName="Design" self={SELF} sendRestriction="allowed" rules={null} members={members} managesSubscription={false} />

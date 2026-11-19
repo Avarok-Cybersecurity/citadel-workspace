@@ -5,7 +5,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { AppInstall, AppListing, Capability, CapabilityRequest, InstallScope } from 'citadel-workspace-client-ts';
+import type { AppInstall, AppListing, AppManifest, Capability, CapabilityRequest, InstallScope } from 'citadel-workspace-client-ts';
 
 const CASES: string = resolve(__dirname, '../../../apps/catalogue/fixtures/manifest-cases.json');
 const BASE: Record<string, unknown> = (JSON.parse(readFileSync(CASES, 'utf8')) as { base: Record<string, unknown> }).base;
@@ -13,26 +13,15 @@ const BASE: Record<string, unknown> = (JSON.parse(readFileSync(CASES, 'utf8')) a
 export const PUBLISHER_KEY: string = 'ab'.repeat(1952);
 export const OTHER_KEY: string = 'cd'.repeat(1952);
 
-export interface ManifestChanges {
-  id?: string;
-  version?: string;
-  name?: string;
-  summary?: string;
-  description?: string;
-  categories?: string[];
-  key?: string;
-  audience?: Record<string, unknown>;
-  scopes?: string[];
-  surfaces?: string[];
-  capabilities?: CapabilityRequest[];
-  icon?: { png_base64: string; max_bytes: number };
-}
+/** Fields of the base manifest a test replaces, as the manifest types them; `key` is the publisher's. */
+const OVERRIDABLE = ['id', 'version', 'name', 'summary', 'description', 'categories', 'audience', 'scopes', 'surfaces', 'capabilities', 'icon'] as const satisfies readonly (keyof AppManifest)[];
+export type ManifestChanges = Partial<Pick<AppManifest, (typeof OVERRIDABLE)[number]>> & { key?: string };
 
 export function manifestJson(c: ManifestChanges = {}): Record<string, unknown> {
   const m: Record<string, unknown> = structuredClone(BASE);
   const publisher: Record<string, unknown> = m.publisher as Record<string, unknown>;
   if (c.key !== undefined) publisher.mldsa65_public_key = c.key;
-  for (const k of ['id', 'version', 'name', 'summary', 'description', 'categories', 'audience', 'scopes', 'surfaces', 'capabilities', 'icon'] as const) {
+  for (const k of OVERRIDABLE) {
     if (c[k] !== undefined) m[k] = c[k];
   }
   if (c.version !== undefined) delete m.previous_versions;

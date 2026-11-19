@@ -4,6 +4,7 @@
  * the app is starting or after it stopped. The app never gets page DOM; the status is the host's
  * words, never the app's.
  */
+import type { AppEvent } from '../sdk/generated/AppEvent';
 
 export type SurfaceState = { readonly kind: 'starting' } | { readonly kind: 'running' } | { readonly kind: 'stopped'; readonly why: string };
 
@@ -13,12 +14,8 @@ export interface ZoneSurface {
   readonly dispose: () => void;
 }
 
-export interface SurfaceSize {
-  /** CSS pixels. */
-  readonly width: number;
-  readonly height: number;
-  readonly dpr: number;
-}
+/** A zone's size as the app's `resize` event carries it: CSS pixels, and the device pixel ratio. */
+export type SurfaceSize = Readonly<Extract<AppEvent, { resize: unknown }>['resize']>;
 
 /** `fill`: the canvas is as tall as its host (a tab), not the zone's fixed height. */
 export function zoneSurface(host: HTMLElement, appName: string, size: SurfaceSize, fill: boolean): ZoneSurface {

@@ -9,7 +9,7 @@ import type { GroupMessage } from '@/types/workspace-entities';
 import { TypedEventEmitter } from './event-emitter';
 import { debugLog } from '@/lib/debug-config';
 import { sortByTime, mergeOlder, applyEdit, removeMessage, reactToGroupMessage } from './group-message-list';
-import type { MessageReaction, ReactionChange } from './reactions/reaction-state';
+import type { GroupReaction, ReactionChange } from './reactions/reaction-state';
 
 export interface GroupMessageEvent {
   type: 'new_message' | 'message_edited' | 'message_deleted' | 'message_reacted' | 'messages_loaded';
@@ -193,7 +193,7 @@ class GroupMessagingManagerClass {
   }
 
   /** A node channel's notice: `reactions` is the message's whole list after the change. */
-  public handleReactionsReplaced(groupId: string, messageId: string, reactions: MessageReaction[]): void {
+  public handleReactionsReplaced(groupId: string, messageId: string, reactions: GroupReaction[]): void {
     const current: GroupMessagesState = this.getMessages(groupId);
     if (!current.messages.some((m) => m.id === messageId)) return;
     const messages: GroupMessage[] = current.messages.map((m) => (m.id === messageId ? { ...m, reactions } : m));

@@ -38,7 +38,7 @@ import type { UsePermissionResult } from './use-permission-result';
  *
  * @example
  * ```tsx
- * const { allowed, loading, reason } = usePermission(nodeId, Permission.EditMdx);
+ * const { allowed, loading, reason } = usePermission(nodeId, 'EditMdx');
  *
  * if (loading) return <Spinner />;
  * if (!allowed) return <Tooltip content={reason}><DisabledButton /></Tooltip>;

@@ -3,7 +3,8 @@
 import { ConnectionState } from './state';
 import { ConnectionIO, connectionIO } from './io';
 import type { CurrentConnectionInfo, AuthSuccessParams } from './types';
-import type { StoredSession, ActiveSession, StoredSessions } from '@/types/session-types';
+import type { StoredSession, StoredSessions } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { POST_DISCONNECT_DELAY_MS, AGENT_START_RETRY } from './constants';
 import { retryWithBackoff } from '@/lib/utils/retry-utils';
 import { debugLog } from '@/lib/debug-config';
@@ -122,7 +123,7 @@ export class ConnectionManager {
     this.state.addCleanupFunction(unsub);
   }
 
-  private async autoReconnectInternal(activeSessions: ActiveSession[]): Promise<void> {
+  private async autoReconnectInternal(activeSessions: SessionInformation[]): Promise<void> {
     await autoReconnect(
       activeSessions, this.state, this.io,
       () => this.getActiveSessions(),
@@ -134,7 +135,7 @@ export class ConnectionManager {
   // Public API
   // ============================================================================
 
-  public async getActiveSessions(): Promise<ActiveSession[]> {
+  public async getActiveSessions(): Promise<SessionInformation[]> {
     return getActiveSessions(this.state, this.io);
   }
 
@@ -154,7 +155,7 @@ export class ConnectionManager {
 
   public async triggerAutoConnect(): Promise<void> {
     debugLog('ConnectionService', 'ConnectionManager: Manually triggering auto-connect');
-    const active: ActiveSession[] = await this.getActiveSessions();
+    const active: SessionInformation[] = await this.getActiveSessions();
     await loadStoredSessions(this.state, this.io);
     if (this.state.storedSessions.sessions.length > 0) {
       this.state.resetReconnectAttempts();

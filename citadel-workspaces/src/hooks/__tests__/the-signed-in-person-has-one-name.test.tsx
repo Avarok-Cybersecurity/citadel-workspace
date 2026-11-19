@@ -12,7 +12,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { WorkspaceProvider, type WorkspaceState } from '@/contexts/WorkspaceContext';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { rosterDisplayName } from '@/lib/roster-display-name';
 
 vi.mock('@/lib/tab-context', async (importOriginal: () => Promise<Record<string, unknown>>) => ({
@@ -26,12 +26,12 @@ vi.mock('@/lib/connection', () => ({
 
 import { useSelfName } from '../use-self-name';
 
-function member(username: string, displayName: string): User {
-  return { id: username, username, displayName, isOnline: true } as User;
+function member(username: string, displayName: string): WorkspaceMember {
+  return { id: username, username, displayName, isOnline: true } as WorkspaceMember;
 }
 
 function withRoster(
-  members: Record<string, User>,
+  members: Record<string, WorkspaceMember>,
   currentUser?: { id: string; username: string; name: string },
 ): (p: { children: ReactNode }) => JSX.Element {
   const state: WorkspaceState = { members, currentUser, nodes: {}, loading: { workspace: false, members: false, nodes: false } } as unknown as WorkspaceState;
@@ -78,7 +78,7 @@ describe('the signed-in person', () => {
 
 describe('a peer', () => {
   it('is named from the roster when it knows them, and not otherwise', () => {
-    const roster: Record<string, User> = { bob0924: member('bob0924', 'Bob Stone'), carol: member('carol', 'carol') };
+    const roster: Record<string, WorkspaceMember> = { bob0924: member('bob0924', 'Bob Stone'), carol: member('carol', 'carol') };
     expect(rosterDisplayName(roster, 'bob0924')).toBe('Bob Stone');
     expect(rosterDisplayName(roster, 'carol')).toBeUndefined();
     expect(rosterDisplayName(roster, 'dave')).toBeUndefined();

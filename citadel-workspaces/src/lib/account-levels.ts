@@ -10,15 +10,20 @@
  * Levels are compared by the SDK's byte value (`SecurityLevel::value`), the
  * ordering it enforces; `Custom(n)` is `n`.
  */
+import type { SecurityLevel } from '@avarok/citadel-protocol-types';
+import { everyMember } from '@/types/every-member';
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export const NAMED_LEVELS: readonly string[] = ['Standard', 'Reinforced', 'High', 'Ultra', 'Extreme'];
+/** The SDK's named levels, in byte-value order; the list fails to compile when the enum gains or loses one. */
+type NamedLevel = Extract<SecurityLevel, string>;
+export const NAMED_LEVELS: readonly NamedLevel[] = everyMember<NamedLevel>()(['Standard', 'Reinforced', 'High', 'Ultra', 'Extreme']);
 
 /** A level as the SDK serialises it (`"High"`, `{ Custom: 7 }`), as its byte value; null when it is neither. */
 export function securityLevelValue(level: unknown): number | null {
   if (typeof level === 'string') {
-    const index: number = NAMED_LEVELS.indexOf(level);
+    const index: number = (NAMED_LEVELS as readonly string[]).indexOf(level);
     return index === -1 ? null : index;
   }
   if (isRecord(level) && typeof level.Custom === 'number') return level.Custom;
