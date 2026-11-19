@@ -1,4 +1,5 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
+use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_internal_service_test_common::{
     self as common, get_free_port, server_test_node_skip_cert_verification,
 };
@@ -51,6 +52,7 @@ pub async fn new_internal_service_with_admin(
         .with_node_type(NodeType::Peer)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()
+        .as_test_agent(&internal_service_kernel)
         .build(internal_service_kernel)?;
 
     // Start the node to initialize the remote

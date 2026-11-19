@@ -4,6 +4,7 @@
 #![allow(dead_code)] // each test file uses a different subset
 
 use citadel_internal_service::kernel::CitadelWorkspaceService;
+use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_internal_service_test_common::{
     get_free_port, spawn_services, InternalServicesFutures,
 };
@@ -38,7 +39,8 @@ pub async fn spawn_agent(insecure: bool) -> Result<SocketAddr, Box<dyn Error>> {
     let builder = builder
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
-        .with_node_type(NodeType::Peer);
+        .with_node_type(NodeType::Peer)
+        .as_test_agent(&kernel);
     if insecure {
         let _ = builder.with_insecure_skip_cert_verification();
     }

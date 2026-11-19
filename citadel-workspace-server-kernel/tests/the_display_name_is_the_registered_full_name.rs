@@ -7,6 +7,7 @@
 //! server: the full name exists only on the SDK's account record, so a kernel
 //! with an injected user could not show whether it is read.
 
+use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_sdk::prefabs::client::single_connection::SingleClientServerConnectionKernel;
 use citadel_sdk::prefabs::client::ServerConnectionSettingsBuilder;
 use citadel_sdk::prelude::*;
@@ -84,6 +85,7 @@ async fn stored_name(settings: ServerConnectionSettings<StackedRatchet>, repair:
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()
+        .as_test_node()
         .build(kernel)
         .expect("client node");
     let client = tokio::spawn(client);

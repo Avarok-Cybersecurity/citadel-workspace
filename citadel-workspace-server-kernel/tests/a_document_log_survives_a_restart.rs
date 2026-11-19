@@ -6,6 +6,7 @@
 //! the kernel on a real node over the SQLite backend production uses
 //! (`docker-compose.production.yml`), stops it, and starts a second kernel on the same file.
 
+use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_sdk::prelude::*;
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
 use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
@@ -42,7 +43,8 @@ async fn boot(db: &std::path::Path) -> (Kernel, tokio::task::JoinHandle<()>) {
         .with_backend(BackendType::sql(format!(
             "sqlite://{}?mode=rwc",
             db.display()
-        )));
+        )))
+        .as_test_node();
     let node = builder.build(kernel).expect("server node");
     let task = tokio::spawn(async move {
         let _ = node.await;

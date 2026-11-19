@@ -14,6 +14,7 @@ use citadel_internal_service_types::{
 };
 use citadel_sdk::prelude::{NodeBuilder, NodeType, StackedRatchet};
 use citadel_workspace_server_kernel_test_common::production_server::start_server_named_localhost;
+use common::node_settings::TestNode;
 use futures::StreamExt;
 use uuid::Uuid;
 
@@ -101,6 +102,7 @@ async fn a_kernel_s_answer_verifies_the_pinned_server() {
         .with_node_type(NodeType::Peer)
         .with_backend(backend)
         .with_insecure_skip_cert_verification()
+        .as_test_agent(&service)
         .build(service)
         .unwrap();
     let _node = tokio::spawn(node);

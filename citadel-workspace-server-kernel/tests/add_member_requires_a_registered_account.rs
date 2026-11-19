@@ -8,6 +8,7 @@
 //! in the SDK's account store, not in the kernel's records -- a kernel with an
 //! injected user could not show which of the two is asked.
 
+use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_sdk::prefabs::client::single_connection::SingleClientServerConnectionKernel;
 use citadel_sdk::prefabs::client::ServerConnectionSettingsBuilder;
 use citadel_sdk::prelude::*;
@@ -102,6 +103,7 @@ where
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()
+        .as_test_node()
         .build(kernel)
         .expect("client node");
     let client = tokio::spawn(client);

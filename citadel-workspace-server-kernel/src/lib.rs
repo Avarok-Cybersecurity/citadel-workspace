@@ -3,9 +3,11 @@ use citadel_logging::info;
 #[cfg(not(target_family = "wasm"))]
 use citadel_logging::{setup_log, warn};
 use citadel_sdk::prelude::{
-    ArgonDefaultServerSettings, BackendType, NetworkError, NodeBuilder, NodeType, PlatformOps,
-    ServerMiscSettings, StackedRatchet,
+    ArgonDefaultServerSettings, BackendType, LinkManagerMode, NetworkError, NodeBuilder, NodeType,
+    PlatformOps, ServerMiscSettings, StackedRatchet,
 };
+#[cfg(not(target_family = "wasm"))]
+use citadel_sdk::prelude::{MaxSecurityLevel, SecurityLevel};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use std::net::SocketAddr;
 #[cfg(not(target_family = "wasm"))]
@@ -969,6 +971,9 @@ pub async fn run_server_on<T: PlatformOps>(
         .with_node_type(node_type)
         .with_stun_servers(network::builder_list(&network.stun_servers))
         .with_path_policy(network.path_policy)
+        .with_max_security_level(network.max_security_level)
+        // Managed links are not switched on in this release.
+        .with_link_manager(LinkManagerMode::Legacy)
         .with_backend(backend)
         .with_server_argon_settings(server_argon_settings)
         // The same refusal of password-less transient accounts as the native server: a
@@ -1114,6 +1119,14 @@ pub async fn run_server_with_site_verify(
         .with_node_type(node_type)
         .with_stun_servers(network::builder_list(&stun_servers))
         .with_path_policy(path_policy)
+        // The owner's production maximum for the workspace server (2026-11-18), the agent's
+        // too; the SDK has no default.
+        .with_max_security_level(
+            MaxSecurityLevel::new(SecurityLevel::Custom(10))
+                .map_err(|e| NetworkError::msg(e.to_string()))?,
+        )
+        // Managed links are not switched on in this release.
+        .with_link_manager(LinkManagerMode::Legacy)
         .with_backend(backend_type_for_node_builder)
         .with_server_misc_settings(ServerMiscSettings {
             pq_sign_in: sign_in.pq_sign_in,
