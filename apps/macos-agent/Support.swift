@@ -71,17 +71,26 @@ final class LogFile {
     /// Beyond this the log starts over at launch; a crash loop left alone must not fill a disk.
     private static let limit: UInt64 = 10 * 1024 * 1024
 
-    init() throws {
+    convenience init() throws {
         let dir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Logs/Citadel Agent", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        url = dir.appendingPathComponent("agent.log")
+        try self.init(at: dir.appendingPathComponent("agent.log"))
+    }
+
+    /// Opened for appending (O_APPEND): every write lands at the end, whoever else writes the file.
+    /// The agent writes it too (its output is this handle), and an update runs two apps at once,
+    /// each with its own handle; a plain handle wrote at its own offset, so each app overwrote the
+    /// other's lines, and the agent's, mid-file (agent.log, 2026-10-24: "0.11.0 answers; the previo").
+    init(at url: URL) throws {
+        self.url = url
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? UInt64) ?? 0
         if size > Self.limit || !FileManager.default.fileExists(atPath: url.path) {
             FileManager.default.createFile(atPath: url.path, contents: nil)
         }
-        handle = try FileHandle(forWritingTo: url)
-        handle.seekToEndOfFile()
+        let fd = open(url.path, O_WRONLY | O_APPEND)
+        guard fd >= 0 else { throw SettingsError.invalid("the log file", "\(url.path): \(String(cString: strerror(errno)))") }
+        handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
     }
 
     func write(_ line: String) {

@@ -6,7 +6,7 @@ import react from "@vitejs/plugin-react-swc";
 import { VitePWA } from 'vite-plugin-pwa';
 import path from "path";
 import { stripWsPrefix } from "./src/lib/websocket-service/proxy-path";
-import { manifestForBuild, checkedMinSeq } from "./src/lib/pwa/version-manifest";
+import { manifestForBuild, checkedMinSeq, crateVersion } from "./src/lib/pwa/version-manifest";
 import { MIN_BUILD_SEQ } from "./src/lib/pwa/min-build-seq";
 import { VERSION_MANIFEST_PATH } from "./src/lib/pwa/deployed-version";
 import { KIT_MANIFEST } from "./src/pwa/kit-manifest.generated";
@@ -102,6 +102,12 @@ const agentProxy = {
 const BUILD_SEQ: number = Math.floor(Date.now() / 1000);
 
 /**
+ * The agent crate whose version is the release this build ships with (`agent` in /version.json).
+ * Read at build time only; the production Docker build copies it in (docker/ui/Dockerfile).
+ */
+const AGENT_CRATE_MANIFEST: string = path.resolve(__dirname, '../citadel-workspace-internal-service/Cargo.toml');
+
+/**
  * Emit `/version.json` so an open page can tell that a newer build is deployed
  * without a service worker (see src/lib/pwa/deployed-version.ts for why, and why the entry
  * chunk is the id).
@@ -118,7 +124,8 @@ function versionManifestPlugin(): Plugin {
       if (base === null) this.error('version.json: the config was never resolved');
       try {
         const minSeq: number = checkedMinSeq(MIN_BUILD_SEQ, BUILD_SEQ);
-        this.emitFile({ type: 'asset', fileName: VERSION_MANIFEST_PATH.slice(1), source: manifestForBuild(bundle, base, { seq: BUILD_SEQ, minSeq }) });
+        const agent: string = crateVersion(readFileSync(AGENT_CRATE_MANIFEST, 'utf8'));
+        this.emitFile({ type: 'asset', fileName: VERSION_MANIFEST_PATH.slice(1), source: manifestForBuild(bundle, base, { seq: BUILD_SEQ, minSeq }, agent) });
       } catch (error: unknown) {
         this.error(error instanceof Error ? error.message : String(error));
       }

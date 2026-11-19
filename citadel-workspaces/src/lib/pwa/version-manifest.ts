@@ -13,7 +13,7 @@ type BuildOutput = Record<string, OutputAsset | OutputChunk>;
  * is the module, and main.tsx is bundled into it. main.tsx's `import.meta.url` is
  * therefore this chunk's URL, which is what the running page compares.
  */
-export function manifestForBuild(bundle: BuildOutput, base: string, seqs: { seq: number; minSeq: number | null }): string {
+export function manifestForBuild(bundle: BuildOutput, base: string, seqs: { seq: number; minSeq: number | null }, agent: string): string {
   const entries: OutputChunk[] = Object.values(bundle).filter(
     (output: OutputAsset | OutputChunk): output is OutputChunk =>
       output.type === 'chunk' && output.isEntry && (output.facadeModuleId ?? '').endsWith('/index.html'),
@@ -22,7 +22,18 @@ export function manifestForBuild(bundle: BuildOutput, base: string, seqs: { seq:
     throw new Error(`version.json: expected one index.html entry chunk, found ${entries.length}`);
   }
   const entry: string = `${base}${entries[0].fileName}`;
-  return versionManifest(seqs.minSeq === null ? { entry, seq: seqs.seq } : { entry, seq: seqs.seq, minSeq: seqs.minSeq });
+  return versionManifest(seqs.minSeq === null ? { entry, seq: seqs.seq, agent } : { entry, seq: seqs.seq, minSeq: seqs.minSeq, agent });
+}
+
+/**
+ * The `[package]` version of a Cargo.toml: the agent crate's is the release the build ships
+ * with (VersionManifest.agent). Throws rather than guess when there is none.
+ */
+export function crateVersion(toml: string): string {
+  const pkg: RegExpExecArray | null = /^\[package\]([\s\S]*?)(?=^\[|(?![\s\S]))/m.exec(toml);
+  const version: RegExpExecArray | null = pkg === null ? null : /^version\s*=\s*"(\d+\.\d+\.\d+)"/m.exec(pkg[1]);
+  if (version === null) throw new Error('version.json: the agent crate\'s Cargo.toml has no [package] version');
+  return version[1];
 }
 
 /**

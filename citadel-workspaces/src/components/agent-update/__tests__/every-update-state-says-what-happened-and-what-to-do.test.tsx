@@ -3,7 +3,7 @@
  * About card's honesty about what "verified" rests on. The agent is a recorder answering on the
  * app's event emitter; nothing in the panel is mocked.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { UpdateStatusPanel } from '../UpdateStatusPanel';
 import { AgentVersionCard } from '../AgentVersionCard';
@@ -12,6 +12,10 @@ import { useRestartToUpdate, type RestartControl } from '../use-restart-to-updat
 import { deriveUpdateView, type UpdateView } from '@/lib/agent-update/update-view';
 import { fromAvailable, type AgentUpdate, type UpdaterSettings } from '@/lib/agent-update/update-state';
 import { available, fakeUpdater, RELEASE, type FakeUpdater } from '@/lib/agent-update/__tests__/fake-updater';
+import { restartPhase } from '@/lib/agent-update/restart-controller';
+
+// One restart per window (restart-controller.ts): each test starts with none.
+beforeEach(() => { restartPhase.set({ kind: 'idle' }); });
 
 const settings = (over: Partial<UpdaterSettings> = {}): UpdaterSettings =>
   ({ current: '0.8.8', autoInstall: true, lastChecked: 1_790_000_000n, lastError: null, ...over });

@@ -94,6 +94,26 @@ export function releaseAssetUrl(asset: string): string {
   return `https://github.com/${RELEASE_REPO}/releases/latest/download/${asset}`;
 }
 
+/** Download URL for `asset` of one agent release, by its version: what a banner naming that version links. */
+export function releaseAssetUrlFor(version: string, asset: string): string {
+  return `https://github.com/${RELEASE_REPO}/releases/download/agent-v${version}/${asset}`;
+}
+
+/** One agent release's page, where every asset of it is listed. */
+export function releasePageFor(version: string): string {
+  return `https://github.com/${RELEASE_REPO}/releases/tag/agent-v${version}`;
+}
+
+/**
+ * Where to download agent `version` for an installer family: the Mac disk image, the Windows
+ * installer, and otherwise (Linux has two packages; an unknown computer none) the release page.
+ */
+export function installerUrlFor(version: string, family: InstallerFamily | undefined): string {
+  if (family === 'mac') return releaseAssetUrlFor(version, MAC_APP_ASSET);
+  if (family === 'windows') return releaseAssetUrlFor(version, WINDOWS_INSTALLER_ASSET);
+  return releasePageFor(version);
+}
+
 /** Download URL for a platform's raw archive. */
 export function agentDownloadUrl(platform: AgentPlatform): string {
   return releaseAssetUrl(AGENT_ASSETS[platform]);

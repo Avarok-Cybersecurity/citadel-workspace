@@ -49,6 +49,9 @@ export interface RequestResponseOptions<T> {
  */
 export const CONNECTION_LOST: "the connection to the Citadel agent was lost" = 'the connection to the Citadel agent was lost';
 
+/** How a request that got no answer in its budget fails: `<operation> request timed out`. */
+export const REQUEST_TIMED_OUT: 'request timed out' = 'request timed out';
+
 export function requestResponse<T>(options: RequestResponseOptions<T>): Promise<T> {
   const { request, requestId, sendRequest, timeoutMs, operationName, matcher } = options;
 
@@ -61,7 +64,7 @@ export function requestResponse<T>(options: RequestResponseOptions<T>): Promise<
 
     const timeout: NodeJS.Timeout = setTimeout((): void => {
       cleanup();
-      reject(new Error(`${operationName} request timed out`));
+      reject(new Error(`${operationName} ${REQUEST_TIMED_OUT}`));
     }, timeoutMs);
 
     const onDisconnected = (): void => {

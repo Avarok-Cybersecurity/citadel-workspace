@@ -218,7 +218,12 @@ jobs:
             [ "$code" = 200 ] || { echo "::error::$asset answered $code"; exit 1; }
             echo "ok $asset"
           done
-      - name: The site answers
+      - name: The site answers, and names this release as its agent
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 https://work.avarok.net/version.json
+          # The agent-update banner names /version.json's `agent` (agent-update/released-agent.ts).
+          agent="$(curl -fsS --max-time 30 https://work.avarok.net/version.json | jq -r .agent)"
+          [ "agent-v$agent" = "$TAG" ] || { echo "::error::the site names agent $agent, the release is $TAG: the update banner would offer the wrong version"; exit 1; }
+          echo "ok version.json agent $agent"
