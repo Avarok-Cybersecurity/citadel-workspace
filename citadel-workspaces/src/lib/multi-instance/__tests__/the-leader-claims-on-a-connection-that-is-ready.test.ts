@@ -57,6 +57,8 @@ vi.mock('citadel-workspace-client-ts', async (importOriginal: () => Promise<type
     }
     stopMessageProcessing(): void {}
     async close(): Promise<void> {}
+    /** The service records the page's wire-types hash once the client exists (types-step.ts). */
+    typesHash(): string { return 'a'.repeat(64); }
   }
   return { ...real, WorkspaceClient: FakeSocket };
 });

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { readGreetingFacts } from '../agent-facts';
-import { typesStep } from '../types-step';
+import { typesStep, type TypesStep } from '../types-step';
 
 const A: string = 'a'.repeat(64);
 const B: string = 'b'.repeat(64);
@@ -24,7 +24,7 @@ describe('the types handshake', () => {
   });
 
   it('names both sides and what to do when they differ', () => {
-    const step = typesStep(readGreetingFacts({ types_hash: A, agent_version: '0.13.1' }), B);
+    const step: TypesStep | null = typesStep(readGreetingFacts({ types_hash: A, agent_version: '0.13.1' }), B);
     expect(step?.kind).toBe('out-of-step');
     expect(step && 'text' in step ? step.text : '').toBe(
       'Citadel Agent 0.13.1 and this page are out of step (agent aaaaaaaa, page bbbbbbbb), so messages between them may fail. Update the agent, then reload this page.',
