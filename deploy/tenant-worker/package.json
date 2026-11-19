@@ -11,7 +11,7 @@
     "@noble/post-quantum": "0.6.1",
     "@vitest/runner": "4.1.0",
     "@vitest/snapshot": "4.1.0",
-    "vitest": "4.1.0",
+    "vitest": "4.1.12",
     "wrangler": "4.136.3"
   },
   "overrides": {
