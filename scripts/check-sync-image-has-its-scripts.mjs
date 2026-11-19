@@ -25,7 +25,12 @@ const COMPOSE = 'docker-compose.yml';
 
 const read = (path) => readFileSync(join(ROOT, path), 'utf8');
 
-const invoked = [...read(SCRIPT).matchAll(/^\s*node "\$WORKSPACE_ROOT\/([^"]+)"/gm)].map((m) => m[1]);
+// The script and every file it `source`s (scripts/lib/wasm-pkg.sh holds the build and
+// the stamp now): a sourced file must be in the image too, and its node calls count.
+const sourced = [...read(SCRIPT).matchAll(/^\s*(?:source|\.) "\$WORKSPACE_ROOT\/([^"]+)"/gm)].map((m) => m[1]);
+const invoked = [SCRIPT, ...sourced]
+  .flatMap((file) => [...read(file).matchAll(/^\s*(?:\S.*\s)?node "\$WORKSPACE_ROOT\/([^"]+)"/gm)].map((m) => m[1]))
+  .concat(sourced);
 const copied = [...read(DOCKERFILE).matchAll(/^COPY\s+\.\/(\S+)/gm)].map((m) => m[1]);
 
 const compose = read(COMPOSE);
@@ -38,7 +43,7 @@ const mounted = [...service[1].matchAll(/^\s+- \.\/([^:]+):\/workspace\/\1(?::\w
 
 // A script this scan cannot see looks exactly like a passing scan.
 if (invoked.length === 0) {
-  console.error(`check-sync-image-has-its-scripts: found no \`node "$WORKSPACE_ROOT/..."\` call in ${SCRIPT}; its shape changed.`);
+  console.error(`check-sync-image-has-its-scripts: found no \`node "$WORKSPACE_ROOT/..."\` call in ${SCRIPT} or what it sources; its shape changed.`);
   process.exit(1);
 }
 
@@ -52,4 +57,4 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-console.log(`  ${invoked.length} script(s) sync-wasm-clients.sh runs with node are in the sync image  ok`);
+console.log(`  ${invoked.length} script(s) sync-wasm-clients.sh sources or runs with node are in the sync image  ok`);

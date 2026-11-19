@@ -3025,6 +3025,10 @@ jobs:
         # button on every dialog in the app, with every a11y gate green.
         run: npm run check:mobile
         working-directory: citadel-workspaces
+  # The committed WASM pkg is what its source builds to (TYPES-SYNC D3).
+  wasm-rebuild-diff:
+    uses: ./.github/workflows/wasm-rebuild-diff.yml
+
   all-green:
     name: Validation passed
     if: always()
@@ -3051,6 +3055,7 @@ jobs:
       - production-build
       - production-bundle-browser
       - integration-stack
+      - wasm-rebuild-diff
     # It only reads a JSON blob; the timeout is the house rule, not a need.
     timeout-minutes: 5
     runs-on: >-

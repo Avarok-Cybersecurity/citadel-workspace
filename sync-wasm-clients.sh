@@ -66,33 +66,10 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 WORKSPACE_ROOT="$SCRIPT_DIR"
 INTERNAL_SERVICE_ROOT="$WORKSPACE_ROOT/citadel-internal-service"
 
-# Hash of every tree the WASM binary is built from, in the order
-# scripts/wasm-source-trees.txt lists them.
-#
-# That file is read by the staleness gate too, so the writer and the checker
-# cannot disagree about what counts as source. It used to be one hard-coded
-# directory here and the same one hard-coded there -- and it was the wrong
-# directory: the WASM client's lib.rs imports the connector's messenger, which
-# CLAUDE.md names as the P2P send path, so an edit there left the stamp
-# unchanged and the gate reported a match over a binary without it.
-wasm_source_stamp() {
-    local trees
-    trees=$(grep -v '^[[:space:]]*#' "$WORKSPACE_ROOT/scripts/wasm-source-trees.txt" | grep -v '^[[:space:]]*$')
-    local out=""
-    local dir
-    while IFS= read -r dir; do
-        local hash
-        # The build reads the working tree; the stamp names HEAD. Refuse to name a
-        # HEAD the working tree does not match, or a dirty build gets a clean stamp.
-        if [ -n "$(git -C "$INTERNAL_SERVICE_ROOT" status --porcelain -- "$dir" 2>/dev/null)" ]; then
-            print_error "$dir has uncommitted changes in citadel-internal-service; commit them before stamping"
-            return 1
-        fi
-        hash=$(git -C "$INTERNAL_SERVICE_ROOT" rev-parse "HEAD:$dir" 2>/dev/null) || return 1
-        out="${out:+$out }$hash"
-    done <<< "$trees"
-    printf '%s\n' "$out"
-}
+# build_wasm_pkg, wasm_source_stamp and stamp_committed_pkg: shared with
+# scripts/regenerate-committed-pkg.sh, so both build and stamp the pkg alike.
+# shellcheck source=scripts/lib/wasm-pkg.sh
+source "$WORKSPACE_ROOT/scripts/lib/wasm-pkg.sh"
 NO_RESTART=false
 
 # Check to see if --no-restart was passed
@@ -211,13 +188,10 @@ fi
 
 # Build WASM 
 print_status "Running wasm-pack build..."
-wasm-pack build --target web --out-dir pkg
-
-if [ ! -d "pkg" ]; then
-    print_error "WASM build failed - pkg directory not created"
+if ! build_wasm_pkg; then
+    print_error "WASM build failed"
     exit 1
 fi
-node "$WORKSPACE_ROOT/scripts/strip-wasm-names.mjs" pkg/citadel_internal_service_wasm_client_bg.wasm  # 40% of the binary is names
 
 # Step 2: Generate TypeScript types
 print_status "Generating TypeScript types..."
@@ -331,21 +305,9 @@ if [ -d "$DEST3/pkg" ] || mkdir -p "$DEST3/pkg"; then
     # is also exactly how you would make the gate green over a STALE binary.
     # The check measured whether somebody typed a hash, not whether the binary
     # was rebuilt.
-    #
-    # Two lines: the source the binary was built from, then the content hash of
-    # the pkg beside it (scripts/lib/pkg-content-hash.mjs, which the gate also
-    # imports). Written to a temporary file and moved into place only when both
-    # succeed, so a failure can never leave a truncated stamp that names nothing.
-    # Outside pkg/, because pkg/ is what the second line hashes.
-    STAMP_TMP="$DEST3/.wasm-source-tree.tmp"
-    if wasm_source_stamp > "$STAMP_TMP" \
-        && node "$WORKSPACE_ROOT/scripts/lib/pkg-content-hash.mjs" "$DEST3/pkg" >> "$STAMP_TMP"; then
-        mv "$STAMP_TMP" "$DEST3/pkg/.wasm-source-tree"
-        echo "  Stamped $DEST3/pkg/.wasm-source-tree"
-    else
-        rm -f "$STAMP_TMP"
-        echo "  WARNING: could not stamp $DEST3/pkg; check-wasm-matches-its-source will fail"
-    fi
+    # The warning is printed by stamp_committed_pkg; the sync goes on (a dev
+    # container has no git for the stamp), and the gate is what refuses.
+    stamp_committed_pkg "$DEST3/pkg" || true
 fi
 
 # Step 5: Copy TypeScript types if they were generated

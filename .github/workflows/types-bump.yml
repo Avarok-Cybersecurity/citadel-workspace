@@ -4,8 +4,8 @@ name: Types bump
 # bot/types-bump, with ONE PR that each run updates (TYPES-SYNC D2):
 #   - the citadel-internal-service submodule onto its master (the pointer IS
 #     the agent's release), with citadel-workspace-client-ts/pkg regenerated
-#     from it in the same sync container production images use, so
-#     check-wasm-matches-its-source holds;
+#     from it by scripts/regenerate-committed-pkg.sh, the recipe
+#     wasm-rebuild-diff holds it to;
 #   - @avarok/citadel-protocol-types pinned EXACTLY (TYPES-SYNC D1) in every
 #     workspace that depends on it.
 # Validate runs on the PR, so a type the page no longer matches is a compile
@@ -77,13 +77,15 @@ jobs:
           after=$(git -C citadel-internal-service rev-parse HEAD)
           echo "moved=$([ "$before" != "$after" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "agent $before -> $after"
+      # The pinned recipe wasm-rebuild-diff holds the committed pkg to, so the
+      # bump PR passes it (scripts/wasm-toolchain.env).
+      - name: The pinned WASM toolchain
+        if: steps.agent.outputs.moved == 'true'
+        run: bash scripts/install-wasm-toolchain.sh
       - name: Regenerate the committed pkg from the new agent
         if: steps.agent.outputs.moved == 'true'
-        env:
-          WORKSPACE_MASTER_PASSWORD: 'ci-types-bump'
-          INTERNAL_SERVICE_PORT: '12345'
         run: |
-          docker compose up --build --exit-code-from sync-wasm-client sync-wasm-client
+          bash scripts/regenerate-committed-pkg.sh
           node scripts/check-wasm-matches-its-source.mjs
       - name: Which protocol-types version
         id: version
