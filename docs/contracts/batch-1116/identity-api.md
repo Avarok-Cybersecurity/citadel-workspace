@@ -65,7 +65,10 @@ pub fn display_handle<'a>(u: &'a str, accepted: &[CanonicalDomain]) -> &'a str;
 
 `canonical_domain`: refuse any non-ASCII, whitespace or `@ ? # % \` character first; lowercase;
 strip `scheme://` (scheme must be `[a-z][a-z0-9+.-]*`); strip trailing `/`s; split `authority/path`;
-host labels `[a-z0-9-]{1,63}` not edged by `-` (an IPv6 literal is therefore refused); port
+host labels `[a-z0-9-]{1,63}` not edged by `-`, or a bracketed IPv6 literal `[addr]` that parses
+as an IPv6 address and is written bracketed in its compressed lowercase form (RFC 5952, as Rust's
+`Ipv6Addr` prints it), so every spelling of one address is one domain; an unbracketed IPv6 literal
+is refused (its colons are ambiguous with the port; owner, 2026-11-19); port
 `1..=65535` with no leading zero, kept unless it is `443`; path segments `[a-z0-9._~-]+`, never `.`
 or `..`, re-joined with single `/`; result ≤ 190 bytes. Idempotent. Errors: `Empty, TooLong,
 ForbiddenChar, BadScheme, BadHost, BadPort, BadPath`.
