@@ -167,6 +167,24 @@ export function send_p2p_message_reliable(local_cid_str, peer_cid_str, message, 
 }
 
 /**
+ * The identity of the wire types this client was built from. The page compares
+ * it with the agent's greeting (`types_hash`) and says when they are out of step.
+ * @returns {string}
+ */
+export function types_hash() {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const ret = wasm.types_hash();
+        deferred1_0 = ret[0];
+        deferred1_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
  * True only for a valid signature. `signature` is the `app.mldsa.sig` bytes (its hex decoded);
  * the digests are lowercase hex sha256. Anything malformed is false, never an exception.
  * @param {string} public_key_hex
@@ -623,7 +641,7 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 1388, function: Function { arguments: [], shim_idx: 1389, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 1386, function: Function { arguments: [], shim_idx: 1387, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut_____Output________1_, wasm_bindgen_dc0159de9c09e5bc___convert__closures_____invoke_______1_);
             return ret;
         },

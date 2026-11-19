@@ -58,6 +58,12 @@ export function send_media_frame(local_cid_str: string, peer_cid_str: string, tr
 export function send_p2p_message_reliable(local_cid_str: string, peer_cid_str: string, message: Uint8Array, security_level?: string | null, compression_hint?: string | null): Promise<void>;
 
 /**
+ * The identity of the wire types this client was built from. The page compares
+ * it with the agent's greeting (`types_hash`) and says when they are out of step.
+ */
+export function types_hash(): string;
+
+/**
  * True only for a valid signature. `signature` is the `app.mldsa.sig` bytes (its hex decoded);
  * the digests are lowercase hex sha256. Anything malformed is false, never an exception.
  */
@@ -79,6 +85,7 @@ export interface InitOutput {
     readonly send_direct_to_internal_service: (a: any) => any;
     readonly send_media_frame: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
     readonly send_p2p_message_reliable: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => any;
+    readonly types_hash: () => [number, number];
     readonly verify_app_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => number;
     readonly wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut_____Output________1_: (a: number, b: number) => void;
     readonly wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut__web_sys_5d094b1de2ee9013___features__gen_CloseEvent__CloseEvent____Output_______: (a: number, b: number) => void;

@@ -82,6 +82,12 @@ wasm_source_stamp() {
     local dir
     while IFS= read -r dir; do
         local hash
+        # The build reads the working tree; the stamp names HEAD. Refuse to name a
+        # HEAD the working tree does not match, or a dirty build gets a clean stamp.
+        if [ -n "$(git -C "$INTERNAL_SERVICE_ROOT" status --porcelain -- "$dir" 2>/dev/null)" ]; then
+            print_error "$dir has uncommitted changes in citadel-internal-service; commit them before stamping"
+            return 1
+        fi
         hash=$(git -C "$INTERNAL_SERVICE_ROOT" rev-parse "HEAD:$dir" 2>/dev/null) || return 1
         out="${out:+$out }$hash"
     done <<< "$trees"
@@ -325,9 +331,19 @@ if [ -d "$DEST3/pkg" ] || mkdir -p "$DEST3/pkg"; then
     # is also exactly how you would make the gate green over a STALE binary.
     # The check measured whether somebody typed a hash, not whether the binary
     # was rebuilt.
-    if wasm_source_stamp > "$DEST3/pkg/.wasm-source-tree"; then
+    #
+    # Two lines: the source the binary was built from, then the content hash of
+    # the pkg beside it (scripts/lib/pkg-content-hash.mjs, which the gate also
+    # imports). Written to a temporary file and moved into place only when both
+    # succeed, so a failure can never leave a truncated stamp that names nothing.
+    # Outside pkg/, because pkg/ is what the second line hashes.
+    STAMP_TMP="$DEST3/.wasm-source-tree.tmp"
+    if wasm_source_stamp > "$STAMP_TMP" \
+        && node "$WORKSPACE_ROOT/scripts/lib/pkg-content-hash.mjs" "$DEST3/pkg" >> "$STAMP_TMP"; then
+        mv "$STAMP_TMP" "$DEST3/pkg/.wasm-source-tree"
         echo "  Stamped $DEST3/pkg/.wasm-source-tree"
     else
+        rm -f "$STAMP_TMP"
         echo "  WARNING: could not stamp $DEST3/pkg; check-wasm-matches-its-source will fail"
     fi
 fi
