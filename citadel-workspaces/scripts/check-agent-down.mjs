@@ -27,9 +27,10 @@ import { dirname, resolve, join } from 'node:path';
 import { createConnection } from 'node:net';
 import { chromium } from 'playwright';
 import { AxeBuilder } from '@axe-core/playwright';
+import { freePort } from './lib/free-port.mjs';
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = Number(process.env.AGENT_DOWN_PORT ?? 4203);
+const PORT = await freePort(); // chosen per run: concurrent runs cannot collide (lib/free-port.mjs)
 const DEAD_AGENT_PORT = Number(process.env.AGENT_DOWN_AGENT_PORT ?? 12399);
 const ORIGIN = `http://localhost:${PORT}`;
 // These checks drive the production bundle, where first-run onboarding is ON

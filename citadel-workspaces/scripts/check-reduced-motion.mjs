@@ -23,9 +23,10 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { chromium } from 'playwright';
+import { freePort } from './lib/free-port.mjs';
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = Number(process.env.REDUCED_MOTION_PORT ?? 4177);
+const PORT = await freePort(); // chosen per run: concurrent runs cannot collide (lib/free-port.mjs)
 const ORIGIN = `http://localhost:${PORT}`;
 
 const results = [];

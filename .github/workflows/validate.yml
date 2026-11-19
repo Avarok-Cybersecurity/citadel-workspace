@@ -148,6 +148,17 @@ jobs:
       - run: cargo clippy --locked --all-targets --manifest-path tools/release-sign/Cargo.toml -- -D warnings
       - run: cargo test --locked --manifest-path tools/release-sign/Cargo.toml
       - run: cargo run --locked --manifest-path tools/release-sign/Cargo.toml -- check-key --public-key citadel-internal-service/citadel-internal-service/src/updater/release_public_key.txt
+      # The menu-bar app's updater (apps/macos-agent), which verifies these releases before it
+      # installs one: its sequence, swap and rollback against scripted steps. release-agent.yml's
+      # macos-app job runs it again on the notarised app, but only when an agent is released; here
+      # a PR that breaks it fails before merge. It needs swiftc and AppKit, so it runs when this job
+      # lands on the Mac pool (every same-repo run while CITADEL_MAC_RUNNER is on) and says so when not.
+      - name: The macOS app's updater passes its tests
+        if: runner.os == 'macOS'
+        run: scripts/test-macos-agent-updater.sh
+      - name: The macOS app's updater was not tested on this runner
+        if: runner.os != 'macOS'
+        run: echo "::warning::scripts/test-macos-agent-updater.sh needs macOS; this run landed on $RUNNER_OS, so the updater is tested only at release (release-agent.yml macos-app)."
 
   # tools/telemetry-read (Avarok support's signed telemetry reads) is its own workspace too. It
   # depends on citadel-workspace-types, whose agent-side types load the agent's workspace, nested
@@ -399,6 +410,10 @@ jobs:
         run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/merge-preview-planning.test.mjs
       - name: The flaky-spec report counts only attempts that failed
         run: node --test scripts/lib/retry-passes.test.mjs
+      - name: No shipped artefact carries a build machine's home directory
+        run: node --test scripts/lib/home-paths.test.mjs && node scripts/check-no-home-paths-shipped.mjs
+      - name: Every wasm-bindgen init call passes the single object the glue expects
+        run: node --test scripts/lib/wasm-init-shape.test.mjs && node scripts/check-wasm-init-object-form.mjs
       - name: The stack's loopback STUN answers as RFC 5389 says
         run: node --test docker/stun/stun-wire.test.mjs
       - name: Check the docs' commands resolve
@@ -503,6 +518,10 @@ jobs:
         # identical code, and four other gates had the same shape without having
         # failed yet -- green about the wrong screen.
         run: node scripts/check-gates-pin-their-world.mjs
+        working-directory: citadel-workspaces
+      - name: Every browser gate serves on a port chosen per run
+        # Fixed ports with --strictPort made concurrent runs collide (4198, 4203 were seen).
+        run: node --test scripts/lib/fixed-ports.test.mjs && node scripts/check-preview-ports-are-chosen-per-run.mjs
         working-directory: citadel-workspaces
       - name: Service logs survive a failing test
         # `if: failure()` on a step reads as "run if anything failed" and is not:

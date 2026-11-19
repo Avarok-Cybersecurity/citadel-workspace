@@ -205,6 +205,10 @@ fi
 
 # Build WASM 
 print_status "Running wasm-pack build..."
+# Source paths mapped (scripts/lib/remap-paths.mjs): unmapped, the binary carried this machine's
+# home directory, which every user's console printed. Assigned first so a failure stops set -e.
+REMAP_ENV="$(node "$WORKSPACE_ROOT/scripts/remap-path-env.mjs" wasm32-unknown-unknown)"
+export "$REMAP_ENV"
 wasm-pack build --target web --out-dir pkg
 
 if [ ! -d "pkg" ]; then

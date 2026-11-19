@@ -26,7 +26,6 @@ import { join } from 'node:path';
 import { serveDocsHarness } from './lib/docs-harness/serve.mjs';
 import { grayscale, measureEdges } from './lib/docs-harness/edges.mjs';
 
-const PORT = Number(process.env.DOCS_HARNESS_PORT ?? 4198);
 const TEXT = 'Illumination lit HIH minimum';
 /** Mean pixels per edge strictly between 10% and 90% of the step, at most (the owner's bar). */
 const LIMIT = { 1: 1.5, 2: 2 };
@@ -132,7 +131,7 @@ async function run(browser, dpr, offset, renderer) {
   return { png, edges, own, problems };
 }
 
-const harness = await serveDocsHarness(PORT);
+const harness = await serveDocsHarness();
 const browser = await chromium.launch();
 let failures = 0;
 try {

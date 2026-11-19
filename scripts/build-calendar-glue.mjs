@@ -18,10 +18,11 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withArtifact } from './lib/first-party-manifest.mjs';
+import { remapFlags } from './lib/remap-paths.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const APP = join(ROOT, 'apps', 'first-party', 'calendar');
@@ -55,8 +56,7 @@ if (cliVersion !== bindgenVersion) {
   fail(`the wasm-bindgen CLI is ${cliVersion ?? 'not installed'}; the glue needs ${bindgenVersion}: cargo install wasm-bindgen-cli --locked --version ${bindgenVersion}`);
 }
 
-const cargoHome = process.env.CARGO_HOME ?? join(homedir(), '.cargo');
-const remaps = [`--remap-path-prefix=${ROOT}=/citadel-workspace`, `--remap-path-prefix=${cargoHome}=/cargo`];
+const remaps = remapFlags({ root: ROOT });
 delete process.env.RUSTUP_TOOLCHAIN;
 delete process.env.RUSTFLAGS;
 delete process.env.CARGO_ENCODED_RUSTFLAGS;
