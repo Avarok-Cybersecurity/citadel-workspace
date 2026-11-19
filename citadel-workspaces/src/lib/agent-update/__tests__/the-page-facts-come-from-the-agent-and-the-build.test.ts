@@ -11,11 +11,12 @@ import { parseNotes, type NotesBlock } from '../parse-notes';
 
 describe('the greeting\'s facts', () => {
   it('reads a version and an operating system when they are text', () => {
-    expect(readGreetingFacts({ agent_version: '0.8.9', os: 'macos' })).toEqual({ version: '0.8.9', os: 'macos' });
+    expect(readGreetingFacts({ agent_version: '0.8.9', os: 'macos' })).toEqual({ version: '0.8.9', os: 'macos', typesHash: null });
   });
   it('reads nothing from an older agent, or from the wrong shape', () => {
-    expect(readGreetingFacts({ cid: 0n })).toEqual({});
-    expect(readGreetingFacts({ agent_version: 9, os: '' })).toEqual({});
+    // typesHash null, not absent: a greeting WAS read, and it named no types (types-step.ts).
+    expect(readGreetingFacts({ cid: 0n })).toEqual({ typesHash: null });
+    expect(readGreetingFacts({ agent_version: 9, os: '' })).toEqual({ typesHash: null });
   });
 });
 
