@@ -4,7 +4,7 @@
  * offered only for exactly that version, ready; otherwise the download of that version here.
  */
 import { describe, it, expect } from 'vitest';
-import { bannerFor, downloadFor } from '../banner-model';
+import { bannerFor, downloadFor, type AgentBanner } from '../banner-model';
 import { fromAvailable, type AgentUpdate } from '../update-state';
 import { isAtLeast, isNewer, parseVersion } from '../agent-version';
 import { available, RELEASE } from './fake-updater';
@@ -14,24 +14,24 @@ const offer = (latest: string, ready: boolean, current: string = '0.11.0'): Agen
 
 describe('the agent update banner model', () => {
   it('names the site latest when the agent still offers the release before it', () => {
-    const banner = bannerFor({ released: '0.13.0', current: '0.11.0', offer: offer('0.12.1', true), family: 'mac' });
+    const banner: AgentBanner | null = bannerFor({ released: '0.13.0', current: '0.11.0', offer: offer('0.12.1', true), family: 'mac' });
     expect(banner).toMatchObject({ latest: '0.13.0', current: '0.11.0', restart: false, stale: true });
     expect(banner?.downloadUrl).toBe(`${RELEASE}download/agent-v0.13.0/Citadel-Agent.dmg`);
   });
 
   it('offers the restart once the agent has that very release ready', () => {
-    const banner = bannerFor({ released: '0.13.0', current: '0.11.0', offer: offer('0.13.0', true), family: 'mac' });
+    const banner: AgentBanner | null = bannerFor({ released: '0.13.0', current: '0.11.0', offer: offer('0.13.0', true), family: 'mac' });
     expect(banner).toMatchObject({ latest: '0.13.0', restart: true, stale: false });
   });
 
   it('downloads that release where the agent cannot install it itself, with the agent\'s own link', () => {
     const linux: AgentUpdate = offer('0.13.0', false);
-    const banner = bannerFor({ released: '0.13.0', current: '0.11.0', offer: linux, family: 'linux' });
+    const banner: AgentBanner | null = bannerFor({ released: '0.13.0', current: '0.11.0', offer: linux, family: 'linux' });
     expect(banner).toMatchObject({ restart: false, stale: false, downloadUrl: linux.downloadUrl });
   });
 
   it('shows the site latest even before the agent offers anything', () => {
-    const banner = bannerFor({ released: '0.13.0', current: '0.12.1', offer: null, family: 'windows' });
+    const banner: AgentBanner | null = bannerFor({ released: '0.13.0', current: '0.12.1', offer: null, family: 'windows' });
     expect(banner).toMatchObject({ latest: '0.13.0', restart: false, stale: true });
     expect(banner?.downloadUrl).toBe(`${RELEASE}download/agent-v0.13.0/Citadel-Agent-x64.msi`);
   });

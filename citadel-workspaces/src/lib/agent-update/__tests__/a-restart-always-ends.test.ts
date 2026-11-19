@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { UpdateStatus } from 'citadel-internal-service-wasm-client';
 import { restartPhase, restartToUpdate, type AgentNow, type RestartPorts } from '../restart-controller';
-import { RESTART_DEADLINE_MS } from '../restart-flow';
+import { RESTART_DEADLINE_MS, type RestartPhase } from '../restart-flow';
 
 /** Ports over a clock that moves only when told, and an agent the test speaks for. */
 class Rig {
@@ -27,7 +27,7 @@ class Rig {
     return {
       now: (): number => this.clock,
       after: (ms: number, run: () => void): (() => void) => {
-        const timer = { at: this.clock + ms, run };
+        const timer: { at: number; run: () => void } = { at: this.clock + ms, run };
         this.timers.push(timer);
         return (): void => { this.timers = this.timers.filter((t) => t !== timer); };
       },
@@ -66,21 +66,21 @@ beforeEach(() => { restartPhase.set({ kind: 'idle' }); });
 
 describe('a restart to update', () => {
   it('that never comes back fails at the deadline, naming both versions', async () => {
-    const rig = new Rig();
+    const rig: Rig = new Rig();
     restartToUpdate('0.13.0', '0.11.0', rig.ports());
     await settle();
     expect(restartPhase.get().kind).toBe('restarting');
     rig.advance(RESTART_DEADLINE_MS - 1);
     expect(restartPhase.get().kind).toBe('restarting');
     rig.advance(1);
-    const phase = restartPhase.get();
+    const phase: RestartPhase = restartPhase.get();
     expect(phase).toMatchObject({ kind: 'failed', target: '0.13.0' });
     expect(phase.kind === 'failed' && phase.message).toMatch(/did not come back as 0\.13\.0 within 2 minutes, so it is still 0\.11\.0/);
     expect(rig.timers).toEqual([]);
   });
 
   it('that comes back as the new version is an update, before the deadline', async () => {
-    const rig = new Rig();
+    const rig: Rig = new Rig();
     rig.apply = new Promise<UpdateStatus>((_, reject) => { reject(new Error('UpdateApply failed: the connection to the Citadel agent was lost')); });
     restartToUpdate('0.13.0', '0.11.0', rig.ports());
     await settle();
@@ -94,7 +94,7 @@ describe('a restart to update', () => {
   });
 
   it('that comes back as the old version is not an update', async () => {
-    const rig = new Rig();
+    const rig: Rig = new Rig();
     restartToUpdate('0.13.0', '0.11.0', rig.ports());
     await settle();
     rig.reconnect('0.11.0');
@@ -104,7 +104,7 @@ describe('a restart to update', () => {
   });
 
   it('that the agent refuses fails at once with its reason', async () => {
-    const rig = new Rig();
+    const rig: Rig = new Rig();
     rig.agent = { current: '0.11.0', lastError: 'Nothing was installed: Citadel Agent.app is not listening' };
     rig.apply = Promise.resolve(rig.status());
     rig.agent = { current: '0.11.0', lastError: null };
@@ -114,12 +114,12 @@ describe('a restart to update', () => {
   });
 
   it('carries a reason the agent recorded during the wait into the failure', async () => {
-    const rig = new Rig();
+    const rig: Rig = new Rig();
     restartToUpdate('0.13.0', '0.11.0', rig.ports());
     await settle();
     rig.agent = { current: '0.11.0', lastError: 'Installing 0.13.0 failed: Citadel Agent.app did not start installing 0.13.0 within 60s' };
     rig.advance(RESTART_DEADLINE_MS);
-    const phase = restartPhase.get();
+    const phase: RestartPhase = restartPhase.get();
     expect(phase.kind === 'failed' && phase.message).toMatch(/still 0\.11\.0\. Installing 0\.13\.0 failed/);
   });
 });
