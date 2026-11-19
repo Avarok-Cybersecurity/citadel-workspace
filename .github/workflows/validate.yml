@@ -1611,6 +1611,10 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: bash scripts/ci/install-chromium.test.sh
         working-directory: citadel-workspaces
+      - name: The browser install's deadline kills apt-get, so no lock outlives an attempt
+        if: matrix.project == 'citadel-workspaces'
+        run: bash scripts/ci/install-chromium-deadline.test.sh
+        working-directory: citadel-workspaces
 
   # Browser geometry and pixel gates over the shipped components, moved from the UI repo's own
   # validate.yml when the UI was folded into citadel-workspaces/. jsdom has no layout, so a hover
