@@ -6,7 +6,7 @@
 //! `kernel.toml` (`stun_servers`); a hosted server's host supplies them, and a hosted config
 //! that names them is refused, so there is one source for each deployment.
 
-use citadel_sdk::prelude::{NetworkError, PathPolicy, StunServers};
+use citadel_sdk::prelude::{MaxSecurityLevel, NetworkError, PathPolicy, StunServers};
 
 /// The network settings a hosted server's host supplies (`run_server_on`).
 #[derive(Clone, Debug)]
@@ -15,6 +15,9 @@ pub struct HostedNetwork {
     /// From the tenant's plan, read once when the node starts: a plan change takes effect at
     /// the next node restart, not on sessions already running (v1).
     pub path_policy: PathPolicy,
+    /// The most security layers the node builds a link with; every level a client names is
+    /// checked against it. Required by the SDK, with no default.
+    pub max_security_level: MaxSecurityLevel,
 }
 
 /// A native server's STUN servers: `kernel.toml`'s `stun_servers`, which it will not start

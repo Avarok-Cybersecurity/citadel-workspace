@@ -7,6 +7,7 @@
 //! other. Run end to end against the production server, because enrolment
 //! lives in the connection handler and nowhere a kernel test can call.
 
+use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_sdk::prefabs::client::single_connection::SingleClientServerConnectionKernel;
 use citadel_sdk::prefabs::client::ServerConnectionSettingsBuilder;
 use citadel_sdk::prelude::*;
@@ -91,6 +92,7 @@ fn session(addr: SocketAddr, username: &'static str, reports: Reports) {
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()
+        .as_test_node()
         .build(kernel)
         .expect("client node");
     drop(tokio::spawn(node));

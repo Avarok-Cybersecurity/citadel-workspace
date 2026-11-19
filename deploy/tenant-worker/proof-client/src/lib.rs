@@ -262,6 +262,10 @@ pub async fn run_proof(
         // Required by the SDK for every node, and only ever handed to a peer connection's ICE
         // agent: a proof client dials its server and never a peer, so these are never contacted.
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
+        // The tenant server's maximum (the SDK's test one is the same Custom(10)), and the links
+        // this release runs: both required, with no default.
+        .with_max_security_level(citadel_sdk::test_common::localhost_max_security_level())
+        .with_link_manager(citadel_sdk::prelude::LinkManagerMode::Legacy)
         .with_backend(BackendType::InMemory)
         .with_client_config(client_config)
         .build(kernel)

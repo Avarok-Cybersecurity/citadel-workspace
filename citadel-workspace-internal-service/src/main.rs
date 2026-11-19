@@ -3,11 +3,14 @@
 // `windows_shell::init` routes it. Debug builds keep the console a developer reads.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use citadel_internal_service::kernel::CitadelWorkspaceService;
+use citadel_internal_service::kernel::{revfs_seed, CitadelWorkspaceService};
 use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
 use citadel_internal_service::{sweep_stale_browser_transfers, BrowserTransferRoot};
 use citadel_internal_service::{OriginPolicy, AGENT_SUPERVISOR, SERVER_RECONNECT};
-use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
+use citadel_sdk::prelude::{
+    BackendType, LinkManagerMode, MaxSecurityLevel, NodeBuilder, NodeType, SecurityLevel,
+    StackedRatchet,
+};
 use std::error::Error;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -185,13 +188,20 @@ async fn run() -> Result<(), Box<dyn Error>> {
         std::sync::Arc::new(apps_authority::WorkspaceHostNetAuthority),
     )
     .with_app_sessions(app_net::app_session_config());
+    // Each account's RE-VFS key, from a seed sealed under a vault that follows the backend.
+    let revfs_keys = service.revfs_key_source(revfs_seed::vault_for(&backend_type)?)?;
 
     // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
     let mut node_builder = NodeBuilder::<StackedRatchet>::default();
     let mut builder = stun_servers
         .apply(&mut node_builder)
         .with_backend(backend_type)
-        .with_node_type(NodeType::Peer);
+        .with_node_type(NodeType::Peer)
+        // The owner's production maximum for the agent (2026-11-18); the SDK has no default.
+        .with_max_security_level(MaxSecurityLevel::new(SecurityLevel::Custom(10))?)
+        // Managed links are not switched on in this release.
+        .with_link_manager(LinkManagerMode::Legacy)
+        .with_revfs_key_source(revfs_keys);
 
     if opts.dangerous.unwrap_or(false) {
         citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED via --dangerous flag. Never use in production!");
