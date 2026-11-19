@@ -23,9 +23,9 @@
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { remapFlags } from './lib/remap-paths.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURES = join(ROOT, 'apps', 'sdk-fixtures');
@@ -40,11 +40,7 @@ if (names.length < 10) {
   process.exit(1);
 }
 
-const cargoHome = process.env.CARGO_HOME ?? join(homedir(), '.cargo');
-const remaps = [
-  `--remap-path-prefix=${ROOT}=/citadel-workspace`,
-  `--remap-path-prefix=${cargoHome}=/cargo`,
-];
+const remaps = remapFlags({ root: ROOT });
 
 function cargo(args, env, label) {
   const r = spawnSync('cargo', args, { cwd: FIXTURES, stdio: 'inherit', env: { ...process.env, ...env } });

@@ -14,6 +14,7 @@ import react from '@vitejs/plugin-react-swc';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stubWasmClient } from '../stub-wasm-client.mjs';
+import { boundPort } from '../free-port.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const APP_ROOT = resolve(HERE, '..', '..', '..');
@@ -23,9 +24,9 @@ export const APP_ROOT = resolve(HERE, '..', '..', '..');
  * socket open; a page whose first render raced either one came up blank (its socket failed at ~90 ms, the vite
  * client polled for a "restart" and reloaded the page under the measurement, aborting its module loads), and
  * only a later, clean page rendered. A built bundle has neither a compile to race nor a socket to lose, so the
- * first render is the only render.
+ * first render is the only render. Served on a port the OS picks (0): concurrent runs never contend for one.
  */
-export async function serveHarness(port) {
+export async function serveHarness() {
   // The cdoc worker is emitted as the app emits it (an ES module worker, vite.config.ts): a
   // screen that can reach Citadel Docs (sharing a document reaches its sync) reaches the worker,
   // and Vite's default IIFE worker cannot hold the glue's dynamic import.
@@ -50,9 +51,9 @@ export async function serveHarness(port) {
     },
     build: { outDir, emptyOutDir: true, minify: false, chunkSizeWarningLimit: 100_000 },
   });
-  const server = await preview({ root: HERE, configFile: false, logLevel: 'error', build: { outDir }, preview: { port, strictPort: true } });
+  const server = await preview({ root: HERE, configFile: false, logLevel: 'error', build: { outDir }, preview: { port: 0, strictPort: true, host: '127.0.0.1' } });
   return {
-    origin: `http://localhost:${port}`,
+    origin: `http://127.0.0.1:${boundPort(server)}`,
     close: async () => { await server.close(); rmSync(outDir, { recursive: true, force: true }); },
   };
 }

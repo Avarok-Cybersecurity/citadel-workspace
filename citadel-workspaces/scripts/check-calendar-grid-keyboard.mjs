@@ -16,4 +16,4 @@ import { CALENDAR_PANEL_CHECKS } from './lib/polish-harness/checks-calendar-pane
 import { CALENDAR_CHANGE_CHECKS } from './lib/polish-harness/checks-calendar-changes.mjs';
 import { CALENDAR_TEAM_CHECKS } from './lib/polish-harness/checks-calendar-teams.mjs';
 
-process.exit(await runChecks({ ...CALENDAR_CHECKS, ...CALENDAR_PANEL_CHECKS, ...CALENDAR_CHANGE_CHECKS, ...CALENDAR_TEAM_CHECKS }, Number(process.env.CALENDAR_HARNESS_PORT ?? 4203)));
+process.exit(await runChecks({ ...CALENDAR_CHECKS, ...CALENDAR_PANEL_CHECKS, ...CALENDAR_CHANGE_CHECKS, ...CALENDAR_TEAM_CHECKS }));

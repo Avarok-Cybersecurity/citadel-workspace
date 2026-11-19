@@ -33,11 +33,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { explainShortfall } from './lighthouse-shortfall.mjs';
 import { bestPerformanceRun } from './lighthouse-best-run.mjs';
+import { freePort } from './lib/free-port.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(__dirname, '..');
 const DIST = resolve(APP_ROOT, 'dist');
-const PORT = Number(process.env.LIGHTHOUSE_PORT ?? 4173);
+const PORT = await freePort(); // chosen per run: concurrent runs cannot collide (lib/free-port.mjs)
 const URL = `http://localhost:${PORT}/`;
 
 const IS_CI = Boolean(process.env.CI);

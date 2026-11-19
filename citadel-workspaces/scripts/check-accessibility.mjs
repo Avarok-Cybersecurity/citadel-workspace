@@ -26,9 +26,10 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { chromium } from 'playwright';
 import { AxeBuilder } from '@axe-core/playwright';
+import { freePort } from './lib/free-port.mjs';
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = Number(process.env.A11Y_PORT ?? 4186);
+const PORT = await freePort(); // chosen per run: concurrent runs cannot collide (lib/free-port.mjs)
 const ORIGIN = `http://localhost:${PORT}`;
 // These checks drive the production bundle, where first-run onboarding is ON
 // (isOnboardingEnabled in src/lib/debug-config.ts). They exercise the

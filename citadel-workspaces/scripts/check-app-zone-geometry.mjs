@@ -28,7 +28,6 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serveHarness } from './lib/docs-harness/serve.mjs';
 
-const PORT = Number(process.env.APP_ZONE_HARNESS_PORT ?? 4201);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), 'lib', 'app-zone-harness');
 const VIEWPORTS = [
   { name: 'desktop 1x', viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 },
@@ -209,7 +208,7 @@ async function lifecycle(browser, origin) {
   await context.close();
 }
 
-const harness = await serveHarness(ROOT, PORT);
+const harness = await serveHarness(ROOT);
 const browser = await chromium.launch();
 try {
   for (const v of VIEWPORTS) {

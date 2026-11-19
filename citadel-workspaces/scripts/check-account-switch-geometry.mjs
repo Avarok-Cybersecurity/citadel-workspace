@@ -14,4 +14,4 @@ const MOTIONS = [
   { name: 'lite', reducedMotion: 'no-preference', tier: 'lite' },
 ];
 
-process.exit(await runMatrix(ACCOUNT_SWITCH_CHECKS, Number(process.env.ACCOUNT_SWITCH_PORT ?? 4206), { viewports: VIEWPORTS, motions: MOTIONS }));
+process.exit(await runMatrix(ACCOUNT_SWITCH_CHECKS, { viewports: VIEWPORTS, motions: MOTIONS }));
