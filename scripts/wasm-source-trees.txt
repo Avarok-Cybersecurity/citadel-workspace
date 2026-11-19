@@ -34,3 +34,14 @@ citadel-app-id/src
 # fails outright. The recorded commit is exactly the content identity wanted --
 # every ILM change moves it, and nothing else does.
 intersession-layer-messaging
+# The manifests and the lockfile, as FILES (rev-parse HEAD:<file> names a blob).
+#
+# The trees above are only the first-party source. The binary also compiles in
+# every dependency the agent's Cargo.lock resolves -- including the
+# Citadel-Protocol git rev (citadel_types, citadel_io, citadel_logging) -- and the
+# features the wasm-client's Cargo.toml turns on. Without these, an SDK bump moved
+# the lock and left the stamp unchanged, so the gate reported a match over a pkg
+# built against the previous SDK.
+Cargo.toml
+Cargo.lock
+citadel-internal-service-wasm-client/Cargo.toml

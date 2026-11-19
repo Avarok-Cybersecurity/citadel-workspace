@@ -60,6 +60,13 @@ WORKDIR /workspace
 # Copy sync script, and the name stripper it runs after wasm-pack
 COPY ./sync-wasm-clients.sh /workspace/
 COPY ./scripts/strip-wasm-names.mjs /workspace/scripts/
+# The build and stamp shared with scripts/regenerate-committed-pkg.sh, and what they read.
+COPY ./scripts/lib/wasm-pkg.sh /workspace/scripts/lib/
+COPY ./scripts/lib/pkg-content-hash.mjs /workspace/scripts/lib/
+COPY ./scripts/wasm-source-trees.txt /workspace/scripts/
+# The build's --remap-path-prefix flags (wasm-pkg.sh), so the image's pkg ships no home path.
+COPY ./scripts/remap-path-env.mjs /workspace/scripts/
+COPY ./scripts/lib/remap-paths.mjs /workspace/scripts/lib/
 
 # Make script executable
 RUN chmod +x /workspace/sync-wasm-clients.sh

@@ -35,7 +35,7 @@ describe('native_picker in the greeting', () => {
 describe('the rest of what a greeting may say', () => {
   it('keeps the agent\'s version and operating system for the About tab, and forgets them with the socket', async () => {
     await greetAs(true, { agent_version: '0.9.1', os: 'linux' });
-    expect(agentFacts.get()).toEqual({ version: '0.9.1', os: 'linux' });
+    expect(agentFacts.get()).toEqual({ version: '0.9.1', os: 'linux', typesHash: null });
     forgetCapabilities();
     expect(agentFacts.get()).toEqual({});
   });

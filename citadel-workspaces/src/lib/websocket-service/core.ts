@@ -22,6 +22,7 @@ import type { HeldOutbox, ReliableSendOptions } from '@/lib/p2p-pause/outbox';
 import type { ChatSecurityLevel } from '@/lib/p2p/chat-advanced-settings';
 import type { SendDelivery } from '@/lib/p2p/send-failure';
 import type { SignInFactors } from '@/lib/sign-in/types';
+import { pageTypesHash } from '@/lib/agent-update/types-step';
 
 export class WebSocketServiceCore {
   client: WorkspaceClient | null = null;
@@ -59,7 +60,7 @@ export class WebSocketServiceCore {
         disconnect: (cid) => this.disconnect(cid),
         releaseSession: (cid) => this.releaseSession(cid),
         getClient: () => this.client,
-        onClientCreated: (client) => { this.client = client; this.isInitialized = true; },
+        onClientCreated: (client) => { this.client = client; this.isInitialized = true; pageTypesHash.set(client.typesHash()); },
         onClientReset: () => { this.client = null; this.isInitialized = false; this.initializationPromise = null; },
       }
     );

@@ -167,6 +167,24 @@ export function send_p2p_message_reliable(local_cid_str, peer_cid_str, message, 
 }
 
 /**
+ * The identity of the wire types this client was built from. The page compares
+ * it with the agent's greeting (`types_hash`) and says when they are out of step.
+ * @returns {string}
+ */
+export function types_hash() {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const ret = wasm.types_hash();
+        deferred1_0 = ret[0];
+        deferred1_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
  * True only for a valid signature. `signature` is the `app.mldsa.sig` bytes (its hex decoded);
  * the digests are lowercase hex sha256. Anything malformed is false, never an exception.
  * @param {string} public_key_hex
@@ -628,22 +646,22 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 477, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 478, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 543, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 544, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut__web_sys_5d094b1de2ee9013___features__gen_CloseEvent__CloseEvent____Output_______, wasm_bindgen_dc0159de9c09e5bc___convert__closures_____invoke___web_sys_5d094b1de2ee9013___features__gen_CloseEvent__CloseEvent_____);
             return ret;
         },
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 718, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 719, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 720, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 721, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut__web_sys_5d094b1de2ee9013___features__gen_MessageEvent__MessageEvent____Output_______, wasm_bindgen_dc0159de9c09e5bc___convert__closures_____invoke___web_sys_5d094b1de2ee9013___features__gen_MessageEvent__MessageEvent_____);
             return ret;
         },
         __wbindgen_cast_0000000000000004: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 808, function: Function { arguments: [Externref], shim_idx: 809, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 810, function: Function { arguments: [Externref], shim_idx: 811, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut__wasm_bindgen_dc0159de9c09e5bc___JsValue____Output_______, wasm_bindgen_dc0159de9c09e5bc___convert__closures_____invoke___wasm_bindgen_dc0159de9c09e5bc___JsValue_____);
             return ret;
         },
         __wbindgen_cast_0000000000000005: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 819, function: Function { arguments: [], shim_idx: 820, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 821, function: Function { arguments: [], shim_idx: 822, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut_____Output_______, wasm_bindgen_dc0159de9c09e5bc___convert__closures_____invoke______);
             return ret;
         },

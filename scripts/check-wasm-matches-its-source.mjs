@@ -30,6 +30,7 @@
 // produces the binary beside it.
 import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { pkgContentHash, CONTENT_PREFIX } from './lib/pkg-content-hash.mjs';
 
 const STAMP = 'citadel-workspace-client-ts/pkg/.wasm-source-tree';
 const SUBMODULE = 'citadel-internal-service';
@@ -100,7 +101,11 @@ if (!existsSync(STAMP)) {
   process.exit(1);
 }
 
-const recorded = readFileSync(STAMP, 'utf8').trim();
+// Line 1: the source the binary was built from. Line 2: the content of the pkg
+// that build produced. Line 2 is what makes a hand-edited .js, a binary written
+// by build.rs, or a stamp typed in by hand fail: each leaves the source hash
+// right and the bytes wrong.
+const [recorded = '', recordedContent = ''] = readFileSync(STAMP, 'utf8').trim().split('\n');
 if (recorded !== actual) {
   console.error(`::error file=${STAMP}::the committed WASM predates the current wasm-client source`);
   console.error(`\nFAIL: the WASM binary was built from a different source tree.`);
@@ -111,4 +116,20 @@ if (recorded !== actual) {
   console.error(`commit the regenerated pkg/, and the stamp updates with it.`);
   process.exit(1);
 }
-console.log(`OK: the committed WASM matches the wasm-client source (${actual.slice(0, 12)}).`);
+const content = pkgContentHash('citadel-workspace-client-ts/pkg');
+if (!recordedContent.startsWith(CONTENT_PREFIX)) {
+  console.error(`::error file=${STAMP}::the stamp records no pkg content hash`);
+  console.error(`\nFAIL: the stamp predates content hashing, so nothing ties it to the bytes.`);
+  console.error(`Run ./sync-wasm-clients.sh and commit the regenerated pkg/.`);
+  process.exit(1);
+}
+if (recordedContent !== content) {
+  console.error(`::error file=${STAMP}::the committed pkg is not the one its stamp's build produced`);
+  console.error(`\nFAIL: pkg/ was changed after the build that stamped it.`);
+  console.error(`  stamped:  ${recordedContent}`);
+  console.error(`  current:  ${content}`);
+  console.error(`\nA hand edit, a copy from elsewhere, or a build.rs rebuild (which never stamps).`);
+  console.error(`Run ./sync-wasm-clients.sh, and commit pkg/ and its stamp together.`);
+  process.exit(1);
+}
+console.log(`OK: the committed WASM matches the wasm-client source (${actual.slice(0, 12)}) and its stamp's bytes.`);
