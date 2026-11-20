@@ -31,6 +31,8 @@ interface P2PChatHeaderProps {
   connectionRoute: PeerPathReport | null;
   /** What the agent's supervisor says it is doing about the link; shown even while it is down. */
   supervisor: SupervisorPhase | null;
+  /** Whether the peer's identity key is verified, and the way to check it; omitted where not wired up. */
+  identity?: React.ReactNode;
   onSettingsClick: () => void;
   /** The storage you share with this peer, in the file manager; null until you are registered peers. */
   onOpenFiles: (() => void) | null;
@@ -106,6 +108,7 @@ export function P2PChatHeader({
   paused,
   connectionRoute,
   supervisor,
+  identity,
   onSettingsClick,
   onOpenFiles,
   onShare,
@@ -127,13 +130,16 @@ export function P2PChatHeader({
               carried this exact fix, with a comment, since it was written. */}
           <div className="min-w-0">
             <h3 className="truncate text-base font-semibold text-foreground">{peerName}</h3>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {/* Wraps: at phone width the status, path and identity marks outgrow the room the
+                actions leave, and an unwrapped row runs underneath them. */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               <div
                 className={`h-2 w-2 rounded-full ${statusDisplay.color || ''}`}
                 style={statusDisplay.customColor ? { backgroundColor: statusDisplay.customColor } : undefined}
               />
               <span className={statusDisplay.textColor}>{statusDisplay.text}</span>
               {(isConnected || supervisor === 'healing') && !paused && <ConnectionPathLabel route={connectionRoute} supervisor={supervisor} />}
+              {identity}
               {/* Permanently mounted so the region pre-exists its text; a live
                   region created together with its content is announced
                   inconsistently or not at all. The pulse was purely visual. */}

@@ -251,7 +251,7 @@ dependencies = [
 [[package]]
 name = "async_ip"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -748,6 +748,7 @@ dependencies = [
  "citadel_types",
  "custom_debug",
  "serde",
+ "sha3",
  "uuid",
  "zeroize",
 ]
@@ -867,7 +868,7 @@ dependencies = [
 [[package]]
 name = "citadel_crypt"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "arrayvec",
  "async-trait",
@@ -903,7 +904,7 @@ dependencies = [
 [[package]]
 name = "citadel_io"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "bytes",
  "citadel_io_macros",
@@ -922,7 +923,7 @@ dependencies = [
 [[package]]
 name = "citadel_io_macros"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -932,7 +933,7 @@ dependencies = [
 [[package]]
 name = "citadel_link"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "citadel_media",
  "citadel_negotiation",
@@ -943,7 +944,7 @@ dependencies = [
 [[package]]
 name = "citadel_logging"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "tracing",
  "tracing-subscriber",
@@ -952,7 +953,7 @@ dependencies = [
 [[package]]
 name = "citadel_media"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "bytes",
 ]
@@ -960,7 +961,7 @@ dependencies = [
 [[package]]
 name = "citadel_negotiation"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "bincode",
  "citadel_types",
@@ -971,7 +972,7 @@ dependencies = [
 [[package]]
 name = "citadel_pqcrypto"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "aes-gcm",
  "ascon-aead",
@@ -999,7 +1000,7 @@ dependencies = [
 [[package]]
 name = "citadel_proto"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1044,7 +1045,7 @@ dependencies = [
 [[package]]
 name = "citadel_sdk"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1066,7 +1067,7 @@ dependencies = [
 [[package]]
 name = "citadel_treekem"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "arrayvec",
  "bincode",
@@ -1085,7 +1086,7 @@ dependencies = [
 [[package]]
 name = "citadel_types"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "bincode",
  "bytes",
@@ -1104,7 +1105,7 @@ dependencies = [
 [[package]]
 name = "citadel_user"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1137,7 +1138,7 @@ dependencies = [
 [[package]]
 name = "citadel_wire"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "anyhow",
  "async-trait-with-sync",
@@ -2952,7 +2953,7 @@ dependencies = [
 [[package]]
 name = "netbeam"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=10f8ea11#10f8ea11c973627c32fc26275e6dc42203f7dd4c"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=dd099ab1#dd099ab1d4762406b2e4ea8234c470f26c33f97b"
 dependencies = [
  "anyhow",
  "async-stream",

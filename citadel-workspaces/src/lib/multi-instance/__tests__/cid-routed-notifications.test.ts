@@ -74,6 +74,8 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
     IhttpFrameNotification: { cid: targetCid, peer_cid: senderCid, frame: [0xa1, 1, 2], request_id: 'r11' },
     // The generated binding: { cid, group_key, refusal, request_id }; the agent never sets request_id.
     GroupMessageRefusedNotification: { cid: targetCid, group_key: { cid: senderCid, mgid: 3n }, refusal: { RateLimited: { max_per_second: 2 } }, request_id: null },
+    // The generated binding: { cid, peer_cid, pinned_fingerprint, presented_fingerprint, request_id }.
+    PeerIdentityKeyChangedNotification: { cid: targetCid, peer_cid: senderCid, pinned_fingerprint: 'aaaa-bbbb-cccc-dddd', presented_fingerprint: 'eeee-ffff-gggg-hhhh', request_id: null },
   };
 
   it('has a test fixture for every CID-routed notification type', () => {
@@ -108,6 +110,7 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
         'MessageNotification',
         'MessageSendFailure',
         'PeerConnectNotification',
+        'PeerIdentityKeyChangedNotification',
         'PeerPathChangedNotification',
         'PeerRegisterNotification',
         'ServerConnectionLost',

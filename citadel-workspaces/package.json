@@ -26,6 +26,7 @@
     "check:pwa-update": "node scripts/check-pwa-update.mjs",
     "check:reduced-motion": "node scripts/check-reduced-motion.mjs",
     "check:mobile": "node scripts/check-mobile-layout.mjs",
+    "check:peer-identity": "node scripts/check-peer-identity.mjs",
     "check:chat-polish": "node scripts/check-chat-polish-geometry.mjs",
     "check:chat-files": "node scripts/check-chat-files-geometry.mjs",
     "check:account-switch": "node scripts/check-account-switch-geometry.mjs",

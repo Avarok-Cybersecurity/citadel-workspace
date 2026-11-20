@@ -17,20 +17,10 @@ import type {
 import { requestResponse } from '../websocket/request-response';
 import { TIMEOUT } from '../timeout-constants';
 
-import { conversationSender, type RequestSender } from './sender';
+import { answerTo as answer, conversationSender, type RequestSender } from './sender';
 
 export { registerConversationSender, sendToAgent, type RequestSender } from './sender';
 
-function unwrap(message: Record<string, unknown>): Record<string, unknown> {
-  return ((message.Response as Record<string, unknown> | undefined) ?? message);
-}
-
-function answer(message: Record<string, unknown>, variant: string, requestId: string): Record<string, unknown> | undefined {
-  const value: unknown = unwrap(message)[variant];
-  if (typeof value !== 'object' || value === null) return undefined;
-  const v: Record<string, unknown> = value as Record<string, unknown>;
-  return v.request_id === requestId ? v : undefined;
-}
 
 /** Send `body` as request variant `variant`; resolve with what `success` reads from the answer. */
 async function ask<T>(

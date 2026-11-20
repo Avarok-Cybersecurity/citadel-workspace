@@ -57,7 +57,7 @@ export function P2PChat({ peerCid, peerName = 'Peer', peerUsername, currentUserC
       transport={transport}
       pause={pause.status}
       header={(status: ChatPaneStatus) => (
-        <PeerChatTop peer={peer} knowsUsername={peerUsername !== undefined} status={status} pause={pause} call={call} share={share} route={route} supervisor={supervisor} />
+        <PeerChatTop sessionCid={currentUserCid ?? null} peer={peer} knowsUsername={peerUsername !== undefined} status={status} pause={pause} call={call} share={share} route={route} supervisor={supervisor} />
       )}
     />
   );

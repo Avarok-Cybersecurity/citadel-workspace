@@ -22,3 +22,12 @@ export function sendToAgent(request: Record<string, unknown>): Promise<void> {
   if (!sender) return Promise.reject(new Error('The websocket service is not ready'));
   return sender(request);
 }
+
+/** `variant`'s body in an agent answer (bare, or under `Response`), if it answers `requestId`. */
+export function answerTo(message: Record<string, unknown>, variant: string, requestId: string): Record<string, unknown> | undefined {
+  const body: Record<string, unknown> = (message.Response as Record<string, unknown> | undefined) ?? message;
+  const value: unknown = body[variant];
+  if (typeof value !== 'object' || value === null) return undefined;
+  const v: Record<string, unknown> = value as Record<string, unknown>;
+  return v.request_id === requestId ? v : undefined;
+}

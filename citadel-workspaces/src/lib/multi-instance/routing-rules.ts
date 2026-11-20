@@ -83,6 +83,10 @@ export const CID_ROUTED_NOTIFICATIONS: Set<ResponseType> = new Set<ResponseType>
   // The agent always sends it with request_id null (kernel/responses/group_refusal.rs), so
   // routed by request_id it would reach no tab and the refusal would be lost.
   'GroupMessageRefusedNotification',
+  // cid = the session whose peer signed a key exchange with a key other than the one pinned for
+  // it. Unsolicited (request_id null): without cid routing no tab would raise the changed-key
+  // screen, and the peer would stay refused with nobody told why.
+  'PeerIdentityKeyChangedNotification',
 ]);
 
 /**

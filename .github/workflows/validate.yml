@@ -1661,6 +1661,8 @@ jobs:
           - { name: Chat files geometry, run: 'npm run check:chat-files' }
           # The switcher's signed-out account row and the sign-in it opens, at 375px too, under Full and Lite motion.
           - { name: Account switch geometry, run: 'npm run check:account-switch' }
+          # A peer's identity mark, safety number and changed-key screen at 390px and 375px: fit, 44px answers, axe clean.
+          - { name: Peer identity geometry, run: 'npm run check:peer-identity' }
           - { name: UI sweep geometry, run: 'npm run check:ui-sweep' }
           - { name: Docs text crispness, run: 'npm run check:docs-crispness' }
           - { name: Docs pane states, run: 'npm run check:docs-pane-states' }

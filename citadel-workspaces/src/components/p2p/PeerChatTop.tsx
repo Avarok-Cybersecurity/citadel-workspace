@@ -8,6 +8,10 @@ import { PausedBanner } from './PausedBanner';
 import { ConnectRequestBanner } from './ConnectRequestBanner';
 import { DockedCall } from './DockedCall';
 import { usePeerFilesOpener } from './hooks/use-peer-files-opener';
+import { usePeerIdentity, type PeerIdentityBinding } from './hooks/use-peer-identity';
+import { PeerIdentityMark } from './peer-identity/PeerIdentityMark';
+import { acceptPeerIdentityKey } from '@/lib/peer-identity/requests';
+import { peerLink } from '@/lib/p2p-pause';
 import { callCapabilityWhile } from '@/lib/p2p-pause/pause-copy';
 import type { DirectCallBinding } from './hooks/use-direct-call';
 import type { PeerPauseBinding } from './hooks/use-peer-pause';
@@ -18,6 +22,8 @@ import type { ChatPaneStatus } from '@/components/chat/pane/ChatPane';
 import type { ChatPeer } from '@/lib/cdoc/chat/chat-app-ports';
 
 interface PeerChatTopProps {
+  /** This window's session; null while it is not known. */
+  sessionCid: bigint | null;
   peer: ChatPeer;
   /** Whether the caller knew the peer's roster key; without it there is nothing to share. */
   knowsUsername: boolean;
@@ -29,8 +35,15 @@ interface PeerChatTopProps {
   supervisor: SupervisorPhase | null;
 }
 
-export function PeerChatTop({ peer, knowsUsername, status, pause, call, share, route, supervisor }: PeerChatTopProps): JSX.Element {
+export function PeerChatTop({ sessionCid, peer, knowsUsername, status, pause, call, share, route, supervisor }: PeerChatTopProps): JSX.Element {
   const openFiles: (() => void) | null = usePeerFilesOpener(peer.cid, status.accepted);
+  const identity: PeerIdentityBinding = usePeerIdentity(sessionCid, peer.cid);
+  const acceptKey = async (fingerprint: string): Promise<void> => {
+    if (sessionCid === null) throw new Error('no session');
+    await acceptPeerIdentityKey(sessionCid, peer.cid, fingerprint);
+    identity.refresh();
+    await peerLink.reconnect(peer.cid);
+  };
   const paused: boolean = pause.status === 'paused';
   return (
     <>
@@ -44,6 +57,7 @@ export function PeerChatTop({ peer, knowsUsername, status, pause, call, share, r
         paused={paused}
         connectionRoute={route}
         supervisor={supervisor}
+        identity={<PeerIdentityMark peerName={peer.name} view={identity.view} onAccept={acceptKey} />}
         onSettingsClick={status.openSettings ?? ((): void => undefined)}
         onOpenFiles={openFiles}
         onShare={knowsUsername ? (): void => share.open({ kind: 'peer-chat', peerUsername: peer.username, peerName: peer.name }) : undefined}
