@@ -10,7 +10,8 @@
  * workspace and turns it on. Then a registration and a sign-in without a token are refused as
  * PqSignInAdmissionRequired (350) and admitted with one; a reconnect after the client's link
  * died half-open (the server still holds the session) presents its resume token and is not
- * asked; a recovery-code sign-in is not asked. Restarted with the always-fail testing secret, a
+ * asked; a recovery-phrase sign-in is asked like a fresh one, under the action "recover".
+ * Restarted with the always-fail testing secret, a
  * token siteverify refuses is PqSignInAdmissionFailed (351), for a sign-in and a registration.
  */
 import {
@@ -80,10 +81,10 @@ try {
   const member = await newClient();
   const unchecked = await refusal(member.register(memberName, memberPassword));
   check(results, "a registration without a token is refused as required (350)", unchecked.includes(REQUIRED), unchecked);
-  let codes = [];
+  let phrase = [];
   try {
-    codes = JSON.parse(await member.register(memberName, memberPassword, TOKEN));
-    check(results, "a registration with a token siteverify passes is admitted", codes.length === 10, `${codes.length} recovery codes`);
+    phrase = JSON.parse(await member.register(memberName, memberPassword, TOKEN));
+    check(results, "a registration with a token siteverify passes is admitted", phrase.length === 24, `${phrase.length} recovery words`);
   } catch (e) {
     check(results, "a registration with a token siteverify passes is admitted", false, e?.message ?? String(e));
   }
@@ -100,8 +101,12 @@ try {
   check(results, "a resume-token reconnect, with no token, is not asked", resumed === "admitted", resumed);
   await member.disconnect().catch(() => {});
 
-  const recovered = codes.length === 0 ? "no recovery code to use" : await refusal(member.connect_recovery(memberName, codes[0]));
-  check(results, "a recovery-code sign-in, with no token, is not asked", recovered === "admitted", recovered);
+  const words = phrase.join(" ");
+  const unrecovered = phrase.length === 0 ? "no recovery phrase to use" : await refusal(member.connect_recovery(memberName, words));
+  check(results, "a recovery-phrase sign-in without a token is refused as required (350)", unrecovered.includes(REQUIRED), unrecovered);
+  const recovered = phrase.length === 0 ? "no recovery phrase to use" : await refusal(member.connect_recovery(memberName, words, TOKEN));
+  check(results, "a recovery-phrase sign-in with a token siteverify passes is admitted", recovered === "admitted", recovered);
+  await member.disconnect().catch(() => {});
   for (const c of clients) await c.disconnect().catch(() => {});
 
   await stopWrangler(wrangler);

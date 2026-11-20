@@ -25,7 +25,7 @@ import type { AdmissionGate } from './admission/useAdmissionGate';
 import { RegisteredAwaitingSignIn } from '@/lib/admission/refusal';
 import { connectAfterRegistration } from './sign-in/connect-after-registration';
 import type { HostedTerms } from './use-hosted-terms';
-import type { RecoverySecret } from '@/lib/recovery/secret';
+import type { RecoveryPhrase } from '@/lib/recovery/secret';
 
 /** The required credentials plus the optional profile fields sent after registration. */
 export interface JoinFormData extends SignupProfileFields, SignupConsentFields {
@@ -65,7 +65,7 @@ export function useJoinRegistration(
   const [connectStatus, setConnectStatus] = useState<ConnectStatus>("connecting");
   const [registeredCid, setRegisteredCid] = useState<string | null>(null);
   /** Shown once by the caller, then gone: never stored, never logged. */
-  const [recoverySecret, setRecoverySecret] = useState<RecoverySecret | null>(null);
+  const [recoveryPhrase, setRecoveryPhrase] = useState<RecoveryPhrase | null>(null);
   /** Registered on a workspace that checks, and the follow-up connect still needs a fresh check. */
   const [awaitingSignIn, setAwaitingSignIn] = useState<bigint | null>(null);
 
@@ -167,7 +167,7 @@ export function useJoinRegistration(
         };
 
         handler = createRegistrationResponseHandler(requestId, resolve, reject, cleanup, {
-          handleConnectSuccess, setShowNotInitializedModal, onRecoverySecret: setRecoverySecret, username: formData.username,
+          handleConnectSuccess, setShowNotInitializedModal, onRecoveryPhrase: setRecoveryPhrase, username: formData.username,
         });
         eventEmitter.on('websocket-message', handler);
       });
@@ -230,7 +230,7 @@ export function useJoinRegistration(
     handleSubmit,
     handleConnectModalComplete,
     handleReturnToLogin,
-    recoverySecret,
+    recoveryPhrase,
     awaitingSignIn,
     finishSignIn: async (admissionToken: string): Promise<bigint> => {
       const cid: bigint = await connectAfterRegistration(formData.username, serverAddress, formData.password, admissionToken, mapSecuritySettings(securitySettings));

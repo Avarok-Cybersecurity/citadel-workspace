@@ -22,19 +22,19 @@ import { world } from '@/lib/sign-in/__tests__/helpers';
 import { PRF_COPY } from '@/lib/sign-in/copy';
 import { fakePhrase } from '@/lib/sign-in/__tests__/fake-agent-recovery';
 import { PHRASE_COPY } from '@/lib/recovery/copy';
-import type { RecoverySecret } from '@/lib/recovery/secret';
+import type { RecoveryPhrase } from '@/lib/recovery/secret';
 
 const WORDS: string[] = fakePhrase(3);
-const PHRASE: RecoverySecret = { kind: 'phrase', words: WORDS };
+const PHRASE: RecoveryPhrase = WORDS;
 let alice: FakeAccount;
 let onDone: ReturnType<typeof vi.fn>;
 let clipboard: ReturnType<typeof vi.fn>;
 const downloads: string[] = [];
 
-function renderSteps(secret: RecoverySecret | null): void {
+function renderSteps(secret: RecoveryPhrase): void {
   onDone = vi.fn();
   render(<><PostRegistrationSteps session={alice.cid} username="alice" serverAddress="bench.work.avarok.net"
-    password="correct horse battery" recoverySecret={secret} signIn={vi.fn()} onDone={onDone} /><SecurityKeyPrompt /></>);
+    password="correct horse battery" recoveryPhrase={secret} signIn={vi.fn()} onDone={onDone} /><SecurityKeyPrompt /></>);
 }
 
 /** Type back the words the check asks for: `wrong` types the next word instead at the first box. */
@@ -117,24 +117,6 @@ describe('after an account is created', () => {
       + [...h.w.deps.store.data.values()].map((b) => new TextDecoder().decode(b)).join('');
     expect(stored).not.toContain(WORDS.slice(0, 3).join(' '));
     for (const word of new Set(WORDS)) expect(stored.includes(`"${word}"`)).toBe(false);
-  });
-
-  it('still shows an older server\'s codes, so none is lost', async () => {
-    renderSteps({ kind: 'codes', words: ['CODE-0000', 'CODE-0001', 'CODE-0002'] });
-    fireEvent.click(screen.getByTestId('add-security-key-skip'));
-    expect(await screen.findByText(PHRASE_COPY.codesTitle)).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('recovery-phrase-written'));
-    screen.getAllByTestId('recovery-phrase-check-word').forEach((box: HTMLElement) => {
-      fireEvent.change(box, { target: { value: `CODE-000${box.getAttribute('data-position')}` } });
-    });
-    fireEvent.click(screen.getByTestId('recovery-phrase-confirm'));
-    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
-  });
-
-  it('shows nothing, and opens the workspace, for a server without post-quantum sign-in', () => {
-    renderSteps(null);
-    expect(screen.queryByTestId('post-registration')).toBeNull();
-    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
   it('refuses a key without PRF support, declining the server\'s Enrol challenge, and adds nothing', async () => {

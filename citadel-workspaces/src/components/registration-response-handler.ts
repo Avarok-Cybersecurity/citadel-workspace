@@ -10,7 +10,7 @@ import { AdmissionRefusal, RegisteredAwaitingSignIn, admissionChallengeOf, admis
 import type { WebSocketMessage } from '@/types/ws-message-types';
 import { UsernameHeldElsewhere } from '@/lib/sessions/known-accounts';
 import { UNKNOWN_REASON_COPY } from '@/lib/connection/connect-refusal';
-import { secretOf, type RecoverySecret } from '@/lib/recovery/secret';
+import { phraseOf, type RecoveryPhrase } from '@/lib/recovery/secret';
 
 export interface RegistrationHandlerDeps {
   handleConnectSuccess: (
@@ -20,10 +20,10 @@ export interface RegistrationHandlerDeps {
   ) => Promise<void>;
   setShowNotInitializedModal: (show: boolean) => void;
   /**
-   * RegisterSuccess carries the recovery phrase (or an older server's codes) and arrives AHEAD
+   * RegisterSuccess carries the recovery phrase and arrives AHEAD
    * of the connect answer, under the same request id. It is not an outcome: the wait goes on.
    */
-  onRecoverySecret: (secret: RecoverySecret) => void;
+  onRecoveryPhrase: (phrase: RecoveryPhrase) => void;
   /** Who is registering: named in the refusal when this device holds that name for another server. */
   username: string;
 }
@@ -35,14 +35,14 @@ export function createRegistrationResponseHandler(
   cleanup: () => void,
   deps: RegistrationHandlerDeps
 ) {
-  const { handleConnectSuccess, setShowNotInitializedModal, onRecoverySecret } = deps;
+  const { handleConnectSuccess, setShowNotInitializedModal, onRecoveryPhrase } = deps;
   /** The account RegisterSuccess created, once it has arrived. */
   let registered: bigint | null = null;
-  const takeCodes = (v: Record<string, unknown> | undefined): void => {
+  const takePhrase = (v: Record<string, unknown> | undefined): void => {
     if (!v || !matchId(v)) return;
     if (typeof v.cid === 'bigint') registered = v.cid;
-    const secret: RecoverySecret | null = secretOf(v);
-    if (secret !== null) onRecoverySecret(secret);
+    const phrase: RecoveryPhrase | null = phraseOf(v);
+    if (phrase !== null) onRecoveryPhrase(phrase);
   };
   const matchId = (v: Record<string, unknown>): boolean => v.request_id === requestId;
   const rejectWith = (v: Record<string, unknown>, fallback: string): void => {
@@ -63,9 +63,9 @@ export function createRegistrationResponseHandler(
     const message: WebSocketMessage | null = narrowWebSocketMessage(raw);
     if (!message) return;
     debugLog('Join', 'Registration response received, expecting:', requestId);
-    takeCodes(getVariant(message, 'RegisterSuccess'));
+    takePhrase(getVariant(message, 'RegisterSuccess'));
     const wrapped: Record<string, unknown> | undefined = getVariant(message, 'Response');
-    takeCodes(wrapped?.RegisterSuccess as Record<string, unknown> | undefined);
+    takePhrase(wrapped?.RegisterSuccess as Record<string, unknown> | undefined);
 
     const cs: Record<string, unknown> | undefined = getVariant(message, 'ConnectSuccess');
     if (cs && matchId(cs)) { cleanup(); handleConnectSuccess(cs, resolve, reject).catch(reject); return; }

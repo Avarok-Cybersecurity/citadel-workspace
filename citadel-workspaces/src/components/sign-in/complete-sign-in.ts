@@ -1,8 +1,6 @@
 /**
  * What happens after the agent accepts a sign-in, whichever factors it used.
  *
- * - A recovery code opened a restricted session: hand back the account, and
- *   start nothing that would use the workspace.
  * - A key-first sign-in worked: remember the account (tenant + CID) so the
  *   form can offer the key first next time.
  * - An option-A passkey opened the password: offer to move to a key the
@@ -29,8 +27,7 @@ export interface CompletionDeps {
 export type Completed =
   /** keyAdded: whether a key offered after this sign-in was added; null when none was offered. */
   | { kind: 'signed-in'; cid: bigint; messagingReady: boolean; keyAdded: boolean | null }
-  | { kind: 'redirected' }
-  | { kind: 'recovery'; account: AccountRef };
+  | { kind: 'redirected' };
 
 export const MIGRATE_COPY: { title: string; body: string } = {
   title: 'Move your passkey to the new sign-in',
@@ -49,10 +46,6 @@ export async function completeSignIn(
   const result: LoginResult = await deps.login(username, factors);
   if (result.kind === 'redirected') return result;
   const account: AccountRef | null = accountOf(username, result.cid, result.serverAddress);
-  if (result.kind === 'recovery') {
-    if (!account) throw new Error('Signed in with a recovery code, but the agent did not say which server this account is on');
-    return { kind: 'recovery', account };
-  }
   const done: Completed = { kind: 'signed-in', cid: result.cid, messagingReady: result.messagingReady, keyAdded: null };
   if (!account) return done;
 

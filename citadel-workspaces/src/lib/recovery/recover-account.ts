@@ -10,8 +10,15 @@
  * `SessionAlreadyActive` means this device already holds a full session for the account (another
  * window signed in): the agent will not open a recovery session beside it, so it is a refusal
  * with its own reason, not a wait for an answer that never comes.
+ *
+ * On a workspace that asks for a human check, `admission_token` pays for the recovery step. After a
+ * fresh recovery the phrase sign-in has no token left and may be refused for its check
+ * (`ConnectFailure`, `admission_required`): the account is now held here, so the next
+ * `RecoverAccount`, with a fresh token, only signs in. Either refusal is a
+ * `RecoveryAdmissionRefusal`, which the form's check shows.
  */
 import { stringToBytes } from '@/lib/utils/encoding-utils';
+import { AdmissionRefusal, admissionChallengeOf, admissionReasonOf, type AdmissionChallenge, type AdmissionReason } from '@/lib/admission/refusal';
 import type { SessionSecuritySettings } from '@/lib/security-utils';
 import type { AgentRequestBody } from '@/types/agent-request';
 import type { AgentPort } from './recovery-ports';
@@ -35,13 +42,26 @@ export interface RecoveryConsoleSession {
   devicesSignedOut: boolean;
 }
 
-/** The agent refused: its own words, and the reason the UI can act on (a human check), if any. */
+/** The agent refused: its own words, and its reason code, if any. */
 export class RecoveryRefusal extends Error {
   readonly reason: string | null;
   constructor(message: string, reason: string | null) {
     super(message);
     this.name = 'RecoveryRefusal';
     this.reason = reason;
+  }
+}
+
+/**
+ * The workspace's human check refused this attempt. `devicesSignedOut`: the account was recovered
+ * onto this device before the sign-in was refused, which the retry (a sign-in only) cannot say.
+ */
+export class RecoveryAdmissionRefusal extends AdmissionRefusal {
+  readonly devicesSignedOut: boolean;
+  constructor(reason: AdmissionReason, message: string, challenge: AdmissionChallenge | null, devicesSignedOut: boolean) {
+    super(reason, message, challenge);
+    this.name = 'RecoveryAdmissionRefusal';
+    this.devicesSignedOut = devicesSignedOut;
   }
 }
 
@@ -61,9 +81,12 @@ function answer(message: unknown, name: string, requestId: string): Fields | nul
   return (value as Fields).request_id === requestId ? (value as Fields) : null;
 }
 
-const refusalOf = (fields: Fields, fallback: string): RecoveryRefusal =>
-  new RecoveryRefusal(typeof fields.message === 'string' && fields.message !== '' ? fields.message : fallback,
-    typeof fields.reason_code === 'string' ? fields.reason_code : null);
+function refusalOf(fields: Fields, fallback: string, devicesSignedOut: boolean): Error {
+  const message: string = typeof fields.message === 'string' && fields.message !== '' ? fields.message : fallback;
+  const admission: AdmissionReason | null = admissionReasonOf(fields);
+  if (admission !== null) return new RecoveryAdmissionRefusal(admission, message, admissionChallengeOf(fields), devicesSignedOut);
+  return new RecoveryRefusal(message, typeof fields.reason_code === 'string' ? fields.reason_code : null);
+}
 
 export function recoverAccount(port: AgentPort, request: RecoverRequest, requestId: string, timeoutMs: number): Promise<RecoveryConsoleSession> {
   return new Promise<RecoveryConsoleSession>((resolve, reject) => {
@@ -72,9 +95,9 @@ export function recoverAccount(port: AgentPort, request: RecoverRequest, request
     const stop: () => void = port.listen((message: unknown): void => {
       if (answer(message, 'RecoverAccountSuccess', requestId)) { devicesSignedOut = true; return; }
       const refused: Fields | null = answer(message, 'RecoverAccountFailure', requestId);
-      if (refused) { settle((): void => reject(refusalOf(refused, 'The account could not be recovered.'))); return; }
+      if (refused) { settle((): void => reject(refusalOf(refused, 'The account could not be recovered.', devicesSignedOut))); return; }
       const failed: Fields | null = answer(message, 'ConnectFailure', requestId);
-      if (failed) { settle((): void => reject(refusalOf(failed, 'Signing in with the recovery phrase failed.'))); return; }
+      if (failed) { settle((): void => reject(refusalOf(failed, 'Signing in with the recovery phrase failed.', devicesSignedOut))); return; }
       if (answer(message, 'SessionAlreadyActive', requestId)) {
         settle((): void => reject(new RecoveryRefusal(ALREADY_SIGNED_IN, 'SessionAlreadyActive')));
         return;

@@ -6,6 +6,7 @@
 import { BIP39_ENGLISH } from '@/lib/sign-in-with-citadel/bip39-english';
 import type { SignInCredential, SignInManagementOp } from '../types';
 import type { FakeAccount } from './fake-agent';
+import type { FakeAdmission } from './fake-admission';
 
 /** A deterministic 24-word phrase of real recovery words: a different one per `seed`. */
 export function fakePhrase(seed: number): string[] {
@@ -34,9 +35,7 @@ export function listCredentials(account: FakeAccount, wire: boolean): SignInCred
   }];
   const all: SignInCredential[] = [...password, ...account.keys.map((k): SignInCredential => ({
     id: k.id, kind: 'SecurityKey', label: k.label, credential_id: k.credentialId, created_ms: 2n, last_used_ms: null, consumed: false,
-  })), ...phrase, ...account.recoveryCodes.map((c: string, i: number): SignInCredential => ({
-    id: 100 + i, kind: 'RecoveryCode', label: `Recovery code ${i + 1}`, credential_id: null, created_ms: 1n, last_used_ms: null, consumed: account.consumed.includes(c),
-  }))];
+  })), ...phrase];
   if (!wire) return all;
   return all.map((c: SignInCredential): SignInCredential => {
     const out: Partial<SignInCredential> = { ...c };
@@ -53,26 +52,40 @@ export const isPhraseOf = (account: FakeAccount, typed: string): boolean =>
 export interface RecoverySide {
   readonly accounts: FakeAccount[];
   readonly recoverySessions: Set<bigint>;
+  readonly admission: FakeAdmission;
   emit: (variant: string, body: Record<string, unknown>) => void;
   text: (bytes: unknown) => string | null;
 }
 
+/** True when `token` passes the workspace's check; else its refusal, as the agent words it under `variant`. */
+function admit(agent: RecoverySide, variant: string, requestId: string, token: unknown): boolean {
+  const refused: string | null = agent.admission.check(token);
+  if (refused === null) return true;
+  agent.emit(variant, { cid: 0n, request_id: requestId, message: 'A human check is required', reason_code: refused, ...agent.admission.published(refused) });
+  return false;
+}
+
 /**
  * `RecoverAccount`: refused alike for an unknown name and a wrong phrase. An account this device
- * does not hold is recovered first (`RecoverAccountSuccess`, other devices revoked); then the phrase
- * sign-in's `ConnectSuccess`, a console session.
+ * does not hold is recovered first, paid for by `admission_token` (`RecoverAccountSuccess`, other
+ * devices revoked); the phrase sign-in that follows then has no token, as the agent's has none.
+ * One this device holds is only signed in, with the token. Then the sign-in's `ConnectSuccess`, a
+ * console session.
  */
 export function recoverAccount(agent: RecoverySide, body: Record<string, unknown>): void {
   const requestId: string = body.request_id as string;
   const account: FakeAccount | undefined = agent.accounts.find((a) => a.username === body.username && a.server === body.server_addr);
+  const recovering: boolean = !account?.heldHere;
+  if (recovering && !admit(agent, 'RecoverAccountFailure', requestId, body.admission_token)) return;
   if (!account || !isPhraseOf(account, agent.text(body.phrase) ?? '')) {
     agent.emit('RecoverAccountFailure', { cid: 0n, request_id: requestId, message: 'authentication failed' });
     return;
   }
-  if (!account.heldHere) {
+  if (recovering) {
     account.heldHere = true;
     agent.emit('RecoverAccountSuccess', { cid: account.cid, request_id: requestId });
   }
+  if (!admit(agent, 'ConnectFailure', requestId, recovering ? null : body.admission_token)) return;
   agent.recoverySessions.add(account.cid);
   agent.emit('ConnectSuccess', { cid: account.cid, request_id: requestId });
 }

@@ -7,7 +7,7 @@ import { SIGN_IN_COPY } from '@/lib/sign-in/copy';
 import { tenantOf } from '@/lib/sign-in/factors';
 import type { AccountRef } from '@/lib/sign-in/types';
 import { AddSecurityKeyCard } from './AddSecurityKeyCard';
-import type { RecoverySecret } from '@/lib/recovery/secret';
+import type { RecoveryPhrase } from '@/lib/recovery/secret';
 import { FinishSignInStep } from './FinishSignInStep';
 
 // Its own chunk: the phrase panel is met once per account, never on the landing path.
@@ -19,11 +19,9 @@ type Step = 'key' | 'phrase' | 'sign-in';
  * The steps, in order. Signed in: an optional key, then the recovery phrase.
  * Registered but not signed in (a workspace that checks spent the register
  * token): the phrase first, then the sign-in with a fresh check, then the key --
- * which needs the session. A server without post-quantum sign-in sends no
- * phrase and has no keys to enrol, so only the sign-in, if any, is left.
+ * which needs the session.
  */
-export function stepsFor(signedIn: boolean, hasPhrase: boolean): Step[] {
-  if (!hasPhrase) return signedIn ? [] : ['sign-in'];
+export function stepsFor(signedIn: boolean): Step[] {
   return signedIn ? ['key', 'phrase'] : ['phrase', 'sign-in', 'key'];
 }
 
@@ -32,18 +30,18 @@ export function stepsFor(signedIn: boolean, hasPhrase: boolean): Step[] {
  * phrase (shown once, then three of its words checked), and on a workspace that
  * asks for a human check, the sign-in its spent register token could not make.
  */
-export function PostRegistrationSteps({ session, username, serverAddress, password, recoverySecret, signIn, onDone }: {
+export function PostRegistrationSteps({ session, username, serverAddress, password, recoveryPhrase, signIn, onDone }: {
   /** The new account's session, or null while its sign-in still needs a fresh check. */
   session: bigint | null;
   username: string;
   serverAddress: string;
   /** The password just chosen: the step-up for the new account's first key. */
   password: string;
-  recoverySecret: RecoverySecret | null;
+  recoveryPhrase: RecoveryPhrase;
   signIn: (admissionToken: string) => Promise<bigint>;
   onDone: (cid: bigint) => void;
 }): JSX.Element | null {
-  const [steps] = useState<Step[]>(() => stepsFor(session !== null, recoverySecret !== null));
+  const [steps] = useState<Step[]>(() => stepsFor(session !== null));
   const [at, setAt] = useState<number>(0);
   const [cid, setCid] = useState<bigint | null>(session);
   const { ref, dialogProps } = useDialogOverlay({ label: 'Secure your account' });
@@ -72,9 +70,9 @@ export function PostRegistrationSteps({ session, username, serverAddress, passwo
               onFinished={next}
             />
           )}
-          {step === 'phrase' && recoverySecret !== null && (
+          {step === 'phrase' && (
             <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-              <RecoveryPhrasePanel secret={recoverySecret} account={username} server={serverAddress} onDone={next} />
+              <RecoveryPhrasePanel words={recoveryPhrase} account={username} server={serverAddress} onDone={next} />
             </Suspense>
           )}
           {step === 'sign-in' && (

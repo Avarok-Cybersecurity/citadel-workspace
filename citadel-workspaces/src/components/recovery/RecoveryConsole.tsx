@@ -19,7 +19,7 @@ import { ConsoleSetPassword } from './ConsoleSetPassword';
 import { ConsoleTaskList } from './ConsoleTaskList';
 
 /**
- * The recovery console: where a sign-in with the recovery phrase (or a code) lands, instead of the
+ * The recovery console: where a sign-in with the recovery phrase lands, instead of the
  * workspace. A guided set of steps over the only changes the server allows such a session.
  */
 export function RecoveryConsole({ account, serverAddress, devicesSignedOut, send, signOut, signInWith }: {

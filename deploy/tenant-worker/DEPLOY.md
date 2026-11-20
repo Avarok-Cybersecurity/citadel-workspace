@@ -113,8 +113,8 @@ admission check verifies its tokens with `TURNSTILE_SECRET` and the actions `sig
 those answers carry too, not the tenant's own host. The widget is rendered with `cData` set to
 the tenant's slug, and the check refuses an answer whose `cdata` names another workspace (only
 an answer from Cloudflare's testing keys, which carries none, is taken without it). The check
-runs only for fresh sign-ins and registrations: a recovery-code sign-in and a resume-token
-reconnect are not asked, and a client older than 0.12 is told to update.
+runs for fresh sign-ins, registrations and recoveries (a recovery-phrase sign-in is asked with
+action `recover`); a resume-token reconnect is not asked, and a client older than 0.12 is told to update.
 
 ### 5. Stripe, in TEST mode
 
@@ -190,7 +190,7 @@ hardening) when it is provisioned, or at its first start on a build that has thi
 in its key-value storage under `control:oprf-seed`, apart from the account rows. It is never
 logged, reported or exported, and **there is no copy anywhere else** (an owner decision,
 docs/plans/pq-sign-in.md): an object whose seed is lost or replaced can no longer verify any
-password factor, which must then be reset; security keys and recovery codes keep working. A
+password factor, which must then be reset; security keys and the recovery phrase keep working. A
 stored value that is not 32 bytes stops the object rather than being replaced. Legacy accounts
 are upgraded at their next login and cannot go back: rolling the Worker back below this release
 locks out every account that signed in since.
@@ -294,7 +294,7 @@ without a real Turnstile pass, needs (the header of `wrangler.toml` lists them).
 |---|---|---|
 | `npx vitest run` | path routing and diagnostics on, `test/fixture-ui` as assets; the production tests read `wrangler.toml` through wrangler and use its own vars | the control plane, the UI headers and meta tags, no stats in production |
 | `node upgrade.mjs <dir> <old-tenant-worker>` | dev | what the build in `<old-tenant-worker>` (a built `deploy/tenant-worker` of the commit production runs) stored in an object loads under this one: the same account logs in, reads its profile back, and is upgraded to post-quantum sign-in by that login |
-| `node admission.mjs <dir>` | dev, then the always-fail Turnstile testing secret | the sign-in check enforced: no token refused (350), a passing token admitted, a refused one failed (351), for sign-in and registration; recovery-code and resume-token sign-ins not asked |
+| `node admission.mjs <dir>` | dev, then the always-fail Turnstile testing secret | the sign-in check enforced: no token refused (350), a passing token admitted, a refused one failed (351), for sign-in and registration; a resume-token sign-in not asked, a recovery-phrase one asked (action `recover`) |
 | `node sign-in.mjs <dir>` | dev | post-quantum accounts, the sign-in setting (admin-only, discovery follows it) and the OPRF seed surviving a restart |
 | `./proof-control.sh` | dev (as `proof-lib.mjs` `DEV_OVERRIDES`) | Turnstile, free creation, a real TEST-mode Checkout and signed webhooks |
 | `node serve-tenants.mjs ...` | dev | tenants by path, for the agent and kernel proofs |

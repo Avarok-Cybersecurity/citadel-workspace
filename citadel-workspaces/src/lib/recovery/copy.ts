@@ -7,21 +7,14 @@ export const PHRASE_COPY = {
     "security keys. Write them down, in order, and keep them somewhere private. They won't be shown again.",
   warning: 'Anyone with these words can take over your account. Citadel will never ask you for them.',
   written: "I've written down all 24 words",
-  codesTitle: 'Save your recovery codes',
-  codesBody:
-    'This workspace server issued recovery codes instead of a phrase. Each code signs in once. ' +
-    "Write them down and keep them somewhere private. They won't be shown again.",
-  codesWritten: "I've written down the codes",
   confirmTitle: 'Check what you wrote down',
   confirmBody: 'Type the words at these positions, so a phrase that was never written down is caught now.',
   confirmMismatch: "Those words don't match your phrase. Check what you wrote down and try again.",
   showAgain: 'Show the phrase again',
   regenerate: 'New recovery phrase',
-  regenerateWarning: 'Your current phrase, and any recovery codes, stop working at once.',
+  regenerateWarning: 'Your current phrase stops working at once.',
   settingsTitle: 'Recovery phrase',
   settingsBody: 'Lets you back in if you forget your password or lose your keys.',
-  legacyCodes: (n: number): string =>
-    `${n} unused recovery ${n === 1 ? 'code still works' : 'codes still work'} until you make a recovery phrase.`,
 } as const;
 
 export const RECOVER_COPY = {

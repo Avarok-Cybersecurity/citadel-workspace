@@ -15,6 +15,11 @@
  * registration in the suite goes through: it reads the 24 words off the screen and types back the
  * three the check asks for); createAccount hands this spec the words it read. Copy, Download and
  * a refused check are the unit tests' and the polish harness's (RecoveryPhrasePanel).
+ *
+ * The local stack's workspace asks for no human check, so the recover form and the sign-in after
+ * the console show none here. The check under the `recover` action, its retry after a fresh
+ * recovery, and the post-console sign-in's check are the unit tests'
+ * (recovering-an-account-past-a-human-check) and the polish harness's (recover-account-check).
  */
 import { test, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { createAccount, disconnectViaTopBar, waitForAppReady, waitForWorkspaceLoaded } from '../lib/index.js';

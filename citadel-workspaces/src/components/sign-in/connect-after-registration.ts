@@ -29,7 +29,7 @@ export async function connectAfterRegistration(
   try {
     try {
       await wsModule.websocketService.connect(requestId, username, server,
-        { password, securityKey: passkeysAvailableHere(), recoveryCode: null, admissionToken }, settings);
+        { password, securityKey: passkeysAvailableHere(), admissionToken }, settings);
     } catch (error) {
       const _unanswered: Promise<unknown> = outcome.catch((): undefined => undefined);
       throw error;

@@ -14,10 +14,6 @@ export const SIGN_IN_COPY: {
   readonly touchHint: string;
   readonly useKeyInstead: 'Sign in with a security key instead';
   readonly usePasswordInstead: 'Use my password instead';
-  readonly lostKey: 'Lost your key?';
-  readonly recoveryLabel: 'Recovery code';
-  readonly recoveryHint: string;
-  readonly recoverySubmit: 'Sign in with recovery code';
   readonly addKeyTitle: 'Add a security key';
   readonly addKeyBody: string;
   readonly stepUpTitle: "Confirm it's you";
@@ -30,10 +26,6 @@ export const SIGN_IN_COPY: {
   touchHint: 'Press Continue, then touch your security key or use Touch ID when your browser asks.',
   useKeyInstead: 'Sign in with a security key instead',
   usePasswordInstead: 'Use my password instead',
-  lostKey: 'Lost your key?',
-  recoveryLabel: 'Recovery code',
-  recoveryHint: 'One of the codes you saved when you created your account. Each works once.',
-  recoverySubmit: 'Sign in with recovery code',
   addKeyTitle: 'Add a security key',
   addKeyBody:
     'Sign in with Touch ID, your phone or a security key. The server checks the key itself, ' +

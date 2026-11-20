@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
 import { getDefaultSecuritySettings } from '@/lib/security-utils';
 import { FakeAgent, type FakeAccount } from '@/lib/sign-in/__tests__/fake-agent';
-import { ALREADY_SIGNED_IN, recoverAccount, RecoveryRefusal, type RecoverRequest, type RecoveryConsoleSession } from '../recover-account';
+import { FAKE_TOKEN_PREFIX } from '@/lib/sign-in/__tests__/fake-admission';
+import { ALREADY_SIGNED_IN, recoverAccount, RecoveryAdmissionRefusal, RecoveryRefusal, type RecoverRequest, type RecoveryConsoleSession } from '../recover-account';
 import type { AgentPort } from '../recovery-ports';
 
 let agent: FakeAgent;
@@ -64,6 +65,28 @@ describe('recovering with the phrase', () => {
     eventEmitter.emit('websocket-message', { Response: { SessionAlreadyActive: { cid: 7n, username: 'alice', message: 'active', request_id: 'mine' } } });
     await expect(pending).rejects.toEqual(new RecoveryRefusal(ALREADY_SIGNED_IN, 'SessionAlreadyActive'));
     expect(listeners()).toBe(before - 1);
+  });
+});
+
+describe('on a workspace that asks for a human check', () => {
+  const SITE_KEY: '1x00000000000000000000AA' = '1x00000000000000000000AA';
+  beforeEach(() => { agent.admission.required = true; alice.heldHere = false; });
+
+  it('a recovery refused for its check is an admission refusal carrying the check it published', async () => {
+    agent.admission.challenge = { provider: 'turnstile', site_key: SITE_KEY, identity: 'bench' };
+    const refusal: unknown = await recoverAccount(portOf(agent), request({}), 'r1', 1000).catch((e: unknown) => e);
+    expect(refusal).toBeInstanceOf(RecoveryAdmissionRefusal);
+    expect(refusal).toMatchObject({ reason: 'admission_required', challenge: { siteKey: SITE_KEY, identity: 'bench' }, devicesSignedOut: false });
+    expect(alice.heldHere).toBe(false);
+  });
+
+  it('the sign-in after a fresh recovery, refused for its check, says the account was recovered here', async () => {
+    const refusal: unknown = await recoverAccount(portOf(agent), request({ admissionToken: `${FAKE_TOKEN_PREFIX}1` }), 'r1', 1000).catch((e: unknown) => e);
+    expect(refusal).toBeInstanceOf(RecoveryAdmissionRefusal);
+    expect(refusal).toMatchObject({ reason: 'admission_required', devicesSignedOut: true });
+    // The account is held here now: the retry only signs in, with its own token.
+    expect(await recoverAccount(portOf(agent), request({ admissionToken: `${FAKE_TOKEN_PREFIX}2` }), 'r2', 1000)).toEqual({ cid: alice.cid, devicesSignedOut: false });
+    expect(agent.sent.map(([, b]) => b.admission_token)).toEqual([`${FAKE_TOKEN_PREFIX}1`, `${FAKE_TOKEN_PREFIX}2`]);
   });
 });
 

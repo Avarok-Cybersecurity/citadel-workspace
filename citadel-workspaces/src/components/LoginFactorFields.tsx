@@ -1,5 +1,4 @@
-import { KeyRound, LifeBuoy } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { KeyRound } from "lucide-react";
 import { SIGN_IN_COPY } from "@/lib/sign-in/copy";
 import { RECOVER_COPY } from "@/lib/recovery/copy";
 import { LoginPasswordField } from "./LoginPasswordField";
@@ -11,7 +10,8 @@ const linkClass: string =
 /**
  * The part of the sign-in form that depends on how the user signs in: a
  * password (the server asks for a key touch too if the account's policy says
- * so), a key alone with no password field, or a recovery code.
+ * so), or a key alone with no password field. A lost password or key is
+ * recovered with the recovery phrase ("Recover your account").
  */
 export function LoginFactorFields({ h, keysHere, onRecover }: { h: LoginHandler; keysHere: boolean; onRecover: () => void }): JSX.Element {
   const describedBy: string | undefined = h.error ? 'login-error' : undefined;
@@ -31,24 +31,6 @@ export function LoginFactorFields({ h, keysHere, onRecover }: { h: LoginHandler;
           No password needed: you'll touch your security key next.
         </p>
       )}
-      {h.mode === 'recovery' && (
-        <div className="space-y-1.5">
-          <label htmlFor="recovery-code" className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
-            {SIGN_IN_COPY.recoveryLabel}
-          </label>
-          <div className="relative">
-            <LifeBuoy className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
-            <Input
-              id="recovery-code" autoComplete="off" spellCheck={false}
-              aria-invalid={h.invalidField === 'recovery-code' ? true : undefined}
-              aria-describedby={describedBy ? `recovery-code-hint ${describedBy}` : 'recovery-code-hint'}
-              value={h.recoveryCode} onChange={(e) => h.setRecoveryCode(e.target.value)}
-              className="bg-input border-border text-foreground pl-10 h-11 rounded-lg font-mono"
-            />
-          </div>
-          <p id="recovery-code-hint" className="text-xs text-muted-foreground">{SIGN_IN_COPY.recoveryHint}</p>
-        </div>
-      )}
       <div className="flex flex-wrap justify-between gap-2">
         {h.mode !== 'password' ? (
           <button type="button" className={linkClass} onClick={() => switchTo('password', 'password')} data-testid="login-mode-password">
@@ -59,11 +41,6 @@ export function LoginFactorFields({ h, keysHere, onRecover }: { h: LoginHandler;
             {SIGN_IN_COPY.useKeyInstead}
           </button>
         ) : <span />}
-        {h.mode !== 'recovery' && (
-          <button type="button" className={linkClass} onClick={() => switchTo('recovery', 'recovery-code')} data-testid="login-mode-recovery">
-            {SIGN_IN_COPY.lostKey}
-          </button>
-        )}
       </div>
       <button type="button" className={linkClass} onClick={onRecover} data-testid="login-recover-account">
         {RECOVER_COPY.link}

@@ -44,7 +44,7 @@ describe('a server at 0.12.2', () => {
     w.agent.serverAt0122 = true;
     w.deps.rpId = 'localhost';
     alice.policy = 'PasswordAndKey';
-    await manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryCodes', STEP_UP);
+    await manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryPhrase', STEP_UP);
     // One get() per ceremony: the enrolment's, under the relying party the server named, then the
     // step-up's, under this page's because a 0.12.2 server names none.
     const asked: string[] = w.authenticator.getCalls.map((g) => g.rpId);

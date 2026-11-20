@@ -34,11 +34,6 @@ import { connectRefusal } from '@/lib/connection/connect-refusal';
 
 export type LoginResult =
   | { kind: 'signed-in'; cid: bigint; messagingReady: boolean; serverAddress: string }
-  /**
-   * A recovery code opened a restricted session: it may only add a key, set the
-   * policy or sign out, so nothing that would use the workspace is started.
-   */
-  | { kind: 'recovery'; cid: bigint; serverAddress: string }
   /** An existing session was claimed instead; the redirect has already run. */
   | { kind: 'redirected' };
 
@@ -117,7 +112,6 @@ export async function loginWithPassword(
 
   const cid: bigint = outcome.cid;
   const { serverAddress, fullName } = await labelFor(cid);
-  if (factors.recoveryCode !== null) return { kind: 'recovery', cid, serverAddress };
   await connectionManager.handleAuthSuccess({
     username, fullName, serverAddress,
     // Stored as chosen too. Persisting the defaults here meant every

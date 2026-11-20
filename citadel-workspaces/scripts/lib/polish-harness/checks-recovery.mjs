@@ -6,7 +6,8 @@ import { AxeBuilder } from '@axe-core/playwright';
  * inside the viewport with no sideways scroll; every control inside the card, at least WCAG 2.2's
  * 24px, and the primary actions 44px; the 24 phrase words drawn in order, two columns at 390px,
  * none clipped and none overlapping; the recover form's 24 boxes the same, and its mistyped word
- * marked; the console's three-step indicator inside its header; no serious or critical axe finding.
+ * marked; the human check a workspace asks for drawn inside the recover form, above its button; the
+ * console's three-step indicator inside its header; no serious or critical axe finding.
  */
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const PHRASE = ['abandon', 'ability', 'able', 'about', 'above', 'absent', 'absorb', 'abstract', 'absurd', 'abuse', 'access', 'accident',
@@ -89,6 +90,20 @@ async function theRecoverFormFits({ page, url, viewport }) {
   await axe(page);
 }
 
+async function theRecoverFormCheckFits({ page, url, viewport }) {
+  await open(page, url, 'recover-account-check', 'turnstile-frame');
+  await fits(page, viewport, ['recover-submit']);
+  const form = await page.getByTestId('recover-account').boundingBox();
+  for (const id of ['admission-check', 'turnstile-frame', 'admission-message']) {
+    const box = await page.getByTestId(id).boundingBox();
+    assert.ok(box.x >= form.x - 0.5 && box.x + box.width <= form.x + form.width + 0.5, `${id} ${JSON.stringify(box)} overhangs the form ${JSON.stringify(form)}`);
+  }
+  const frame = await page.getByTestId('turnstile-frame').boundingBox();
+  const submit = await page.getByTestId('recover-submit').boundingBox();
+  assert.ok(frame.y + frame.height <= submit.y + 0.5, `the check ${JSON.stringify(frame)} is not above the Recover button ${JSON.stringify(submit)}`);
+  await axe(page);
+}
+
 const theConsoleFits = (scenario, view, primary) => async ({ page, url, viewport }) => {
   await open(page, url, scenario, 'recovery-console');
   await page.locator(`[data-testid="recovery-console"][data-view="${view}"]`).waitFor();
@@ -105,6 +120,7 @@ export const RECOVERY_CHECKS = {
   theRecoveryPhraseFits: thePhraseFits,
   theRecoveryPhraseCheckFits: thePhraseCheckFits,
   theRecoverAccountFormFits: theRecoverFormFits,
+  theRecoverAccountFormCheckFits: theRecoverFormCheckFits,
   theRecoveryConsoleWelcomeFits: theConsoleFits('recovery-console-welcome', 'welcome', ['recovery-console-begin', 'recovery-console-sign-out']),
   theRecoveryConsoleTasksFit: theConsoleFits('recovery-console-tasks', 'tasks', ['recovery-task-password', 'recovery-task-phrase', 'recovery-console-done']),
   theRecoveryConsolePasswordFits: theConsoleFits('recovery-console-password', 'password', ['console-password-save', 'recovery-console-back']),

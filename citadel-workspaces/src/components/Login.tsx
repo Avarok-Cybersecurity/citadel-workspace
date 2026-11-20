@@ -18,7 +18,6 @@ import { LoginRecoveryCard, showsRecovery, useAccountRecovery, type AccountRecov
 import { useSignInHints } from "./sign-in/useSignInHints";
 import { passkeysAvailableHere } from "@/lib/passkey";
 import type { SignInHint } from "@/lib/sign-in";
-import { SIGN_IN_COPY } from "@/lib/sign-in/copy";
 import { AdmissionCheck } from "./admission/AdmissionCheck";
 import { useAdmissionGate, type AdmissionGate } from "./admission/useAdmissionGate";
 import { useAccountServer } from "./admission/useAccountServer";
@@ -98,7 +97,7 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 p-4" ref={dialogRef} {...dialogProps}>
-      {showsRecovery(h, recovery) ? (
+      {showsRecovery(recovery) ? (
         <LoginRecoveryCard h={h} recovery={recovery} scope={scope.server ?? knownServer ?? null} />
       ) : keyOffer ? (
         <Card className="bg-background border-border shadow-2xl shadow-black/40 w-full max-w-md" data-testid="passkey-enrol">
@@ -174,7 +173,7 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
                 <p className="text-sm text-muted-foreground" data-testid="login-key-next">{PASSWORD_THEN_KEY}</p>
               )}
 
-              {/* How the account is proved: password, key alone, or recovery code */}
+              {/* How the account is proved: password, or a key alone */}
               <LoginFactorFields h={h} keysHere={passkeysAvailableHere()} onRecover={recovery.start} />
               {/* No Server Address field.
                   Signing in does not need one and never did: the SDK pins the
@@ -228,7 +227,7 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
                 ) : (
                   <>
                     <LogIn className="h-4 w-4" />
-                    {mode === 'recovery' ? SIGN_IN_COPY.recoverySubmit : mode === 'key' ? 'Continue with security key' : 'Sign In'}
+                    {mode === 'key' ? 'Continue with security key' : 'Sign In'}
                   </>
                 )}
               </Button>

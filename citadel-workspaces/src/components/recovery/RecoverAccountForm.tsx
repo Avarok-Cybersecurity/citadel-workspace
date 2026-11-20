@@ -6,8 +6,11 @@ import { Label } from '@/components/ui/label';
 import { resolveServerAddress } from '@/lib/address-resolver';
 import { RECOVER_COPY } from '@/lib/recovery/copy';
 import { emptyCells, readCells, readingError, type PhraseReading } from '@/lib/recovery/phrase-entry';
-import { RECOVER_TIMEOUT_MS, recoverAccount, type RecoveryConsoleSession } from '@/lib/recovery/recover-account';
-import { browserAgentPort } from '@/lib/recovery/recovery-ports';
+import { RECOVER_TIMEOUT_MS, recoverAccount, RecoveryAdmissionRefusal, type RecoveryConsoleSession } from '@/lib/recovery/recover-account';
+import type { AgentPort } from '@/lib/recovery/recovery-ports';
+import { ADMISSION_ACTION } from '@/lib/admission/copy';
+import { AdmissionCheck } from '@/components/admission/AdmissionCheck';
+import { useAdmissionGate, type AdmissionGate } from '@/components/admission/useAdmissionGate';
 import { describeFailure } from '@/lib/failure-message';
 import type { SessionSecuritySettings } from '@/lib/security-utils';
 import { defaultDeviceLabel } from '@/components/sign-in/default-key-label';
@@ -23,9 +26,11 @@ type Field = 'recover-username' | 'recover-server' | 'recover-device' | 'recover
 /**
  * "Recover account" on the sign-in screen: the username, its server, a name for this device and
  * the 24-word phrase. Each field is checked before anything is sent; the agent then recovers the
- * account and signs in to the recovery console.
+ * account and signs in to the recovery console. A workspace that asks for a human check gets the
+ * sign-in form's own check, under the `recover` action.
  */
-export function RecoverAccountForm({ initialUsername, initialServer, securitySettings, onRecovered, onCancel }: {
+export function RecoverAccountForm({ port, initialUsername, initialServer, securitySettings, onRecovered, onCancel }: {
+  port: AgentPort;
   initialUsername: string;
   initialServer: string;
   securitySettings: SessionSecuritySettings;
@@ -38,6 +43,11 @@ export function RecoverAccountForm({ initialUsername, initialServer, securitySet
   const [cells, setCells] = useState<string[]>(emptyCells);
   const [error, setError] = useState<{ message: string; field: Field | null } | null>(null);
   const [busy, setBusy] = useState<boolean>(false);
+  /** The server the check binds to: the one typed, once the field is left (discovery asks per change). */
+  const [checkedServer, setCheckedServer] = useState<string | undefined>(initialServer.trim() || undefined);
+  const gate: AdmissionGate = useAdmissionGate(ADMISSION_ACTION.recover, { serverAddress: checkedServer, reauth: false, accountNamed: false });
+  /** An attempt recovered the account here before its sign-in was refused: the console must still say so. */
+  const recoveredHere: React.MutableRefObject<boolean> = useRef<boolean>(false);
   const headingRef: React.RefObject<HTMLHeadingElement> = useRef<HTMLHeadingElement>(null);
   useEffect((): void => { headingRef.current?.focus(); }, []);
 
@@ -57,17 +67,22 @@ export function RecoverAccountForm({ initialUsername, initialServer, securitySet
       refuse(readingError(reading) ?? '', 'recovery-word', `recovery-word-${first}`);
       return;
     }
+    const admissionToken: string | null | 'missing' = gate.take();
+    if (admissionToken === 'missing') return;
     setBusy(true);
     setError(null);
     try {
       const serverAddress: string = await resolveServerAddress(server);
-      const session: RecoveryConsoleSession = await recoverAccount(browserAgentPort(), {
-        username, serverAddress, phrase: reading.phrase, deviceLabel: device, admissionToken: null, securitySettings,
+      const session: RecoveryConsoleSession = await recoverAccount(port, {
+        username, serverAddress, phrase: reading.phrase, deviceLabel: device, admissionToken, securitySettings,
       }, crypto.randomUUID(), RECOVER_TIMEOUT_MS);
-      onRecovered({ ...session, username: username.trim(), serverAddress });
+      onRecovered({ ...session, devicesSignedOut: session.devicesSignedOut || recoveredHere.current, username: username.trim(), serverAddress });
     } catch (failure: unknown) {
-      refuse(describeFailure(failure, 'The account could not be recovered. Check the phrase and try again.'), null, null);
+      if (failure instanceof RecoveryAdmissionRefusal && failure.devicesSignedOut) recoveredHere.current = true;
       setBusy(false);
+      // A human check that was missing or failed is shown on the check itself.
+      if (gate.settle(failure)) return;
+      refuse(describeFailure(failure, 'The account could not be recovered. Check the phrase and try again.'), null, null);
     }
   };
 
@@ -96,6 +111,7 @@ export function RecoverAccountForm({ initialUsername, initialServer, securitySet
           <Label htmlFor="recover-server">{RECOVER_COPY.server}</Label>
           <Input id="recover-server" value={server} autoComplete="off" spellCheck={false} disabled={busy} className="min-h-[44px]"
             placeholder="citadel.example.com:12400" aria-invalid={invalid('recover-server')} aria-describedby={describe('recover-server')}
+            onBlur={(): void => setCheckedServer(server.trim() || undefined)}
             onChange={(e: React.ChangeEvent<HTMLInputElement>): void => { setServer(e.target.value); setError(null); }} />
         </div>
       </div>
@@ -113,6 +129,7 @@ export function RecoverAccountForm({ initialUsername, initialServer, securitySet
         <p id="recover-device-hint" className="text-xs text-muted-foreground">{RECOVER_COPY.deviceHint}</p>
       </div>
       <p className="text-xs text-muted-foreground" data-testid="recover-new-device-note">{RECOVER_COPY.newDevice}</p>
+      <AdmissionCheck gate={gate} />
       {error !== null && (
         <p id="recover-error" role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive-emphasis" data-testid="recover-error">
           {error.message}

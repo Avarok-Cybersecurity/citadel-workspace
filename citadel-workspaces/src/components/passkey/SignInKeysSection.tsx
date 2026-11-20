@@ -34,7 +34,7 @@ export function SignInKeysSection(): JSX.Element | null {
     return (
       <div className="p-3 rounded-lg bg-background/50">
         <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-          <RecoveryPhrasePanel secret={{ kind: 'phrase', words: k.freshPhrase }} account={k.account.username} server={k.account.tenant} onDone={k.forgetPhrase} />
+          <RecoveryPhrasePanel words={k.freshPhrase} account={k.account.username} server={k.account.tenant} onDone={k.forgetPhrase} />
         </Suspense>
       </div>
     );
@@ -92,7 +92,7 @@ export function SignInKeysSection(): JSX.Element | null {
           <div>
             <p className="text-sm font-medium">{PHRASE_COPY.settingsTitle}</p>
             <p className="text-xs text-muted-foreground" data-testid="recovery-phrase-state">
-              {`${k.listing.codesLeft > 0 ? PHRASE_COPY.legacyCodes(k.listing.codesLeft) : PHRASE_COPY.settingsBody} ${PHRASE_COPY.regenerateWarning}`}
+              {`${PHRASE_COPY.settingsBody} ${PHRASE_COPY.regenerateWarning}`}
             </p>
           </div>
           <Button type="button" size="sm" variant="outline" className="gap-2 shrink-0 min-h-[44px]" disabled={k.busy}

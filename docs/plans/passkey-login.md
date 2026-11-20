@@ -91,7 +91,7 @@ an account has passkeys.
 
 **Recovery.** The password stays valid (v1), so losing every key only costs the
 convenience. If passwordless accounts are wanted later (a random 32-byte password
-generated at registration and never shown), a printable recovery code must be a second
+generated at registration and never shown), the recovery phrase must be a second
 KEK, created at registration. Otherwise losing the key locks the account out for good.
 
 **Attacker with the disk / agent storage:** gets the CNAC files and the wrapped blobs. The
@@ -327,7 +327,7 @@ production WebAuthn code against a spec authenticator, not a mock.
   subdomains and future native apps share credentials, with a larger blast radius).
 - D2. Blob location: agent CID-0 KV (recommended), IndexedDB, or both.
 - D3. v1 keeps the password as the recovery path (recommended), or ship passwordless
-  accounts now (generated password + mandatory recovery code).
+  accounts now (generated password + mandatory recovery phrase).
 - D4. Should enrolling a key delete the plaintext "Remember credentials" copy? Should that
   toggle be removed entirely?
 - D5. Require UV (recommended; excludes PIN-less and U2F-only keys).

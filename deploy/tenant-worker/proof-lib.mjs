@@ -71,8 +71,11 @@ export function redirect(from, to) {
 export const endpoint = (tenant) => `ws://${BASE}/${tenant}`;
 export const secret = () => randomBytes(12).toString("hex");
 
+/** A tenant's canonical domain, as the agent derives it for the recovery phrase. */
+export const tenantDomain = (tenant) => `${tenant}.work.avarok.net`;
+
 export async function client(tenant) {
-  return start_client(BASE, endpoint(tenant), LOG_FILTER);
+  return start_client(BASE, endpoint(tenant), tenantDomain(tenant), LOG_FILTER);
 }
 
 export async function stats(tenant) {

@@ -32,7 +32,7 @@ describe('the recovery console', () => {
   it('lists every sign-in method, the phrase included', async () => {
     const { policy, credentials } = await listCredentials(agent.send, alice.cid);
     expect(policy).toBe('Password');
-    expect(credentials.map((c) => c.kind)).toEqual(['Password', 'SecurityKey', 'SecurityKey', 'RecoveryPhrase', ...alice.recoveryCodes.map(() => 'RecoveryCode')]);
+    expect(credentials.map((c) => c.kind)).toEqual(['Password', 'SecurityKey', 'SecurityKey', 'RecoveryPhrase']);
   });
 
   it('removes a lost key and changes the policy', async () => {

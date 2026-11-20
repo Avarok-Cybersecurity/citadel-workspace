@@ -6,7 +6,7 @@
  * local process talking post-quantum Citadel to a Durable Object, none of which
  * exists under vitest. It keeps the server's rules that the UI depends on --
  * the policy decides which factors a sign-in needs, a key is proved by the PRF
- * output it gave at enrolment, a recovery code works once, the phrase opens a
+ * output it gave at enrolment, the phrase opens a
  * recovery console that may only manage how the account signs in, removing a
  * factor the policy needs is refused -- so a UI that skips a step fails here as
  * it would live.
@@ -31,9 +31,6 @@ export interface FakeAccount {
   password: string;
   policy: SignInPolicy;
   keys: Array<{ id: number; credentialId: number[]; label: string; prf: string }>;
-  /** An older server's codes (an account made before the phrase); a new registration has none. */
-  recoveryCodes: string[];
-  consumed: string[];
   /** The 24-word recovery phrase. */
   phrase: string[];
   /** Whether this device holds the account's bundle: a RecoverAccount for one it does not recovers it here first. */
@@ -45,7 +42,7 @@ interface Pending { requestId: string; resolve: (prf: { credentialId: number[]; 
 export class FakeAgent {
   readonly sent: Array<[string, Req]> = [];
   readonly accounts: FakeAccount[] = [];
-  /** Recovery console sessions: opened by a recovery code or the phrase. */
+  /** Recovery console sessions: opened by the phrase. */
   readonly recoverySessions: Set<bigint> = new Set<bigint>();
   /** The workspace's human-check requirement, enforced on Connect and Register. */
   readonly admission: FakeAdmission = new FakeAdmission();
@@ -53,11 +50,11 @@ export class FakeAgent {
   serverAt0122: boolean = false;
   private readonly pending: Map<string, Pending> = new Map<string, Pending>();
   private nextFactor: number = 10;
-  private nextCode: number = 0;
+  private nextPhrase: number = 0;
 
   account(username: string, policy: SignInPolicy = 'Password', cid: bigint = 7n): FakeAccount {
     const account: FakeAccount = {
-      username, cid, server: FAKE_SERVER, password: 'correct horse battery', policy, keys: [], recoveryCodes: this.codes(), consumed: [],
+      username, cid, server: FAKE_SERVER, password: 'correct horse battery', policy, keys: [],
       phrase: fakePhrase(this.accounts.length + 1), heldHere: true,
     };
     this.accounts.push(account);
@@ -69,10 +66,6 @@ export class FakeAgent {
     this.sent.push([variant, structuredClone(body)]);
     queueMicrotask(() => { void this.handle(variant, body); });
   };
-
-  private codes(): string[] {
-    return Array.from({ length: 10 }, () => `CODE-${(this.nextCode++).toString().padStart(4, '0')}`);
-  }
 
   emit(variant: string, body: Req): void {
     eventEmitter.emit('websocket-message', { [variant]: body });
@@ -138,9 +131,7 @@ export class FakeAgent {
     const account: FakeAccount = this.account(body.username as string, 'Password', 100n + BigInt(this.accounts.length));
     account.server = body.server_addr as string;
     account.password = this.text(body.proposed_password) ?? '';
-    // A server at 0.12.4 or later: the phrase, and no codes.
-    account.recoveryCodes = [];
-    this.emit('RegisterSuccess', { cid: account.cid, request_id: body.request_id, recovery_codes: [], recovery_phrase: [...account.phrase] });
+    this.emit('RegisterSuccess', { cid: account.cid, request_id: body.request_id, recovery_phrase: [...account.phrase] });
     // connect_after_register has no token left: the Register spent it (agent #112, Register.admission_token).
     if (this.admission.required) { this.emit('ConnectFailure', { cid: 0n, request_id: body.request_id, message: 'A human check is required', reason_code: 'admission_required', ...this.admission.published('admission_required') }); return; }
     this.emit('ConnectSuccess', { cid: account.cid, request_id: body.request_id });
@@ -158,14 +149,6 @@ export class FakeAgent {
     const phrase: string | null = this.text(body.recovery_phrase);
     if (phrase !== null) {
       if (!isPhraseOf(account, phrase)) { fail(); return; }
-      this.recoverySessions.add(account.cid);
-      this.emit('ConnectSuccess', { cid: account.cid, request_id: requestId });
-      return;
-    }
-    const code: string | null = this.text(body.recovery_code);
-    if (code !== null) {
-      if (!account.recoveryCodes.includes(code) || account.consumed.includes(code)) { fail(); return; }
-      account.consumed.push(code);
       this.recoverySessions.add(account.cid);
       this.emit('ConnectSuccess', { cid: account.cid, request_id: requestId });
       return;
@@ -237,13 +220,8 @@ export class FakeAgent {
       account.password = this.text(args.new_password) ?? '';
       ok('PasswordSet');
     } else if (opName === 'RegenerateRecoveryPhrase') {
-      account.phrase = fakePhrase(1000 + this.nextCode++);
-      account.recoveryCodes = [];
+      account.phrase = fakePhrase(1000 + this.nextPhrase++);
       ok({ RecoveryPhrase: [...account.phrase] });
-    } else if (opName === 'RegenerateRecoveryCodes') {
-      account.recoveryCodes = this.codes();
-      account.consumed = [];
-      ok({ RecoveryCodes: [...account.recoveryCodes] });
     }
   }
 }

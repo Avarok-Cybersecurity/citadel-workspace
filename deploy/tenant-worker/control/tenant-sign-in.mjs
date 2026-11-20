@@ -8,8 +8,8 @@
  *   loadSettings()      -> Promise<string>   the settings as JSON, `{"require_turnstile_sign_in":b}`
  *   storeSettings(json) -> Promise<void>     replace them (the kernel has checked the caller is an admin)
  *   admit(json)         -> Promise<null | {refuse, reason?}>
- *       the SDK's AdmissionContext for a FRESH sign-in or registration (a recovery-code sign-in
- *       and a resume-token reconnect are never asked),
+ *       the SDK's AdmissionContext for a FRESH sign-in, registration or recovery (a recovery-phrase
+ *       sign-in is asked as "Recover"; a resume-token reconnect is never asked),
  *       `{"username","kind":"SignIn"|"Register"|"Recover","token":string|null,"remote_addr":"100.64.x.y"|null}`.
  *       null admits; `{refuse:"admission_required",challenge?}` / `{refuse:"admission_failed",reason}`,
  *       `challenge` being `{provider:"turnstile",site_key,identity}` (public; admission.mjs `needsToken`).

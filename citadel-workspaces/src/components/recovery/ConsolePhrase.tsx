@@ -19,7 +19,7 @@ export function ConsolePhrase({ send, account, serverAddress, onDone }: {
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (words !== null) return <RecoveryPhrasePanel secret={{ kind: 'phrase', words }} account={account.username} server={serverAddress} onDone={onDone} />;
+  if (words !== null) return <RecoveryPhrasePanel words={words} account={account.username} server={serverAddress} onDone={onDone} />;
 
   const make = (): void => {
     setBusy(true);

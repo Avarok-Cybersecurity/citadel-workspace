@@ -60,17 +60,9 @@ beforeEach(async () => {
 afterEach(() => h.w.stop());
 
 describe('Settings -> Sign-in keys', () => {
-  it('lists the keys the server holds', async () => {
+  it('lists the keys the server holds, and says what the phrase is for', async () => {
     await openSection('password');
-    // An account made before the phrase: its codes still work, and Settings says until when.
-    expect(screen.getByTestId('recovery-phrase-state')).toHaveTextContent(PHRASE_COPY.legacyCodes(10));
-  });
-
-  it('says what the phrase is for when there are no codes left to mention', async () => {
-    alice.recoveryCodes = [];
-    await openSection('password');
-    expect(screen.getByTestId('recovery-phrase-state')).toHaveTextContent(PHRASE_COPY.settingsBody);
-    expect(screen.getByTestId('recovery-phrase-state')).not.toHaveTextContent('codes still work');
+    expect(screen.getByTestId('recovery-phrase-state')).toHaveTextContent(`${PHRASE_COPY.settingsBody} ${PHRASE_COPY.regenerateWarning}`);
   });
 
   it('adds a key after a step-up, with its Enrol touch', async () => {
@@ -123,7 +115,6 @@ describe('Settings -> Sign-in keys', () => {
     const shown: string[] = (await screen.findAllByTestId('recovery-phrase-word')).map((li) => li.lastElementChild?.textContent ?? '');
     expect(shown).toEqual(alice.phrase);
     expect(shown).not.toEqual(before);
-    expect(alice.recoveryCodes).toEqual([]);
     const op: Record<string, unknown> | undefined = h.w.agent.sent.map(([, b]) => b).find((b) => b.op === 'RegenerateRecoveryPhrase');
     expect(op?.step_up).toEqual({ password: Array.from(new TextEncoder().encode(PASSWORD)), security_key: true });
     fireEvent.click(screen.getByTestId('recovery-phrase-written'));

@@ -14,7 +14,8 @@ Status: agreed with the owner on 2026-10-02. This supersedes options A and C of
      the server's OPRF key as well.
    - What it doesn't carry: the post-quantum security, which ML-KEM provides.
 4. **A sign-in policy per account:** `Password`, `PasswordAndKey` or `KeyOnly`.
-5. **Recovery codes** for lost keys.
+5. **A recovery phrase** (24 words) for a lost password or lost keys. It replaced
+   the recovery codes (owner, 2026-11-20); there is no codes path left.
 
 ## Owner decisions, 2026-10-03 (server phase)
 6. **No backup of the OPRF seed.** Each tenant's seed lives only in its Durable
@@ -24,8 +25,8 @@ Status: agreed with the owner on 2026-10-02. This supersedes options A and C of
      nothing outside the object can ever drive an offline guess.
    - What it costs: if the seed is lost while the accounts survive, every
      **password** factor of that tenant stops verifying and must be reset. Security
-     keys and **recovery codes** don't use the OPRF and keep working, so members
-     sign in with a code (a restricted session), enrol a key or reset the password,
+     keys and the **recovery phrase** don't use the OPRF and keep working, so members
+     sign in with the phrase (a recovery session), enrol a key or reset the password,
      and carry on. A stored value that is not a seed stops the object; it is never
      silently replaced, since a new seed is the same lockout.
    - Losing the whole of the object's storage loses the accounts with it; a seed
@@ -59,12 +60,12 @@ stores only the encapsulation (public) key.
 |---|---|
 | Password | `rwd = OPRF(k_user, password)`, computed blinded with the server (RFC 9497, ristretto255), then `seed = Argon2id(rwd, salt_user)` on the client |
 | A hardware key / passkey | the WebAuthn **PRF** (`hmac-secret`) output for this credential and an account-specific `eval` salt, then HKDF-SHA3. The PRF is symmetric HMAC-SHA-256 inside the authenticator, so it is post-quantum safe. The key's classical assertion signature is **not** relied on. |
-| A recovery code | 128-bit random code, then HKDF-SHA3 (high entropy, so no stretching is needed) |
+| The recovery phrase | a 32-byte seed the client draws, shown once as 24 words; `HKDF-SHA3-256(seed)` with the server's domain and the username in `info`, so one seed gives unrelated factors per server and name (256 bits, so no stretching is needed) |
 
 **Proving a factor.** The steps for each required factor:
 1. The server runs `ML-KEM.Encaps(ek_factor)` and gets `(ct, K)`.
 2. The client derives `dk` (password plus OPRF plus Argon2, or a key touch, or
-   a code) and decapsulates `ct`, getting `K`.
+   the phrase) and decapsulates `ct`, getting `K`.
 3. The client returns `tag = HMAC-SHA3-256(K, "citadel-auth-v1" ‖ factor_id ‖ transcript_hash)`.
 4. The server compares in constant time.
 
@@ -111,10 +112,32 @@ All of this runs **inside** the post-quantum channel.
 - `RenameCredential`.
 - `RemoveCredential`: refused if it would leave the policy unsatisfiable.
 - `SetSignInPolicy`.
-- `RegenerateRecoveryCodes`.
+- `RegenerateRecoveryPhrase`.
 
-A recovery code signs in exactly once, and only to a restricted session that
-can do just two things: enrol a key and set the policy.
+The phrase is not used up: it signs in again and again, always to a recovery
+session, and an old, foreign or wrong phrase fails like any other factor. A
+recovery session may only manage the sign-in methods (list, add or remove a key,
+set a new password, set the policy, regenerate the phrase) and sign out. A
+recovery and a phrase sign-in are both asked the human check, with action
+`recover`.
+
+### The phrase recovers the files
+The phrase's seed is also the account's RE-VFS root
+(`RevfsKey::derive(seed, canonical_domain, cid)`), so a member who recovers on a
+new device opens the files stored before.
+- The agent keeps the seed sealed under the device vault. It is never stored in
+  plaintext and never sent to the server (only the factor's `ek` is).
+- Registration stores the issued phrase's seed before anything can use a key.
+  `RecoverAccount` on a device that does not hold the account stores the typed
+  phrase's seed. An account with no stored root has no key, and Connect refuses
+  it by name.
+- Regenerating the phrase re-keys the files. An object's layer keys are derived
+  from the root, so nothing can be re-wrapped: the agent reads each object under
+  the old root and writes it again under the new one (staging copy, then the
+  object, then the staging copy goes), from its own index of the account's
+  objects. The pass resumes where it stopped, every object stays readable at
+  every step, and the old root stays sealed until no index entry names it. While
+  a pass runs, the account's other file operations are refused (`REKEYING`).
 
 ### Migration
 Accounts with a legacy Argon2 record keep working.
@@ -161,13 +184,13 @@ account rows alone therefore can't drive offline guessing. It is never logged.
   and a tag.
 
 ## UI (Citadel Workspace; built after the protocol works)
-- **Registration:** an optional "Add a security key" step, then the recovery
-  codes, shown once with a confirmation.
+- **Registration:** an optional "Add a security key" step, then the 24-word
+  recovery phrase, shown once with a confirmation.
 - **Sign-in:** password-only accounts are unchanged. `PasswordAndKey` accounts
   ask for the password, then show "Touch your security key". `KeyOnly`
   accounts sign in key-first, with no password field.
 - **Settings → Sign-in keys:** backed by the server. It lists, adds, renames
-  and removes keys, switches the policy, and regenerates recovery codes.
+  and removes keys, switches the policy, and regenerates the recovery phrase.
 - **Unsupported keys:** a key without PRF support is refused with a clear
   reason.
 - **Local records:** scoped by tenant and CID (fixing the collision). The
@@ -183,7 +206,7 @@ Each of the following must be rejected:
 - the wrong key (another credential's PRF);
 - a tampered ciphertext;
 - a tampered OPRF evaluation;
-- a reused recovery code;
+- an old, foreign or wrong recovery phrase;
 - a recovery session attempting a normal operation;
 - removing the last factor;
 - enrolling a key without its proof.

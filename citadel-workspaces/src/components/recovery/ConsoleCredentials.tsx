@@ -9,7 +9,6 @@ import type { FactorKind, SignInCredential } from '@/lib/sign-in/types';
 const KIND: Record<FactorKind, { label: string; icon: typeof Lock }> = {
   Password: { label: 'Password', icon: Lock },
   SecurityKey: { label: 'Security key', icon: KeyRound },
-  RecoveryCode: { label: 'Recovery code', icon: LifeBuoy },
   RecoveryPhrase: { label: 'Recovery phrase', icon: LifeBuoy },
 };
 
