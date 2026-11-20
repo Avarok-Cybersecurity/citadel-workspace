@@ -71,10 +71,16 @@ async fn wait_for_record<R: Ratchet>(
 }
 
 fn registration(addr: SocketAddr, username: &str) -> ServerConnectionSettings<StackedRatchet> {
-    ServerConnectionSettingsBuilder::credentialed_registration(addr, username, username, PASSWORD)
-        .with_udp_mode(UdpMode::Disabled)
-        .build()
-        .expect("settings")
+    ServerConnectionSettingsBuilder::credentialed_registration(
+        addr,
+        username,
+        username,
+        PASSWORD,
+        common::sign_in_client::TEST_SERVER_CERTIFICATE,
+    )
+    .with_udp_mode(UdpMode::Disabled)
+    .build()
+    .expect("settings")
 }
 
 /// Runs a client node with `settings` until `on_connect` finishes, and returns

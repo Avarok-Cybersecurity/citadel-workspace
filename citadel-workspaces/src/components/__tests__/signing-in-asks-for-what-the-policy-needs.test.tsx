@@ -3,8 +3,9 @@
  *
  * Password accounts are unchanged. A PasswordAndKey account is asked to touch
  * its key after the password, by the challenge the server sends; a KeyOnly
- * account signs in with no password field; a recovery code lands on a screen
- * that can only add a key or set the policy, and starts nothing else.
+ * account signs in with no password field; a recovery code lands on the
+ * recovery console, which manages only how the account signs in, and starts
+ * nothing else.
  *
  * Doubled, each at an I/O seam:
  * - the agent (fake-agent.ts) behind the REAL AuthOperations, so the Connect on
@@ -36,7 +37,6 @@ import { SecurityKeyPromptHost as SecurityKeyPrompt } from '../sign-in/SecurityK
 import { enrolKey, world } from '@/lib/sign-in/__tests__/helpers';
 import { loginWorld as h } from './login-world';
 import { listHints } from '@/lib/sign-in/hints';
-import { SIGN_IN_COPY } from '@/lib/sign-in/copy';
 
 let onNext: ReturnType<typeof vi.fn>;
 function renderLogin(): void {
@@ -107,19 +107,24 @@ describe('a KeyOnly account', () => {
 });
 
 describe('a recovery code', () => {
-  it('lands on the restricted screen and starts nothing that uses the workspace', async () => {
+  it('lands on the recovery console and starts nothing that uses the workspace', async () => {
     const alice: FakeAccount = await accountWithKey('KeyOnly');
     renderLogin();
     fireEvent.click(screen.getByTestId('login-mode-recovery'));
     type('username', 'alice'); type('recovery-code', alice.recoveryCodes[0]); submit();
-    expect(await screen.findByTestId('recovery-session')).toBeInTheDocument();
+    expect(await screen.findByTestId('recovery-console')).toHaveAttribute('data-view', 'welcome');
     expect(onNext).not.toHaveBeenCalled();
     expect(h.postAuth).not.toHaveBeenCalled();
     expect(h.messaging).not.toHaveBeenCalled();
     expect(connects()[0]).toMatchObject({ password: null });
-    // A recovery session cannot list its factors: the screen says what it can do instead.
-    expect(screen.getByText(SIGN_IN_COPY.recoveryBody)).toBeInTheDocument();
-    expect(h.w.agent.sent.some(([v, b]) => v === 'SignInManagement' && b.op === 'ListCredentials')).toBe(false);
+    // A code signed in on the device that holds the account: nothing was revoked, so nothing says so.
+    expect(screen.queryByTestId('recovery-console-devices-signed-out')).toBeNull();
+    // The console lists the account's factors, with no step-up.
+    fireEvent.click(screen.getByTestId('recovery-console-begin'));
+    fireEvent.click(await screen.findByTestId('recovery-task-credentials'));
+    expect(await screen.findAllByTestId('console-credential')).not.toHaveLength(0);
+    expect(h.w.agent.sent.find(([v, b]) => v === 'SignInManagement' && b.op === 'ListCredentials')?.[1])
+      .toMatchObject({ step_up: { password: null } });
   });
 
   it('adds a key there, then signs out back to a key-first form', async () => {
@@ -127,11 +132,13 @@ describe('a recovery code', () => {
     renderLogin();
     fireEvent.click(screen.getByTestId('login-mode-recovery'));
     type('username', 'alice'); type('recovery-code', alice.recoveryCodes[1]); submit();
+    fireEvent.click(await screen.findByTestId('recovery-console-begin'));
+    fireEvent.click(await screen.findByTestId('recovery-task-key'));
     fireEvent.click(await screen.findByTestId('add-security-key-continue'));
     fireEvent.click(await screen.findByTestId('security-key-continue'));
-    expect(await screen.findByTestId('recovery-key-added')).toBeInTheDocument();
+    expect(await screen.findByTestId('recovery-task-key')).toHaveAttribute('data-done', 'true');
     expect(alice.keys).toHaveLength(2);
-    fireEvent.click(screen.getByTestId('recovery-sign-out'));
+    fireEvent.click(screen.getByTestId('recovery-console-sign-out'));
     expect(await screen.findByTestId('login-key-mode')).toBeInTheDocument();
     expect(h.w.agent.recoverySessions.size).toBe(0);
   });
@@ -143,6 +150,6 @@ describe('a recovery code', () => {
     fireEvent.click(screen.getByTestId('login-mode-recovery'));
     type('username', 'alice'); type('recovery-code', alice.recoveryCodes[0]); submit();
     expect(await screen.findByRole('alert')).toBeInTheDocument();
-    expect(screen.queryByTestId('recovery-session')).toBeNull();
+    expect(screen.queryByTestId('recovery-console')).toBeNull();
   });
 });

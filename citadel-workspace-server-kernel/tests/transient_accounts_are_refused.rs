@@ -71,6 +71,7 @@ async fn the_production_server_refuses_a_transient_account() {
             common::test_user!("realuser"),
             "Real User",
             "password123",
+            common::sign_in_client::TEST_SERVER_CERTIFICATE,
         )
         .with_udp_mode(UdpMode::Disabled)
         .build()
@@ -83,10 +84,13 @@ async fn the_production_server_refuses_a_transient_account() {
     );
 
     let transient = attempt(
-        ServerConnectionSettingsBuilder::transient(addr)
-            .with_udp_mode(UdpMode::Disabled)
-            .build()
-            .expect("settings"),
+        ServerConnectionSettingsBuilder::transient(
+            addr,
+            common::sign_in_client::TEST_SERVER_CERTIFICATE,
+        )
+        .with_udp_mode(UdpMode::Disabled)
+        .build()
+        .expect("settings"),
     )
     .await;
     let Outcome::Refused(err) = transient else {

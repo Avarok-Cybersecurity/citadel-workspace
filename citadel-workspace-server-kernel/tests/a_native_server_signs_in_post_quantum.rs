@@ -5,12 +5,13 @@
 //! security key, because a key is a post-quantum factor. Run against
 //! `run_server_with_base_path` itself, so this proves the server people deploy is built with it.
 //!
-//! The client sees which way it registered: a post-quantum registration hands back its ten
-//! recovery codes, a legacy one none (`RegisterSuccess::recovery_codes`).
+//! The client sees which way it registered: a post-quantum registration under the server's
+//! canonical domain hands back its 24-word recovery phrase, a legacy one none
+//! (`RegisterSuccess::recovery_phrase`).
 
 use citadel_sdk::prelude::*;
-use common::production_server::start_production_server;
-use common::sign_in_client::{drive, sign_in, username, PASSWORD};
+use common::production_server::{start_production_server, TEST_CANONICAL_DOMAIN};
+use common::sign_in_client::{drive, sign_in, username, PASSWORD, TEST_SERVER_CERTIFICATE};
 
 const CREDENTIAL: &[u8] = b"native-test-security-key";
 
@@ -38,11 +39,21 @@ async fn an_account_registers_and_signs_in_post_quantum() {
     let user = username("pq");
     drive(move |remote| async move {
         let registered = remote
-            .register_with_defaults(addr, user.as_str(), user.as_str(), PASSWORD)
+            .register_admitted(
+                addr,
+                user.as_str(),
+                user.as_str(),
+                PASSWORD,
+                Default::default(),
+                None,
+                None,
+                Some(TEST_CANONICAL_DOMAIN.to_string()),
+                TEST_SERVER_CERTIFICATE,
+            )
             .await?;
         assert_eq!(
-            registered.recovery_codes.len(),
-            10,
+            registered.recovery_phrase.as_ref().map(Vec::len),
+            Some(24),
             "the native server registered this account the legacy way"
         );
         let conn = sign_in(&remote, &user, password()).await?;
@@ -68,7 +79,13 @@ async fn a_security_key_is_enrolled_and_then_required() {
     let user = username("key");
     drive(move |remote| async move {
         remote
-            .register_with_defaults(addr, user.as_str(), user.as_str(), PASSWORD)
+            .register_with_defaults(
+                addr,
+                user.as_str(),
+                user.as_str(),
+                PASSWORD,
+                TEST_SERVER_CERTIFICATE,
+            )
             .await?;
         let conn = sign_in(&remote, &user, password()).await?;
         let add = SignInManagementOp::AddSecurityKey {

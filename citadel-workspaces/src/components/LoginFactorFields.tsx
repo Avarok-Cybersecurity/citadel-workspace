@@ -1,6 +1,7 @@
 import { KeyRound, LifeBuoy } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { SIGN_IN_COPY } from "@/lib/sign-in/copy";
+import { RECOVER_COPY } from "@/lib/recovery/copy";
 import { LoginPasswordField } from "./LoginPasswordField";
 import type { LoginHandler, SignInMode } from "./useLoginHandler";
 
@@ -12,7 +13,7 @@ const linkClass: string =
  * password (the server asks for a key touch too if the account's policy says
  * so), a key alone with no password field, or a recovery code.
  */
-export function LoginFactorFields({ h, keysHere }: { h: LoginHandler; keysHere: boolean }): JSX.Element {
+export function LoginFactorFields({ h, keysHere, onRecover }: { h: LoginHandler; keysHere: boolean; onRecover: () => void }): JSX.Element {
   const describedBy: string | undefined = h.error ? 'login-error' : undefined;
   const switchTo = (mode: SignInMode, focus: string): void => {
     h.setMode(mode);
@@ -64,6 +65,9 @@ export function LoginFactorFields({ h, keysHere }: { h: LoginHandler; keysHere: 
           </button>
         )}
       </div>
+      <button type="button" className={linkClass} onClick={onRecover} data-testid="login-recover-account">
+        {RECOVER_COPY.link}
+      </button>
     </>
   );
 }

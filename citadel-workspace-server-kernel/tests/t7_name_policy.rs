@@ -18,7 +18,7 @@ use citadel_workspace_server_kernel::kernel::sign_in::{
     AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal,
 };
 use common::production_server::{start_production_server, TEST_CANONICAL_DOMAIN};
-use common::sign_in_client::{drive, username, PASSWORD};
+use common::sign_in_client::{drive, username, PASSWORD, TEST_SERVER_CERTIFICATE};
 use parking_lot::Mutex;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -198,7 +198,13 @@ async fn the_production_server_refuses_a_bare_name_and_registers_a_domain_name()
     let bare = username("bob").replace(&format!("@{TEST_CANONICAL_DOMAIN}"), "");
     drive(move |remote| async move {
         let refused = remote
-            .register_with_defaults(addr, "Bob Brown", bare.as_str(), PASSWORD)
+            .register_with_defaults(
+                addr,
+                "Bob Brown",
+                bare.as_str(),
+                PASSWORD,
+                TEST_SERVER_CERTIFICATE,
+            )
             .await
             .map(|_| ())
             .expect_err("a bare name registered");
@@ -206,7 +212,13 @@ async fn the_production_server_refuses_a_bare_name_and_registers_a_domain_name()
         assert!(format!("{refused:?}").contains(&expected), "{refused:?}");
         let named = format!("{bare}@{TEST_CANONICAL_DOMAIN}");
         remote
-            .register_with_defaults(addr, "Bob Brown", named.as_str(), PASSWORD)
+            .register_with_defaults(
+                addr,
+                "Bob Brown",
+                named.as_str(),
+                PASSWORD,
+                TEST_SERVER_CERTIFICATE,
+            )
             .await?;
         Ok(())
     })

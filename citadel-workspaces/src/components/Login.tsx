@@ -14,9 +14,8 @@ import { usePasskeyAccounts } from "./passkey/usePasskeyAccounts";
 import { PASSWORD_THEN_KEY, passkeyAction, passkeyOffer, type PasskeyAction } from "./passkey/passkey-offer";
 import { LoginFactorFields } from "./LoginFactorFields";
 import { AddSecurityKeyCard } from "./sign-in/AddSecurityKeyCard";
-import { RecoverySessionScreen } from "./sign-in/RecoverySessionScreen";
+import { LoginRecoveryCard, showsRecovery, useAccountRecovery, type AccountRecovery } from "./recovery/LoginRecovery";
 import { useSignInHints } from "./sign-in/useSignInHints";
-import { websocketService } from "@/lib/websocket-service";
 import { passkeysAvailableHere } from "@/lib/passkey";
 import type { SignInHint } from "@/lib/sign-in";
 import { SIGN_IN_COPY } from "@/lib/sign-in/copy";
@@ -57,8 +56,9 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
   const signInLevel: number | undefined = useSignInLevel(h.username);
   const {
     username, setUsername, error, invalidField, loading, securitySettings, setSecuritySettings,
-    handleLogin, passkey, handlePasskeyLogin, handleKeyLogin, keyOffer, recoverySession, mode,
+    handleLogin, passkey, handlePasskeyLogin, handleKeyLogin, keyOffer, mode,
   } = h;
+  const recovery: AccountRecovery = useAccountRecovery();
 
   // Offered before a username is typed: option-A passkeys and this device's sign-in hints (passkey-offer.ts).
   const legacyAccounts: string[] = usePasskeyAccounts();
@@ -98,15 +98,8 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 p-4" ref={dialogRef} {...dialogProps}>
-      {recoverySession ? (
-        <Card className="bg-background border-border shadow-2xl shadow-black/40 w-full max-w-md">
-          <CardContent className="pt-6">
-            <RecoverySessionScreen
-              account={recoverySession}
-              signOut={async (): Promise<void> => { await websocketService.disconnect(recoverySession.cid); h.endRecoverySession(); }}
-            />
-          </CardContent>
-        </Card>
+      {showsRecovery(h, recovery) ? (
+        <LoginRecoveryCard h={h} recovery={recovery} scope={scope.server ?? knownServer ?? null} />
       ) : keyOffer ? (
         <Card className="bg-background border-border shadow-2xl shadow-black/40 w-full max-w-md" data-testid="passkey-enrol">
           <CardContent className="pt-6">
@@ -182,7 +175,7 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
               )}
 
               {/* How the account is proved: password, key alone, or recovery code */}
-              <LoginFactorFields h={h} keysHere={passkeysAvailableHere()} />
+              <LoginFactorFields h={h} keysHere={passkeysAvailableHere()} onRecover={recovery.start} />
               {/* No Server Address field.
                   Signing in does not need one and never did: the SDK pins the
                   server in the account's CNAC at registration, and `connect`

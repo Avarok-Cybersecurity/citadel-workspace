@@ -12,8 +12,10 @@ import type { SignInCredential, SignInManagementOutcome, SignInPolicy } from './
 export interface Listing {
   policy: SignInPolicy;
   keys: SignInCredential[];
-  /** Unused recovery codes. */
+  /** Unused recovery codes: an account made before the phrase, until it makes one. */
   codesLeft: number;
+  /** Whether the account has a recovery phrase. */
+  hasPhrase: boolean;
 }
 
 /** A Rust `None` arrives as an absent field; every reader below checks `null`. */
@@ -27,6 +29,7 @@ export function listingOf(outcome: SignInManagementOutcome): Listing {
     policy,
     keys: credentials.filter((c: SignInCredential) => c.kind === 'SecurityKey').map(present),
     codesLeft: credentials.filter((c: SignInCredential) => c.kind === 'RecoveryCode' && !c.consumed).length,
+    hasPhrase: credentials.some((c: SignInCredential) => c.kind === 'RecoveryPhrase'),
   };
 }
 
@@ -46,4 +49,5 @@ export const withKeyRemoved = (l: Listing, id: number): Listing =>
 
 export const withPolicy = (l: Listing, policy: SignInPolicy): Listing => ({ ...l, policy });
 
-export const withNewCodes = (l: Listing, codes: readonly string[]): Listing => ({ ...l, codesLeft: codes.length });
+/** A new phrase replaces the old one and every recovery code. */
+export const withNewPhrase = (l: Listing): Listing => ({ ...l, codesLeft: 0, hasPhrase: true });

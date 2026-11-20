@@ -60,7 +60,11 @@ async fn announcement_naming<R: Ratchet>(
 /// Registers and connects `username`, reports enrolment, then optionally watches.
 fn session(addr: SocketAddr, username: &'static str, reports: Reports) {
     let settings = ServerConnectionSettingsBuilder::credentialed_registration(
-        addr, username, username, PASSWORD,
+        addr,
+        username,
+        username,
+        PASSWORD,
+        common::sign_in_client::TEST_SERVER_CERTIFICATE,
     )
     .with_udp_mode(UdpMode::Disabled)
     .build()

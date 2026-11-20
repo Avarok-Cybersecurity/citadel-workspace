@@ -15,6 +15,11 @@ use futures::StreamExt;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
+/// What the proof client demands of a tenant's certificate: what the agent demands
+/// (citadel-internal-service `SERVER_CERTIFICATE`), so the proof dials as a real user's agent
+/// does. A self-signed certificate is taken; the session's own key exchange still runs.
+pub(crate) const SERVER_CERTIFICATE: CertVerification = CertVerification::SelfSignedAccepted;
+
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = performance, js_name = now)]
@@ -113,6 +118,7 @@ impl ProofKernel {
                 self.password.as_str(),
                 SessionSecuritySettings::default(),
                 None,
+                SERVER_CERTIFICATE,
             )
             .await?;
         let t1 = performance_now();
@@ -125,6 +131,7 @@ impl ProofKernel {
                 None,
                 SessionSecuritySettings::default(),
                 None,
+                SERVER_CERTIFICATE,
             )
             .await?;
         let t2 = performance_now();
@@ -166,6 +173,7 @@ impl ProofKernel {
                 None,
                 SessionSecuritySettings::default(),
                 None,
+                SERVER_CERTIFICATE,
             )
             .await?;
         let t4 = performance_now();

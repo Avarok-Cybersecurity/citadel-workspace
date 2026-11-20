@@ -10,6 +10,7 @@ import { AdmissionRefusal, RegisteredAwaitingSignIn, admissionChallengeOf, admis
 import type { WebSocketMessage } from '@/types/ws-message-types';
 import { UsernameHeldElsewhere } from '@/lib/sessions/known-accounts';
 import { UNKNOWN_REASON_COPY } from '@/lib/connection/connect-refusal';
+import { secretOf, type RecoverySecret } from '@/lib/recovery/secret';
 
 export interface RegistrationHandlerDeps {
   handleConnectSuccess: (
@@ -19,10 +20,10 @@ export interface RegistrationHandlerDeps {
   ) => Promise<void>;
   setShowNotInitializedModal: (show: boolean) => void;
   /**
-   * RegisterSuccess carries the recovery codes and arrives AHEAD of the connect
-   * answer, under the same request id. It is not an outcome: the wait goes on.
+   * RegisterSuccess carries the recovery phrase (or an older server's codes) and arrives AHEAD
+   * of the connect answer, under the same request id. It is not an outcome: the wait goes on.
    */
-  onRecoveryCodes: (codes: readonly string[]) => void;
+  onRecoverySecret: (secret: RecoverySecret) => void;
   /** Who is registering: named in the refusal when this device holds that name for another server. */
   username: string;
 }
@@ -34,13 +35,14 @@ export function createRegistrationResponseHandler(
   cleanup: () => void,
   deps: RegistrationHandlerDeps
 ) {
-  const { handleConnectSuccess, setShowNotInitializedModal, onRecoveryCodes } = deps;
+  const { handleConnectSuccess, setShowNotInitializedModal, onRecoverySecret } = deps;
   /** The account RegisterSuccess created, once it has arrived. */
   let registered: bigint | null = null;
   const takeCodes = (v: Record<string, unknown> | undefined): void => {
     if (!v || !matchId(v)) return;
     if (typeof v.cid === 'bigint') registered = v.cid;
-    if (Array.isArray(v.recovery_codes)) onRecoveryCodes(v.recovery_codes.filter((c: unknown): c is string => typeof c === 'string'));
+    const secret: RecoverySecret | null = secretOf(v);
+    if (secret !== null) onRecoverySecret(secret);
   };
   const matchId = (v: Record<string, unknown>): boolean => v.request_id === requestId;
   const rejectWith = (v: Record<string, unknown>, fallback: string): void => {

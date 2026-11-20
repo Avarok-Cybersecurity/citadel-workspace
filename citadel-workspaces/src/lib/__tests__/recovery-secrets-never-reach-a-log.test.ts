@@ -1,9 +1,10 @@
 /**
- * Recovery codes, PRF outputs, passwords and recovery codes typed at sign-in
- * never reach the console, whichever call site logs the message carrying them.
+ * Recovery phrases and codes, PRF outputs, passwords and recovery secrets typed
+ * at sign-in never reach the console, whichever call site logs the message
+ * carrying them.
  *
  * The leader logs every message off the wire ("Message received from WASM
- * client"), and RegisterSuccess carries the account's ten recovery codes. Not
+ * client"), and RegisterSuccess carries the account's recovery phrase. Not
  * doubled: the real debugLog, and console.log observed with a spy.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -37,6 +38,21 @@ describe('logging a message that carries a secret', () => {
     expect(text).not.toContain('DUMMY.TOKEN');
     expect(text).toContain('alice');
     expect(text).toContain('[9]');
+  });
+
+  it('redacts the recovery phrase wherever it travels, and a password set from the console', () => {
+    const err: ReturnType<typeof vi.spyOn> = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    errorLog('x',
+      { RegisterSuccess: { cid: 7n, request_id: 'r', recovery_codes: [], recovery_phrase: ['abandon', 'ability'] } },
+      { SignInManagementSuccess: { outcome: { RecoveryPhrase: ['zebra', 'zone'] } } },
+      { RecoverAccount: { username: 'alice', phrase: [97, 98, 99], device_label: 'My Mac' } },
+      { Connect: { username: 'alice', recovery_phrase: [100, 101] } },
+      { SignInManagement: { op: { SetPassword: { new_password: [110, 112] } } } },
+      { IdentityImport: { phrase: [120, 121], unlock_password: [122, 123] } });
+    const text: string = printed(err);
+    for (const secret of ['abandon', 'zebra', '[97,98,99]', '[100,101]', '[110,112]', '[120,121]', '[122,123]']) expect(text).not.toContain(secret);
+    expect(text).toContain('My Mac');
+    expect(text).toContain('SetPassword');
   });
 
   it('leaves the original message as it was', () => {

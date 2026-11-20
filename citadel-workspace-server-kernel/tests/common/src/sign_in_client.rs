@@ -77,6 +77,10 @@ where
     }
 }
 
+/// What these tests' clients demand of a test server's certificate: the in-process servers
+/// present self-signed ones, as the agent's workspace servers do (its `SERVER_CERTIFICATE`).
+pub const TEST_SERVER_CERTIFICATE: CertVerification = CertVerification::SelfSignedAccepted;
+
 /// Signs `user` in with `factors`.
 pub async fn sign_in(
     remote: &NodeRemote<StackedRatchet>,
@@ -84,7 +88,10 @@ pub async fn sign_in(
     factors: SignInFactors,
 ) -> Result<CitadelClientServerConnection<StackedRatchet>, NetworkError> {
     remote
-        .connect_with_defaults(AuthenticationRequest::sign_in(user.to_string(), factors))
+        .connect_with_defaults(
+            AuthenticationRequest::sign_in(user.to_string(), factors),
+            TEST_SERVER_CERTIFICATE,
+        )
         .await
 }
 

@@ -199,6 +199,13 @@ async fn start_native_server_on(
             }
             None => citadel_workspace_server_kernel::run_server_with_base_path(config, None).await,
         };
+        // As a test ends, its runtime cancels the server's own tasks, and the server can see that
+        // before its task is dropped: an end the test caused, not a server that died under it.
+        // The SDK reports it as tokio's JoinError text. A panic here exits the process
+        // (citadel_logging's hook), failing whichever test was finishing.
+        if matches!(&result, Err(e) if e.to_string().ends_with("was cancelled")) {
+            return;
+        }
         panic!("the production server ended: {result:?}");
     });
     for _ in 0..200 {

@@ -30,7 +30,7 @@ interface JoinProps {
 }
 
 export const Join = ({ onNext, onBack, defaultWorkspace, serverAddress, serverPassword, securitySettings, profileDraft }: JoinProps): JSX.Element => {
-  // The account exists from here; the key and recovery-code steps come before the workspace.
+  // The account exists from here; the key and recovery-phrase steps come before the workspace.
   const [joinedCid, setJoinedCid] = useState<string | null>(null);
   const terms: HostedTerms = useHostedTerms(serverAddress);
   const admission: AdmissionGate = useAdmissionGate(ADMISSION_ACTION.register, { serverAddress, reauth: false, accountNamed: false });
@@ -47,7 +47,7 @@ export const Join = ({ onNext, onBack, defaultWorkspace, serverAddress, serverPa
     handleSubmit,
     handleConnectModalComplete,
     handleReturnToLogin,
-    recoveryCodes,
+    recoverySecret,
     awaitingSignIn,
     finishSignIn,
   } = useJoinRegistration(onBack, setJoinedCid, serverAddress, serverPassword, admission, securitySettings, profileDraft, terms);
@@ -82,7 +82,7 @@ export const Join = ({ onNext, onBack, defaultWorkspace, serverAddress, serverPa
     return (
       <PostRegistrationSteps
         session={joinedCid === null ? null : BigInt(joinedCid)} username={formData.username} serverAddress={serverAddress}
-        password={formData.password} recoveryCodes={recoveryCodes} signIn={finishSignIn} onDone={(cid: bigint) => onNext(cid.toString())}
+        password={formData.password} recoverySecret={recoverySecret} signIn={finishSignIn} onDone={(cid: bigint) => onNext(cid.toString())}
       />
     );
   }

@@ -18,19 +18,12 @@ export const SIGN_IN_COPY: {
   readonly recoveryLabel: 'Recovery code';
   readonly recoveryHint: string;
   readonly recoverySubmit: 'Sign in with recovery code';
-  readonly recoveryTitle: 'Signed in with a recovery code';
-  readonly recoveryBody: string;
-  readonly codesTitle: 'Save your recovery codes';
-  readonly codesBody: string;
-  readonly codesSaved: "I've saved these codes";
   readonly addKeyTitle: 'Add a security key';
   readonly addKeyBody: string;
   readonly stepUpTitle: "Confirm it's you";
   readonly stepUpBody: string;
   readonly policyTitle: 'How you sign in';
-  readonly regenerate: 'New recovery codes';
   readonly showKeys: 'Show my sign-in keys';
-  readonly regenerateWarning: string;
 } = {
   continueWithKey: 'Continue',
   waitingForKey: 'Waiting for your key…',
@@ -41,15 +34,6 @@ export const SIGN_IN_COPY: {
   recoveryLabel: 'Recovery code',
   recoveryHint: 'One of the codes you saved when you created your account. Each works once.',
   recoverySubmit: 'Sign in with recovery code',
-  recoveryTitle: 'Signed in with a recovery code',
-  recoveryBody:
-    'This session can only add a security key and choose how you sign in. ' +
-    'Add a key now, then sign out and sign in with it.',
-  codesTitle: 'Save your recovery codes',
-  codesBody:
-    "If you lose every security key, a recovery code is the only way back in. Each code works once. " +
-    "Keep them somewhere safe: they won't be shown again.",
-  codesSaved: "I've saved these codes",
   addKeyTitle: 'Add a security key',
   addKeyBody:
     'Sign in with Touch ID, your phone or a security key. The server checks the key itself, ' +
@@ -57,9 +41,7 @@ export const SIGN_IN_COPY: {
   stepUpTitle: "Confirm it's you",
   stepUpBody: 'Changes to how you sign in need your password or one of your security keys.',
   policyTitle: 'How you sign in',
-  regenerate: 'New recovery codes',
   showKeys: 'Show my sign-in keys',
-  regenerateWarning: 'Your current recovery codes will stop working.',
 } as const;
 
 /**

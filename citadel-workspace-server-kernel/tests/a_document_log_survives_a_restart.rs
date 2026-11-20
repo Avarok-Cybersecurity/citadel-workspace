@@ -40,6 +40,9 @@ async fn boot(db: &std::path::Path) -> (Kernel, tokio::task::JoinHandle<()>) {
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_path_policy(citadel_sdk::test_common::localhost_path_policy())
         .with_node_type(NodeType::server(addr).expect("server node type"))
+        .with_server_limits(
+            citadel_workspace_server_kernel::server_limits::production_server_limits(),
+        )
         .with_backend(BackendType::sql(format!(
             "sqlite://{}?mode=rwc",
             db.display()

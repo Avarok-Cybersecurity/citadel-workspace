@@ -7,10 +7,11 @@
 
 use citadel_sdk::prelude::{AccountManager, BackendType, ServerMiscSettings, StackedRatchet};
 use citadel_sdk::prelude::{HostSqlHandle, SecBuffer};
-use citadel_user::auth::pq::client::ClientRegistration;
+use citadel_user::auth::pq::client::{ClientRegistration, NewRecovery};
 use citadel_user::auth::pq::oprf::OprfSeed;
 use citadel_user::auth::pq::record::{KsfParams, PqAuthRecord};
 use citadel_user::auth::pq::server::{registration_reply, PqAuthServerSettings};
+use citadel_user::auth::pq::throttle::ThrottlePolicy;
 use std::path::PathBuf;
 use tenant_storage_compat::SqliteFileHost;
 
@@ -39,7 +40,12 @@ fn pq_settings() -> PqAuthServerSettings {
         iterations: 2,
         lanes: 1,
     };
-    PqAuthServerSettings::new(OprfSeed::from_bytes([7u8; 32]), ksf).expect("at the floor")
+    PqAuthServerSettings::new(
+        OprfSeed::from_bytes([7u8; 32]),
+        ksf,
+        ThrottlePolicy::RECOMMENDED,
+    )
+    .expect("at the floor")
 }
 
 /// A manager over `host`, as this tree's server runs one: post-quantum sign-in on.
@@ -59,7 +65,10 @@ async fn upgrade_record() -> PqAuthRecord {
     let password = SecBuffer::from(b"the fixture's password".to_vec());
     let (start, client) = ClientRegistration::start(USERNAME, &password).expect("start");
     let (reply, pending) = registration_reply(&pq_settings(), &start).expect("reply");
-    let (finish, _) = client.finish(&reply, true).await.expect("finish");
+    let (finish, _) = client
+        .finish(&reply, NewRecovery::Codes)
+        .await
+        .expect("finish");
     pending.finish(finish, 1).expect("record")
 }
 

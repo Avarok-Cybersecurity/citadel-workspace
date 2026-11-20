@@ -13,9 +13,8 @@ import { SignInServerRefusal } from '@/lib/sessions/sign-in-server';
 import { usePasskeyAccount, type PasskeyAccount } from './passkey/usePasskeyAccount';
 import { browserPasskeyDeps, failureOf, passkeysAvailableHere, signInWithPasskey } from '@/lib/passkey';
 import { failureCopy } from '@/lib/passkey/copy';
-import { browserSignInDeps } from '@/lib/sign-in';
 import type { AccountRef, SignInFactors } from '@/lib/sign-in/types';
-import { completeSignIn, type Completed } from './sign-in/complete-sign-in';
+import { finishLogin } from './sign-in/finish-login';
 import { useKeyOffer, type KeyOffer } from './sign-in/useKeyOffer';
 import type { AdmissionGate } from './admission/useAdmissionGate';
 import type {
@@ -81,6 +80,8 @@ export interface LoginHandler {
   recoverySession: AccountRef | null;
   /** The restricted session was signed out: back to the form, ready for the new key. */
   endRecoverySession: () => void;
+  /** Sign in with a password the recovery console just set, and open the workspace. */
+  signInWithNewPassword: (user: string, password: string) => Promise<void>;
 }
 
 export function useLoginHandler({ onNext, initialUsername, initialServer, admission }: UseLoginHandlerParams): LoginHandler {
@@ -112,25 +113,10 @@ export function useLoginHandler({ onNext, initialUsername, initialServer, admiss
    * scope only, including while the key offer waits; it never enters React state
    * beyond the field it was typed into.
    */
-  const completeLogin = async (user: string, factors: SignInFactors, opts: { offerKey: boolean; legacy: boolean }): Promise<void> => {
-    const login = (name: string, f: SignInFactors): Promise<LoginResult> =>
-      loginWithPassword({ redirect: doRedirect }, name, f, securitySettings, server);
-    const done: Completed = await completeSignIn({ login, offerKey, signIn: browserSignInDeps() }, user, factors, opts);
-    if (done.kind === 'redirected') return;
-    if (done.kind === 'recovery') { setRecoverySession(done.account); return; }
-    onNext(done.cid.toString());
-    // Not an unconditional "Connected to workspace successfully". The ILM
-    // messenger can fail to start while everything else succeeds.
-    toast(
-      done.messagingReady
-        ? { title: 'Login successful', description: 'Connected to workspace successfully' }
-        : {
-            variant: 'destructive',
-            title: 'Signed in, but messaging is unavailable',
-            description: 'Your workspace loaded. Messages cannot be sent or received until you reload.',
-          },
-    );
-  };
+  const completeLogin = (user: string, factors: SignInFactors, opts: { offerKey: boolean; legacy: boolean }): Promise<void> => finishLogin({
+    login: (name: string, f: SignInFactors): Promise<LoginResult> => loginWithPassword({ redirect: doRedirect }, name, f, securitySettings, server),
+    offerKey, onRecovery: setRecoverySession, onNext, toast,
+  }, user, factors, opts);
 
   const reportFailure = (err: unknown): void => {
     // A human check that was missing or failed is shown on the check itself.
@@ -246,5 +232,7 @@ export function useLoginHandler({ onNext, initialUsername, initialServer, admiss
     error, loading, securitySettings, setSecuritySettings, handleLogin, invalidField,
     passkey, handlePasskeyLogin, handleKeyLogin, keyOffer, recoverySession,
     endRecoverySession: (): void => { setRecoverySession(null); setMode('key'); },
+    signInWithNewPassword: (user: string, password: string): Promise<void> => completeLogin(user,
+      { password, securityKey: passkeysAvailableHere(), recoveryCode: null, admissionToken: null }, { offerKey: false, legacy: false }),
   };
 }

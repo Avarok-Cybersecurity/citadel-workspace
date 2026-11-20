@@ -47,9 +47,10 @@ export const POST_REGISTRATION_CARD = 'post-registration';
 const STEP_BUDGET_MS = 30_000;
 
 /**
- * A server with post-quantum sign-in issues recovery codes, and the app then
- * holds the new account on "Secure your account" -- an optional security key,
- * then the codes -- and opens the workspace only once both are answered. The
+ * A server with post-quantum sign-in issues a recovery phrase (an older one,
+ * codes), and the app then holds the new account on "Secure your account" --
+ * an optional security key, then the phrase, checked by typing three of its
+ * words back -- and opens the workspace only once both are answered. The
  * Escape sweep does not answer them: it closed the card and left the wizard
  * behind it, so every account ended on the landing page. Answer each step as
  * a person would, on one shared budget, until the workspace route arrives.
@@ -76,23 +77,41 @@ async function walkPostRegistrationSteps(page: Page): Promise<boolean> {
 
 async function answerPostRegistrationStep(page: Page): Promise<void> {
   const skipKey = page.getByTestId('add-security-key-skip');
-  const codes = page.getByTestId('recovery-codes');
+  const phrase = page.getByTestId('recovery-phrase');
   const finish = page.getByTestId('finish-sign-in-continue');
   const step = await Promise.race([
     skipKey.waitFor({ state: 'visible' }).then(() => 'key' as const),
-    codes.waitFor({ state: 'visible' }).then(() => 'codes' as const),
+    phrase.waitFor({ state: 'visible' }).then(() => 'phrase' as const),
     finish.waitFor({ state: 'visible' }).then(() => 'sign-in' as const),
   ]);
   console.log(`  Post-registration step: ${step}`);
   if (step === 'key') {
     await skipKey.click();
     await skipKey.waitFor({ state: 'detached' });
-  } else if (step === 'codes') {
-    await page.getByTestId('recovery-codes-saved').check();
-    await page.getByTestId('recovery-codes-done').click();
-    await codes.waitFor({ state: 'detached' });
+  } else if (step === 'phrase') {
+    await confirmRecoveryPhrase(page);
   } else {
     await finish.click();
     await finish.waitFor({ state: 'detached' });
   }
+}
+
+/**
+ * The phrase step as a person does it: read the words off the screen, say they
+ * are written down, and type back the three the check asks for. Each word is
+ * the last span of its row (the first is its number).
+ */
+export async function confirmRecoveryPhrase(page: Page): Promise<string[]> {
+  const words = await page.getByTestId('recovery-phrase-word').locator('span:last-child').allTextContents();
+  await page.getByTestId('recovery-phrase-written').click();
+  const check = page.getByTestId('recovery-phrase-check');
+  await check.waitFor({ state: 'visible' });
+  const boxes = page.getByTestId('recovery-phrase-check-word');
+  for (const box of await boxes.all()) {
+    const position = Number(await box.getAttribute('data-position'));
+    await box.fill(words[position]);
+  }
+  await page.getByTestId('recovery-phrase-confirm').click();
+  await check.waitFor({ state: 'detached' });
+  return words;
 }

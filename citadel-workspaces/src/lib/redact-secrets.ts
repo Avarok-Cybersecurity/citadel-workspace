@@ -3,13 +3,15 @@
  *
  * The leader logs every message off the wire, and a few of them carry what
  * must never reach a console or a captured test log: a RegisterSuccess or a
- * RegenerateRecoveryCodes outcome holds the account's recovery codes, a
- * SecurityKeyAnswer holds a PRF output, a Connect holds a password or a
- * recovery code. Redacting at the one place logging happens covers every call
- * site, including the ones written next year.
+ * regenerate outcome holds the account's recovery phrase (or an older server's
+ * codes), a SecurityKeyAnswer holds a PRF output, a Connect or RecoverAccount
+ * holds a password, a code or the phrase, and the recovery console's
+ * SetPassword holds the new password. Redacting at the one place logging
+ * happens covers every call site, including the ones written next year.
  */
 const SECRET_FIELDS: ReadonlySet<string> = new Set<string>([
-  'recovery_codes', 'RecoveryCodes', 'recovery_code', 'prf_output', 'password', 'proposed_password', 'admission_token',
+  'recovery_codes', 'RecoveryCodes', 'recovery_code', 'recovery_phrase', 'RecoveryPhrase', 'phrase',
+  'prf_output', 'password', 'proposed_password', 'new_password', 'unlock_password', 'admission_token',
 ]);
 const MAX_DEPTH: 8 = 8;
 export const REDACTED: '<redacted>' = '<redacted>';

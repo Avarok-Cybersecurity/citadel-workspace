@@ -25,6 +25,7 @@ pub mod path_policy;
 #[cfg(test)]
 mod path_policy_tests;
 mod platform;
+pub mod server_limits;
 
 pub use citadel_workspace_types::WORKSPACE_ROOT_ID;
 pub const WORKSPACE_MASTER_PASSWORD_KEY: &str = "workspace_master_password";
@@ -983,6 +984,7 @@ pub async fn run_server_on<T: PlatformOps>(
             admission: Some(admission),
             ..production_server_misc_settings()
         })
+        .with_server_limits(server_limits::production_server_limits())
         .with_injected_listener(listener)
         .build(kernel)
         .map_err(|e| NetworkError::generic(e.to_string()))?
@@ -1132,7 +1134,8 @@ pub async fn run_server_with_site_verify(
             pq_sign_in: sign_in.pq_sign_in,
             admission: Some(admission),
             ..production_server_misc_settings()
-        });
+        })
+        .with_server_limits(server_limits::production_server_limits());
 
     if config.dangerous_skip_cert_verification.unwrap_or(false) {
         citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED. This should ONLY be used for local development with self-signed certificates. Never use in production!");

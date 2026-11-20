@@ -121,6 +121,8 @@ impl ProofClient {
                     SessionSecuritySettings::default(),
                     None,
                     admission,
+                    None,
+                    crate::SERVER_CERTIFICATE,
                 )
                 .await
                 .map_err(js_err)?;
@@ -168,6 +170,7 @@ impl ProofClient {
                     None,
                     SessionSecuritySettings::default(),
                     None,
+                    crate::SERVER_CERTIFICATE,
                 )
                 .await
                 .map_err(js_err)?;

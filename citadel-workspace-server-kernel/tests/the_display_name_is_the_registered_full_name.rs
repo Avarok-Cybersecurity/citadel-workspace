@@ -15,6 +15,7 @@ use citadel_workspace_types::structs::User;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use common::production_client::ask;
 use common::production_server::start_production_server;
+use common::sign_in_client::TEST_SERVER_CERTIFICATE;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -69,7 +70,10 @@ async fn stored_name(settings: ServerConnectionSettings<StackedRatchet>, repair:
                 let node = conn.remote.remote().clone();
                 conn.disconnect().await?;
                 let mut again = node
-                    .connect_with_defaults(AuthenticationRequest::credentialed(USERNAME, PASSWORD))
+                    .connect_with_defaults(
+                        AuthenticationRequest::credentialed(USERNAME, PASSWORD),
+                        TEST_SERVER_CERTIFICATE,
+                    )
                     .await?;
                 let (mut tx, mut rx) = again.take_channel().expect("channel").split();
                 user = ask(&mut tx, &mut rx, own_record(), member).await?;
@@ -97,10 +101,16 @@ async fn stored_name(settings: ServerConnectionSettings<StackedRatchet>, repair:
 }
 
 fn registration(addr: SocketAddr) -> ServerConnectionSettings<StackedRatchet> {
-    ServerConnectionSettingsBuilder::credentialed_registration(addr, USERNAME, FULL_NAME, PASSWORD)
-        .with_udp_mode(UdpMode::Disabled)
-        .build()
-        .expect("settings")
+    ServerConnectionSettingsBuilder::credentialed_registration(
+        addr,
+        USERNAME,
+        FULL_NAME,
+        PASSWORD,
+        TEST_SERVER_CERTIFICATE,
+    )
+    .with_udp_mode(UdpMode::Disabled)
+    .build()
+    .expect("settings")
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -10,7 +10,7 @@
  *   admit(json)         -> Promise<null | {refuse, reason?}>
  *       the SDK's AdmissionContext for a FRESH sign-in or registration (a recovery-code sign-in
  *       and a resume-token reconnect are never asked),
- *       `{"username","kind":"SignIn"|"Register","token":string|null,"remote_addr":"100.64.x.y"|null}`.
+ *       `{"username","kind":"SignIn"|"Register"|"Recover","token":string|null,"remote_addr":"100.64.x.y"|null}`.
  *       null admits; `{refuse:"admission_required",challenge?}` / `{refuse:"admission_failed",reason}`,
  *       `challenge` being `{provider:"turnstile",site_key,identity}` (public; admission.mjs `needsToken`).
  */
