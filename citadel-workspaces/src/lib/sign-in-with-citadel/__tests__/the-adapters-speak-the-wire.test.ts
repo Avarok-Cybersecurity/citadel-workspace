@@ -11,6 +11,7 @@ import { httpIssuer, ISSUER_PATHS } from '../issuer-http';
 import { identityAnswer } from '../agent-socket';
 import { formReturner } from '../return-form';
 import { ALLOWLIST, BEGUN, LINK } from './fake-ports';
+import type { SignInBeginRequest } from '../issuer-wire';
 
 type Recorded = { input: string; init: RequestInit };
 
@@ -26,7 +27,7 @@ function fetchAnswering(status: number, body: unknown): { fetchFn: (input: strin
 describe('the issuer adapter', () => {
   it('POSTs the begin body as JSON to /sign-in/begin and returns the shaped answer', async () => {
     const { fetchFn, seen } = fetchAnswering(200, BEGUN);
-    const body = { v: 1 as const, client: LINK.client, challenge: LINK.challenge, state: LINK.state, return: LINK.return };
+    const body: SignInBeginRequest = { v: 1, client: LINK.client, challenge: LINK.challenge, state: LINK.state, return: LINK.return };
     expect(await httpIssuer(fetchFn).begin(body)).toEqual({ ok: true, value: BEGUN });
     expect(seen[0].input).toBe(ISSUER_PATHS.begin);
     expect(seen[0].init.method).toBe('POST');
@@ -49,12 +50,12 @@ describe('the issuer adapter', () => {
 describe("the agent's answers, from captured frames", () => {
   const id: string = 'dec0912b-5466-4ee8-87ac-64ac6fc51e35';
   it('IdentitySuccess wrapped in Response', () => {
-    const frame = JSON.parse(`{"Response":{"IdentitySuccess":{"cid":0,"request_id":"${id}","outcome":{"Status":{"state":"None"}}}}}`);
+    const frame: Record<string, unknown> = JSON.parse(`{"Response":{"IdentitySuccess":{"cid":0,"request_id":"${id}","outcome":{"Status":{"state":"None"}}}}}`);
     expect(identityAnswer(frame, id)).toEqual({ ok: true, outcome: { Status: { state: 'None' } } });
   });
 
   it('IdentityFailure, and nothing for another request', () => {
-    const frame = JSON.parse(`{"Response":{"IdentityFailure":{"cid":0,"request_id":"${id}","reason":"no_identity","message":"this agent holds no identity"}}}`);
+    const frame: Record<string, unknown> = JSON.parse(`{"Response":{"IdentityFailure":{"cid":0,"request_id":"${id}","reason":"no_identity","message":"this agent holds no identity"}}}`);
     expect(identityAnswer(frame, id)).toEqual({ ok: false, reason: 'no_identity', message: 'this agent holds no identity' });
     expect(identityAnswer(frame, 'another')).toBeUndefined();
   });

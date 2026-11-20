@@ -32,7 +32,7 @@ export const BEGUN: SignInBeginResponse = {
 
 export const PROVEN: SignInProveResponse = { v: 1, code: 'K7QM-2XRA', return: LINK.return, state: LINK.state };
 
-export const ID_FP = '3forj6ftckvpoy2r';
+export const ID_FP: string = '3forj6ftckvpoy2r';
 export const LOCKED: AgentAnswer = { ok: true, outcome: { Status: { state: { Locked: { id_fp: ID_FP } } } } };
 export const NO_IDENTITY: AgentAnswer = { ok: true, outcome: { Status: { state: 'None' } } };
 export const SIGNED: AgentAnswer = { ok: true, outcome: { SignedChallenge: { proof: 'AQ' + 'A'.repeat(7200) } } };

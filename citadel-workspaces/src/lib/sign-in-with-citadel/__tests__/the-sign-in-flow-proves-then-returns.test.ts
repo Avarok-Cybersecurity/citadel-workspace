@@ -182,7 +182,7 @@ describe('a new person creates an identity first', () => {
 
   it('a lost agent socket while creating stops the sign-in instead of hanging', async () => {
     const { ports } = fakePorts({ status: NO_IDENTITY });
-    ports.agent.create = async () => { throw new Error('socket lost'); };
+    ports.agent.create = async (): Promise<never> => { throw new Error('socket lost'); };
     const flow: SignInFlow = new SignInFlow(ports);
     await flow.start(search(LINK));
     await flow.createIdentity('a long password');
