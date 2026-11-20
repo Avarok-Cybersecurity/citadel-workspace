@@ -19,9 +19,9 @@ import type { Page } from 'playwright';
  * refused registration never navigates; the caller's rejection race reports
  * that, so this must not throw.
  */
-export async function waitForRegistrationToSettle(page: Page): Promise<void> {
+export async function waitForRegistrationToSettle(page: Page, onRecoveryPhrase?: (words: string[]) => void): Promise<void> {
   const navWait = Date.now();
-  const navigated = await walkPostRegistrationSteps(page);
+  const navigated = await walkPostRegistrationSteps(page, onRecoveryPhrase);
   if (!navigated) {
     console.log('  Did not enter the workspace within 30s of registration');
     return;
@@ -56,7 +56,7 @@ const STEP_BUDGET_MS = 30_000;
  * a person would, on one shared budget, until the workspace route arrives.
  * Returns false if it never does.
  */
-async function walkPostRegistrationSteps(page: Page): Promise<boolean> {
+async function walkPostRegistrationSteps(page: Page, onRecoveryPhrase?: (words: string[]) => void): Promise<boolean> {
   const deadline = Date.now() + STEP_BUDGET_MS;
   const entered = page
     .waitForURL(/\/(workspace|office)/, { timeout: STEP_BUDGET_MS })
@@ -71,11 +71,11 @@ async function walkPostRegistrationSteps(page: Page): Promise<boolean> {
       card.waitFor({ state: 'visible', timeout: remaining }).then(() => 'card', () => 'timeout'),
     ]);
     if (next !== 'card') return next === 'entered';
-    await answerPostRegistrationStep(page);
+    await answerPostRegistrationStep(page, onRecoveryPhrase);
   }
 }
 
-async function answerPostRegistrationStep(page: Page): Promise<void> {
+async function answerPostRegistrationStep(page: Page, onRecoveryPhrase?: (words: string[]) => void): Promise<void> {
   const skipKey = page.getByTestId('add-security-key-skip');
   const phrase = page.getByTestId('recovery-phrase');
   const finish = page.getByTestId('finish-sign-in-continue');
@@ -89,7 +89,8 @@ async function answerPostRegistrationStep(page: Page): Promise<void> {
     await skipKey.click();
     await skipKey.waitFor({ state: 'detached' });
   } else if (step === 'phrase') {
-    await confirmRecoveryPhrase(page);
+    const words: string[] = await confirmRecoveryPhrase(page);
+    onRecoveryPhrase?.(words);
   } else {
     await finish.click();
     await finish.waitFor({ state: 'detached' });

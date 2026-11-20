@@ -12,14 +12,10 @@
  * covered: it needs a second agent, and is covered by the agent's pq_account_recovery tests.
  *
  * The phrase step is answered by the suite's own helper (confirmRecoveryPhrase, which every
- * registration in the suite goes through). This spec looks at the step first, through a locator
- * handler that runs when the phrase appears and before the helper's first click: it records the
- * words, downloads and copies them, and gets a wrong check refused, then returns to the phrase so
- * the helper answers it as it does everywhere else.
+ * registration in the suite goes through: it reads the 24 words off the screen and types back the
+ * three the check asks for); createAccount hands this spec the words it read. Copy, Download and
+ * a refused check are the unit tests' and the polish harness's (RecoveryPhrasePanel).
  */
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { createAccount, disconnectViaTopBar, waitForAppReady, waitForWorkspaceLoaded } from '../lib/index.js';
 import { signedInAs } from '../lib/signed-in-as.js';
@@ -29,23 +25,15 @@ const USERNAME: string = `pw_recover_${Date.now()}`;
 const NEW_PASSWORD: string = 'recovered42';
 const PHRASE_WORDS: number = 24;
 
-/** Read from the module that names the file, never retyped (see onboarding.spec.ts). */
-const PHRASE_FILE_NAME: string = ((): string => {
-  const owner: string = join(dirname(fileURLToPath(import.meta.url)), '../../../src/lib/recovery/phrase-file.ts');
-  const declared: RegExpMatchArray | null = readFileSync(owner, 'utf8').match(/PHRASE_FILE_NAME: '([^']+)'/);
-  if (declared === null) throw new Error(`Could not read PHRASE_FILE_NAME from ${owner}`);
-  return declared[1];
-})();
-
 test.describe.configure({ mode: 'serial' });
 
 let context: BrowserContext;
 let page: Page;
-/** The phrase as the registration showed it, recorded by the handler below. */
+/** The phrase as the registration showed it, from the suite's helper. */
 let phrase: string[] = [];
 
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
-  context = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+  context = await browser.newContext();
   page = await context.newPage();
 });
 
@@ -53,40 +41,11 @@ test.afterAll(async () => {
   await context.close();
 });
 
-/** Everything the phrase step offers, looked at before the suite's helper answers it. */
-async function examinePhraseStep(p: Page): Promise<void> {
-  const shown: string[] = await p.getByTestId('recovery-phrase-word').locator('span:last-child').allTextContents();
-  expect(shown, 'the phrase is not 24 words').toHaveLength(PHRASE_WORDS);
-  for (const word of shown) expect(word, `"${word}" is not a lower-case word`).toMatch(/^[a-z]{3,8}$/);
-  phrase = shown;
-
-  const [download] = await Promise.all([p.waitForEvent('download'), p.getByTestId('recovery-phrase-download').click()]);
-  expect(download.suggestedFilename()).toBe(PHRASE_FILE_NAME);
-  const saved: string = readFileSync(await download.path(), 'utf8');
-  expect(saved).toContain(USERNAME);
-  shown.forEach((word: string, i: number) => expect(saved, `the file lacks word ${i + 1}`).toContain(`${String(i + 1).padStart(2, ' ')}. ${word}`));
-
-  await p.getByTestId('recovery-phrase-copy').click();
-  await expect.poll(() => p.evaluate(() => navigator.clipboard.readText()), { message: 'Copy did not put the file text on the clipboard' }).toBe(saved);
-
-  await p.getByTestId('recovery-phrase-written').click();
-  await expect(p.getByTestId('recovery-phrase-check-word')).toHaveCount(3);
-  const confirm = p.getByTestId('recovery-phrase-confirm');
-  await expect(confirm, 'Continue is enabled with the boxes empty').toBeDisabled();
-  // Not a list word, so no phrase can contain it: the check is wrong whichever positions it asks.
-  for (const box of await p.getByTestId('recovery-phrase-check-word').all()) await box.fill('zzzzz');
-  await confirm.click();
-  await expect(p.locator('#recovery-phrase-check-error'), 'a wrong check was accepted').toBeVisible();
-  await expect(p.getByTestId('post-registration'), 'a wrong check let the account through').toBeVisible();
-
-  await p.getByTestId('recovery-phrase-show-again').click();
-  await expect(p.getByTestId('recovery-phrase-word').locator('span:last-child')).toHaveText(shown);
-}
-
-test('(a) registration shows the phrase once and lets the account in only once it is confirmed', async () => {
-  await page.addLocatorHandler(page.getByTestId('recovery-phrase-written'), (): Promise<void> => examinePhraseStep(page), { times: 1, noWaitAfter: true });
-  expect(await createAccount(page, USERNAME)).toBe(true);
+test('(a) registration shows the 24-word phrase once and lets the account in once three words are typed back', async () => {
+  expect(await createAccount(page, USERNAME, { onRecoveryPhrase: (words: string[]): void => { phrase = words; } })).toBe(true);
   expect(phrase, 'the registration never showed a phrase').toHaveLength(PHRASE_WORDS);
+  for (const word of phrase) expect(word, `"${word}" is not a lower-case word`).toMatch(/^[a-z]{3,8}$/);
+  expect(new Set(phrase).size, 'the phrase repeats most of its words').toBeGreaterThan(PHRASE_WORDS / 2);
   expect(await waitForWorkspaceLoaded(page, 30_000)).toBe(true);
   expect(await signedInAs(page)).toBe(USERNAME);
 });

@@ -189,8 +189,8 @@ describe('the recovery console', () => {
     await recoverToConsole();
     fireEvent.click(screen.getByTestId('recovery-console-begin'));
     fireEvent.click(screen.getByTestId('recovery-task-password'));
-    type('console-password', 'brandnew1');
-    type('console-password-again', 'brandnew2');
+    type('console-password', 'lanternharbor');
+    type('console-password-again', 'lanternharbour');
     fireEvent.click(screen.getByTestId('console-password-save'));
     expect(await screen.findByText(CONSOLE_COPY.passwordMismatch)).toBeInTheDocument();
     type('console-password', 'has space in it');
@@ -206,18 +206,18 @@ describe('the recovery console', () => {
     await recoverToConsole();
     fireEvent.click(screen.getByTestId('recovery-console-begin'));
     fireEvent.click(screen.getByTestId('recovery-task-password'));
-    type('console-password', 'brandnew12');
-    type('console-password-again', 'brandnew12');
+    type('console-password', 'meadowlantern');
+    type('console-password-again', 'meadowlantern');
     fireEvent.click(screen.getByTestId('console-password-save'));
     expect(await screen.findByTestId('recovery-task-password')).toHaveAttribute('data-done', 'true');
-    expect(alice.password).toBe('brandnew12');
+    expect(alice.password).toBe('meadowlantern');
     fireEvent.click(screen.getByTestId('recovery-console-done'));
     expect(screen.getByTestId('recovery-console-finish')).toHaveTextContent(CONSOLE_COPY.finishSignedIn);
     fireEvent.click(screen.getByTestId('recovery-console-continue'));
     await waitFor(() => expect(onNext).toHaveBeenCalledWith(alice.cid.toString()));
     expect(h.w.agent.recoverySessions.size).toBe(0);
     const connect: Record<string, unknown> | undefined = h.w.agent.sent.find(([v]) => v === 'Connect')?.[1];
-    expect(new TextDecoder().decode(Uint8Array.from(connect?.password as number[]))).toBe('brandnew12');
+    expect(new TextDecoder().decode(Uint8Array.from(connect?.password as number[]))).toBe('meadowlantern');
   });
 
   it('makes a new phrase, shows it once, and checks it before the task is done', async () => {
