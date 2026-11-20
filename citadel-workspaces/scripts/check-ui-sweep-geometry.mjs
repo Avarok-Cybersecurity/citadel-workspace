@@ -29,7 +29,8 @@ import { MIGRATION_CHECKS } from './lib/polish-harness/checks-migration.mjs';
 import { APP_TOOLBAR_CHECKS } from './lib/polish-harness/checks-app-toolbar.mjs';
 import { PEER_CONSENT_CHECKS } from './lib/polish-harness/checks-peer-consent.mjs';
 import { DIALOG_FOOTER_CHECKS } from './lib/polish-harness/checks-dialog-footers.mjs';
+import { SIGN_IN_CHECKS } from './lib/polish-harness/checks-sign-in.mjs';
 import { SERVER_FILE_CHECKS } from './lib/polish-harness/checks-server-files.mjs';
 import { NODE_TAB_CHECKS } from './lib/polish-harness/checks-node-tabs.mjs';
 
-process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...MIGRATION_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS }));
+process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...MIGRATION_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS }));
