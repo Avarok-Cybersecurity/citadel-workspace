@@ -42,6 +42,15 @@ export function toBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+/** The bytes of unpadded base64url text, or null when it is not that. */
+export function fromBase64Url(text: string): Bytes | null {
+  if (!/^[A-Za-z0-9_-]*$/.test(text) || text.length % 4 === 1) return null;
+  const binary: string = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+  const out: Bytes = new Uint8Array(binary.length);
+  for (let i: number = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
 export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.byteLength !== b.byteLength) return false;
   let diff: number = 0;
