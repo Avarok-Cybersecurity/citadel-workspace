@@ -135,6 +135,12 @@ pub async fn start_native_server(
 /// `ServerIdentityChallenge` under that name. Bound on the first address `localhost` resolves
 /// to. Returns the name and its key's fingerprint, which a member is handed out of band.
 pub async fn start_server_named_localhost() -> (String, String) {
+    start_server_named_localhost_taking("require_canonical").await
+}
+
+/// As [`start_server_named_localhost`], whose `registration_names` is `names` (`allow_legacy`
+/// also takes an account registered with a typed password).
+pub async fn start_server_named_localhost_taking(names: &str) -> (String, String) {
     let first = std::net::ToSocketAddrs::to_socket_addrs("localhost:0")
         .expect("resolve localhost")
         .next()
@@ -145,7 +151,7 @@ pub async fn start_server_named_localhost() -> (String, String) {
         .expect("addr");
     let name = format!("localhost:{}", addr.port());
     let dir = sign_in_dir();
-    let identity = pinned_identity_toml(&dir, &name, "require_canonical");
+    let identity = pinned_identity_toml(&dir, &name, names);
     let parsed: toml::Value = toml::from_str(&identity).expect("[identity]");
     let config: IdentityConfig = parsed["identity"].clone().try_into().expect("[identity]");
     let key = native_identity(Some(&config), 0).expect("the server's identity");

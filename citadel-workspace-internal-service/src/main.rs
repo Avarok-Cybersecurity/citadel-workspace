@@ -21,6 +21,7 @@ mod apps_authority;
 mod identity_setup;
 mod log_setup;
 mod notice_token;
+mod p2p_kex_setup;
 mod server_identity_codec;
 mod shell_menu;
 mod telemetry;
@@ -190,6 +191,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
     .with_app_sessions(app_net::app_session_config());
     // Each account's RE-VFS key, from a seed sealed under a vault that follows the backend.
     let revfs_keys = service.revfs_key_source(revfs_seed::vault_for(&backend_type)?)?;
+    // Each identity session signs its P2P key exchanges, and peers' keys are pinned.
+    let kex_identity = p2p_kex_setup::kex_identity(&service, &backend_type).await?;
 
     // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
     let mut node_builder = NodeBuilder::<StackedRatchet>::default();
@@ -201,7 +204,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
         .with_max_security_level(MaxSecurityLevel::new(SecurityLevel::Custom(10))?)
         // Managed links are not switched on in this release.
         .with_link_manager(LinkManagerMode::Legacy)
-        .with_revfs_key_source(revfs_keys);
+        .with_revfs_key_source(revfs_keys)
+        .with_p2p_kex_identity(kex_identity);
 
     if opts.dangerous.unwrap_or(false) {
         citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED via --dangerous flag. Never use in production!");
