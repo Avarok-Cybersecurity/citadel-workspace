@@ -407,7 +407,7 @@ jobs:
       - name: Publish skips re-validation only on proof that this tree passed
         run: node --test scripts/lib/publish-validation-decision.test.mjs
       - name: Preflight derives CI's gates, tiers a change, and plans merge previews correctly
-        run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/merge-preview-planning.test.mjs
+        run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/changed-paths.test.mjs scripts/lib/merge-preview-planning.test.mjs
       - name: The flaky-spec report counts only attempts that failed
         run: node --test scripts/lib/retry-passes.test.mjs
       - name: No shipped artefact carries a build machine's home directory
