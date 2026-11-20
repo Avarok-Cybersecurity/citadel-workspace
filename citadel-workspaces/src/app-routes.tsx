@@ -47,6 +47,9 @@ const WorkspaceShell: LazyExoticComponent<() => JSX.Element> = lazy((): Promise<
 // flow, and nothing on it is needed until someone chooses to set one up.
 const CreateWorkspace: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages/CreateWorkspace"));
 const Legal: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages/Legal"));
+// "Sign in with Citadel" (an app's link lands here): its flow, the match-phrase hash and the word
+// list load only for that link.
+const SignIn: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages/SignIn"));
 
 /** The route table. Rendered inside a router configured with `ROUTER_FUTURE`. */
 export function AppRoutes(): JSX.Element {
@@ -60,6 +63,7 @@ export function AppRoutes(): JSX.Element {
         <Route path="/create/done" element={<CreateWorkspace />} />
         <Route path="/legal/:doc" element={<Legal />} />
         <Route path="/agent" element={<Agent />} />
+        <Route path="/sign-in" element={<SignIn />} />
 
         {/* Protected routes that require workspace data to be loaded. One
             loader and one shell for all of them: a page changes inside <main>,

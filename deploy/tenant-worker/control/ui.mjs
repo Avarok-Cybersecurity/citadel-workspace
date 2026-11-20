@@ -9,6 +9,8 @@
  * No I/O of its own: the assets binding is passed in.
  */
 
+import { completionOrigins } from "./sign-in-clients.mjs";
+
 /** Cloudflare Turnstile: its script and its challenge iframe (the creation flow's widget). */
 export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 
@@ -22,6 +24,15 @@ export const WEB_ANALYTICS_REPORT_ORIGIN = "https://cloudflareinsights.com";
 
 /** Where the page finds the control plane (dispatch.mjs answers `/api/*` on this host). */
 export const CONTROL_PLANE_PATH = "/api";
+
+/**
+ * Where a page may submit a form: itself, and every return of "Sign in with Citadel"
+ * (sign-in-clients.mjs, the allowlist's SSOT). The /sign-in page ends by POSTing the one-time code to
+ * the client's return; under `form-action 'self'` the browser blocked that POST for every client
+ * off this origin (synchronized.work). Policy-wide, not per route: the service worker serves every
+ * navigation from its cached copy of "/", headers included.
+ */
+export const FORM_ACTIONS = ["'self'", ...completionOrigins()].join(" ");
 
 /**
  * The policy nginx sends, with Turnstile added. `loopbackAgent` is the one off-origin socket the
@@ -43,7 +54,7 @@ export function contentSecurityPolicy(loopbackAgent) {
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    `form-action ${FORM_ACTIONS}`,
   ].join("; ");
 }
 
