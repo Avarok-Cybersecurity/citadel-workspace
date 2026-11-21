@@ -47,7 +47,7 @@ pub async fn add_room_with_chat(kernel: &Kernel, members: &[&str]) {
         members: members.iter().map(|m| m.to_string()).collect(),
         children: vec![],
         mdx_content: String::new(),
-        mdx_content_hash: None,
+        mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(""),
         rules: None,
         chat_enabled: true,
         chat_channel_id: Some(CHANNEL.to_string()),

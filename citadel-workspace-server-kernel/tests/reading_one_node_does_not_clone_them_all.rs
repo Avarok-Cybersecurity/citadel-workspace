@@ -67,7 +67,7 @@ async fn seed(kernel: &common::member_test_utils::GateKernel, count: usize) {
             members: vec![],
             children: vec![],
             mdx_content: "x".repeat(BODY),
-            mdx_content_hash: None,
+            mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(""),
             rules: None,
             chat_enabled: false,
             chat_channel_id: None,

@@ -43,6 +43,7 @@ pub mod rate_limiter;
 /// Edits to a workspace's role table, and the rules they obey. Pure.
 pub mod role_edits;
 pub(crate) mod roster;
+pub(crate) mod schema_version;
 pub mod secret_eq;
 /// Secure links: tokens the server maps to in-app deep links.
 pub mod secure_links;

@@ -59,8 +59,7 @@ pub struct LinkRecord {
     /// when it was made. Fixed for the link's life: an own link expiring does not move it.
     pub from_pool: bool,
     /// The accounts a booking-guest grant admitted, in the order they came (Calendar design
-    /// §3.6.4). `serde(default)`: a record written before guests existed has none.
-    #[serde(default)]
+    /// §3.6.4).
     pub guests: Vec<GuestGrant>,
 }
 

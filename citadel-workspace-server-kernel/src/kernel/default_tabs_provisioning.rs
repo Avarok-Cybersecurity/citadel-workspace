@@ -1,9 +1,9 @@
 //! Giving the root workspace its default app tabs when it has none.
 //!
 //! Run at every boot, after the root workspace is created or found. It writes only when the
-//! workspace lacks `default_app_tabs`: a new workspace, or one provisioned before node tabs
-//! existed. After that the key is there, and an administrator's list, `[]` included, is theirs;
-//! nothing removes the key, so this is a one-shot migration however often it runs.
+//! workspace lacks `default_app_tabs`, which is a new workspace. After that the key is there,
+//! and an administrator's list, `[]` included, is theirs; nothing removes the key, so the
+//! seeding happens once however often this runs.
 
 use crate::handlers::domain::server_ops::node_metadata_merge::provisioned_default_app_tabs;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;

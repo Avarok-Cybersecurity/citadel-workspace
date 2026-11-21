@@ -137,9 +137,7 @@ fn node(id: &str, parent: &str, depth: u32) -> DomainNode {
         members: vec![],
         children: vec![],
         mdx_content: "# Body\n".to_string(),
-        mdx_content_hash: Some(citadel_workspace_types::structs::mdx_content_hash(
-            "# Body\n",
-        )),
+        mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash("# Body\n"),
         rules: None,
         chat_enabled: false,
         chat_channel_id: None,

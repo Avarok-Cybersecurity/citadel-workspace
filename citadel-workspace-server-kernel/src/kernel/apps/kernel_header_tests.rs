@@ -18,10 +18,7 @@ const CAPS: &[Capability] = &[Capability::Canvas, Capability::NodesRead];
 async fn content(kernel: &Kernel, node: &str) -> String {
     let backend = &kernel.domain_operations.backend_tx_manager;
     let node = backend.get_node(node).await.unwrap().unwrap();
-    assert_eq!(
-        node.mdx_content_hash,
-        Some(mdx_content_hash(&node.mdx_content))
-    );
+    assert_eq!(node.mdx_content_hash, mdx_content_hash(&node.mdx_content));
     node.mdx_content
 }
 

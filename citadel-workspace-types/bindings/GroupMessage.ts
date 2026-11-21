@@ -51,7 +51,6 @@ mentions: Array<string>,
  */
 edited_at: bigint | null, 
 /**
- * Reactions, retractions included. Absent on messages stored before reactions existed,
- * which is the same fact as an empty list: nobody has reacted.
+ * Reactions, retractions included. Omitted when empty, so an absent list is empty.
  */
 reactions?: Array<GroupReaction>, };

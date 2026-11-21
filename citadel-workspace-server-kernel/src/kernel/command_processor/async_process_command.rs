@@ -694,7 +694,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             Ok(WorkspaceProtocolResponse::Members {
                 // Echoed from the request, resolved the same way the lookup
                 // above resolved it, so the answer says what it is about.
-                domain_id: Some(target_id.to_string()),
+                domain_id: target_id.to_string(),
                 guests: users
                     .iter()
                     .filter(|u| live_guests.contains(&u.id))

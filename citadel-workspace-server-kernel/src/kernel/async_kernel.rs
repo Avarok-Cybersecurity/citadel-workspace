@@ -17,10 +17,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-/// Current schema version for the workspace backend storage.
-/// Increment this when making breaking changes to the storage format.
-/// The `on_start` method checks this version and runs migrations if needed.
-pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+pub use super::schema_version::CURRENT_SCHEMA_VERSION;
 
 /// Reject a path segment supplied by an authenticated client before it
 /// is joined onto the content base directory. Without this check, a
@@ -1490,9 +1487,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 // Seeded content is hashed like any other, so a document that
                 // shipped with the workspace is verified on the same terms as
                 // one a member wrote.
-                mdx_content_hash: Some(citadel_workspace_types::structs::mdx_content_hash(
-                    &mdx_content,
-                )),
+                mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(&mdx_content),
                 mdx_content,
                 rules: office_config.rules.clone(),
                 chat_enabled: office_config.chat_enabled,
@@ -1569,9 +1564,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     owner_id: UNASSIGNED_OWNER.to_string(),
                     members: vec![],
                     children: Vec::new(),
-                    mdx_content_hash: Some(citadel_workspace_types::structs::mdx_content_hash(
+                    mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(
                         &room_mdx_content,
-                    )),
+                    ),
                     mdx_content: room_mdx_content,
                     rules: room_config.rules.clone(),
                     chat_enabled: room_config.chat_enabled,
@@ -1685,11 +1680,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     backend.set_schema_version(CURRENT_SCHEMA_VERSION).await?;
                 }
                 Some(version) if version < CURRENT_SCHEMA_VERSION => {
-                    // Earlier stores are not migrated (no compatibility before the 0.12.4 release).
-                    return Err(NetworkError::msg(format!(
-                        "Backend schema version (v{version}) was written by an earlier server; \
-                         this one reads only v{CURRENT_SCHEMA_VERSION}. Start it on an empty store."
-                    )));
+                    super::schema_version::refuse_earlier(version).map_err(NetworkError::msg)?;
                 }
                 Some(version) if version > CURRENT_SCHEMA_VERSION => {
                     // Refuse to start: a newer-than-expected schema means
@@ -2591,7 +2582,7 @@ mod structure_seed_idempotency_tests {
             members: vec![],
             children: Vec::new(),
             mdx_content: String::new(),
-            mdx_content_hash: None,
+            mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(""),
             rules: None,
             chat_enabled: true,
             chat_channel_id: None,

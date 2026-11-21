@@ -219,10 +219,8 @@ pub enum WorkspaceProtocolRequest {
         /// `Some("")` removes the stored avatar.
         avatar_data: Option<String>,
         /// Contact email shown to workspace members. `Some("")` clears it.
-        /// Absent from clients that predate the field, which reads as `None`.
         email: Option<String>,
         /// Job title shown to workspace members. `Some("")` clears it.
-        /// Absent from clients that predate the field, which reads as `None`.
         title: Option<String>,
         /// Whether members who are not the user's P2P contacts may see the
         /// avatar, email and title. `None` leaves the stored choice alone.
@@ -553,23 +551,16 @@ pub enum WorkspaceProtocolResponse {
     /// user-search corpus, and the group-call roster. A list fetched for one
     /// domain would render inside another, and the admin tab would then send
     /// role changes naming ITS entity with users taken from somebody else's.
-    ///
-    /// `Option` because a client may be talking to a server that predates the
-    /// field; a client that cannot tell which domain a list is for should keep
-    /// its old behaviour rather than discard the list.
     Members {
-        domain_id: Option<String>,
+        domain_id: String,
         members: Vec<User>,
         /// Member id -> the level above (a node id, or the workspace id) whose
         /// membership gives them access here. Absent for people listed on this
-        /// node directly. `serde(default)` so a reply from a server that
-        /// predates the field still decodes, as a list of direct members.
-        #[serde(default)]
+        /// node directly.
         inherited_from: std::collections::HashMap<String, String>,
         /// The listed members a live booking link names as guests (Calendar design §3.6.4),
         /// derived from the link records on each call. Sent to callers holding ManageRoles only;
-        /// empty for everyone else, and from a server that predates the field.
-        #[serde(default)]
+        /// empty for everyone else.
         guests: Vec<String>,
     },
     /// The roster of `domain_id` exists and an admin has hidden it from this
@@ -615,12 +606,7 @@ pub enum WorkspaceProtocolResponse {
         /// refusing until the reader navigated away and back. The verifier and
         /// this broadcast were built two rounds apart and their intersection
         /// was never exercised: ordinary collaborative editing was the trigger.
-        ///
-        /// Optional so an older server, which does not send it, degrades to
-        /// "unhashed" rather than "mismatch" — refusing content because the
-        /// server predates the field would be the same defect wearing the fix's
-        /// clothes.
-        mdx_content_hash: Option<String>,
+        mdx_content_hash: String,
         updated_by: String,
         #[ts(type = "bigint")]
         timestamp: u64,
@@ -639,7 +625,6 @@ pub enum WorkspaceProtocolResponse {
         messages: Vec<GroupMessage>,
         has_more: bool,
         /// How far each member has read, so ticks are right the moment the channel opens.
-        #[serde(default)]
         read_cursors: Vec<group_chat::GroupReadCursor>,
     },
 
@@ -836,8 +821,7 @@ pub struct GroupMessage {
     /// Unix timestamp of last edit (None if never edited)
     #[ts(type = "bigint | null")]
     pub edited_at: Option<u64>,
-    /// Reactions, retractions included. Absent on messages stored before reactions existed,
-    /// which is the same fact as an empty list: nobody has reacted.
+    /// Reactions, retractions included. Omitted when empty, so an absent list is empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<group_chat::GroupReaction>>", optional)]
     pub reactions: Vec<group_chat::GroupReaction>,

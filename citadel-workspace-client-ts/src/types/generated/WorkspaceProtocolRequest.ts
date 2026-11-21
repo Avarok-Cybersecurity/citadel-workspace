@@ -53,12 +53,10 @@ name: string | null,
 avatar_data: string | null, 
 /**
  * Contact email shown to workspace members. `Some("")` clears it.
- * Absent from clients that predate the field, which reads as `None`.
  */
 email: string | null, 
 /**
  * Job title shown to workspace members. `Some("")` clears it.
- * Absent from clients that predate the field, which reads as `None`.
  */
 title: string | null, 
 /**

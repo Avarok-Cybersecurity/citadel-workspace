@@ -34,7 +34,7 @@ pub(super) async fn rewrite_mdx<R: Ratchet + Send + Sync + 'static>(
             return Ok(false);
         };
         node.mdx_content = content;
-        node.mdx_content_hash = Some(mdx_content_hash(&node.mdx_content));
+        node.mdx_content_hash = mdx_content_hash(&node.mdx_content);
         node.updated_at = caller.now / 1000;
         let written = node.clone();
         backend.save_nodes(&nodes).await?;

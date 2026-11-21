@@ -22,11 +22,10 @@ ihttp_routes: Array<string>,
  */
 ihttp_call_targets: Array<string>, 
 /**
- * `ihttp.p2p.serve`: the patterns served peer to peer. Absent from installs made before
- * it existed, which could not have been granted it: empty.
+ * `ihttp.p2p.serve`: the patterns served peer to peer.
  */
 ihttp_p2p_routes: Array<string>, 
 /**
- * `group.topic.*`: the app's topics. Absent from older installs, as above: empty.
+ * `group.topic.*`: the app's topics.
  */
 topics: Array<string>, };

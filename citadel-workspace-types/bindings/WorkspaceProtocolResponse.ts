@@ -24,18 +24,17 @@ import type { UserRole } from "./UserRole";
 import type { Workspace } from "./Workspace";
 import type { WorkspaceMetadata } from "./WorkspaceMetadata";
 
-export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspaces": Array<WorkspaceMetadata> } | { "Success": string } | { "Error": string } | "WorkspaceNotInitialized" | { "Members": { domain_id: string | null, members: Array<User>, 
+export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspaces": Array<WorkspaceMetadata> } | { "Success": string } | { "Error": string } | "WorkspaceNotInitialized" | { "Members": { domain_id: string, members: Array<User>, 
 /**
  * Member id -> the level above (a node id, or the workspace id) whose
  * membership gives them access here. Absent for people listed on this
- * node directly. `serde(default)` so a reply from a server that
- * predates the field still decodes, as a list of direct members.
+ * node directly.
  */
 inherited_from: { [key in string]?: string }, 
 /**
  * The listed members a live booking link names as guests (Calendar design §3.6.4),
  * derived from the link records on each call. Sent to callers holding ManageRoles only;
- * empty for everyone else, and from a server that predates the field.
+ * empty for everyone else.
  */
 guests: Array<string>, } } | { "MembersHidden": { domain_id: string, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, 
 /**
@@ -64,13 +63,8 @@ role_id: string | null, } } | { "UserProfileUpdated": User } | { "NodeContentUpd
  * refusing until the reader navigated away and back. The verifier and
  * this broadcast were built two rounds apart and their intersection
  * was never exercised: ordinary collaborative editing was the trigger.
- *
- * Optional so an older server, which does not send it, degrades to
- * "unhashed" rather than "mismatch" — refusing content because the
- * server predates the field would be the same defect wearing the fix's
- * clothes.
  */
-mdx_content_hash: string | null, updated_by: string, timestamp: bigint, } } | { "GroupMessageNotification": { group_id: string, message: GroupMessage, } } | { "GroupMessages": { group_id: string, messages: Array<GroupMessage>, has_more: boolean, 
+mdx_content_hash: string, updated_by: string, timestamp: bigint, } } | { "GroupMessageNotification": { group_id: string, message: GroupMessage, } } | { "GroupMessages": { group_id: string, messages: Array<GroupMessage>, has_more: boolean, 
 /**
  * How far each member has read, so ticks are right the moment the channel opens.
  */

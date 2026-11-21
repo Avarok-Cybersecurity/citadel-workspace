@@ -802,9 +802,8 @@ pub struct DomainNode {
     /// script execution in the page, who could patch the check itself; and it
     /// says nothing about whether the document was hostile when it was written.
     ///
-    /// `Option` because documents stored before this existed have no hash, and
-    /// a client must be able to tell "not hashed" from "hash does not match".
-    pub mdx_content_hash: Option<String>,
+    /// Always the hash of `mdx_content` (`mdx_content_hash`), empty content included.
+    pub mdx_content_hash: String,
     /// Rules displayed to users
     pub rules: Option<String>,
     /// Whether group chat is enabled for this node
@@ -1153,10 +1152,7 @@ pub struct Workspace {
     pub metadata: Vec<u8>,
     /// The server's domains, canonical first then its former ones: a member named
     /// `handle@<one of these>` is shown as the bare handle. Filled from the server's `[identity]`
-    /// on every `GetWorkspace` answer, never stored: a stored record carries none, and a reply
-    /// from a server that predates the field decodes as an empty list.
-    #[serde(default)]
-    #[ts(as = "Option<Vec<String>>", optional)]
+    /// on every `GetWorkspace` answer; a stored record carries none.
     pub accepted_domains: Vec<String>,
 }
 
