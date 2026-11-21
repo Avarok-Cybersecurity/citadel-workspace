@@ -14,7 +14,6 @@ import { readEnvelope, type ChannelEnvelope } from './channel-envelope';
 import { outranks, ownRank, type LeaderRank } from './version-skew';
 import { refusesToLead } from './tab-staleness';
 import { admitLeaderEpoch, beginLeadership, followEpoch, outbid } from './leadership-epoch';
-import { onLegacyClaim, onLegacyHeartbeat } from './legacy-v1-put-down';
 import { sendHeartbeat, type LeaderElectionState } from './leadership-signals';
 
 export { relinquishLeadership, sendHeartbeat, type LeaderElectionState } from './leadership-signals';
@@ -25,13 +24,13 @@ const LEADER_TIMEOUT_MS: number = INTERVAL.LEADER_TIMEOUT_MS;
 /**
  * Every rule below compares builds before tabs: a newer build leads (`outranks`, version-skew.ts),
  * and a tab whose build is superseded never takes leadership (tab-staleness.ts). A message with
- * no envelope is from a protocol-1 build and goes to legacy-v1-put-down.ts instead.
+ * no envelope is from a protocol-1 build and is never admitted (version-skew.ts).
  */
 export function handleLeaderElection(state: LeaderElectionState, message: ChannelMessage): void {
   const payload: Record<string, unknown> | undefined = message.payload as Record<string, unknown> | undefined;
   if (payload?.isLeader) {
     const envelope: ChannelEnvelope | null = readEnvelope(message);
-    if (envelope === null) return onLegacyClaim(state, message);
+    if (envelope === null) return;
     const theirId: bigint = BigInt((payload.instanceIdBigInt as string) || '0');
     const myId: bigint = instanceManager.instanceIdAsBigInt;
 
@@ -100,7 +99,7 @@ export function handleLeaderHeartbeat(state: LeaderElectionState, message: Chann
   // does so via tryBecomeLeader after LEADER_TIMEOUT_MS of no heartbeat —
   // that path is unaffected.
   const envelope: ChannelEnvelope | null = readEnvelope(message);
-  if (envelope === null) return onLegacyHeartbeat(state, message);
+  if (envelope === null) return;
   const me: LeaderRank = ownRank(instanceManager.instanceIdAsBigInt);
   let theirId: bigint;
   try { theirId = BigInt(message.senderInstanceId); } catch { theirId = 0n; }

@@ -1,8 +1,8 @@
 /**
  * Tabs of different builds in one browser, for the tests of what they agree on.
  *
- * Real, per tab, each in its own module graph: the InstanceChannel (the live one, or the frozen
- * protocol-1 copy in fixtures/legacy-v1), its election and dispatch, the instance manager, the
+ * Real, per tab, each in its own module graph: the InstanceChannel, its election and dispatch,
+ * the instance manager, the
  * leadership listener that opens and closes the socket (websocket/leadership-listener.ts), and
  * the session claims a leader makes on its socket (follower-session-claims.ts).
  *
@@ -25,7 +25,8 @@ export const SOCKET_OPEN_MS: number = 20;
 /** The CID-report window a leader gives tabs to answer; the app's is TIMEOUT.CID_REPORT_WINDOW_MS. */
 const REPORT_WINDOW_MS: number = 2000;
 
-export type Build = 'legacy' | 'proto2';
+/** Every tab speaks the current channel protocol; builds differ by `seq`. */
+export type Build = 'proto2';
 
 interface TabChannel {
   sendToLeader(payload: unknown, requestId?: string): Promise<AckResult>;
@@ -107,13 +108,13 @@ export async function openTab(name: string, build: Build, seq: number, cid: bigi
   const { eventEmitter } = await import('@/lib/event-emitter');
   const tab: Tab = {
     name, build, manager: instanceManager, emitter: eventEmitter, channel: null as unknown as TabChannel,
-    staleness: build === 'proto2' ? await import('../tab-staleness') : null,
+    staleness: await import('../tab-staleness'),
     reachable: true, socketsOpened: 0, socketsClosed: 0, clientOpen: false,
     promotions: 0, demotedAt: [], promotedAt: [], leaderWithoutClient: [], sent: [], sendTakesMs: 0,
   };
   opening = tab;
   const module: { instanceChannel: TabChannel & { relinquishLeadership(): void; requestCidReport(): void } } =
-    build === 'proto2' ? await import('../instance-channel') : await import('./fixtures/legacy-v1/instance-channel');
+    await import('../instance-channel');
   opening = null;
   const channel: TabChannel & { relinquishLeadership(): void; requestCidReport(): void } = module.instanceChannel;
   (tab as { channel: TabChannel }).channel = channel;
