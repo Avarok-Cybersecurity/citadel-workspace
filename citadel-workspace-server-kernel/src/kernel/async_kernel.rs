@@ -1676,7 +1676,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
             let backend = &self.domain_operations.backend_tx_manager;
             match backend.get_schema_version().await? {
                 None => {
-                    // Fresh database or pre-versioning installation: stamp with current version
+                    // A fresh database: stamp the current version.
                     info!(
                         target: "citadel",
                         "No schema version found, initializing to v{}",
@@ -1685,22 +1685,11 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     backend.set_schema_version(CURRENT_SCHEMA_VERSION).await?;
                 }
                 Some(version) if version < CURRENT_SCHEMA_VERSION => {
-                    info!(
-                        target: "citadel",
-                        "Schema migration required: v{} -> v{}",
-                        version,
-                        CURRENT_SCHEMA_VERSION
-                    );
-                    // Future migrations go here, applied sequentially:
-                    // if version < 2 { migrate_v1_to_v2().await?; }
-                    // if version < 3 { migrate_v2_to_v3().await?; }
-                    // ...
-                    backend.set_schema_version(CURRENT_SCHEMA_VERSION).await?;
-                    info!(
-                        target: "citadel",
-                        "Schema migration complete, now at v{}",
-                        CURRENT_SCHEMA_VERSION
-                    );
+                    // Earlier stores are not migrated (no compatibility before the 0.12.4 release).
+                    return Err(NetworkError::msg(format!(
+                        "Backend schema version (v{version}) was written by an earlier server; \
+                         this one reads only v{CURRENT_SCHEMA_VERSION}. Start it on an empty store."
+                    )));
                 }
                 Some(version) if version > CURRENT_SCHEMA_VERSION => {
                     // Refuse to start: a newer-than-expected schema means
