@@ -16,7 +16,7 @@ export function stagedPaths(repo, prefix) {
 }
 
 /** The branch a new remote branch is compared against: the remote's default, which a clone records. */
-function remoteDefault(repo, remote) {
+export function remoteDefault(repo, remote) {
   try {
     return git(repo, 'symbolic-ref', '--quiet', `refs/remotes/${remote}/HEAD`);
   } catch {

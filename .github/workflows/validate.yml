@@ -387,6 +387,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0 # the tracking-identifier check reads every commit since the merge base
       - uses: ./.github/actions/no-nested-ui-repo
       - uses: actions/setup-node@v4
         with:
@@ -398,6 +399,15 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Check crate coverage
         run: node scripts/check-crate-coverage.mjs
+      - name: No internal tracking identifier enters public history
+        # A push to master adds no commit to judge, and its checkout records no remote default.
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/check-no-tracking-ids.mjs
+      - name: The tracking-identifier check's own tests
+        run: node --test scripts/lib/tracking-ids.test.mjs
       - name: No fork's pull request can reach the self-hosted Mac
         run: node scripts/check-mac-runner-is-fork-safe.mjs
       - name: Every hosted Linux runner names its release
