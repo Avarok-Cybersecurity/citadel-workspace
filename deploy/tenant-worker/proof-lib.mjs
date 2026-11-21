@@ -160,8 +160,7 @@ export async function startWrangler(persistTo, overrides) {
 }
 
 /**
- * `startWrangler` for the tenant worker in `dir`: another build's (upgrade.mjs runs the build
- * production runs from its own checkout, its Worker and its wasm together).
+ * `startWrangler` for the tenant worker in `dir`.
  */
 export async function startWranglerIn(dir, persistTo, overrides) {
   if (!Array.isArray(overrides)) throw new Error("startWrangler: pass DEV_OVERRIDES or PRODUCTION_LIKE_OVERRIDES");

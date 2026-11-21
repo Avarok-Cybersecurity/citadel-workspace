@@ -47,7 +47,7 @@ export class TenantIdentity {
   /** The identity the node is started with. Throws when the object has no key. */
   host() {
     if (this.seed === null) {
-      throw new Error("this workspace has no server key: it was provisioned before server identities, and is provisioned again to get one");
+      throw new Error("this workspace has no server key: it was provisioned by an earlier release, and does not start");
     }
     this.built ??= { host: new (this.wasm().ServerIdentityHost)(this.kernelConfig(), this.seed), document: null };
     return this.built.host;

@@ -2,7 +2,6 @@
  * The tenant registry in D1. Every query the control plane makes is here.
  */
 import { ADDONS } from "./plans.mjs";
-import { IDENTITY_PENDING, IDENTITY_VERSION } from "./identity-version.mjs";
 
 /** One column per add-on quantity (control/addons.mjs), each added by its own migration. */
 const ADDON_COLUMNS = ADDONS.map((a) => a.quantityField);
@@ -14,7 +13,7 @@ const COLUMNS =
 /** The coupon columns (migration 0009), which every insert names: a comp grant is set when it activates. */
 const COUPON_COLUMNS = ["coupon_hash", "grant_id", "grant_unlimited", "trial_end", "stripe_status"];
 const INSERT_COLUMNS = ["slug", "tenant_id", "display_name", "status", "tier", "interval", "seats", ...ADDON_COLUMNS,
-  "created_at", "expires_at", "claim_hash", "reservation_hash", ...COUPON_COLUMNS, "identity_version"];
+  "created_at", "expires_at", "claim_hash", "reservation_hash", ...COUPON_COLUMNS];
 /** What a reservation batch answers: the slug is held, someone else holds it, or the coupon ran out. */
 export const RESERVED = "reserved";
 export const TAKEN = "taken";
@@ -35,21 +34,6 @@ export class Store {
   /** Every active tenant, for the usage monitor. */
   async active() {
     return (await this.db.prepare(`SELECT ${COLUMNS} FROM tenants WHERE status = 'active'`).all()).results;
-  }
-
-  /** Up to `limit` rows the identity upgrade has yet to reach (identity-version.mjs), by slug after `after`. */
-  async identityPending(after, limit) {
-    const pending = this.db.prepare(`SELECT ${COLUMNS} FROM tenants WHERE ${IDENTITY_PENDING} AND slug > ? ORDER BY slug LIMIT ?`);
-    return (await pending.bind(after, limit).all()).results;
-  }
-
-  /** Records that the identity upgrade reached `slug`'s object; false when the row is no longer that tenant's. */
-  async identityUpgraded(slug, tenantId) {
-    const done = await this.db
-      .prepare("UPDATE tenants SET identity_version = ? WHERE slug = ? AND tenant_id = ?")
-      .bind(IDENTITY_VERSION, slug, tenantId)
-      .run();
-    return done.meta.changes === 1;
   }
 
   async byTenantId(tenantId) {
@@ -100,8 +84,6 @@ export class Store {
           .bind(
             row.slug, row.tenant_id, row.display_name, "pending", row.tier, row.interval, row.seats, ...ADDON_COLUMNS.map((c) => row[c]), now,
             row.expires_at, row.claim_hash, row.reservation_hash, ...COUPON_COLUMNS.map((c) => row[c]),
-            // Its object is provisioned with its identity at creation (tenants.mjs).
-            IDENTITY_VERSION,
           ),
         // The acceptance lands with the reservation or not at all.
         this.db
