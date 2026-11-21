@@ -25,10 +25,10 @@ SwMessage = { 1: typ (uint 1..=17),  2: unsigned (map)  |  3: signed (Signed) } 
 Signed    = { 1: alg "ML-DSA-65", 2: kid bstr(32), 3: body bstr, 4: sig bstr(3309) }
 Body      = { 1: typ, 2: iss tstr(16) = id_fp, 3: from uint64 = sender CID, 4: aud tstr "synchronized.work" | uint64 CID,
               5: iat uint64 ms, 6: exp uint64 ms, 7: nonce bstr(16), 8: seq uint64, 9: payload map }
-Sealed    = { 1: kem "ML-KEM-768", 2: rcpt bstr(32), 3: ct bstr(1088), 4: aead "AES-256-GCM", 5: n bstr(12), 6: enc bstr }
+Sealed    = { 1: kem "ML-KEM-1024", 2: rcpt bstr(32), 3: ct bstr(1568), 4: aead "AES-256-GCM", 5: n bstr(12), 6: enc bstr }
 P2P env.  = { "type": "sw/1", "payload": bstr = SwMessage bytes }                   -- text keys, exactly two
 ```
-- `kid = SHA3-256(encoded verifying key)` (ML-DSA-65 pk, 1952 B; ML-KEM-768 ek, 1184 B).
+- `kid = SHA3-256(encoded verifying key)` (ML-DSA-65 pk, 1952 B; ML-KEM-1024 ek, 1568 B).
   `iss` is the Person's `id_fp` (identity-api §4); the Person's root `kid` is `SHA3-256(identity pk)`.
 - `sig = ML-DSA-65.Sign(sk, "sw-signed-v1" ‖ 0x00 ‖ body_bytes)`, pure, empty context,
   deterministic. `body_bytes` is the exact byte string in `Signed[3]`; verifiers sign-check those
@@ -39,11 +39,14 @@ P2P env.  = { "type": "sw/1", "payload": bstr = SwMessage bytes }               
   at the node; the Device's own CID inside a sealed payload); `iat ≤ now + 60 s`; `exp > now`
   (`exp - iat ≤ 24 h` for 2/3/4/5/6/17, ≤ 5 min otherwise); `(kid, nonce)` unseen until `exp`;
   `seq` strictly greater than the last seen for `kid`.
-- Sealing (`typ 4, 5` only): `Body[9]` **is** the `Sealed` map. `ct, ss = ML-KEM-768.Encaps(ek)`;
-  `key = HKDF-SHA3-256(salt = none, ikm = ss, info = "sw/seal/1", L = 32)`;
+- Sealing (`typ 4, 5` only): `Body[9]` **is** the `Sealed` map. `ct, ss = ML-KEM-1024.Encaps(ek)`;
+  `key = HKDF-SHA3-256(salt = none, ikm = ss, info = "sw/seal/2", L = 32)`;
   `enc = AES-256-GCM(key, n, aad = ∅, plaintext = canonical CBOR of the inner map)`; the inner map
   carries `aud` (the Device CID) plus the type's payload fields. `rcpt = SHA3-256(ek)`.
 - Signature and seal keys are per Endpoint and never derived from the identity seed.
+- `Sealed` is envelope version 2 (`kem "ML-KEM-1024"`, info `"sw/seal/2"`). Version 1
+  (`kem "ML-KEM-768"`, `ct` 1088 B, ek 1184 B, info `"sw/seal/1"`) is refused by name, with no
+  compatibility path; an ENROL announcing a 1184-byte seal key is refused as malformed.
 
 ## 3. Message types and payloads (text keys; every listed key required unless `?`)
 
@@ -59,7 +62,7 @@ P2P env.  = { "type": "sw/1", "payload": bstr = SwMessage bytes }               
 | 8 | JOIN_REQUEST | Endpoint key | 3 | `task_id`, `note: tstr ≤ 280 B`, `readiness: Readiness`, `agent_id?` |
 | 9 | JOIN_ANSWER | owner Controller key | 3 | `request_id: bstr(32)` (the request's `signal_id`), `accept: bool`, `reason?` |
 | 10 | TASK_WRITE | Endpoint key | 3 | `op: "create"\|"update"\|"delete"`, `task_id`, `fields: TaskFields` (empty map for `delete`) |
-| 11 | ENROL / REVOKE | **identity (root) key**, or the Endpoint key with `assertion` | 3 | `op: "enrol"`: `endpoint_cid: uint, kind: "device"\|"controller", pubkeys: {sign: bstr(1952), seal?: bstr(1184)}, epoch: uint, assertion?: bstr` — `op: "revoke"`: `kid: bstr(32), epoch: uint` |
+| 11 | ENROL / REVOKE | **identity (root) key**, or the Endpoint key with `assertion` | 3 | `op: "enrol"`: `endpoint_cid: uint, kind: "device"\|"controller", pubkeys: {sign: bstr(1952), seal?: bstr(1568)}, epoch: uint, assertion?: bstr` — `op: "revoke"`: `kid: bstr(32), epoch: uint` |
 | 12 | SUGGESTION | Endpoint key | 3 | `task_id`, `text: tstr ≤ 2 KiB` |
 | 13 | EVENT | node→viewers, unsigned | 2 | `project_id, cursor: uint, kind: tstr, body: EventBody` |
 | 14 | NOTIFY | node→Person, unsigned | 2 | `event_id: bstr(32), kind, subject, text, at: uint ms` |
@@ -92,7 +95,7 @@ everything else is refused on the P2P path.
 ## 4. Person record (ServerDO, keyed by `id_fp`; `person-record` fixture)
 
 ```
-{ 1: id_fp tstr(16), 2: pk bstr(1952), 3: display tstr, 4: endpoints [ { 1: cid uint, 2: kind tstr, 3: sign bstr(1952), 4?: seal bstr(1184), 5: epoch uint } ],
+{ 1: id_fp tstr(16), 2: pk bstr(1952), 3: display tstr, 4: endpoints [ { 1: cid uint, 2: kind tstr, 3: sign bstr(1952), 4?: seal bstr(1568), 5: epoch uint } ],
   5: epoch uint, 6: policy { "approval": "manual"|"auto", "rate_per_min": uint } }
 ```
 

@@ -209,6 +209,6 @@ export function checkSwWireKat(kat, identityKat) {
   t.eq('person.identity_kid', kat.person.identity_kid_hex, hex(sha3(unb64(identityKat.identities.A.pk_b64url))));
   for (const role of ['device', 'controller']) t.eq(`${role}.kid`, kat[role].kid_hex, hex(sha3(hexToBytes(kat[role].sign_pk_hex))));
   t.eq('device.kem_kid', kat.device.kem_kid_hex, hex(sha3(hexToBytes(kat.device.kem_ek_hex))));
-  t.len('device.kem_ek', hexToBytes(kat.device.kem_ek_hex), 1184);
+  t.len('device.kem_ek', hexToBytes(kat.device.kem_ek_hex), 1568);
   return t;
 }
