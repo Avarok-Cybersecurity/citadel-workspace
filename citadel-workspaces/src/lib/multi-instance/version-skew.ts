@@ -53,15 +53,6 @@ export function outranks(a: LeaderRank, b: LeaderRank): boolean {
   return a.id < b.id;
 }
 
-/** The sender's instance id as the election compares it; null when it is not a number. */
-export function instanceIdOf(senderInstanceId: string): bigint | null {
-  try {
-    return BigInt(senderInstanceId);
-  } catch {
-    return null;
-  }
-}
-
 export function ownRank(id: bigint): LeaderRank {
   return { seq: BUILD_SEQ, id };
 }
