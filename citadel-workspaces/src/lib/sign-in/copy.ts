@@ -67,9 +67,9 @@ export const POLICY_COPY: Record<SignInPolicy, { label: string; detail: string }
 export const secondsLeftCopy = (seconds: number): string =>
   seconds === 1 ? '1 second left' : `${seconds} seconds left`;
 
-/** The agent's SDK refused to ask this server for a key: it is too old to enrol one, or has not enabled keys. */
+/** The agent's SDK refused to ask this server for a key: the server has not enabled security keys. */
 export const SERVER_CANNOT_ENROL_KEYS: string =
-  'This workspace server must be updated before you can add a security key. Your password still works.';
+  "This workspace server hasn't enabled security keys, so you can't add one here. Your password still works.";
 
 /** What to tell the user when adding or using a key failed: the server's own words when it refused. */
 export function keyFailureCopy(error: unknown): string {

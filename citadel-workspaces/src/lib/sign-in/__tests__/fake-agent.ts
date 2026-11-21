@@ -46,8 +46,8 @@ export class FakeAgent {
   readonly recoverySessions: Set<bigint> = new Set<bigint>();
   /** The workspace's human-check requirement, enforced on Connect and Register. */
   readonly admission: FakeAdmission = new FakeAdmission();
-  /** A 0.12.2 server: it names no relying party, and the SDK will not ask it to enrol a key. */
-  serverAt0122: boolean = false;
+  /** A server that has not enabled security keys: the SDK will not ask it to enrol one. */
+  keysDisabled: boolean = false;
   private readonly pending: Map<string, Pending> = new Map<string, Pending>();
   private nextFactor: number = 10;
   private nextPhrase: number = 0;
@@ -81,7 +81,7 @@ export class FakeAgent {
     return new Promise((resolve) => {
       this.pending.set(challengeId, { requestId, resolve, ceremony });
       this.emit('SecurityKeyChallengeNotification', {
-        cid, request_id: requestId, challenge_id: challengeId, purpose, ceremony, ...(this.serverAt0122 ? {} : { rp_id: FAKE_RP_ID }),
+        cid, request_id: requestId, challenge_id: challengeId, purpose, ceremony, rp_id: FAKE_RP_ID,
         // A u64, which the WASM client hands to JavaScript as a BigInt (serialize_large_number_types_as_bigints).
         prf_salt: PRF_SALT, expires_in_ms: BigInt(TOUCH_WINDOW_MS),
       });
@@ -186,8 +186,8 @@ export class FakeAgent {
     }
     if (opName === 'ListCredentials') { ok({ Credentials: { policy: account.policy, credentials: listCredentials(account, true) } }); return; }
     const args: Req = typeof op === 'string' ? {} : (op as Req)[opName] as Req;
-    if (opName === 'AddSecurityKey' && this.serverAt0122) {
-      fail('the server predates enrolling a security key this client creates', 'server_cannot_enrol_security_keys');
+    if (opName === 'AddSecurityKey' && this.keysDisabled) {
+      fail('this server has not enabled security keys', 'server_cannot_enrol_security_keys');
     } else if (opName === 'AddSecurityKey') {
       // The SDK's Register ceremony: a random user handle, the account's name, and its keys excluded.
       const register: Ceremony = { Register: {
