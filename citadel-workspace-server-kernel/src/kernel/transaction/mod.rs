@@ -1789,7 +1789,7 @@ mod group_paging_tests {
     /// earlier server wrote.
     async fn seed_pre_paging_blob(mgr: &BackendTransactionManager<StackedRatchet>, count: usize) {
         let messages: Vec<GroupMessage> = (0..count).map(|i| message(&format!("m{i}"))).collect();
-        mgr.backend_save("citadel_workspace.group_messages.room", &messages)
+        mgr.backend_save(&group_message_pages::pre_paging_key("room"), &messages)
             .await
             .expect("seed");
     }

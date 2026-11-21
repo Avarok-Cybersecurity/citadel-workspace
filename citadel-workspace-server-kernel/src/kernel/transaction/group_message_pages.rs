@@ -36,6 +36,13 @@ pub(super) fn index_key(group_id: &str) -> String {
     format!("citadel_workspace.group_messages.{group_id}.pages")
 }
 
+/// Where an earlier server kept a room's whole history as one blob. Never read; named only so
+/// a test can plant one and show it is ignored.
+#[cfg(test)]
+pub(super) fn pre_paging_key(group_id: &str) -> String {
+    format!("citadel_workspace.group_messages.{group_id}")
+}
+
 /// The key holding every member's read cursor in a room, beside its pages.
 pub(super) fn read_cursors_key(group_id: &str) -> String {
     format!("citadel_workspace.group_messages.{group_id}.read_cursors")
