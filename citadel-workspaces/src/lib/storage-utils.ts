@@ -7,7 +7,7 @@
 
 import { openDB, IDBPDatabase, DBSchema , type IDBPTransaction } from 'idb';
 import { errorLog, warnLog } from './debug-config';
-import { DB_NAME, DB_VERSION, runMigrations, missingStores , type StoreName } from './storage-migrations';
+import { DB_NAME, DB_VERSION, upgradeSchema, missingStores , type StoreName } from './storage-migrations';
 
 // ============================================================================
 // Database Schema
@@ -62,16 +62,16 @@ export function getDB(): Promise<IDBPDatabase<CitadelDBSchema>> {
     });
 
     const opening: Promise<IDBPDatabase<CitadelDBSchema>> = openDB<CitadelDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db: IDBPDatabase<CitadelDBSchema>, oldVersion: number, newVersion: number | null, tx: IDBPTransaction<CitadelDBSchema, ("keyValue" | "tabContext")[], "versionchange">): void {
-        runMigrations(db, oldVersion, newVersion, tx);
+      upgrade(db: IDBPDatabase<CitadelDBSchema>, oldVersion: number, newVersion: number | null): void {
+        upgradeSchema(db, oldVersion);
 
         const missing: ("keyValue" | "tabContext")[] = missingStores(db.objectStoreNames);
         if (missing.length > 0) {
-          // The migration list has drifted from the schema. Failing here aborts
+          // The store list has drifted from the schema. Failing here aborts
           // the upgrade transaction and keeps the old database, which is far
           // easier to diagnose than a NotFoundError from an unrelated read later.
           throw new Error(
-            `Schema v${newVersion ?? DB_VERSION} is missing object stores after migration: ${missing.join(', ')}`
+            `Schema v${newVersion ?? DB_VERSION} is missing object stores after the upgrade: ${missing.join(', ')}`
           );
         }
       },
