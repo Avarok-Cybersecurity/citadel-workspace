@@ -21,7 +21,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { homePathsIn } from './lib/home-paths.mjs';
+import { homePathHits, homePathsIn } from './lib/home-paths.mjs';
 import { ROOT } from './lib/remap-paths.mjs';
 
 const SHIPPED_JS = /^(citadel-workspace-client-ts\/pkg|citadel-workspaces\/vendor|citadel-workspaces\/public)\/.*\.m?js$/;
@@ -48,14 +48,21 @@ if (allowUnder.length && !given.length) {
   process.exit(1);
 }
 const files = given.length ? given : trackedArtefacts();
+/** How many hits a failing artefact lists, each with its offset and whole path. */
+const HITS_SHOWN = 25;
+
 const problems = [];
 for (const file of files) {
   if (!existsSync(file)) {
     problems.push(`${file}: does not exist`);
     continue;
   }
-  const found = homePathsIn(readFileSync(file), { allowUnder });
-  if (found.length) problems.push(`${file}: ${found.join(', ')}`);
+  const bytes = readFileSync(file);
+  const hits = homePathHits(bytes, { allowUnder });
+  if (!hits.length) continue;
+  const shown = hits.slice(0, HITS_SHOWN).map((h) => `    @0x${h.offset.toString(16)}: ${h.path}`);
+  if (hits.length > HITS_SHOWN) shown.push(`    ... and ${hits.length - HITS_SHOWN} more`);
+  problems.push(`${file}: ${homePathsIn(bytes, { allowUnder }).join(', ')} (${hits.length} path(s))\n${shown.join('\n')}`);
 }
 if (files.length === 0) problems.push('no artefact to check; the scan would have measured nothing');
 

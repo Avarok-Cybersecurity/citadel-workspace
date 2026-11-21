@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { homePathsIn } from './home-paths.mjs';
+import { HIT_PATH_MAX, homePathHits, homePathsIn } from './home-paths.mjs';
 import { remapFlags, targetRustflagsEnv } from './remap-paths.mjs';
 
 const bytes = (s) => Buffer.from(s, 'latin1');
@@ -42,4 +42,18 @@ test('the env variable is the per-target one cargo merges with config rustflags'
 
 test('a path cargo would split on whitespace is refused', () => {
   assert.throws(() => targetRustflagsEnv('x86_64-pc-windows-msvc', ['--remap-path-prefix=/a b=/cargo']), /whitespace/);
+});
+
+test('each hit names its byte offset and the whole embedded path', () => {
+  const binary = bytes('\0\0C:\\Users\\runneradmin\\.cargo\\registry\\src\\x\\a.c\0/home/runner/b.rs');
+  assert.deepEqual(homePathHits(binary), [
+    { offset: 2, path: 'C:\\Users\\runneradmin\\.cargo\\registry\\src\\x\\a.c' },
+    { offset: 49, path: '/home/runner/b.rs' },
+  ]);
+});
+
+test('a long hit is truncated, so one string cannot flood the log', () => {
+  const [hit] = homePathHits(bytes(`/home/runner/${'a'.repeat(500)}`));
+  assert.equal(hit.path.length, HIT_PATH_MAX + 3);
+  assert.ok(hit.path.endsWith('...'));
 });
