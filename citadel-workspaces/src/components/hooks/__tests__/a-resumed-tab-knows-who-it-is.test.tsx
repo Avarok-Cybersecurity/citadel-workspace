@@ -68,7 +68,7 @@ async function emit(event: string, payload: unknown): Promise<void> {
 const workspaceLoaded: () => Promise<void> = (): Promise<void> => emit('workspace:loaded', { workspace: { id: 'w', name: 'Admin Lab', metadata: [] }, connection: {} });
 const membersLoaded: () => Promise<void> = (): Promise<void> => emit('members:loaded', {
   domainId: WORKSPACE_ROOT_ID, connection: {},
-  members: [mapWasmMember({ id: 'max.lab', name: 'Max Member', role: 'Admin', metadata: HIDDEN })],
+  members: [mapWasmMember({ id: 'max.lab', name: 'Max Member', banned: false, workspace_roles: { [WORKSPACE_ROOT_ID]: 'admin' }, metadata: HIDDEN })],
 });
 
 describe('the tab user', () => {
@@ -90,6 +90,6 @@ describe('the tab user', () => {
     await workspaceLoaded();
     await membersLoaded();
     expect(h.state().currentUser?.showProfileToStrangers).toBe(false);
-    expect(h.state().currentUser?.role).toBe('Admin');
+    expect(h.state().currentUser?.roleId).toBe('admin');
   });
 });

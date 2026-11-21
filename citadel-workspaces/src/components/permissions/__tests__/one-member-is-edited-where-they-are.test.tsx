@@ -52,7 +52,7 @@ const STATE: WorkspaceState = {
 } as WorkspaceState;
 
 function answer(domainId: string, permissions: string[]): void {
-  act(() => { eventEmitter.emit('user:permissions:loaded', { userId: 'ada', domainId, role: 'Member', permissions }); });
+  act(() => { eventEmitter.emit('user:permissions:loaded', { userId: 'ada', domainId, roleId: 'member', permissions }); });
 }
 
 function answerEveryLevel(): void {

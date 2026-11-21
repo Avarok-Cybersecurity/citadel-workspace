@@ -7,7 +7,7 @@
 
 // Types & constants
 export { ALL_PERMISSIONS, PERMISSION_LABELS, PERMISSION_CATEGORIES } from './types';
-export type { Permission, UserRole, DomainPermissionEntry } from './types';
+export type { Permission, DomainPermissionEntry } from './types';
 
 // Service class
 export { PermissionsService } from './service';

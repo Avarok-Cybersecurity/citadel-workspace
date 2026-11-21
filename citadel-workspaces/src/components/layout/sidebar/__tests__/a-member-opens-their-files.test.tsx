@@ -17,7 +17,7 @@ import type { WorkspaceMember } from '@/types/workspace-entities';
 afterEach(cleanup);
 
 const member = (username: string): WorkspaceMember =>
-  ({ id: username, username, displayName: username, isOnline: null, role: 'member' }) as WorkspaceMember;
+  ({ id: username, username, displayName: username, isOnline: null, banned: false, roleId: 'member' }) as WorkspaceMember;
 
 function list(opened: string[]): void {
   const openFilesOf = (m: WorkspaceMember): (() => void) | null =>

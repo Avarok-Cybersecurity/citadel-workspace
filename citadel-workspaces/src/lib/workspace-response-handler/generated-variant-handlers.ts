@@ -109,20 +109,25 @@ export function handleGeneratedVariants(
   }
 
   if (isVariant(response, 'UserPermissions')) {
-    const { user_id, role, role_id, permissions, domain_id } = response.UserPermissions;
+    const { user_id, role_id, permissions, domain_id } = response.UserPermissions;
     debugLog('WorkspaceResponseHandler', 'UserPermissions received', { user_id, role_id, domain_id });
     // `?? null`: an absent Option arrives from WASM as undefined, not null.
     eventEmitter.emit('user:permissions:loaded', {
-      userId: user_id, role, roleId: role_id ?? null, permissions, domainId: domain_id, connection: connectionInfo,
+      userId: user_id, roleId: role_id ?? null, permissions, domainId: domain_id, connection: connectionInfo,
     });
     return true;
   }
 
-  if (isVariant(response, 'MemberRoleUpdated')) {
-    const { user_id, new_role, role_id } = response.MemberRoleUpdated;
-    debugLog('WorkspaceResponseHandler', 'MemberRoleUpdated received', { user_id, role_id });
+  // A ban or an unban moves the member's role as a role change does: a banned member holds none.
+  const roleChange: { user_id: string; role_id: string | null } | null = isVariant(response, 'MemberRoleUpdated')
+    ? response.MemberRoleUpdated
+    : isVariant(response, 'MemberBanned') ? { user_id: response.MemberBanned.user_id, role_id: null }
+      : isVariant(response, 'MemberUnbanned') ? response.MemberUnbanned : null;
+  if (roleChange !== null) {
+    const { user_id, role_id } = roleChange;
+    debugLog('WorkspaceResponseHandler', 'Member role or ban changed', { user_id, role_id });
     eventEmitter.emit('member:role-updated', {
-      userId: user_id, role: new_role, roleId: role_id ?? null, connection: connectionInfo,
+      userId: user_id, roleId: role_id ?? null, connection: connectionInfo,
     });
     // Also raw, so a caller awaiting confirmation can see it.
     //

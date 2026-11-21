@@ -61,7 +61,7 @@ function listMembers(members: Array<{ id: string; shows?: boolean }>): void {
     Members: {
       domain_id: null,
       members: members.map(({ id, shows }) => ({
-        id, name: id, role: 'Member', permissions: {},
+        id, name: id, banned: false, permissions: {},
         metadata: shows === undefined ? {} : { shows_online_status: { type: 'Boolean', content: shows } },
       })),
     },

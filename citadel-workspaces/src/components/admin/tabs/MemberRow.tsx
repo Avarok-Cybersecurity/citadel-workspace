@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/select';
 import { Loader2, UserMinus, Shield } from 'lucide-react';
 import type { MemberData } from '../types';
+import { MemberRoleBadge } from '@/components/shared/MemberRoleBadge';
+import { BanToggle } from './BanToggle';
 
 /** What may be done to this member, decided by the tab from the role ladder. */
 export interface MemberRowRules {
@@ -36,6 +38,8 @@ export interface MemberRowRules {
   isOnlyManager: boolean;
   /** Why you cannot act on this member at all (their role is not below yours), or null. */
   actOnBlocked: string | null;
+  /** Why you cannot ban or unban this member, or null. */
+  banBlocked: string | null;
 }
 
 interface MemberRowProps {
@@ -46,6 +50,8 @@ interface MemberRowProps {
   onRoleChange: (userId: string, newRole: RoleDefinition) => void;
   onAdvancedPermissions: (member: MemberData) => void;
   onRemove: (member: MemberData) => void;
+  /** Offered on the workspace's own roster only: a ban is workspace-wide. */
+  onSetBanned?: (member: MemberData, banned: boolean) => void;
 }
 
 export const LAST_MANAGER_REASON: string = 'This is the only member who can manage roles. Give that to someone else first.';
@@ -58,6 +64,7 @@ export function MemberRow({
   onRoleChange,
   onAdvancedPermissions,
   onRemove,
+  onSetBanned,
 }: MemberRowProps): JSX.Element {
   // Someone who reaches this node through a level above cannot be removed from it
   // here: the server refuses, since it would not take their access away.
@@ -110,7 +117,9 @@ export function MemberRow({
       </div>
 
       <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-        {showAdvanced ? (
+        {member.banned ? (
+          <MemberRoleBadge holder={{ banned: true }} data-testid={`member-banned-${member.userId}`} />
+        ) : showAdvanced ? (
           <Button
             variant="outline"
             size="sm"
@@ -161,6 +170,10 @@ export function MemberRow({
             </SelectContent>
           </Select>
           </BlockedReason>
+        )}
+
+        {onSetBanned !== undefined && (
+          <BanToggle member={member} blocked={rules.banBlocked} onSetBanned={onSetBanned} />
         )}
 
         <BlockedReason reason={removeBlocked}>

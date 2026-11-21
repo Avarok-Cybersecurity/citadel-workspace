@@ -5,7 +5,7 @@
  * and permission management.
  */
 
-import type { MemberRole, Permission, UpdateOperation, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
+import type { Permission, UpdateOperation, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { workspaceResponseHandler } from '@/lib/workspace-response-handler';
 import type { ProtocolSender } from './workspace-operations';
 import { aboutMember } from './response-matchers';
@@ -38,7 +38,8 @@ async function afterMemberWrite<T>(write: Promise<T>): Promise<T> {
 export async function addMember(
   sender: ProtocolSender,
   userId: string,
-  role: MemberRole,
+  /** The id of a role in the workspace's table. */
+  role: string,
   domainId?: string,
   metadata?: Uint8Array
 ): Promise<void> {
@@ -74,7 +75,8 @@ export async function getMember(sender: ProtocolSender, userId: string): Promise
 export async function updateMemberRole(
   sender: ProtocolSender,
   userId: string,
-  role: MemberRole,
+  /** The id of a role in the workspace's table. */
+  role: string,
   /**
    * Accepted, transmitted, and DISCARDED by the server.
    *
@@ -130,6 +132,17 @@ export async function updateMemberPermissions(
   // which cannot reject a send-only promise — so this used to report success
   // for writes the server was about to refuse.
   return awaitWriteResponse('UpdateMemberPermissions', () => sender.sendProtocolRequest(requestPart));
+}
+
+/**
+ * Ban a member from the workspace, or lift their ban. Both are announced to the
+ * workspace, so the answer is matched to the member it names.
+ */
+export async function setBanned(sender: ProtocolSender, userId: string, banned: boolean): Promise<unknown> {
+  const requestPart: WorkspaceProtocolRequest = banned ? { Ban: { user_id: userId } } : { Unban: { user_id: userId } };
+  return afterMemberWrite(
+    awaitWriteResponse(banned ? 'Ban' : 'Unban', () => sender.sendProtocolRequest(requestPart), aboutMember(userId)),
+  );
 }
 
 /**

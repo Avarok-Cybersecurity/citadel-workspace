@@ -7,7 +7,7 @@
 
 import { debugLog } from '@/lib/debug-config';
 import { ALL_PERMISSIONS, PERMISSION_LABELS, type Permission } from './types';
-import type { UserRole, DomainPermissionEntry } from './types';
+import type { DomainPermissionEntry } from './types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
 /**
@@ -38,14 +38,12 @@ export function parsePermissionSet(permissions: string[]): Set<Permission> {
 export function updateCacheEntry(
   cache: Map<string, DomainPermissionEntry>,
   domainId: string,
-  role: UserRole,
   permissions: string[],
 ): void {
   const permSet: Set<Permission> = parsePermissionSet(permissions);
 
   cache.set(domainId, {
     domainId,
-    role,
     permissions: permSet,
     lastUpdated: Date.now(),
   });

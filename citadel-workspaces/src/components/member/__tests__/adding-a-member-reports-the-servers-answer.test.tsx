@@ -56,7 +56,7 @@ vi.mock('@/lib/workspace-service', async () => {
           eventEmitter.emit('members:loaded', { members: roster.current, domainId });
         });
       },
-      addMember: (userId: string, role: import('citadel-workspace-client-ts').MemberRole, domainId?: string): Promise<void> =>
+      addMember: (userId: string, role: string, domainId?: string): Promise<void> =>
         members.addMember(sender, userId, role, domainId),
     },
   };

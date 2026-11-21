@@ -66,7 +66,7 @@ export const UserDirectory: () => JSX.Element = (): JSX.Element => {
     displayName: member.displayName,
     avatarUrl: member.avatarUrl,
     email: member.email,
-    role: member.role,
+    banned: member.banned,
     roleId: member.roleId,
     // Presence from the one reader of it (lib/presence.ts), which knows every
     // workspace peer the agent lists. This read the REGISTERED peers only, so

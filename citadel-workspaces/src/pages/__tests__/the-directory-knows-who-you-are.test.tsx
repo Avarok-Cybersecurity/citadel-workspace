@@ -14,8 +14,8 @@ import type { UserData } from '@/components/user/user-search-types';
 
 afterEach(cleanup);
 
-const me: MemberDisplay = { id: 'hana', displayName: 'Hana High', isOnline: true, isSelf: true, isContact: false };
-const other: MemberDisplay = { id: 'nia', displayName: 'Nia Newcomer', isOnline: true, isSelf: false, isContact: false };
+const me: MemberDisplay = { id: 'hana', displayName: 'Hana High', banned: false, isOnline: true, isSelf: true, isContact: false };
+const other: MemberDisplay = { id: 'nia', displayName: 'Nia Newcomer', banned: false, isOnline: true, isSelf: false, isContact: false };
 
 function row(member: MemberDisplay): void {
   render(<MemberListItem member={member} variant="all" onSendMessage={vi.fn()} onInvite={vi.fn()} onSelect={vi.fn()} />);
@@ -38,7 +38,7 @@ describe('your own directory row', () => {
 });
 
 describe('your own profile card', () => {
-  const user: UserData = { id: 'hana', displayName: 'Hana High', isOnline: true };
+  const user: UserData = { id: 'hana', displayName: 'Hana High', banned: false, isOnline: true };
 
   it('does not ask you to connect to yourself', () => {
     render(<UserProfileCard selectedUser={user} isSelf isConnected={false} onClose={vi.fn()} onSendMessage={vi.fn()} onInvite={vi.fn()} />);

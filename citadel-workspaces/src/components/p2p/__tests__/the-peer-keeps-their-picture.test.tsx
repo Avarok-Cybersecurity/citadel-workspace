@@ -25,7 +25,7 @@ import { ConversationPeerItem } from '../ConversationPeerItem';
 import { TextBubble } from '../bubbles/TextBubble';
 
 const PICTURE: string = 'data:image/webp;base64,ADA';
-const ADA: WorkspaceMember = { id: 'ada', username: 'ada', displayName: 'Ada Lovelace', role: 'member', isOnline: true, avatarUrl: PICTURE } as WorkspaceMember;
+const ADA: WorkspaceMember = { id: 'ada', username: 'ada', displayName: 'Ada Lovelace', banned: false, roleId: 'member', isOnline: true, avatarUrl: PICTURE } as WorkspaceMember;
 const ONLINE: PeerPresence = { status: MessagingLayerType.Online, lastUpdate: 0 };
 
 function inWorkspace(children: ReactElement, member: WorkspaceMember = ADA): ReactElement {

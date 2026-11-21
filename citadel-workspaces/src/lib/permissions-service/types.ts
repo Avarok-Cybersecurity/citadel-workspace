@@ -9,17 +9,11 @@
 import type { Permission } from 'citadel-workspace-client-ts';
 export type { Permission };
 
-/** The legacy role enum, as generated. Only `Banned` still means anything; a role is a table id. */
-export type { UserRole } from 'citadel-workspace-client-ts';
-import type { UserRole } from 'citadel-workspace-client-ts';
-
 /**
  * Permission set for a specific domain
  */
 export interface DomainPermissionEntry {
   domainId: string;
-  /** The legacy mirror. Never read for authority; the role is `currentUser.roleId`. */
-  role: UserRole;
   permissions: Set<Permission>;
   lastUpdated: number;
 }

@@ -16,6 +16,7 @@ import { MemberListItem, type MemberDisplay } from '../MemberListItem';
 const member: MemberDisplay = {
   id: 'member-1',
   displayName: 'Ada Lovelace',
+  banned: false,
   isOnline: true,
   isSelf: false,
   isContact: false,

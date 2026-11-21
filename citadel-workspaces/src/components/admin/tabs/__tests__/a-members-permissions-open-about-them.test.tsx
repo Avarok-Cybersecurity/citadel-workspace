@@ -40,7 +40,7 @@ describe('Permissions on one member in the admin panel', () => {
   it('opens the editor about that member, at the level the tab is for -- not the role matrix', async () => {
     render(<PermissionsProvider><WorkspaceProvider state={STATE}><MembersTab entityType="office" entityId="hq" onClose={() => {}} /></WorkspaceProvider></PermissionsProvider>);
     act(() => {
-      eventEmitter.emit('members:loaded', { domainId: 'hq', members: [{ id: 'ada', username: 'ada', displayName: 'Ada Lovelace', role: 'Member' }] });
+      eventEmitter.emit('members:loaded', { domainId: 'hq', members: [{ id: 'ada', username: 'ada', displayName: 'Ada Lovelace', banned: false }] });
     });
     await userEvent.click(await screen.findByTestId('members-advanced-toggle'));
     await userEvent.click(screen.getByTestId('member-permissions-ada'));

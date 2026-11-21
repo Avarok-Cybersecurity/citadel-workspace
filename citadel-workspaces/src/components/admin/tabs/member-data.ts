@@ -3,5 +3,5 @@ import type { PermissionSubject } from '@/components/permissions/MemberPermissio
 import type { MemberData } from '../types';
 
 export function asPermissionSubject(member: MemberData): PermissionSubject {
-  return { id: member.userId, username: member.username, displayName: member.name || member.username, role: member.role, roleId: member.roleId };
+  return { id: member.userId, username: member.username, displayName: member.name || member.username, banned: member.banned, roleId: member.roleId };
 }

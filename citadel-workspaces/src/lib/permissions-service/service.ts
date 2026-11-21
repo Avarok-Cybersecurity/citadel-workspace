@@ -12,7 +12,7 @@ import { debugLog } from '@/lib/debug-config';
 import { INTERVAL } from '@/lib/timeout-constants';
 
 import { Permission, PERMISSION_LABELS } from './types';
-import type { UserRole, DomainPermissionEntry } from './types';
+import type { DomainPermissionEntry } from './types';
 import {
   updateCacheEntry,
   hasPermission as cacheHasPermission,
@@ -55,7 +55,6 @@ export class PermissionsService extends EventListenerManager {
   protected setupEventListeners(): void {
     this.listen<{
       userId: string;
-      role: UserRole;
       permissions: string[];
       domainId: string;
     }>('user:permissions:loaded', (payload) => {
@@ -68,7 +67,7 @@ export class PermissionsService extends EventListenerManager {
       // user who logged IN rather than registering, which made this equality
       // check fail for every response and left the cache permanently empty.
       if (payload.userId === this.getCurrentUserId()) {
-        updateCacheEntry(this.cache, payload.domainId, payload.role, payload.permissions);
+        updateCacheEntry(this.cache, payload.domainId, payload.permissions);
         // Emitted on BOTH paths. It used to be async-only, on the reasoning
         // that the synchronous path had already filled the cache "before any
         // listener could observe it missing" -- true of listeners that run
@@ -82,7 +81,7 @@ export class PermissionsService extends EventListenerManager {
 
       void this.isCurrentUser(payload.userId).then((mine) => {
         if (mine) {
-          updateCacheEntry(this.cache, payload.domainId, payload.role, payload.permissions);
+          updateCacheEntry(this.cache, payload.domainId, payload.permissions);
           this.emit('permissions:updated', { domainId: payload.domainId });
         }
       });
@@ -109,11 +108,11 @@ export class PermissionsService extends EventListenerManager {
     // to: it read as THE permissions-refresh path, so the obvious repair was to
     // start emitting it, which would have refreshed twice for one change.
     // Deleted, and the reason recorded here where the surviving path is.
-    this.listen<{ userId: string; role: UserRole }>('member:role-updated', (payload) => {
+    this.listen<{ userId: string; roleId: string | null }>('member:role-updated', (payload) => {
       void this.isCurrentUser(payload.userId).then((mine) => {
         if (mine) {
           this.clearCache();
-          this.emit('permissions:role-changed', { role: payload.role });
+          this.emit('permissions:role-changed', { roleId: payload.roleId });
         }
       });
     });

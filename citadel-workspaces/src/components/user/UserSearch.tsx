@@ -104,7 +104,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
         const matches: (haystack: string) => boolean = searchMatcher(searchTerm);
         const excluded: Set<string> = new Set(exclude);
 
-        const filteredMembers: { id: string; displayName: string; avatarUrl: string | undefined; email: string | undefined; role: string | undefined; roleId: string | undefined; isOnline: boolean | null; lastActive: undefined; }[] = members
+        const filteredMembers: { id: string; displayName: string; avatarUrl: string | undefined; email: string | undefined; banned: boolean; roleId: string | undefined; isOnline: boolean | null; lastActive: undefined; }[] = members
           .filter(member =>
             !excluded.has(member.id) &&
             (matches(member.displayName) || (member.email ? matches(member.email) : false))
@@ -114,7 +114,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
             displayName: member.displayName,
             avatarUrl: member.avatarUrl,
             email: member.email,
-            role: member.role,
+            banned: member.banned,
             roleId: member.roleId,
             // Real presence, from the polled peer registry -- the same set the
             // sidebar's peer list uses. This was `Math.random() > 0.5`, then
@@ -171,7 +171,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
         displayName: member.displayName,
         avatarUrl: member.avatarUrl,
         email: member.email,
-        role: member.role,
+        banned: member.banned,
         isOnline: isMemberOnline(member.id),
         lastActive: undefined,
       }));

@@ -18,7 +18,7 @@ export interface WorkspaceState {
     id: string;
     username: string;
     name: string;
-    /** The legacy role mirror; only `Banned` means anything. Authority is `roleId`. */
+    /** Your role's name as remembered with the session, shown only until the table has `roleId`. */
     role?: string;
     /** Your role in the workspace's role table (`workspace_roles[root]`); undefined until known. */
     roleId?: string;

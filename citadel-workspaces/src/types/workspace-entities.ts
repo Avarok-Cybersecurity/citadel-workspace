@@ -26,8 +26,8 @@ export interface WorkspaceMember extends Entity {
   showProfileToStrangers?: boolean;
   /** True, false, or null when nobody has said. See lib/presence.ts. */
   isOnline: boolean | null;
-  /** The legacy role mirror, as the wire sends it ('Admin', 'Banned'...). Display only, as a fallback. */
-  role?: string;
+  /** Banned from the workspace; they hold no role while banned. */
+  banned: boolean;
   /** Their role in the workspace's role table; see lib/workspace-roles. */
   roleId?: string;
   permissions?: UserPermissions;

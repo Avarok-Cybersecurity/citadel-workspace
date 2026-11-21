@@ -105,8 +105,8 @@ export interface WorkspaceEventMap {
   /** An admin has hidden `domainId`'s roster from this user: not an empty list. */
   'members:hidden': { domainId: string; connection: ConnectionInfo };
   'members:reload': ConnectionInfo;
-  'member:role-updated': { userId: string; role: string; roleId: string | null; connection: ConnectionInfo };
-  'user:permissions:loaded': { userId: string; role: string; roleId: string | null; permissions: unknown[]; domainId: string; connection: ConnectionInfo };
+  'member:role-updated': { userId: string; roleId: string | null; connection: ConnectionInfo };
+  'user:permissions:loaded': { userId: string; roleId: string | null; permissions: unknown[]; domainId: string; connection: ConnectionInfo };
   // Message events
   'message:received': MessagePayload;
   'typing:started': TypingPayload;

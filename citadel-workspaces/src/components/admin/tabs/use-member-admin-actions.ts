@@ -8,7 +8,7 @@ import type { RoleDefinition } from 'citadel-workspace-client-ts';
 import type { MemberData } from '../types';
 
 /**
- * The two writes the admin members tab performs.
+ * The writes the admin members tab performs.
  *
  * Extracted to keep the tab under the file cap, and because both had the same
  * defect worth fixing in one place: the catch reported "Failed to update member
@@ -22,7 +22,12 @@ import type { MemberData } from '../types';
 export function useMemberAdminActions(
   entityId: string,
   setMembers: React.Dispatch<React.SetStateAction<MemberData[]>>,
-): { updatingRoles: Set<string>; changeRole: (userId: string, newRole: RoleDefinition) => Promise<void>; removeMember: (member: MemberData) => Promise<void>; } {
+): {
+  updatingRoles: Set<string>;
+  changeRole: (userId: string, newRole: RoleDefinition) => Promise<void>;
+  removeMember: (member: MemberData) => Promise<void>;
+  setBanned: (member: MemberData, banned: boolean) => Promise<void>;
+} {
   const [updatingRoles, setUpdatingRoles] = useState<Set<string>>(new Set());
 
   const reason = (error: unknown, fallback: string): string =>
@@ -82,5 +87,26 @@ export function useMemberAdminActions(
     [entityId, setMembers],
   );
 
-  return { updatingRoles, changeRole, removeMember };
+  // The roster reloads once the server confirms (member-operations), which brings the role an
+  // unban gave back; until then the row shows the standing the server just accepted.
+  const setBanned: (member: MemberData, banned: boolean) => Promise<void> = useCallback(
+    async (member: MemberData, banned: boolean) => {
+      const who: string = member.name || member.username;
+      try {
+        await WorkspaceService.setBanned(member.userId, banned);
+        setMembers((prev) => prev.map((m) => (m.userId === member.userId ? { ...m, banned, roleId: undefined } : m)));
+        toast({ title: banned ? 'Member Banned' : 'Ban Lifted', description: banned ? `${who} is banned from the workspace` : `${who} may use the workspace again`, variant: 'success' });
+      } catch (error) {
+        debugLog('MembersTab', 'Failed to change ban:', error);
+        toast({
+          title: banned ? 'Could not ban that member' : 'Could not lift that ban',
+          description: reason(error, 'The server did not accept the change.'),
+          variant: 'destructive',
+        });
+      }
+    },
+    [setMembers],
+  );
+
+  return { updatingRoles, changeRole, removeMember, setBanned };
 }

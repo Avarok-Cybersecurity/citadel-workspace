@@ -35,8 +35,8 @@ export interface MemberData {
   username: string;
   name?: string;
   avatarUrl?: string;
-  /** The legacy mirror, shown only when `roleId` is unknown. */
-  role?: string;
+  /** Banned from the workspace: listed, holding no role, until unbanned. */
+  banned: boolean;
   /** Their role in the workspace's role table. */
   roleId?: string;
   /** The level above that gives them access here, by name; undefined when listed on this node. */

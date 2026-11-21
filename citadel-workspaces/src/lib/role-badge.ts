@@ -22,6 +22,8 @@ const ROLE_BADGE: Record<string, string> = {
   admin: 'bg-transparent text-primary-accent border border-primary-accent/60',
   member: 'bg-transparent text-muted-foreground border border-border',
   guest: 'bg-transparent text-muted-foreground border border-transparent',
+  // A ban, which is not a role: the destructive tint the contrast gate checks.
+  banned: 'bg-destructive/20 text-destructive-emphasis border border-destructive/50',
 };
 
 const FALLBACK: "bg-transparent text-muted-foreground border border-border" = 'bg-transparent text-muted-foreground border border-border';

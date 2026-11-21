@@ -13,7 +13,7 @@ import type { DomainPermissionEntry } from '../types';
 
 const DOMAIN: string = 'workspace-root';
 const entry = (lastUpdated: number): DomainPermissionEntry =>
-  ({ domainId: DOMAIN, role: 'Member', permissions: new Set(), lastUpdated } as unknown as DomainPermissionEntry);
+  ({ domainId: DOMAIN, permissions: new Set(), lastUpdated } as unknown as DomainPermissionEntry);
 
 describe('waiting for a permissions load', () => {
   afterEach(() => { vi.useRealTimers(); });
