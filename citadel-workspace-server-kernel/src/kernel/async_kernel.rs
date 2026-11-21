@@ -118,8 +118,8 @@ pub enum BroadcastAudience {
     ///
     /// Where one server holds several workspaces, renaming one pushed its
     /// record to every session on the box, including users whose `GetWorkspace`
-    /// for it is refused and whose `ListWorkspaces` omits it. A member set to
-    /// `Banned` keeps receiving it too, because nothing closes their socket.
+    /// for it is refused and whose `ListWorkspaces` omits it. A banned member
+    /// keeps receiving it too, because nothing closes their socket.
     ///
     /// The pull path checks membership AND `ViewContent`
     /// (`async_domain_server_ops.rs`); this makes the push path check the same.
@@ -1888,18 +1888,16 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         // undone by the person it was applied to, with nothing
                         // logged.
                         //
-                        // `remove_user_from_domain` now leaves the account at
-                        // `UserRole::Banned`, which grants no permissions and
-                        // ranks 0. Re-admission is `AddMember`, which writes an
-                        // explicit role and so clears it -- an administrator's
-                        // decision either way.
-                        if crate::connect_enrolment(existing.as_ref().map(|u| u.role.clone()))
+                        // `remove_user_from_domain` now bans the account, as
+                        // `Ban` does. Re-admission is `Unban` -- an
+                        // administrator's decision either way.
+                        if crate::connect_enrolment(existing.as_ref())
                             == crate::ConnectEnrolment::RefuseRemoved
                         {
                             info!(
                                 target: "citadel",
-                                "[ASYNC_KERNEL] {} was removed from the workspace; not \
-                                 re-enrolling on connect. An administrator must add them back.",
+                                "[ASYNC_KERNEL] {} is banned from the workspace; not \
+                                 re-enrolling on connect. An administrator must unban them.",
                                 user_id
                             );
                             return Ok(());
@@ -2024,9 +2022,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             if let Some(mut user) = this.get_user(&user_id).await? {
                                 crate::handlers::domain::server_ops::role_writes::assign_workspace_role(
                                     &mut user,
-                                    &crate::handlers::domain::server_ops::role_authority::Assignment::Role(
-                                        citadel_workspace_types::roles::owner_role(),
-                                    ),
+                                    &citadel_workspace_types::roles::owner_role(),
                                 );
                                 this.domain_operations
                                     .backend_tx_manager

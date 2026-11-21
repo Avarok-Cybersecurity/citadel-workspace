@@ -1,12 +1,11 @@
 //! A room with a chat channel and named people in it, written straight to the backend so each
 //! test states the shape it depends on.
 
+use crate::roles_fixture::{roles_for, BANNED};
 use citadel_sdk::prelude::MonoRatchet;
 use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user_and_cid;
-use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, User, UserRole,
-};
+use citadel_workspace_types::structs::{DomainNode, DomainPermissions, NodeEntityType, User};
 use citadel_workspace_types::{
     GroupMessageType, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
@@ -17,12 +16,12 @@ pub type Kernel = AsyncWorkspaceServerKernel<MonoRatchet>;
 pub const CHANNEL: &str = "chat-channel-under-test";
 pub const ROOM_ID: &str = "room-under-test";
 
-pub async fn add_user_with_role(kernel: &Kernel, id: &str, role: UserRole) {
+pub async fn add_user_with_role(kernel: &Kernel, id: &str, role: &str) {
     let user = User {
         id: id.to_string(),
         name: id.to_string(),
-        role,
-        workspace_roles: Default::default(),
+        banned: role == BANNED,
+        workspace_roles: roles_for(role),
         permissions: HashMap::new(),
         metadata: Default::default(),
     };

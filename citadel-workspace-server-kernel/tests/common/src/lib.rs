@@ -1,4 +1,5 @@
 pub mod async_test_helpers;
+pub mod bans_test_utils;
 pub mod booking_guest_test_utils;
 pub mod chat_attachment_test_utils;
 pub mod chat_document_test_utils;
@@ -12,6 +13,7 @@ pub mod permission_test_utils;
 pub mod permissions_test_utils;
 pub mod production_client;
 pub mod production_server;
+pub mod roles_fixture;
 pub mod secure_links_test_utils;
 pub mod sign_in_client;
 pub mod telemetry_test_utils;

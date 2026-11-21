@@ -14,9 +14,9 @@ use citadel_sdk::prelude::MonoRatchet;
 use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use citadel_workspace_types::roles::GUEST_ROLE_ID;
-use citadel_workspace_types::roles_protocol::MemberRole;
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::structs::User;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{roles_for, ADMIN_ROLE_ID, BANNED, MEMBER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::collections::HashMap;
 
@@ -28,7 +28,7 @@ const MEMBER: &str = "member_being_demoted";
 
 type Kernel = AsyncWorkspaceServerKernel<MonoRatchet>;
 
-async fn add_member(kernel: &Kernel, role: UserRole) {
+async fn add_member(kernel: &Kernel, role: &str) {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -37,8 +37,8 @@ async fn add_member(kernel: &Kernel, role: UserRole) {
             User {
                 id: MEMBER.to_string(),
                 name: MEMBER.to_string(),
-                role,
-                workspace_roles: Default::default(),
+                banned: role == BANNED,
+                workspace_roles: roles_for(role),
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },
@@ -52,14 +52,14 @@ async fn a_role_change_is_broadcast_to_every_client() {
     let kernel = create_test_kernel().await;
     // A member's role changed by the Admin above them. Not a promotion to
     // Admin: nobody assigns their own position, so an Admin cannot.
-    add_member(&kernel, UserRole::Member).await;
+    add_member(&kernel, MEMBER_ROLE_ID).await;
     let mut rx = kernel.subscribe_broadcast();
 
     let response = process_command_with_user(
         &kernel,
         &WorkspaceProtocolRequest::UpdateMemberRole {
             user_id: MEMBER.to_string(),
-            role: MemberRole::Id(GUEST_ROLE_ID.to_string()),
+            role: GUEST_ROLE_ID.to_string(),
             metadata: None,
         },
         TEST_ADMIN_USER_ID,
@@ -79,21 +79,12 @@ async fn a_role_change_is_broadcast_to_every_client() {
         .try_recv()
         .expect("the demoted member's client must be told");
     match broadcast.response {
-        WorkspaceProtocolResponse::MemberRoleUpdated {
-            user_id,
-            new_role,
-            role_id,
-        } => {
+        WorkspaceProtocolResponse::MemberRoleUpdated { user_id, role_id } => {
             assert_eq!(user_id, MEMBER);
             assert_eq!(
                 role_id.as_deref(),
                 Some(GUEST_ROLE_ID),
                 "the table id it now holds"
-            );
-            assert_eq!(
-                new_role,
-                UserRole::Guest,
-                "and the enum an older client reads"
             );
         }
         other => panic!("expected MemberRoleUpdated, got {other:?}"),
@@ -106,14 +97,14 @@ async fn a_refused_role_change_is_not_broadcast() {
     // permission cache and make them re-fetch — harmless once, and a lie the
     // rest of the time.
     let kernel = create_test_kernel().await;
-    add_member(&kernel, UserRole::Member).await;
+    add_member(&kernel, MEMBER_ROLE_ID).await;
     let mut rx = kernel.subscribe_broadcast();
 
     let response = process_command_with_user(
         &kernel,
         &WorkspaceProtocolRequest::UpdateMemberRole {
             user_id: MEMBER.to_string(),
-            role: UserRole::Admin.into(),
+            role: ADMIN_ROLE_ID.to_string(),
             metadata: None,
         },
         // Not an admin, so the operation is refused.

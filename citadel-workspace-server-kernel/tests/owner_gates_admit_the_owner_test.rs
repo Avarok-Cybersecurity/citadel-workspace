@@ -17,8 +17,8 @@
 //! actually implemented, not a defence the escalation still depends on.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
-use citadel_workspace_types::structs::UserRole;
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::{BANNED, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 // ---------------------------------------------------------------------------
@@ -37,11 +37,11 @@ use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 // ---------------------------------------------------------------------------
 
 async fn try_set_role(kernel: &Kernel, actor: &str, target: &str) -> Result<(), String> {
-    insert_user_with_role(kernel, target, UserRole::Member).await;
+    insert_user_with_role(kernel, target, MEMBER_ROLE_ID).await;
     join_root(kernel, target).await;
     kernel
         .domain_operations
-        .update_workspace_member_role(actor, target, UserRole::Guest.into(), None)
+        .update_workspace_member_role(actor, target, GUEST_ROLE_ID.to_string(), None)
         .await
         .map_err(|e| e.to_string())
 }
@@ -49,7 +49,7 @@ async fn try_set_role(kernel: &Kernel, actor: &str, target: &str) -> Result<(), 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_owner_may_change_a_members_role() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     join_root(&kernel, "owner").await;
 
     assert!(
@@ -71,15 +71,15 @@ async fn an_admin_may_still_change_a_members_role() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ordinary_roles_still_may_not_change_roles() {
-    for role in [UserRole::Member, UserRole::Guest, UserRole::Banned] {
+    for role in [MEMBER_ROLE_ID, GUEST_ROLE_ID, BANNED] {
         let kernel = create_test_kernel().await;
-        let actor = format!("{role:?}-role-actor");
-        insert_user_with_role(&kernel, &actor, role.clone()).await;
+        let actor = format!("{role}-role-actor");
+        insert_user_with_role(&kernel, &actor, role).await;
         join_root(&kernel, &actor).await;
 
         assert!(
             try_set_role(&kernel, &actor, "target").await.is_err(),
-            "{role:?} must not be able to assign roles: it is a path to Admin",
+            "{role} must not be able to assign roles: it is a path to Admin",
         );
     }
 }
@@ -89,9 +89,9 @@ async fn an_owner_may_change_a_members_permissions() {
     use citadel_workspace_types::structs::Permission;
     use citadel_workspace_types::UpdateOperation;
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     join_root(&kernel, "owner").await;
-    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    insert_user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
     let outcome = kernel
@@ -137,7 +137,7 @@ async fn try_update_schema(kernel: &Kernel, actor: &str) -> Result<(), String> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_owner_may_update_the_tree_schema() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     join_root(&kernel, "owner").await;
 
     let outcome = try_update_schema(&kernel, "owner").await;
@@ -149,15 +149,15 @@ async fn an_owner_may_update_the_tree_schema() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ordinary_roles_still_may_not_update_the_tree_schema() {
-    for role in [UserRole::Member, UserRole::Guest, UserRole::Banned] {
+    for role in [MEMBER_ROLE_ID, GUEST_ROLE_ID, BANNED] {
         let kernel = create_test_kernel().await;
-        let actor = format!("{role:?}-schema-actor");
-        insert_user_with_role(&kernel, &actor, role.clone()).await;
+        let actor = format!("{role}-schema-actor");
+        insert_user_with_role(&kernel, &actor, role).await;
         join_root(&kernel, &actor).await;
 
         assert!(
             try_update_schema(&kernel, &actor).await.is_err(),
-            "{role:?} must not be able to rewrite the tree schema",
+            "{role} must not be able to rewrite the tree schema",
         );
     }
 }

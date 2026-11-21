@@ -12,11 +12,11 @@ use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_sdk::prefabs::client::single_connection::SingleClientServerConnectionKernel;
 use citadel_sdk::prefabs::client::ServerConnectionSettingsBuilder;
 use citadel_sdk::prelude::*;
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 use common::production_server::start_production_server_with;
+use common::roles_fixture::MEMBER_ROLE_ID;
 use futures::StreamExt;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -143,7 +143,7 @@ async fn only_a_registered_account_can_be_added() {
         let add = |user_id: &str| WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: None,
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         };
         let registered = ask(&mut tx, &mut rx, add(REGISTERED)).await?;

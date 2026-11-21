@@ -16,12 +16,10 @@
 //! finding — and it is why these tests read the mechanism (`ViewContent` on the
 //! root) rather than the endpoint.
 
-use citadel_workspace_server_kernel::handlers::domain::async_ops::{
-    AsyncUserManagementOperations, AsyncWorkspaceOperations,
-};
+use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncWorkspaceOperations;
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
-use citadel_workspace_types::structs::UserRole;
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::{GUEST_ROLE_ID, MEMBER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
@@ -62,7 +60,7 @@ async fn reads_allowed(kernel: &Kernel, user: &str) -> Vec<&'static str> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_banned_member_cannot_read_the_tree() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "outcast", UserRole::Member).await;
+    insert_user_with_role(&kernel, "outcast", MEMBER_ROLE_ID).await;
     join_root(&kernel, "outcast").await;
 
     // Without this the test below passes on a build where every read is broken.
@@ -74,9 +72,9 @@ async fn a_banned_member_cannot_read_the_tree() {
 
     kernel
         .domain_operations
-        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned.into(), None)
+        .ban_member(TEST_ADMIN_USER_ID, "outcast")
         .await
-        .expect("an admin may set a role to Banned");
+        .expect("an admin may ban a member");
 
     let still_open = reads_allowed(&kernel, "outcast").await;
     assert!(
@@ -91,7 +89,7 @@ async fn a_guest_still_reads_the_tree() {
     // everyone below Member would satisfy the ban case above on its own, and
     // would contradict what the permission editor shows a Guest holding.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "visitor", UserRole::Guest).await;
+    insert_user_with_role(&kernel, "visitor", GUEST_ROLE_ID).await;
     join_root(&kernel, "visitor").await;
 
     assert_eq!(
@@ -107,7 +105,7 @@ async fn a_non_member_is_still_refused_for_being_a_non_member() {
     // added — `check_entity_permission` honours a direct `permissions[root]`
     // grant before it consults membership, so ViewContent alone is not enough.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "stranger", UserRole::Member).await;
+    insert_user_with_role(&kernel, "stranger", MEMBER_ROLE_ID).await;
     // deliberately not joined to the root workspace
 
     let open = reads_allowed(&kernel, "stranger").await;

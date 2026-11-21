@@ -20,7 +20,6 @@ import type { TelemetryResponse } from "./TelemetryResponse";
 import type { TreeNode } from "./TreeNode";
 import type { TreeSchema } from "./TreeSchema";
 import type { User } from "./User";
-import type { UserRole } from "./UserRole";
 import type { Workspace } from "./Workspace";
 import type { WorkspaceMetadata } from "./WorkspaceMetadata";
 
@@ -39,22 +38,14 @@ inherited_from: { [key in string]?: string },
  */
 guests: Array<string>, } } | { "MembersHidden": { domain_id: string, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, 
 /**
- * The legacy enum, for clients that predate the role table.
- */
-role: UserRole, 
-/**
  * The role this user holds in the workspace, from its table; `None` when banned or
  * not a member.
  */
 role_id: string | null, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, 
 /**
- * The legacy enum, for clients that predate the role table.
- */
-new_role: UserRole, 
-/**
  * The role id the member now holds; `None` when banned.
  */
-role_id: string | null, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
+role_id: string | null, } } | { "MemberBanned": { user_id: string, } } | { "MemberUnbanned": { user_id: string, role_id: string, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
 /**
  * The content's SHA-256, so a watcher can verify what it just received.
  *

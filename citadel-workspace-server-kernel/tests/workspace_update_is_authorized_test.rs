@@ -16,8 +16,9 @@
 //! in its own comment. This was its unguarded twin.
 
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::structs::User;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{roles_for, Standing, MEMBER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_PASSWORD, TEST_ADMIN_USER_ID};
 use std::collections::HashMap;
 
@@ -36,8 +37,8 @@ async fn add_member(kernel: &Kernel, id: &str) {
             User {
                 id: id.to_string(),
                 name: id.to_string(),
-                role: UserRole::Member,
-                workspace_roles: Default::default(),
+                banned: false,
+                workspace_roles: roles_for(MEMBER_ROLE_ID),
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },
@@ -112,7 +113,7 @@ async fn seed_unowned_workspace(kernel: &Kernel, id: &str) -> String {
     id.to_string()
 }
 
-async fn role_of(kernel: &Kernel, id: &str) -> UserRole {
+async fn role_of(kernel: &Kernel, id: &str) -> String {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -120,7 +121,7 @@ async fn role_of(kernel: &Kernel, id: &str) -> UserRole {
         .await
         .expect("read user")
         .expect("user exists")
-        .role
+        .standing()
 }
 
 /// The consequence, not the message: a refusal that still promoted the caller
@@ -140,7 +141,7 @@ async fn the_master_password_does_not_make_an_outsider_an_admin() {
     );
     assert_eq!(
         role_of(&kernel, OUTSIDER).await,
-        UserRole::Member,
+        MEMBER_ROLE_ID,
         "presenting the shared master password must not promote anyone to Admin",
     );
 
@@ -198,7 +199,7 @@ async fn the_first_claim_of_an_unowned_workspace_still_works() {
     // workspace made the claimant an Admin of the root as well.
     assert_eq!(
         role_of(&kernel, OUTSIDER).await,
-        UserRole::Member,
+        MEMBER_ROLE_ID,
         "claiming one workspace changed the claimant's standing in the root",
     );
 }
@@ -222,7 +223,7 @@ async fn a_second_caller_cannot_reclaim_a_claimed_workspace() {
     );
     assert_eq!(
         role_of(&kernel, "latecomer").await,
-        UserRole::Member,
+        MEMBER_ROLE_ID,
         "a second claimant must not be promoted",
     );
 }

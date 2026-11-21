@@ -24,8 +24,9 @@
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, Permission, User, UserRole,
+    DomainNode, DomainPermissions, NodeEntityType, Permission, User,
 };
+use common::roles_fixture::{roles_for, MEMBER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -78,8 +79,8 @@ async fn grant_revocation_waits_for_the_user_record_lock() {
             User {
                 id: "victim".to_string(),
                 name: "Victim".to_string(),
-                role: UserRole::Member,
-                workspace_roles: Default::default(),
+                banned: false,
+                workspace_roles: roles_for(MEMBER_ROLE_ID),
                 permissions,
                 metadata: HashMap::new(),
             },

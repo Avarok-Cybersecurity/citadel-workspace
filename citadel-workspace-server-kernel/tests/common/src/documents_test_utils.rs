@@ -6,13 +6,14 @@
 
 pub use crate::crdt_test_utils::*;
 use crate::member_test_utils::{create_test_user, insert_user_with_role, join_root, GateKernel};
+use crate::roles_fixture::MEMBER_ROLE_ID;
 use crate::workspace_test_utils::{create_configured_test_kernel, TEST_ADMIN_USER_ID};
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
 use citadel_workspace_server_kernel::kernel::async_kernel::BroadcastMessage;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user_and_cid;
 use citadel_workspace_server_kernel::kernel::documents::{DocumentsConfig, DocumentsRelay};
 use citadel_workspace_types::documents::{DocumentsRequest, DocumentsResponse};
-use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use std::sync::Arc;
 use std::time::Duration;
@@ -68,13 +69,13 @@ pub async fn document_node(kernel: &GateKernel) -> String {
 
 /// A workspace member: the Member role reads every node and edits none.
 pub async fn reader(kernel: &GateKernel, id: &str) {
-    insert_user_with_role(kernel, id, UserRole::Member).await;
+    insert_user_with_role(kernel, id, MEMBER_ROLE_ID).await;
     join_root(kernel, id).await;
 }
 
 /// A member granted `EditMdx` on `node`, as an admin grants document editing.
 pub async fn writer(kernel: &GateKernel, id: &str, node: &str) {
-    let mut user = create_test_user(id, UserRole::Member);
+    let mut user = create_test_user(id, MEMBER_ROLE_ID);
     user.permissions.insert(
         node.to_string(),
         [Permission::EditMdx].into_iter().collect(),

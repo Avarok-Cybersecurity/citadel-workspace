@@ -3,8 +3,8 @@
 //! the pool, and an own link that ends frees one of its owner's, never the pool's.
 
 use citadel_workspace_types::secure_links::{SecureLinksRequest, SecureLinksResponse};
-use citadel_workspace_types::structs::UserRole;
 use common::member_test_utils::GateKernel;
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::secure_links_test_utils::{
     create, enrol, expires, links, links_kernel, members, one_time, opened, resolve, try_create,
     HOUR_MS,
@@ -31,7 +31,7 @@ async fn pool_used(kernel: &GateKernel, user: &str) -> u32 {
 async fn past_their_own_members_share_one_pool() {
     let kernel = links_kernel(2, 3).await;
     for id in ["alice", "bob", "carol"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
     }
     // Alice uses her own two, then two of the pool's three.
     for _ in 0..4 {
@@ -70,7 +70,7 @@ async fn past_their_own_members_share_one_pool() {
 async fn a_pool_link_deleted_spent_or_expired_frees_its_place() {
     let kernel = links_kernel(1, 1).await;
     for id in ["alice", "bob"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
     }
     create(
         &kernel,
@@ -129,7 +129,7 @@ async fn a_pool_link_deleted_spent_or_expired_frees_its_place() {
 async fn an_own_link_expiring_does_not_turn_a_pool_link_into_an_own_one() {
     let kernel = links_kernel(1, 1).await;
     for id in ["alice", "bob"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
     }
     create(&kernel, "alice", TARGET, members(&["bob"]), expires(300)).await;
     create(

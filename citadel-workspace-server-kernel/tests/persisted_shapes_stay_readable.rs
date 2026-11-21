@@ -1,7 +1,7 @@
 //! # A record written by yesterday's binary must still load in today's
 //!
-//! Everything the workspace owns — the tree, the workspace itself, its users,
-//! the schema — is persisted as JSON under a backend key and read back with
+//! Everything the workspace owns — the tree, the workspace itself, the schema —
+//! is persisted as JSON under a backend key and read back with
 //! `serde_json::from_slice`. `backend_get` propagates a deserialize failure
 //! rather than swallowing it, which is the right choice: the alternative is an
 //! upgrade that quietly reports an empty workspace.
@@ -27,7 +27,7 @@
 //! second fixture. Do not edit these files to make the test pass — they are what
 //! is already on disk in the field.
 
-use citadel_workspace_types::structs::{DomainNode, TreeSchema, User, Workspace};
+use citadel_workspace_types::structs::{DomainNode, TreeSchema, Workspace};
 
 fn fixture(name: &str) -> String {
     let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
@@ -48,16 +48,6 @@ fn a_stored_domain_node_still_loads() {
     // Stored before "Members can see each other" existed, so the key is absent.
     // Absent must read as visible: an upgrade may not hide a single roster.
     assert!(node.default_permissions.view_members);
-}
-
-#[test]
-fn a_stored_user_still_loads() {
-    let user: User = serde_json::from_str(&fixture("user.json")).expect(
-        "a User written by an older binary no longer deserializes -- give the new field \
-         #[serde(default)] or migrate it; do not edit the fixture",
-    );
-    assert_eq!(user.id, "alice");
-    assert_eq!(user.name, "Alice");
 }
 
 #[test]

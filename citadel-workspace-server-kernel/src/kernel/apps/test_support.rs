@@ -13,7 +13,7 @@ use citadel_workspace_types::apps_protocol::AppsRequest;
 use citadel_workspace_types::apps_responses::AppsResponse;
 use citadel_workspace_types::roles::{RoleDefinition, WorkspaceRoles};
 use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, Permission, User, UserRole,
+    DomainNode, DomainPermissions, NodeEntityType, Permission, User,
 };
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use std::collections::HashMap;
@@ -100,7 +100,7 @@ pub(crate) async fn workspace() -> Kernel {
         let mut user = User {
             workspace_roles: std::iter::once((WORKSPACE_ROOT_ID.to_string(), role.to_string()))
                 .collect(),
-            ..User::new(id.to_string(), id.to_string(), UserRole::Member)
+            ..User::new(id.to_string(), id.to_string())
         };
         if id == "carol" {
             user.permissions

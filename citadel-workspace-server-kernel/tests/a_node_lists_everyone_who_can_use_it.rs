@@ -12,9 +12,10 @@
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
-use citadel_workspace_types::structs::{NodeEntityType, UserRole};
+use citadel_workspace_types::structs::NodeEntityType;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::{BANNED, GUEST_ROLE_ID, MEMBER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::collections::HashMap;
 
@@ -36,7 +37,7 @@ async fn node(kernel: &Kernel, parent: &str, kind: &str, name: &str) -> String {
         .id
 }
 
-async fn member(kernel: &Kernel, id: &str, role: UserRole) {
+async fn member(kernel: &Kernel, id: &str, role: &str) {
     insert_user_with_role(kernel, id, role).await;
     join_root(kernel, id).await;
 }
@@ -67,8 +68,8 @@ async fn roster(
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_office_lists_the_workspace_members_who_can_use_it() {
     let kernel = create_test_kernel().await;
-    member(&kernel, "ann", UserRole::Member).await;
-    member(&kernel, "bea", UserRole::Member).await;
+    member(&kernel, "ann", MEMBER_ROLE_ID).await;
+    member(&kernel, "bea", MEMBER_ROLE_ID).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
     let (ids, via) = roster(&kernel, "ann", &office)
@@ -97,13 +98,18 @@ async fn an_office_lists_the_workspace_members_who_can_use_it() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_room_marks_each_person_with_the_nearest_level() {
     let kernel = create_test_kernel().await;
-    member(&kernel, "ann", UserRole::Member).await;
-    member(&kernel, "bea", UserRole::Member).await;
+    member(&kernel, "ann", MEMBER_ROLE_ID).await;
+    member(&kernel, "bea", MEMBER_ROLE_ID).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
     let room = node(&kernel, &office, "Room", "Standup").await;
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "bea", &office, UserRole::Member.into())
+        .add_user_to_domain(
+            TEST_ADMIN_USER_ID,
+            "bea",
+            &office,
+            MEMBER_ROLE_ID.to_string(),
+        )
         .await
         .expect("an admin may add bea to the office");
 
@@ -125,9 +131,9 @@ async fn a_room_marks_each_person_with_the_nearest_level() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_banned_account_is_not_on_any_roster() {
     let kernel = create_test_kernel().await;
-    member(&kernel, "ann", UserRole::Member).await;
+    member(&kernel, "ann", MEMBER_ROLE_ID).await;
     // A ban sets the role and leaves the account in the workspace's list.
-    member(&kernel, "exiled", UserRole::Banned).await;
+    member(&kernel, "exiled", BANNED).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
     let (ids, _) = roster(&kernel, "ann", &office)
@@ -151,7 +157,7 @@ async fn a_banned_account_is_not_on_any_roster() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn someone_outside_the_workspace_is_still_refused() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "stranger", UserRole::Member).await;
+    insert_user_with_role(&kernel, "stranger", MEMBER_ROLE_ID).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
     let refused = roster(&kernel, "stranger", &office).await;
@@ -164,8 +170,8 @@ async fn someone_outside_the_workspace_is_still_refused() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_guest_sees_the_roster_too() {
     let kernel = create_test_kernel().await;
-    member(&kernel, "gil", UserRole::Guest).await;
-    member(&kernel, "ann", UserRole::Member).await;
+    member(&kernel, "gil", GUEST_ROLE_ID).await;
+    member(&kernel, "ann", MEMBER_ROLE_ID).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
     let (ids, _) = roster(&kernel, "gil", &office)
@@ -177,7 +183,7 @@ async fn a_guest_sees_the_roster_too() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn removing_someone_who_only_inherits_access_says_so() {
     let kernel = create_test_kernel().await;
-    member(&kernel, "ann", UserRole::Member).await;
+    member(&kernel, "ann", MEMBER_ROLE_ID).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
     let inherited = kernel
@@ -192,7 +198,12 @@ async fn removing_someone_who_only_inherits_access_says_so() {
     // The control: someone listed on the office itself is removed as before.
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "ann", &office, UserRole::Member.into())
+        .add_user_to_domain(
+            TEST_ADMIN_USER_ID,
+            "ann",
+            &office,
+            MEMBER_ROLE_ID.to_string(),
+        )
         .await
         .expect("an admin may add ann to the office");
     kernel

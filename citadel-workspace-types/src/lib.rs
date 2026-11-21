@@ -45,9 +45,7 @@ pub mod messaging_trust;
 pub mod node_tabs;
 /// A workspace's role table and its built-ins.
 pub mod roles;
-/// Records written before the role table, read into it.
-pub mod roles_legacy;
-/// Reading and editing the role table, and naming a member's role on the wire.
+/// Reading and editing the role table.
 pub mod roles_protocol;
 /// A role table as it is stored, and reading one stored before it named new members' role.
 pub mod roles_stored;
@@ -80,8 +78,8 @@ use ice::IceServer;
 use serde::{Deserialize, Serialize};
 use sign_in::SignInSettings;
 use structs::{
-    CustomNodeType, DomainNode, NodeEntityType, Permission, TreeNode, TreeSchema, User, UserRole,
-    Workspace, WorkspaceMetadata,
+    CustomNodeType, DomainNode, NodeEntityType, Permission, TreeNode, TreeSchema, User, Workspace,
+    WorkspaceMetadata,
 };
 use ts_rs::TS;
 
@@ -176,7 +174,8 @@ pub enum WorkspaceProtocolRequest {
         user_id: String,
         /// Domain (node) to add the member to. None defaults to workspace root.
         domain_id: Option<String>,
-        role: roles_protocol::MemberRole,
+        /// The id of a role in the workspace's table.
+        role: String,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
@@ -185,7 +184,8 @@ pub enum WorkspaceProtocolRequest {
     },
     UpdateMemberRole {
         user_id: String,
-        role: roles_protocol::MemberRole,
+        /// The id of a role in the workspace's table.
+        role: String,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
@@ -199,6 +199,16 @@ pub enum WorkspaceProtocolRequest {
         user_id: String,
         /// Domain (node) to remove the member from. None defaults to workspace root.
         domain_id: Option<String>,
+    },
+    /// Ban an account: it loses its role in every workspace and is refused on join and on
+    /// admission until unbanned. Needs `RemoveUsers`, never applies to the Owner, and only to a
+    /// member below the caller.
+    Ban {
+        user_id: String,
+    },
+    /// Lift a ban. The account gets the role the table gives new members. Needs `RemoveUsers`.
+    Unban {
+        user_id: String,
     },
     ListMembers {
         /// Domain (node) to list members for. None defaults to workspace root.
@@ -583,8 +593,6 @@ pub enum WorkspaceProtocolResponse {
     UserPermissions {
         domain_id: String,
         user_id: String,
-        /// The legacy enum, for clients that predate the role table.
-        role: UserRole,
         /// The role this user holds in the workspace, from its table; `None` when banned or
         /// not a member.
         role_id: Option<String>,
@@ -593,10 +601,18 @@ pub enum WorkspaceProtocolResponse {
     /// Confirmation that member role was updated
     MemberRoleUpdated {
         user_id: String,
-        /// The legacy enum, for clients that predate the role table.
-        new_role: UserRole,
         /// The role id the member now holds; `None` when banned.
         role_id: Option<String>,
+    },
+    /// `user_id` was banned. Sent to the caller and announced to the workspace.
+    MemberBanned {
+        user_id: String,
+    },
+    /// `user_id`'s ban was lifted, and they now hold `role_id`. Sent to the caller and announced
+    /// to the workspace.
+    MemberUnbanned {
+        user_id: String,
+        role_id: String,
     },
 
     /// Response after user profile was updated

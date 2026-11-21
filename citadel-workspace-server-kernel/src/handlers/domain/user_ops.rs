@@ -4,7 +4,7 @@
 //! providing functionality for adding, removing, and updating user roles and permissions.
 
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use citadel_workspace_types::UpdateOperation;
 
 /// User management operations for the domain operations trait.
@@ -36,7 +36,7 @@ pub trait UserManagementOperations<R: Ratchet + Send + Sync + 'static> {
         admin_id: &str,
         user_id_to_add: &str,
         domain_id: &str,
-        role: UserRole,
+        role: String,
     ) -> Result<(), NetworkError>;
 
     /// Removes a user from a domain and revokes all associated permissions.
@@ -78,7 +78,7 @@ pub trait UserManagementOperations<R: Ratchet + Send + Sync + 'static> {
         &self,
         actor_user_id: &str,
         target_user_id: &str,
-        role: UserRole,
+        role: String,
         metadata: Option<Vec<u8>>, // metadata might be used later for specific role features
     ) -> Result<(), NetworkError>;
 

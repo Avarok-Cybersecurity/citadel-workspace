@@ -1,7 +1,8 @@
+use crate::roles_fixture::{roles_for, BANNED};
 use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_server_kernel::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
 use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::structs::User;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -15,12 +16,12 @@ pub const ADMIN_PASSWORD: &str = "admin_password";
 /// - Specified user role
 /// - Empty permissions map (to be populated by tests)
 /// - Default metadata
-pub fn create_test_user(id: &str, role: UserRole) -> User {
+pub fn create_test_user(id: &str, role: &str) -> User {
     User {
         id: id.to_string(),
         name: format!("Test {}", id),
-        role,
-        workspace_roles: Default::default(),
+        banned: role == BANNED,
+        workspace_roles: roles_for(role),
         permissions: HashMap::new(),
         metadata: Default::default(),
     }

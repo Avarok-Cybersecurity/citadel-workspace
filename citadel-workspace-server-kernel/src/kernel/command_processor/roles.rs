@@ -13,7 +13,6 @@ use crate::kernel::role_edits;
 use crate::{WorkspaceProtocolResponse, WORKSPACE_ROOT_ID};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::roles::WorkspaceRoles;
-use citadel_workspace_types::roles_legacy::legacy_mirror;
 use citadel_workspace_types::roles_protocol::{RolesRequest, RolesResponse};
 use citadel_workspace_types::structs::Permission;
 
@@ -141,7 +140,6 @@ async fn reassign_holders<R: Ratchet + Send + Sync + 'static>(
         }
         user.workspace_roles
             .insert(WORKSPACE_ROOT_ID.to_string(), target.id.clone());
-        user.role = legacy_mirror(&target.id, &target.name);
         backend.insert_user(user_id, user).await?;
     }
     Ok(())

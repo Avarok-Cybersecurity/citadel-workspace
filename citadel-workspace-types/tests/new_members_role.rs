@@ -6,7 +6,6 @@ use citadel_workspace_types::roles::{
     seed_roles, RoleDefinition, WorkspaceRoles, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID,
 };
 use citadel_workspace_types::roles_stored::{DefaultRoleRead, StoredRoles, ROLE_TABLE_VERSION};
-use citadel_workspace_types::structs::{User, UserRole};
 
 fn seed(id: &str) -> RoleDefinition {
     seed_roles()
@@ -84,22 +83,4 @@ fn a_stored_default_naming_the_owner_or_nothing_is_not_trusted() {
         );
         assert_eq!(table.default_role_id, MEMBER_ROLE_ID, "for '{named}'");
     }
-}
-
-/// The creator of an additional workspace holds its Owner role and nothing in the root. Read as
-/// a legacy root Member, they joined the root holding Member whatever the table's default was.
-#[test]
-fn a_record_naming_another_workspaces_role_is_not_a_legacy_member() {
-    let root = citadel_workspace_types::WORKSPACE_ROOT_ID;
-    let mut creator = User::new("cy".into(), "Cy".into(), UserRole::Member);
-    creator
-        .workspace_roles
-        .insert("ws-other".to_string(), OWNER_ROLE_ID.to_string());
-    creator.read_legacy_role();
-    assert_eq!(creator.role_id_in(root), None, "given a root role on read");
-
-    // The control: a record from before the table names nothing anywhere, and is mapped.
-    let mut old = User::new("ola".into(), "Ola".into(), UserRole::Member);
-    old.read_legacy_role();
-    assert_eq!(old.role_id_in(root), Some(MEMBER_ROLE_ID));
 }

@@ -16,8 +16,8 @@
 //! administer is still allowed — a guard that refused both would be no better.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
-use citadel_workspace_types::structs::UserRole;
 use common::member_test_utils::{insert_user_with_role, GateKernel as Kernel};
+use common::roles_fixture::{MEMBER_ROLE_ID, OWNER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 /// Make `ids` the workspace's entire membership.
@@ -40,7 +40,7 @@ async fn only_members(kernel: &Kernel, ids: &[&str]) {
 async fn try_demote(kernel: &Kernel, actor: &str, target: &str) -> Result<(), String> {
     kernel
         .domain_operations
-        .update_workspace_member_role(actor, target, UserRole::Member.into(), None)
+        .update_workspace_member_role(actor, target, MEMBER_ROLE_ID.to_string(), None)
         .await
         .map_err(|e| e.to_string())
 }
@@ -60,7 +60,7 @@ async fn try_remove(kernel: &Kernel, actor: &str, target: &str) -> Result<(), St
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_lone_owner_cannot_demote_themselves() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     only_members(&kernel, &["owner"]).await;
 
     assert!(
@@ -72,7 +72,7 @@ async fn a_lone_owner_cannot_demote_themselves() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_lone_owner_cannot_be_removed() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     only_members(&kernel, &["owner"]).await;
 
     assert!(
@@ -84,7 +84,7 @@ async fn a_lone_owner_cannot_be_removed() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_owner_may_step_down_while_an_admin_remains() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     only_members(&kernel, &["owner", TEST_ADMIN_USER_ID]).await;
 
     let outcome = try_demote(&kernel, "owner", "owner").await;
@@ -97,7 +97,7 @@ async fn an_owner_may_step_down_while_an_admin_remains() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_last_admin_is_still_protected_when_the_owner_is_the_other_one() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     only_members(&kernel, &["owner", TEST_ADMIN_USER_ID]).await;
 
     // Counting Owners is a widening, so the refusal that matters is the one

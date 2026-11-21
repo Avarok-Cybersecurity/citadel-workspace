@@ -2,7 +2,7 @@
 //! had. Anyone else asking is told the link is unavailable, as for one that does not exist.
 
 use citadel_workspace_types::secure_links::{SecureLinksRequest, SecureLinksResponse};
-use citadel_workspace_types::structs::UserRole;
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::secure_links_test_utils::{
     create, enrol, expires, links, links_kernel, members, opened, resolve, HOUR_MS,
 };
@@ -13,7 +13,7 @@ const TARGET: &str = "/messages";
 async fn regenerating_kills_the_old_token_and_only_the_owner_may() {
     let kernel = links_kernel(5, 0).await;
     for id in ["alice", "bob"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
     }
     let (info, old) = create(
         &kernel,
@@ -66,7 +66,7 @@ async fn regenerating_kills_the_old_token_and_only_the_owner_may() {
 async fn only_the_owner_lists_or_deletes_a_link() {
     let kernel = links_kernel(5, 0).await;
     for id in ["alice", "bob"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
     }
     let (info, token) = create(
         &kernel,

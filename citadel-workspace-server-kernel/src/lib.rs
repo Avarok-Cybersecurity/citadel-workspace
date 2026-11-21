@@ -720,8 +720,8 @@ pub fn first_member_outcome(
 pub enum ConnectEnrolment {
     /// Never joined. Enrol them, subject to `first_member_outcome`.
     Enrol,
-    /// An administrator removed them. Leave them out; only `AddMember` can
-    /// bring them back.
+    /// An administrator removed or banned them. Leave them out; only `Unban`
+    /// can bring them back.
     RefuseRemoved,
 }
 
@@ -739,15 +739,13 @@ pub enum ConnectEnrolment {
 /// as a Member, with nothing logged. Removal was undone by the person it was
 /// applied to.
 ///
-/// `remove_user_from_domain` records the removal by leaving the account at
-/// `UserRole::Banned`: no permissions, rank 0, and a role the code defined but
-/// never assigned. Re-admission is `AddMember`, which writes an explicit role
-/// and so clears it.
+/// `remove_user_from_domain` records the removal by banning the account, as
+/// `Ban` does. Re-admission is `Unban`.
 pub fn connect_enrolment(
-    existing_role: Option<citadel_workspace_types::structs::UserRole>,
+    existing: Option<&citadel_workspace_types::structs::User>,
 ) -> ConnectEnrolment {
-    match existing_role {
-        Some(citadel_workspace_types::structs::UserRole::Banned) => ConnectEnrolment::RefuseRemoved,
+    match existing {
+        Some(user) if user.is_banned() => ConnectEnrolment::RefuseRemoved,
         _ => ConnectEnrolment::Enrol,
     }
 }

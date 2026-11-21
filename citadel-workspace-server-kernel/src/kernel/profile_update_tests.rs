@@ -1,10 +1,10 @@
 //! `profile_update`'s rules, over plain `User` records.
 
 use super::profile_update::*;
-use citadel_workspace_types::structs::{MetadataValue, User, UserRole};
+use citadel_workspace_types::structs::{MetadataValue, User};
 
 fn user() -> User {
-    User::new("u".into(), "U".into(), UserRole::Member)
+    User::new("u".into(), "U".into())
 }
 
 fn update(email: Option<&str>, title: Option<&str>) -> ProfileUpdate {

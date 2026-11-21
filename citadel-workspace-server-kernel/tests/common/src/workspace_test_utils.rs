@@ -1,8 +1,9 @@
+use crate::roles_fixture::{roles_for, ADMIN_ROLE_ID};
 use citadel_sdk::prelude::MonoRatchet;
 use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_workspace_server_kernel::kernel::ice_servers::IceServerSourceHandle;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{Domain, User, UserRole};
+use citadel_workspace_types::structs::{Domain, User};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -60,8 +61,8 @@ pub async fn create_configured_test_kernel(
     let admin_user = User {
         id: TEST_ADMIN_USER_ID.to_string(),
         name: "Test Admin".to_string(),
-        role: UserRole::Admin,
-        workspace_roles: Default::default(),
+        banned: false,
+        workspace_roles: roles_for(ADMIN_ROLE_ID),
         permissions: HashMap::new(),
         metadata: Default::default(),
     };

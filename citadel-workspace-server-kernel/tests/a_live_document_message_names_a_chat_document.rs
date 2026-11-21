@@ -2,11 +2,11 @@
 //! channel keeps that id with the message for every later reader.
 
 use citadel_workspace_server_kernel::kernel::command_processor::group_message_shape::NOT_A_CHAT_DOCUMENT;
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{
     GroupMessageType, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 use common::group_channel_test_utils::*;
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::workspace_test_utils::create_test_kernel;
 
 mod common {
@@ -30,7 +30,7 @@ fn share(document_id: &str) -> WorkspaceProtocolRequest {
 
 async fn room() -> std::sync::Arc<Kernel> {
     let kernel = create_test_kernel().await;
-    add_user_with_role(&kernel, MEMBER, UserRole::Member).await;
+    add_user_with_role(&kernel, MEMBER, MEMBER_ROLE_ID).await;
     add_room_with_chat(&kernel, &[MEMBER]).await;
     kernel
 }

@@ -19,11 +19,12 @@
 use citadel_workspace_server_kernel::handlers::domain::async_ops::{
     AsyncPermissionOperations, AsyncWorkspaceOperations,
 };
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::{Standing, OWNER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_PASSWORD};
 
-async fn role_of(kernel: &Kernel, id: &str) -> UserRole {
+async fn role_of(kernel: &Kernel, id: &str) -> String {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -31,13 +32,13 @@ async fn role_of(kernel: &Kernel, id: &str) -> UserRole {
         .await
         .expect("read user")
         .expect("user exists")
-        .role
+        .standing()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_owner_creating_another_workspace_does_not_become_a_global_admin() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     join_root(&kernel, "owner").await;
 
     let created = kernel
@@ -57,7 +58,7 @@ async fn an_owner_creating_another_workspace_does_not_become_a_global_admin() {
     {
         assert_eq!(
             role_of(&kernel, "owner").await,
-            UserRole::Owner,
+            OWNER_ROLE_ID,
             "creating a workspace must not rewrite the global role: is_admin reads it \
              and never asks which workspace",
         );
@@ -67,7 +68,7 @@ async fn an_owner_creating_another_workspace_does_not_become_a_global_admin() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_creator_still_holds_full_authority_over_what_they_created() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     join_root(&kernel, "owner").await;
 
     let created = kernel

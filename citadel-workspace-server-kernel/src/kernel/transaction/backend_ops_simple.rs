@@ -424,12 +424,11 @@ mod rollback_tests {
     }
 
     fn usr(id: &str) -> User {
-        use citadel_workspace_types::structs::UserRole;
         use std::collections::HashMap;
         User {
             id: id.to_string(),
             name: format!("user-{id}"),
-            role: UserRole::Member,
+            banned: false,
             workspace_roles: Default::default(),
             permissions: HashMap::new(),
             metadata: HashMap::new(),

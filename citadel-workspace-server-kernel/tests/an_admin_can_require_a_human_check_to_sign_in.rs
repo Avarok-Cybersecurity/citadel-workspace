@@ -13,11 +13,12 @@ use citadel_workspace_server_kernel::kernel::sign_in::{
     SignInSettingsStore, SignInSettingsUnavailable, NOT_SUPPORTED,
 };
 use citadel_workspace_types::sign_in::SignInSettings;
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use common::member_test_utils::{
     insert_user_with_role, join_root, member_holding, seed_role, GateKernel as Kernel,
 };
+use common::roles_fixture::{MEMBER_ROLE_ID, OWNER_ROLE_ID};
 use common::workspace_test_utils::{
     create_configured_test_kernel, create_test_kernel, TEST_ADMIN_USER_ID,
 };
@@ -65,7 +66,7 @@ async fn hosted(fail: bool) -> (Arc<Kernel>, Arc<HostCell>) {
     });
     let store: Arc<dyn SignInSettingsStore> = cell.clone();
     let kernel = create_configured_test_kernel(|k| k.set_sign_in_settings(Some(store))).await;
-    insert_user_with_role(&kernel, "member", UserRole::Member).await;
+    insert_user_with_role(&kernel, "member", MEMBER_ROLE_ID).await;
     join_root(&kernel, "member").await;
     (kernel, cell)
 }
@@ -159,7 +160,7 @@ async fn a_role_that_configures_the_workspace_may_change_it() {
     assert_eq!(settings(send(&kernel, "gina", update(ON)).await), ON);
     assert_eq!(*cell.stored.lock().unwrap(), ON);
 
-    insert_user_with_role(&kernel, "olga", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "olga", OWNER_ROLE_ID).await;
     join_root(&kernel, "olga").await;
     assert_eq!(settings(send(&kernel, "olga", update(OFF)).await), OFF);
     assert_eq!(*cell.stored.lock().unwrap(), OFF);

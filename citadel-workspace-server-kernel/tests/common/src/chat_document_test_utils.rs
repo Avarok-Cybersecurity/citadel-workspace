@@ -7,13 +7,13 @@ pub use crate::group_channel_test_utils::{
     add_room_with_chat, add_user_with_role, CHANNEL, ROOM_ID,
 };
 pub use crate::member_test_utils::GateKernel;
+use crate::roles_fixture::{GUEST_ROLE_ID, MEMBER_ROLE_ID};
 use crate::workspace_test_utils::create_configured_test_kernel;
 use citadel_workspace_server_kernel::kernel::chat_document_limit::FixedChatDocumentLimit;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user_and_cid;
 use citadel_workspace_server_kernel::kernel::documents::DocumentsRelay;
 use citadel_workspace_types::chat_documents::{ChatDocumentsRequest, ChatDocumentsResponse};
 use citadel_workspace_types::documents::{DocumentRefusal, DocumentsRequest, DocumentsResponse};
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use std::sync::Arc;
 
@@ -55,9 +55,9 @@ pub async fn room_with_limit(limit: u32) -> Arc<GateKernel> {
         kernel.set_chat_document_limit_source(Some(Arc::new(FixedChatDocumentLimit(limit))));
     })
     .await;
-    add_user_with_role(&kernel, MEMBER, UserRole::Member).await;
-    add_user_with_role(&kernel, GUEST, UserRole::Guest).await;
-    add_user_with_role(&kernel, OUTSIDER, UserRole::Member).await;
+    add_user_with_role(&kernel, MEMBER, MEMBER_ROLE_ID).await;
+    add_user_with_role(&kernel, GUEST, GUEST_ROLE_ID).await;
+    add_user_with_role(&kernel, OUTSIDER, MEMBER_ROLE_ID).await;
     add_room_with_chat(&kernel, &[MEMBER, GUEST]).await;
     kernel
 }

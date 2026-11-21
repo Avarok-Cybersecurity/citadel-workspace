@@ -14,7 +14,7 @@
  * LIST — through plain `broadcast()`, which is `Everyone`. Renaming a workspace
  * pushed its record to every session on the box, including users whose
  * `GetWorkspace` for it is refused and whose `ListWorkspaces` omits it, and
- * including a member set to `Banned`, because nothing closes their socket.
+ * including a banned member, because nothing closes their socket.
  *
  * THE RULE: a response variant that carries per-entity data must be broadcast
  * through the helper that scopes it. `Everyone` is for genuinely workspace-wide
@@ -61,9 +61,12 @@ const SCOPED = new Map([
   ['NodeContentUpdated', 'broadcast_to_node'],
   // A named user's GLOBAL role. Sent through plain `broadcast()` at two sites,
   // so it reached every session on the box -- including other workspaces, and
-  // including a member set to Banned, whose socket nothing closes. That is
+  // including a banned member, whose socket nothing closes. That is
   // verbatim the disclosure the `Node` variant's doc comment describes.
   ['MemberRoleUpdated', 'broadcast_to_workspace'],
+  // A member's ban standing: who is banned is the workspace's business only.
+  ['MemberBanned', 'broadcast_to_workspace'],
+  ['MemberUnbanned', 'broadcast_to_workspace'],
   // The role table. A change can move any member's permissions, so every
   // member of THAT workspace hears it; another workspace's sessions must not.
   ['Roles', 'broadcast_to_workspace'],

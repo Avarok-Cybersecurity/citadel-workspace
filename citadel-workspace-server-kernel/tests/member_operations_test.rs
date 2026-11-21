@@ -1,5 +1,6 @@
-use citadel_workspace_types::structs::{NodeEntityType, UserRole};
+use citadel_workspace_types::structs::NodeEntityType;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{with_role, Standing, MEMBER_ROLE_ID};
 
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
@@ -13,10 +14,9 @@ async fn test_member_operations() {
 
     // Create a regular user by adding them to the backend
     use citadel_workspace_types::structs::User;
-    let test_user = User::new(
-        "test_user".to_string(),
-        "Test User".to_string(),
-        UserRole::Member,
+    let test_user = with_role(
+        User::new("test_user".to_string(), "Test User".to_string()),
+        MEMBER_ROLE_ID,
     );
 
     kernel
@@ -32,7 +32,7 @@ async fn test_member_operations() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
             domain_id: None,
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: Some("workspace_metadata".to_string().into_bytes()),
         },
     )
@@ -83,7 +83,7 @@ async fn test_member_operations() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
             domain_id: Some(office_id.clone()),
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: Some("test_metadata".to_string().into_bytes()),
         },
     )
@@ -127,7 +127,7 @@ async fn test_member_operations() {
         WorkspaceProtocolResponse::Member(member) => {
             assert_eq!(member.id, "test_user");
             assert!(member.is_member_of_domain(office_id.clone()));
-            assert_eq!(member.role, UserRole::Member);
+            assert_eq!(member.standing(), MEMBER_ROLE_ID);
         }
         _ => panic!("Expected Member response"),
     }
@@ -138,7 +138,7 @@ async fn test_member_operations() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
             domain_id: Some(room_id.clone()),
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: Some("test_metadata".to_string().into_bytes()),
         },
     )

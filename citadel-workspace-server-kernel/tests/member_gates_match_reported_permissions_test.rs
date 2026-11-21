@@ -11,7 +11,8 @@
 //! matter as much as the grant: these tests pin both directions.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::structs::User;
+use common::roles_fixture::{roles_for, BANNED, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::collections::HashMap;
 
@@ -19,7 +20,7 @@ type Kernel = citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorksp
     citadel_sdk::prelude::MonoRatchet,
 >;
 
-async fn user_with_role(kernel: &Kernel, id: &str, role: UserRole) {
+async fn user_with_role(kernel: &Kernel, id: &str, role: &str) {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -28,8 +29,8 @@ async fn user_with_role(kernel: &Kernel, id: &str, role: UserRole) {
             User {
                 id: id.to_string(),
                 name: id.to_string(),
-                role,
-                workspace_roles: Default::default(),
+                banned: role == BANNED,
+                workspace_roles: roles_for(role),
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },
@@ -54,14 +55,14 @@ async fn join_root(kernel: &Kernel, id: &str) {
 }
 
 async fn try_add(kernel: &Kernel, actor: &str, newcomer: &str) -> Result<(), String> {
-    user_with_role(kernel, newcomer, UserRole::Member).await;
+    user_with_role(kernel, newcomer, MEMBER_ROLE_ID).await;
     kernel
         .domain_operations
         .add_user_to_domain(
             actor,
             newcomer,
             citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
-            UserRole::Member.into(),
+            MEMBER_ROLE_ID.to_string(),
         )
         .await
         .map_err(|e| e.to_string())
@@ -70,7 +71,7 @@ async fn try_add(kernel: &Kernel, actor: &str, newcomer: &str) -> Result<(), Str
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_owner_may_add_members_because_the_reported_set_says_so() {
     let kernel = create_test_kernel().await;
-    user_with_role(&kernel, "owner", UserRole::Owner).await;
+    user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     join_root(&kernel, "owner").await;
 
     assert!(
@@ -95,15 +96,15 @@ async fn an_admin_may_still_add_members() {
 /// escalation, and no role table grants any of them AddUsers.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ordinary_roles_still_may_not_add_members() {
-    for role in [UserRole::Member, UserRole::Guest, UserRole::Banned] {
+    for role in [MEMBER_ROLE_ID, GUEST_ROLE_ID, BANNED] {
         let kernel = create_test_kernel().await;
-        let actor = format!("{role:?}-actor");
-        user_with_role(&kernel, &actor, role.clone()).await;
+        let actor = format!("{role}-actor");
+        user_with_role(&kernel, &actor, role).await;
         join_root(&kernel, &actor).await;
 
         assert!(
             try_add(&kernel, &actor, "newcomer").await.is_err(),
-            "{role:?} holds AddUsers in no role table and must not be able to add members",
+            "{role} holds AddUsers in no role table and must not be able to add members",
         );
     }
 }
@@ -112,7 +113,7 @@ async fn ordinary_roles_still_may_not_add_members() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_owner_who_is_not_a_member_may_not_add_members() {
     let kernel = create_test_kernel().await;
-    user_with_role(&kernel, "outside-owner", UserRole::Owner).await;
+    user_with_role(&kernel, "outside-owner", OWNER_ROLE_ID).await;
     // Deliberately NOT joined to the root workspace.
 
     assert!(
@@ -138,11 +139,11 @@ async fn try_remove(kernel: &Kernel, actor: &str, target: &str) -> Result<(), St
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_owner_may_remove_members_and_a_member_may_not() {
     let kernel = create_test_kernel().await;
-    user_with_role(&kernel, "owner", UserRole::Owner).await;
+    user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     join_root(&kernel, "owner").await;
-    user_with_role(&kernel, "plain", UserRole::Member).await;
+    user_with_role(&kernel, "plain", MEMBER_ROLE_ID).await;
     join_root(&kernel, "plain").await;
-    user_with_role(&kernel, "target", UserRole::Member).await;
+    user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
     assert!(

@@ -16,9 +16,10 @@
 //! refusals alone.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use citadel_workspace_types::UpdateOperation;
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::{MEMBER_ROLE_ID, OWNER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
@@ -38,9 +39,9 @@ async fn try_grant(
 }
 
 async fn owner_and_target(kernel: &Kernel) {
-    insert_user_with_role(kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(kernel, "owner", OWNER_ROLE_ID).await;
     join_root(kernel, "owner").await;
-    insert_user_with_role(kernel, "target", UserRole::Member).await;
+    insert_user_with_role(kernel, "target", MEMBER_ROLE_ID).await;
     join_root(kernel, "target").await;
 }
 

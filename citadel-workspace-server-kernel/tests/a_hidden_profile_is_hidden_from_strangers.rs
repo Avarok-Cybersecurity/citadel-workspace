@@ -1,6 +1,7 @@
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
-use citadel_workspace_types::structs::{MetadataValue, User, UserRole};
+use citadel_workspace_types::structs::{MetadataValue, User};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{with_role, MEMBER_ROLE_ID};
 
 use common::async_test_helpers::execute_command;
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
@@ -32,7 +33,7 @@ async fn kernel_with_two_members() -> std::sync::Arc<Kernel> {
             .backend_tx_manager
             .insert_user(
                 id.to_string(),
-                User::new(id.to_string(), id.to_string(), UserRole::Member),
+                with_role(User::new(id.to_string(), id.to_string()), MEMBER_ROLE_ID),
             )
             .await
             .expect("insert user");
@@ -41,7 +42,7 @@ async fn kernel_with_two_members() -> std::sync::Arc<Kernel> {
             WorkspaceProtocolRequest::AddMember {
                 user_id: id.to_string(),
                 domain_id: None,
-                role: UserRole::Member.into(),
+                role: MEMBER_ROLE_ID.to_string(),
                 metadata: None,
             },
         )
