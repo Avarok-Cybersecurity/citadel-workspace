@@ -7,7 +7,7 @@
  * one identity.
  *
  * A seed is never made when one is read: a new key makes every client that pinned the old one
- * refuse the server. An object with none (provisioned before server identities) cannot start and
+ * refuse the server. An object with none (provisioned by an earlier release) cannot start and
  * publishes no document.
  */
 import { storedSeed } from "./stored-seed.mjs";
