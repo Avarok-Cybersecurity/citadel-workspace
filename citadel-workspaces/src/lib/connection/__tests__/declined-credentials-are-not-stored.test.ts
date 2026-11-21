@@ -71,7 +71,7 @@ describe('handleAuthSuccess credential storage', () => {
 
     const session: StoredSession | undefined = written.at(-1)?.sessions.find(s => s.username === 'alice');
     expect(session).toBeDefined();
-    expect(session!.password).toBeUndefined();
+    expect((session as unknown as Record<string, unknown>).password).toBeUndefined();
     expect((session as unknown as Record<string, unknown>).serverPassword).toBeUndefined();
 
     // Walked rather than JSON.stringify'd, which throws on the bigint cid.

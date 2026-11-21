@@ -64,7 +64,6 @@ export type ConnectionIntent =
   | InitWebSocketIntent
   | SetOrphanModeIntent
   | SendWebSocketMessageIntent
-  | ConnectIntent
   | DisconnectIntent
   | ClaimSessionIntent
   | LocalDBSetIntent
@@ -72,7 +71,6 @@ export type ConnectionIntent =
   | BroadcastConnectionStatusIntent
   | UpdateConnectionServiceIntent
   | SetWorkspaceConnectionIdIntent
-  | MarkUserDisconnectedIntent
   | EmitEventIntent
   | SetInstanceCidIntent
   | AnnouncePresenceIntent
@@ -92,16 +90,6 @@ export interface SetOrphanModeIntent {
 export interface SendWebSocketMessageIntent {
   type: 'send-websocket-message';
   message: unknown;
-}
-
-export interface ConnectIntent {
-  type: 'connect';
-  requestId: string;
-  username: string;
-  password: string;
-  serverAddress: string;
-  serverPassword: string;
-  sessionSecuritySettings?: SessionSecuritySettings;
 }
 
 export interface DisconnectIntent {
@@ -140,12 +128,6 @@ export interface UpdateConnectionServiceIntent {
 export interface SetWorkspaceConnectionIdIntent {
   type: 'set-workspace-connection-id';
   cid: bigint;
-}
-
-export interface MarkUserDisconnectedIntent {
-  type: 'mark-user-disconnected';
-  username: string;
-  serverAddress: string;
 }
 
 export interface EmitEventIntent {

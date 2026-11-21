@@ -222,5 +222,4 @@ export { navigateInApp, navigateToDirectory } from './navigation.js';
 export { adminDialog, openNodeContextMenu, openAdminPanel, activateAdminTab } from './admin-panel.js';
 export { WORKSPACE_ROOT_SENTINEL } from './tree-helpers.js';
 
-export { settleServerAutoConnect } from './p2p/session.js';
 export * from './file-manager.js';

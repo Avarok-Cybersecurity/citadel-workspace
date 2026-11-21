@@ -17,13 +17,11 @@ import { failOnSocketLoss } from '../websocket/request-response';
 import { persistJSON, parsePersistedJSON } from '../storage-utils';
 import { formatForDebug } from '../debug-formatter';
 import { stringToBytes, bytesToString } from '../utils/encoding-utils';
-import type { SessionSecuritySettings } from '../p2p-registration-service';
 import type { StoredSession, StoredSessions } from '@/types/session-types';
 import type { GetSessionsResponse, InternalServiceRequest } from 'citadel-workspace-client-ts';
 import type { ConnectionIntent, PendingRequest } from './types';
 import { SESSION_STORAGE_KEY } from '@/types/session-types';
 import { debugLog, debugEnabled } from '@/lib/debug-config';
-import { passwordOnly } from '@/lib/sign-in/factors';
 
 /**
  * WebSocket and LocalDB I/O operations.
@@ -38,8 +36,6 @@ export class ConnectionIOWebSocket {
         return this.setOrphanMode(intent.enabled);
       case 'send-websocket-message':
         return this.sendWebSocketMessage(intent.message);
-      case 'connect':
-        return this.connect(intent);
       case 'disconnect':
         return this.disconnect(intent.cid);
       case 'claim-session':
@@ -82,22 +78,6 @@ export class ConnectionIOWebSocket {
 
   async waitForWebSocketInit(): Promise<void> {
     await wsModule.websocketService.waitForInit();
-  }
-
-  async connect(params: {
-    requestId: string;
-    username: string;
-    serverAddress: string;
-    password: string;
-    sessionSecuritySettings?: SessionSecuritySettings;
-  }): Promise<void> {
-    await wsModule.websocketService.connect(
-      params.requestId,
-      params.username,
-      params.serverAddress,
-      passwordOnly(params.password),
-      params.sessionSecuritySettings
-    );
   }
 
   async disconnect(cid: bigint): Promise<void> {

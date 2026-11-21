@@ -19,7 +19,6 @@ declare global {
     __p2pRegistrationService?: P2PRegistrationService;
     __p2pAutoConnectService?: P2PAutoConnectService;
     __websocketService?: typeof websocketService;
-    __serverAutoConnectService?: { getPendingReconnectCount(): number };
     __connectionManager?: ConnectionManager;
     __fileTransferService?: FileTransferService;
     __workspaceService?: WorkspaceService;

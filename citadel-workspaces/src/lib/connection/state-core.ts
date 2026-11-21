@@ -17,7 +17,6 @@ import type {
   StoredSessions,
 } from '@/types/session-types';
 import type { CurrentConnectionInfo } from './types';
-import { MAX_RECONNECT_ATTEMPTS } from './constants';
 import { debugLog } from '@/lib/debug-config';
 
 export class ConnectionStateCore {
@@ -25,7 +24,6 @@ export class ConnectionStateCore {
   protected _isInitialized: boolean = false;
   protected _storedSessions: StoredSessions = { sessions: [] };
   protected _currentConnectionInfo: CurrentConnectionInfo | null = null;
-  protected _reconnectAttempts: number = 0;
 
   // Ready promise for initialization
   protected _readyPromise: Promise<void>;
@@ -160,31 +158,6 @@ export class ConnectionStateCore {
   }
 
   // ============================================================================
-  // Reconnect Attempts
-  // ============================================================================
-
-  get reconnectAttempts(): number {
-    return this._reconnectAttempts;
-  }
-
-  incrementReconnectAttempts(): number {
-    this._reconnectAttempts++;
-    return this._reconnectAttempts;
-  }
-
-  resetReconnectAttempts(): void {
-    this._reconnectAttempts = 0;
-  }
-
-  hasReachedMaxReconnectAttempts(): boolean {
-    return this._reconnectAttempts >= MAX_RECONNECT_ATTEMPTS;
-  }
-
-  get maxReconnectAttempts(): number {
-    return MAX_RECONNECT_ATTEMPTS;
-  }
-
-  // ============================================================================
   // Cleanup Functions
   // ============================================================================
 
@@ -208,11 +181,4 @@ export class ConnectionStateCore {
     return cidMatch ? cidMatch[1] : null;
   }
 
-  createConnectionKey(username: string, serverAddress: string): string {
-    return `${username}@${serverAddress}`;
-  }
-
-  calculateBackoffDelay(attempt: number, maxDelay: number): number {
-    return Math.min(1000 * Math.pow(2, attempt), maxDelay);
-  }
 }

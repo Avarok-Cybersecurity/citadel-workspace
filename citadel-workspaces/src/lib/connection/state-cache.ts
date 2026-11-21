@@ -20,7 +20,6 @@ export class ConnectionState extends ConnectionStateCore {
   private _cachedSessionsTimestamp: number = 0;
 
   // Concurrency guard for connection attempts
-  private _connectionAttempts: Set<string> = new Set<string>();
 
   // ============================================================================
   // Pending Requests
@@ -71,21 +70,5 @@ export class ConnectionState extends ConnectionStateCore {
 
   setPendingGetSessions(promise: Promise<ActiveSessionsResult> | null): void {
     this._pendingGetSessions = promise;
-  }
-
-  // ============================================================================
-  // Connection Attempts Guard
-  // ============================================================================
-
-  hasConnectionAttempt(key: string): boolean {
-    return this._connectionAttempts.has(key);
-  }
-
-  addConnectionAttempt(key: string): void {
-    this._connectionAttempts.add(key);
-  }
-
-  removeConnectionAttempt(key: string): void {
-    this._connectionAttempts.delete(key);
   }
 }

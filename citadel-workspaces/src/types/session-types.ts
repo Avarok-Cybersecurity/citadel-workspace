@@ -9,13 +9,6 @@ import { SessionSecuritySettings } from "@/lib/p2p-registration-service";
  */
 export interface StoredSession {
   username: string;
-  /**
-   * Never written: a password kept for next time is sealed under the user's passkey
-   * (src/lib/passkey), not stored here. Read only by the background reconnect paths
-   * (connection/lifecycle.ts, connection/reconnect.ts, server-auto-connect-service), which are
-   * therefore inert and are listed for removal.
-   */
-  password?: string;
   serverAddress: string;
   fullName: string;
   lastConnected: number;

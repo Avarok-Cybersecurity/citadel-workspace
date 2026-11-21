@@ -9,10 +9,8 @@
  *  2. CLAIM it — the service's ownership gate refuses any request for a session
  *     another connection holds, and an orphan's holder is the connection that
  *     opened it, so without this the request was refused every time;
- *  3. mark the user disconnected BEFORE the request, so auto-connect does not
- *     race the sign-out and bring the session back;
- *  4. stop the WASM client only if this session is the one it is running;
- *  5. tell the service; then invalidate, forget, and reload.
+ *  3. stop the WASM client only if this session is the one it is running;
+ *  4. tell the service; then invalidate, forget, and reload.
  */
 
 import { debugLog } from '@/lib/debug-config';
@@ -23,7 +21,6 @@ export type DisconnectAction = 'disconnect' | 'deregister';
 
 /** What the sequence needs from the world. Injected so it can be tested. */
 export interface SignOutIO {
-  markUserDisconnected: (username: string, serverAddress: string) => Promise<void>;
   currentWasmCid: () => string | null;
   stopWasm: () => void;
   deregister: (cid: bigint) => Promise<void>;
@@ -87,8 +84,6 @@ export async function signOutSession(
     const claim: ClaimOutcome = await claimSessionForThisTab(cid);
     const claimRefusal: string | null = signOutRefusal(claim);
     if (claimRefusal !== null) return { status: 'refused', message: claimRefusal };
-
-    await io.markUserDisconnected(target.username, target.serverAddress);
 
     if (io.currentWasmCid() === cid.toString()) io.stopWasm();
 
