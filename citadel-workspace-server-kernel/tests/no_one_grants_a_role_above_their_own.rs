@@ -28,15 +28,8 @@ const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 
 /// What the old rank-16 Custom role held: AddUsers among them. Between Member and Admin.
 ///
-/// Plus `ShareSecureLinks`, which the Member seed now carries. `seed_role` saves this role into
-/// a table written today, so it is a role made after secure links existed, which the stored-table
-/// upgrade (roles_stored.rs, version 1) rightly leaves alone; without the permission it could not
-/// assign Member, by the same ladder rule this file tests. A role stored before the upgrade gets
-/// it when read: kernel/transaction/roles_upgrade_tests.rs.
-///
-/// And `AppInstall`, which the Member seed carries since role table v2, for the same reason: a
-/// role written today without it could not assign Member (citadel-workspace-types/tests/
-/// apps_role_upgrade.rs is the upgrade that gives it to a table stored before v2).
+/// Plus `ShareSecureLinks` and `AppInstall`, which the Member seed carries: without them this
+/// role could not assign Member, by the same ladder rule this file tests.
 const EDITOR: &[Permission] = &[
     Permission::ViewContent,
     Permission::ViewMembers,

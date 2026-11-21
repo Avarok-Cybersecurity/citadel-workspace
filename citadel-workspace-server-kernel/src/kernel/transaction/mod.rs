@@ -30,11 +30,11 @@ pub(crate) mod documents_store;
 mod documents_store_tests;
 mod group_chat_store;
 pub use group_chat_store::ReactionWrite;
+#[cfg(test)]
+mod earlier_role_table_tests;
 mod group_message_pages;
 mod records;
 mod roles_store;
-#[cfg(test)]
-mod roles_upgrade_tests;
 pub(crate) mod secure_links_guests;
 pub(crate) mod secure_links_store;
 pub(crate) mod upload_staging;
