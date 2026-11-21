@@ -44,6 +44,7 @@ export function remapFlags(roots = {}) {
  * labels. MSVC's cl has no remapping flag, only `/d1trimfile`, which cuts the prefix off
  * `__FILE__`; aws-lc-sys maps its own directory for GCC and Clang and nothing for cl, which is how
  * the Windows agent alone shipped `C:\Users\<name>\.cargo\registry\...\aws-lc-sys-*` paths.
+ * Only the agent's builders apply these: the WASM builds link no C, and the gate covers them.
  */
 export function cFlags(triple, roots = {}) {
   const pairs = remapPairs(roots);
