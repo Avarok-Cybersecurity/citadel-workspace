@@ -44,7 +44,7 @@ role: string, metadata: Array<number> | null, } } | { "UpdateMemberPermissions":
 /**
  * Domain (node) to remove the member from. None defaults to workspace root.
  */
-domain_id: string | null, } } | { "Ban": { user_id: string, } } | { "Unban": { user_id: string, } } | { "ListMembers": { 
+domain_id: string | null, } } | { "Ban": { user_id: string, } } | { "Unban": { user_id: string, } } | "ListBanned" | { "ListMembers": { 
 /**
  * Domain (node) to list members for. None defaults to workspace root.
  */

@@ -12,7 +12,10 @@ import type { AdminTabProps, MemberData } from '../types';
 import WorkspaceService from '@/lib/workspace-service';
 import { workspaceEvents, type MembersPayload } from '@/lib/workspace-events';
 import { MemberPermissionsDialog } from '@/components/permissions/MemberPermissionsDialog';
-import { asPermissionSubject } from './member-data';
+import { asMemberData, asPermissionSubject } from './member-data';
+import { BannedSection } from './BannedSection';
+import { usePermission } from '@/hooks/use-permission';
+import { confirms } from '@/hooks/use-permission-result';
 import { Loader2, Shield } from 'lucide-react';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 import { armLoadingDeadline, cancelLoadingDeadline } from '@/lib/loading-flag-timeout';
@@ -57,13 +60,7 @@ export function MembersTab({ entityType, entityId, onClose: _onClose }: AdminTab
       if (!isForDomain(payload.domainId, entityId)) return;
       const guests: ReadonlySet<string> = new Set(payload.guests);
       setMembers(
-        payload.members.map((m) => ({
-          userId: m.id,
-          username: m.username,
-          name: m.displayName,
-          avatarUrl: m.avatarUrl,
-          banned: m.banned,
-          roleId: m.roleId,
+        payload.members.map((m) => asMemberData(m, {
           accessViaName: payload.inheritedFrom?.[m.id] === undefined ? undefined : nameOfLevel(payload.inheritedFrom[m.id]),
           isGuest: guests.has(m.id),
         }))
@@ -102,6 +99,8 @@ export function MembersTab({ entityType, entityId, onClose: _onClose }: AdminTab
   const handleSetBanned: ((member: MemberData, banned: boolean) => void) | undefined = entityId === WORKSPACE_ROOT_ID
     ? (member: MemberData, banned: boolean): void => { if (banned) setMemberToBan(member); else void setBanned(member, false); }
     : undefined;
+
+  const liftsBans: boolean = confirms(usePermission(WORKSPACE_ROOT_ID, 'RemoveUsers'));
 
   const handleRoleChange: (userId: string, newRole: RoleDefinition) => Promise<void> = changeRole;
   const rulesFor: MemberRules = useMemberRowRules();
@@ -172,6 +171,10 @@ export function MembersTab({ entityType, entityId, onClose: _onClose }: AdminTab
           )}
         </div>
       </ScrollArea>
+
+      {entityId === WORKSPACE_ROOT_ID && (
+        <BannedSection allowed={liftsBans} onUnban={(member: MemberData): void => { void setBanned(member, false); }} />
+      )}
 
       <RoleLegend />
 

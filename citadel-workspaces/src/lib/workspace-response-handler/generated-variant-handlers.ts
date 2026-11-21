@@ -16,7 +16,7 @@ import { recordPresenceChoices } from '@/lib/published-presence';
 import type { MappedMember } from '@/lib/workspace-response-handler/member-mapping';
 import { DOCUMENTS_EVENT, documentsEventOf, type DocumentsEvent } from './documents-event';
 import { emitChatAttachments } from './chat-attachments-event';
-import { emitMembers } from './members-event';
+import { emitBannedMembers, emitMembers } from './members-event';
 
 export function handleGeneratedVariants(
   response: WorkspaceProtocolResponse,
@@ -60,6 +60,7 @@ export function handleGeneratedVariants(
   }
 
   if (emitMembers(response, connectionInfo)) return true;
+  if (emitBannedMembers(response, connectionInfo)) return true;
 
   // Hidden by an admin ("Members can see each other" off here or above). Its
   // own event: an empty `members:loaded` would render "Nobody else is here yet".

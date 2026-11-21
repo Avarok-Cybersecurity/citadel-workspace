@@ -1,5 +1,5 @@
 //! `Ban` and `Unban`: changing a member's standing, announced to the workspace so every roster
-//! and the member's own client hear it.
+//! and the member's own client hear it. `ListBanned`: who holds that standing.
 
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::{WorkspaceProtocolResponse, WORKSPACE_ROOT_ID};
@@ -25,6 +25,18 @@ pub(super) async fn ban<R: Ratchet + Send + Sync + 'static>(
     };
     kernel.broadcast_to_workspace(notice.clone(), requester_cid, WORKSPACE_ROOT_ID.to_string());
     Ok(notice)
+}
+
+pub(super) async fn list_banned<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    actor_user_id: &str,
+) -> Result<WorkspaceProtocolResponse, NetworkError> {
+    Ok(
+        match kernel.domain_operations.list_banned(actor_user_id).await {
+            Ok(members) => WorkspaceProtocolResponse::BannedMembers { members },
+            Err(e) => WorkspaceProtocolResponse::Error(format!("Failed to list banned members: {e}")),
+        },
+    )
 }
 
 pub(super) async fn unban<R: Ratchet + Send + Sync + 'static>(

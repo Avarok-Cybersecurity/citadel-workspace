@@ -44,7 +44,7 @@ role_id: string | null, permissions: Array<Permission>, } } | { "MemberRoleUpdat
 /**
  * The role id the member now holds; `None` when banned.
  */
-role_id: string | null, } } | { "MemberBanned": { user_id: string, } } | { "MemberUnbanned": { user_id: string, role_id: string, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
+role_id: string | null, } } | { "MemberBanned": { user_id: string, } } | { "MemberUnbanned": { user_id: string, role_id: string, } } | { "BannedMembers": { members: Array<User>, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
 /**
  * The content's SHA-256, so a watcher can verify what it just received.
  *

@@ -87,6 +87,7 @@ export class WorkspaceService implements ProtocolSender {
   public updateMemberPermissions(userId: string, domainId: string, perms: Permission[], op: UpdateOperation): Promise<void> { return members.updateMemberPermissions(this, userId, domainId, perms, op); }
   public removeMember(userId: string, domainId?: string): Promise<void> { return members.removeMember(this, userId, domainId); }
   public listMembers(domainId?: string): Promise<void> { return members.listMembers(this, domainId); }
+  public listBanned(): Promise<void> { return members.listBanned(this); }
   public getUserPermissions(userId: string, domainId: string): Promise<void> { return members.getUserPermissions(this, userId, domainId); }
 
   // Messaging operations

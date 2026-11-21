@@ -110,6 +110,28 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             .ok_or_else(|| NetworkError::msg(format!("{target_user_id} holds no role after unban")))
     }
 
+    /// Every banned account, by id: a removed member's record outlives the roster, and so does its
+    /// ban, so this reads the records rather than a roster. Needs `RemoveUsers`, as an unban does.
+    pub async fn list_banned(&self, actor_user_id: &str) -> Result<Vec<User>, NetworkError> {
+        if !self
+            .holds_workspace_permission(actor_user_id, Permission::RemoveUsers)
+            .await?
+        {
+            return Err(NetworkError::msg(
+                "Permission denied: RemoveUsers is required to list banned members",
+            ));
+        }
+        let mut banned: Vec<User> = self
+            .backend_tx_manager
+            .get_all_users()
+            .await?
+            .into_values()
+            .filter(User::is_banned)
+            .collect();
+        banned.sort_by(|a, b| a.id.cmp(&b.id));
+        Ok(banned)
+    }
+
     /// List `user_id` in the root workspace and its `Domain::Workspace` copy, which `ListMembers`
     /// reads first. The caller holds `lock_workspaces`.
     pub(crate) async fn list_root_member(&self, user_id: &str) -> Result<(), NetworkError> {

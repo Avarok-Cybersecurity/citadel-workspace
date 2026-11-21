@@ -181,6 +181,12 @@ export async function listMembers(sender: ProtocolSender, domainId?: string): Pr
   return sender.sendProtocolRequest(requestPart);
 }
 
+/** Ask for every banned account; the answer arrives as `members:banned-loaded`. */
+export async function listBanned(sender: ProtocolSender): Promise<void> {
+  const requestPart: WorkspaceProtocolRequest = 'ListBanned';
+  return sender.sendProtocolRequest(requestPart);
+}
+
 /**
  * Get a user's permissions for a specific domain
  */

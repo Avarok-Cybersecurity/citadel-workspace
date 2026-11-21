@@ -210,6 +210,9 @@ pub enum WorkspaceProtocolRequest {
     Unban {
         user_id: String,
     },
+    /// Every banned account, including ones no longer on any roster, so a ban can be found and
+    /// lifted. Needs `RemoveUsers`, as `Unban` does.
+    ListBanned,
     ListMembers {
         /// Domain (node) to list members for. None defaults to workspace root.
         domain_id: Option<String>,
@@ -604,6 +607,10 @@ pub enum WorkspaceProtocolResponse {
     MemberUnbanned {
         user_id: String,
         role_id: String,
+    },
+    /// The answer to `ListBanned`: every banned account, by id.
+    BannedMembers {
+        members: Vec<User>,
     },
 
     /// Response after user profile was updated

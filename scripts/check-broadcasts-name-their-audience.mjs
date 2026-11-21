@@ -67,6 +67,9 @@ const SCOPED = new Map([
   // A member's ban standing: who is banned is the workspace's business only.
   ['MemberBanned', 'broadcast_to_workspace'],
   ['MemberUnbanned', 'broadcast_to_workspace'],
+  // Every banned account: the answer to ListBanned, returned to its caller only. Never
+  // fanned out; if it ever is, the workspace's sessions are the most it may reach.
+  ['BannedMembers', 'broadcast_to_workspace'],
   // The role table. A change can move any member's permissions, so every
   // member of THAT workspace hears it; another workspace's sessions must not.
   ['Roles', 'broadcast_to_workspace'],
