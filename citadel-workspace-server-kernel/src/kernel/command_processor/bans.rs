@@ -34,7 +34,9 @@ pub(super) async fn list_banned<R: Ratchet + Send + Sync + 'static>(
     Ok(
         match kernel.domain_operations.list_banned(actor_user_id).await {
             Ok(members) => WorkspaceProtocolResponse::BannedMembers { members },
-            Err(e) => WorkspaceProtocolResponse::Error(format!("Failed to list banned members: {e}")),
+            Err(e) => {
+                WorkspaceProtocolResponse::Error(format!("Failed to list banned members: {e}"))
+            }
         },
     )
 }

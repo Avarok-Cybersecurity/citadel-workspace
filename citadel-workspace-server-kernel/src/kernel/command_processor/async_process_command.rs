@@ -513,7 +513,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             super::bans::unban(kernel, actor_user_id, requester_cid, user_id).await
         }
 
-        WorkspaceProtocolRequest::ListBanned => super::bans::list_banned(kernel, actor_user_id).await,
+        WorkspaceProtocolRequest::ListBanned => {
+            super::bans::list_banned(kernel, actor_user_id).await
+        }
 
         WorkspaceProtocolRequest::ListMembers { domain_id } => {
             let target_id = domain_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
