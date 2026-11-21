@@ -110,6 +110,11 @@ runs:
         # /Users/runner/.cargo/... strings. Assigned first so a failure stops the step.
         remap="$(node scripts/remap-path-env.mjs "$TARGET")"
         export "$remap"
+        # And the C and C++ compilers' (the cc and cmake crates' __FILE__ strings).
+        remap="$(node scripts/remap-path-env.mjs --cflags "$TARGET")"
+        export "$remap"
+        remap="$(node scripts/remap-path-env.mjs --cxxflags "$TARGET")"
+        export "$remap"
         cargo build --release --target "$TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features "$features"
         # Vendored OpenSSL compiles its install prefix in (ENGINESDIR, MODULESDIR): a C configure
         # path no rustc flag maps, under the checkout, which is under /home/runner on Linux.

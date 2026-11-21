@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HIT_PATH_MAX, homePathHits, homePathsIn } from './home-paths.mjs';
-import { remapFlags, targetRustflagsEnv } from './remap-paths.mjs';
+import { cFlags, remapFlags, targetCompilerFlagsEnv, targetRustflagsEnv } from './remap-paths.mjs';
 
 const bytes = (s) => Buffer.from(s, 'latin1');
 
@@ -56,4 +56,24 @@ test('a long hit is truncated, so one string cannot flood the log', () => {
   const [hit] = homePathHits(bytes(`/home/runner/${'a'.repeat(500)}`));
   assert.equal(hit.path.length, HIT_PATH_MAX + 3);
   assert.ok(hit.path.endsWith('...'));
+});
+
+test('C compilers map the same roots: GCC and Clang to the labels, cl by trimming', () => {
+  const roots = { root: '/r', home: '/h', extra: [['/d', '/citadel-docs']] };
+  assert.deepEqual(cFlags('x86_64-unknown-linux-musl', roots), [
+    '-ffile-prefix-map=/r=/citadel-workspace',
+    '-ffile-prefix-map=/h=/cargo',
+    '-ffile-prefix-map=/d=/citadel-docs',
+  ]);
+  assert.deepEqual(cFlags('x86_64-pc-windows-msvc', roots), ['/d1trimfile:/r', '/d1trimfile:/h', '/d1trimfile:/d']);
+});
+
+test('the C variables are the per-target ones the cc crate reads', () => {
+  assert.deepEqual(targetCompilerFlagsEnv('CFLAGS', 'x86_64-pc-windows-msvc', ['/a', '/b']), {
+    name: 'CFLAGS_x86_64_pc_windows_msvc',
+    value: '/a /b',
+  });
+  assert.equal(targetCompilerFlagsEnv('CXXFLAGS', 'aarch64-apple-darwin', []).name, 'CXXFLAGS_aarch64_apple_darwin');
+  assert.throws(() => targetCompilerFlagsEnv('LDFLAGS', 'aarch64-apple-darwin', []), /CFLAGS or CXXFLAGS/);
+  assert.throws(() => targetCompilerFlagsEnv('CFLAGS', 'x86_64-pc-windows-msvc', ['/d1trimfile:C:\\a b']), /whitespace/);
 });
