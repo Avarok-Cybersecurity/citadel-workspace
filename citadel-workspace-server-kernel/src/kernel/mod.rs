@@ -53,7 +53,6 @@ pub mod server_identity;
 pub mod sign_in;
 pub mod telemetry;
 pub mod transaction;
-pub mod tree_schema_migration;
 pub(crate) mod trust_scope;
 #[cfg(test)]
 mod trust_scope_tests;

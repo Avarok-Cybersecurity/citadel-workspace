@@ -75,7 +75,7 @@ say "build: the UI (build-ui.sh)"
 
 say "gates"
 npx --no-install vitest run
-# What earlier builds stored in the tenant objects still loads under this SDK.
+# The auth-record census reads the account records this SDK stores.
 cargo test --locked -p tenant-storage-compat
 node "$ROOT/scripts/check-preview-csp-matches-production.mjs"
 

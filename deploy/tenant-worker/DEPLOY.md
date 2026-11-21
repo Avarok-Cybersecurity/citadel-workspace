@@ -252,8 +252,8 @@ the directory. `--dry-run` builds without it, provisioning no first-party app.
 1. `npm ci`; `build.sh` (the server wasm); `build-ui.sh` (the UI into `ui-dist/`, which it checks
    carries the three empty meta tags the Worker fills in).
 2. Gates: the vitest suite (including `test/production-config.test.mjs`: no stats, host routing
-   only), `cargo test -p tenant-storage-compat` (accounts a 0.10.0 server stored in its object
-   still load under this tree's SDK, stay legacy, and upgrade to post-quantum sign-in in place) and `scripts/check-preview-csp-matches-production.mjs`
+   only), `cargo test -p tenant-storage-compat` (the auth-record census counts the records this
+   tree's SDK stores) and `scripts/check-preview-csp-matches-production.mjs`
    (nginx, vite and the Worker serve one CSP).
 3. The D1 id is not the placeholder.
 4. The Stripe catalogue audit passes (read-only).

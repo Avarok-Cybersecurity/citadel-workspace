@@ -1,8 +1,7 @@
 //! A tenant Durable Object's stored accounts, read natively by this tree's SDK.
 //!
 //! The object keeps the SDK's `host_sql` tables in its own SQLite storage (server-wasm's
-//! `storage.rs` is only the transport to `ctx.storage.sql`). Those rows outlive every deploy, so
-//! an SDK bump must still read what the previous build wrote. [`SqliteFileHost`] serves a copy of
+//! `storage.rs` is only the transport to `ctx.storage.sql`). [`SqliteFileHost`] serves a copy of
 //! such a database to the backend through the same `SqlHost` interface the object implements,
 //! on the same engine.
 #![cfg(not(target_family = "wasm"))]

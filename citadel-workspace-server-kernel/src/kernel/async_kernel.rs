@@ -1748,7 +1748,6 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     );
                 }
             }
-            self.migrate_default_tree_schema().await?;
         }
 
         // Full-tree integrity check, after seeding and migrations have run.
