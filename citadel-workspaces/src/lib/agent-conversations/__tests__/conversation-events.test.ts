@@ -24,7 +24,7 @@ function message(id: string, from: bigint, extra: Partial<P2PMessage> = {}): P2P
 
 function metadata(extra: Partial<ConversationMetadata> = {}): ConversationMetadata {
   return {
-    peerCid: BOB, totalMessageCount: 1, oldestMessageTimestamp: 1000, newestMessageTimestamp: 1000,
+    peerCid: BOB, ownerCid: ME, totalMessageCount: 1, oldestMessageTimestamp: 1000, newestMessageTimestamp: 1000,
     latestPage: 0, messagesPerPage: 50, unreadCount: 0, lastMessageIndex: 1, lastUpdated: 0, ...extra,
   };
 }

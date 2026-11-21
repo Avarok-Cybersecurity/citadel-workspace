@@ -6,7 +6,9 @@ import { DB_VERSION, STORE_NAMES, upgradeSchema, missingStores, type UpgradingDa
  * ran. An earlier one is cleared, never migrated: the user signs in fresh.
  */
 
-function fakeDb(existingStores: string[] = []): UpgradingDatabase & { _stores: Set<string>; deleteObjectStore: ReturnType<typeof vi.fn> } {
+type FakeDb = UpgradingDatabase & { _stores: Set<string>; deleteObjectStore: ReturnType<typeof vi.fn> };
+
+function fakeDb(existingStores: string[] = []): FakeDb {
   const stores: Set<string> = new Set(existingStores);
   return {
     objectStoreNames: {
@@ -25,14 +27,14 @@ describe('the browser database schema', () => {
   });
 
   it('gives a fresh database exactly the current stores', () => {
-    const db = fakeDb();
+    const db: FakeDb = fakeDb();
     upgradeSchema(db, 0);
     expect([...db._stores].sort()).toEqual([...STORE_NAMES].sort());
     expect(db.deleteObjectStore).not.toHaveBeenCalled();
   });
 
   it('clears an earlier database, its data and retired stores included, and starts it empty', () => {
-    const db = fakeDb(['keyValue', 'tabContext', 'sessions', 'messages']);
+    const db: FakeDb = fakeDb(['keyValue', 'tabContext', 'sessions', 'messages']);
     upgradeSchema(db, 2);
     expect(db.deleteObjectStore).toHaveBeenCalledTimes(4);
     expect([...db._stores].sort()).toEqual([...STORE_NAMES].sort());
