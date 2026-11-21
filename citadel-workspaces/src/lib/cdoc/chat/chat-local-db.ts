@@ -31,7 +31,7 @@ export interface LocalDbPort {
 
 type Fields = Record<string, unknown>;
 
-export const CHAT_STORE_VERSION = 2;
+export const CHAT_STORE_VERSION: number = 2;
 
 function ensureStoreVersion(v: Fields, what: string): void {
   if (v.store_version !== CHAT_STORE_VERSION) {

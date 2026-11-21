@@ -12,7 +12,7 @@ import { recordPresenceChoices } from '@/lib/published-presence';
 /** Handles a `BannedMembers` response; false for any other. */
 export function emitBannedMembers(response: WorkspaceProtocolResponse, connectionInfo: ConnectionInfo): boolean {
   if (!isVariant(response, 'BannedMembers')) return false;
-  const rawMembers = response.BannedMembers.members as unknown as Record<string, unknown>[];
+  const rawMembers: Record<string, unknown>[] = response.BannedMembers.members as unknown as Record<string, unknown>[];
   const members: MappedMember[] = rawMembers.map((m: Record<string, unknown>): MappedMember => mapWasmMember(m));
   recordMemberNames(members);
   eventEmitter.emit('members:banned-loaded', { members, connection: connectionInfo });

@@ -11,7 +11,7 @@ import { hyphenated } from '../../__tests__/wasm-rig';
 import type { EditorSession } from '../../editor/editor-session';
 import type { EditorOrigin, PeerView } from '../../editor/controller';
 import { CHAT_SYNC } from '../chat-config';
-import { localDbChatStore } from '../chat-local-db';
+import { localDbChatStore, type LocalDbPort } from '../chat-local-db';
 import type { ChatStoreBackend } from '../chat-ports';
 import { ChatSyncError } from '../chat-problems';
 import { ALICE, BLANK, BOB, DOC, newWorld, openSide, sameDocument, settle, textOf, type ChatSide, type World } from './doubles/chat-pair';
@@ -104,9 +104,9 @@ describe('a chat document reopened from this device', () => {
 
   it('refuses a copy or an index written in the earlier, unversioned layout, and leaves both as they are', async () => {
     const db: FakeAgentLocalDb = new FakeAgentLocalDb();
-    const port = db.connection([ALICE]);
-    const base = `cdoc-chat:${ALICE.toString()}:${DOC}#base`;
-    const index = `cdoc-chat:${ALICE.toString()}:#index`;
+    const port: LocalDbPort = db.connection([ALICE]);
+    const base: string = `cdoc-chat:${ALICE.toString()}:${DOC}#base`;
+    const index: string = `cdoc-chat:${ALICE.toString()}:#index`;
     const earlierBase: number[] = Array.from(cborEncode({ doc_version: CHAT_SYNC.docVersion, snapshot: new Uint8Array([1]), migration_origin: null }));
     const earlierIndex: number[] = Array.from(cborEncode({ entries: [{ doc_id: DOC, peer_cid: BOB, title: null, held_apart: true }] }));
     await port.set(ALICE, base, earlierBase);
