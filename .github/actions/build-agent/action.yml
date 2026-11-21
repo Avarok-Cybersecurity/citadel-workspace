@@ -110,31 +110,25 @@ runs:
         # /Users/runner/.cargo/... strings. Assigned first so a failure stops the step.
         remap="$(node scripts/remap-path-env.mjs "$TARGET")"
         export "$remap"
+        # And the C and C++ compilers' (the cc and cmake crates' __FILE__ strings).
+        remap="$(node scripts/remap-path-env.mjs --cflags "$TARGET")"
+        export "$remap"
+        remap="$(node scripts/remap-path-env.mjs --cxxflags "$TARGET")"
+        export "$remap"
         cargo build --release --target "$TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features "$features"
         # Vendored OpenSSL compiles its install prefix in (ENGINESDIR, MODULESDIR): a C configure
         # path no rustc flag maps, under the checkout, which is under /home/runner on Linux.
         node scripts/check-no-home-paths-shipped.mjs \
           --allow-under "$PWD/target/$TARGET/release/build/openssl-sys/" \
           "target/$TARGET/release/citadel-workspace-internal-service"
-    # PowerShell, not bash, on Windows: vendored OpenSSL runs its Configure with the first
-    # perl on PATH, and under Git's bash that is Git's cut-down perl, which lacks the modules
-    # Configure needs ("Can't locate ... Params/Check.pm"). The runner's Strawberry perl is
-    # found under pwsh, as it was before this build moved into a composite action.
+    # PowerShell on Windows, and one script shared with validate.yml's windows-agent job, so a PR
+    # builds and gates exactly the binary this leg ships: scripts/build-agent-windows.ps1.
     - name: Build the agent (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       env:
         TARGET: ${{ inputs.target }}
-      run: |
-        $ErrorActionPreference = 'Stop'
-        $remap = node scripts/remap-path-env.mjs $env:TARGET
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        $name, $value = $remap -split '=', 2
-        Set-Item -Path "env:$name" -Value $value
-        cargo build --release --target "$env:TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored,self-update,native-dialogs
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        node scripts/check-no-home-paths-shipped.mjs "target/$env:TARGET/release/citadel-workspace-internal-service.exe"
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      run: ./scripts/build-agent-windows.ps1 -Target $env:TARGET
 
     # Signed and notarised BEFORE packaging, so the tarball carries a binary
     # macOS will run without argument.

@@ -22,16 +22,34 @@ export function cargoHome(env = process.env) {
   return env.CARGO_HOME ?? join(homedir(), '.cargo');
 }
 
+/** The roots every builder maps, in a fixed order: the checkout, cargo's home, then each extra. */
+function remapPairs({ root = ROOT, home = cargoHome(), extra = [] } = {}) {
+  const pairs = [[root, '/citadel-workspace'], [home, '/cargo'], ...extra];
+  for (const [dir, label] of pairs) if (!dir) throw new Error(`remap-paths: no directory given for ${label}`);
+  return pairs.map(([dir, label]) => [resolve(dir), label]);
+}
+
 /**
  * The flags, in a fixed order: the checkout, cargo's home, then each extra `[dir, label]`.
  * The committed fixtures' bytes depend on this order (build-app-fixtures.mjs --check).
  */
-export function remapFlags({ root = ROOT, home = cargoHome(), extra = [] } = {}) {
-  const pairs = [[root, '/citadel-workspace'], [home, '/cargo'], ...extra];
-  return pairs.map(([dir, label]) => {
-    if (!dir) throw new Error(`remap-paths: no directory given for ${label}`);
-    return `--remap-path-prefix=${resolve(dir)}=${label}`;
-  });
+export function remapFlags(roots = {}) {
+  return remapPairs(roots).map(([dir, label]) => `--remap-path-prefix=${dir}=${label}`);
+}
+
+/**
+ * The same roots for the C and C++ compilers the `cc` and `cmake` crates drive, which rustc's
+ * flag never reaches: their `__FILE__` strings (aws-lc's error records, for one) carry the path
+ * each source was compiled from. GCC and Clang take `-ffile-prefix-map`, mapped to the same
+ * labels. MSVC's cl has no remapping flag, only `/d1trimfile`, which cuts the prefix off
+ * `__FILE__`; aws-lc-sys maps its own directory for GCC and Clang and nothing for cl, which is how
+ * the Windows agent alone shipped `C:\Users\<name>\.cargo\registry\...\aws-lc-sys-*` paths.
+ * Only the agent's builders apply these: the WASM builds link no C, and the gate covers them.
+ */
+export function cFlags(triple, roots = {}) {
+  const pairs = remapPairs(roots);
+  if (triple.endsWith('-msvc')) return pairs.map(([dir]) => `/d1trimfile:${dir}`);
+  return pairs.map(([dir, label]) => `-ffile-prefix-map=${dir}=${label}`);
 }
 
 /**
@@ -41,9 +59,26 @@ export function remapFlags({ root = ROOT, home = cargoHome(), extra = [] } = {})
  * path containing whitespace is refused rather than silently split.
  */
 export function targetRustflagsEnv(triple, flags) {
+  return { name: `CARGO_TARGET_${envTriple(triple)}_RUSTFLAGS`, value: joined(flags) };
+}
+
+/**
+ * The variable the `cc` crate adds to every C (`CFLAGS`) or C++ (`CXXFLAGS`) compile for one
+ * target, read as well by the `cmake` crate, which takes its flags from `cc`. Split on
+ * whitespace like cargo's, so the same refusal applies.
+ */
+export function targetCompilerFlagsEnv(variable, triple, flags) {
+  if (variable !== 'CFLAGS' && variable !== 'CXXFLAGS') throw new Error(`remap-paths: '${variable}' is not CFLAGS or CXXFLAGS`);
+  return { name: `${variable}_${envTriple(triple).toLowerCase()}`, value: joined(flags) };
+}
+
+function envTriple(triple) {
   if (!/^[a-z0-9_.-]+$/.test(triple)) throw new Error(`remap-paths: '${triple}' is not a target triple`);
+  return triple.toUpperCase().replace(/[-.]/g, '_');
+}
+
+function joined(flags) {
   const spaced = flags.find((f) => /\s/.test(f));
-  if (spaced) throw new Error(`remap-paths: '${spaced}' contains whitespace, which cargo would split`);
-  const name = `CARGO_TARGET_${triple.toUpperCase().replace(/[-.]/g, '_')}_RUSTFLAGS`;
-  return { name, value: flags.join(' ') };
+  if (spaced) throw new Error(`remap-paths: '${spaced}' contains whitespace, which would be split`);
+  return flags.join(' ');
 }

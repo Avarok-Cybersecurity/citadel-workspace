@@ -336,21 +336,24 @@ jobs:
       - name: Tests, including the Windows-only ones (registry entry, icon, ShellExecute)
         shell: pwsh
         run: cargo test -p citadel-workspace-internal-service --features vendored
-      - name: Build the agent the way the release does
+      # The release leg's own script: remapped source paths, the release features, and the
+      # shipped-artefact gate. This job built without the remapping, so the release pipeline was
+      # the first to meet a Windows home path.
+      - name: Build the agent the way the release does, and gate what it ships
         shell: pwsh
-        run: cargo build --release -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored
+        run: ./scripts/build-agent-windows.ps1 -Target x86_64-pc-windows-msvc
       - name: The shipped binary opens no console window
         shell: bash
         run: |
           node --test scripts/lib/assert-pe-subsystem.test.mjs
-          node scripts/lib/assert-pe-subsystem.mjs target/release/citadel-workspace-internal-service.exe windows
+          node scripts/lib/assert-pe-subsystem.mjs target/x86_64-pc-windows-msvc/release/citadel-workspace-internal-service.exe windows
       - name: It still prints its version when asked from a terminal
         shell: pwsh
         run: |
           # A Windows-subsystem program is neither waited for nor captured by a bare call: start
           # it with its output redirected, as the release gates read it.
           $out = Join-Path $env:RUNNER_TEMP 'version.txt'
-          $run = Start-Process -FilePath target/release/citadel-workspace-internal-service.exe -ArgumentList '--version' -Wait -PassThru -NoNewWindow -RedirectStandardOutput $out
+          $run = Start-Process -FilePath target/x86_64-pc-windows-msvc/release/citadel-workspace-internal-service.exe -ArgumentList '--version' -Wait -PassThru -NoNewWindow -RedirectStandardOutput $out
           if ($run.ExitCode -ne 0) { throw "--version exited $($run.ExitCode)" }
           $printed = (Get-Content $out) -join "`n"
           # The version has one source, the crate's manifest.
