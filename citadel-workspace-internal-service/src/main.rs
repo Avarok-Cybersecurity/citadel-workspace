@@ -164,6 +164,12 @@ async fn run() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
+    // After the launch check, so an update still installs; the new agent then refuses an
+    // earlier agent's data by name, saying where it is (citadel_internal_service::data_format).
+    if let BackendType::Filesystem(dir) = &backend_type {
+        citadel_internal_service::data_format::check_data_dir(std::path::Path::new(dir))?;
+    }
+
     // TLS by default. See BUILTIN_TLS_CERT for why the key ships in the binary,
     // and --no-tls for the one case where plain is right.
     let service = if opts.no_tls {
