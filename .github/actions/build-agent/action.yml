@@ -98,29 +98,7 @@ runs:
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
-      run: |
-        # native-dialogs: the PickFile request opens the OS file dialog (reported to the UI in
-        # the greeting as native_picker). Linux goes through the desktop portal (rfd's
-        # xdg-portal backend, no GTK needed). macOS stays off: rfd panics there
-        # ("NonWindowed environment ... thread different than main") and the agent's panic hook
-        # then exits the whole agent. Verified by sending PickFile to a macOS build.
-        features=vendored,self-update
-        if [ "$RUNNER_OS" = "Linux" ]; then features="$features,native-dialogs"; fi
-        # Source paths mapped (scripts/lib/remap-paths.mjs): agent-v0.13.0 carried 6,318
-        # /Users/runner/.cargo/... strings. Assigned first so a failure stops the step.
-        remap="$(node scripts/remap-path-env.mjs "$TARGET")"
-        export "$remap"
-        # And the C and C++ compilers' (the cc and cmake crates' __FILE__ strings).
-        remap="$(node scripts/remap-path-env.mjs --cflags "$TARGET")"
-        export "$remap"
-        remap="$(node scripts/remap-path-env.mjs --cxxflags "$TARGET")"
-        export "$remap"
-        cargo build --release --target "$TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features "$features"
-        # Vendored OpenSSL compiles its install prefix in (ENGINESDIR, MODULESDIR): a C configure
-        # path no rustc flag maps, under the checkout, which is under /home/runner on Linux.
-        node scripts/check-no-home-paths-shipped.mjs \
-          --allow-under "$PWD/target/$TARGET/release/build/openssl-sys/" \
-          "target/$TARGET/release/citadel-workspace-internal-service"
+      run: ./scripts/build-agent-unix.sh "$TARGET"
     # PowerShell on Windows, and one script shared with validate.yml's windows-agent job, so a PR
     # builds and gates exactly the binary this leg ships: scripts/build-agent-windows.ps1.
     - name: Build the agent (Windows)

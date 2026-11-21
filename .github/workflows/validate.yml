@@ -360,6 +360,47 @@ jobs:
           $version = (Select-String -Path citadel-workspace-internal-service/Cargo.toml -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches[0].Groups[1].Value
           if ($printed.Trim() -ne "citadel-agent $version") { throw "--version printed '$printed', expected citadel-agent $version" }
 
+  # The macOS and Linux agents as people get them: the release legs' own script, so a PR builds
+  # and gates every binary the release ships (windows-agent above is the Windows one). Without
+  # it the Linux leg was first gated by the production release, where vendored OpenSSL had
+  # compiled a remap flag's home path into its `compiler:` string.
+  unix-agents:
+    name: The ${{ matrix.target }} agent ships no build-machine home path
+    timeout-minutes: 60
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The release's matrix (release-agent.yml): Intel Mac is cross-compiled on Apple Silicon.
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/no-nested-ui-repo
+      - name: Add the target
+        env:
+          TARGET: ${{ matrix.target }}
+        run: rustup target add "$TARGET"
+      # The release legs' dependency cache, read only: master and agent-v* tag runs save it.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: release-agent-${{ matrix.target }}
+          save-if: false
+      - name: Install the musl toolchain
+        if: contains(matrix.target, '-musl')
+        run: bash citadel-workspaces/scripts/ci/apt-bounded.sh 600 musl-tools
+      - name: Build the agent the way the release does, and gate what it ships
+        env:
+          TARGET: ${{ matrix.target }}
+        run: ./scripts/build-agent-unix.sh "$TARGET"
+
   # The citadel-internal-service workspace, covered WHOLESALE rather than
   # crate-by-crate.
   #
@@ -3089,6 +3130,7 @@ jobs:
       - internal-service-rust-tests
       - rust-tests
       - windows-agent
+      - unix-agents
       - release-sign
       - telemetry-read
       - app-sdk
