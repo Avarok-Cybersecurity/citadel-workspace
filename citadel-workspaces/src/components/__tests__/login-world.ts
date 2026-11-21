@@ -90,7 +90,6 @@ export const tabContextDouble = async (orig: () => Promise<Record<string, unknow
 
 export const passkeyDouble = async (orig: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> => ({
   ...(await orig()), passkeysAvailableHere: (): boolean => true,
-  browserPasskeyDeps: (): unknown => ({ ...loginWorld.w.deps, now: (): number => 1 }),
 });
 
 export const signInDouble = async (orig: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> => ({

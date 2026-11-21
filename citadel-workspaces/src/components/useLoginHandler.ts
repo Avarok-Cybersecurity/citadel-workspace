@@ -10,9 +10,7 @@ import { getUserFriendlyErrorMessage, getErrorTitle } from "@/lib/error-messages
 import { redirectToExistingSession } from './login-session-redirect';
 import { loginWithPassword, type LoginResult } from './login-with-password';
 import { SignInServerRefusal } from '@/lib/sessions/sign-in-server';
-import { usePasskeyAccount, type PasskeyAccount } from './passkey/usePasskeyAccount';
-import { browserPasskeyDeps, failureOf, passkeysAvailableHere, signInWithPasskey } from '@/lib/passkey';
-import { failureCopy } from '@/lib/passkey/copy';
+import { passkeysAvailableHere } from '@/lib/passkey';
 import type { SignInFactors } from '@/lib/sign-in/types';
 import { finishLogin } from './sign-in/finish-login';
 import { useKeyOffer, type KeyOffer } from './sign-in/useKeyOffer';
@@ -66,10 +64,6 @@ export interface LoginHandler {
   handleLogin: (e: React.FormEvent) => Promise<void>;
   /** Which field to mark, so the message lands on the control it is about. */
   invalidField: LoginField | null;
-  /** Whether passkeys work in this browser, and whether this username has an option-A passkey here. */
-  passkey: PasskeyAccount;
-  /** Sign in as `account` with its option-A passkey, then move it to a server-verified key. */
-  handlePasskeyLogin: (account: string) => Promise<void>;
   /** Sign in as `account` with a security key alone. */
   handleKeyLogin: (account: string) => Promise<void>;
   /** Set while the form is offering to add a security key after sign-in. */
@@ -95,7 +89,6 @@ export function useLoginHandler({ onNext, initialUsername, initialServer, admiss
 
   const { toast } = useToast();
 
-  const passkey: PasskeyAccount = usePasskeyAccount(username);
   const { offer: keyOffer, offerKey } = useKeyOffer();
 
   const doRedirect = (session: { cid: bigint; username: string; server_address: string }): Promise<void> =>
@@ -108,7 +101,7 @@ export function useLoginHandler({ onNext, initialUsername, initialServer, admiss
    * scope only, including while the key offer waits; it never enters React state
    * beyond the field it was typed into.
    */
-  const completeLogin = (user: string, factors: SignInFactors, opts: { offerKey: boolean; legacy: boolean }): Promise<void> => finishLogin({
+  const completeLogin = (user: string, factors: SignInFactors, opts: { offerKey: boolean }): Promise<void> => finishLogin({
     login: (name: string, f: SignInFactors): Promise<LoginResult> => loginWithPassword({ redirect: doRedirect }, name, f, securitySettings, server),
     offerKey, onNext, toast,
   }, user, factors, opts);
@@ -133,33 +126,6 @@ export function useLoginHandler({ onNext, initialUsername, initialServer, admiss
     return false;
   };
 
-  const handlePasskeyLogin = async (account: string): Promise<void> => {
-    const name: string = account.trim();
-    if (!requireUsername(name)) return;
-    // First, as for a key: the human check binds to this account's workspace, and the password is its fallback.
-    setUsername(name);
-    const admissionToken: string | null | false = admit(); if (admissionToken === false) return;
-    begin();
-    let unlocked: boolean = false;
-    try {
-      await signInWithPasskey(browserPasskeyDeps(), name, async (user: string, secret: string): Promise<void> => {
-        unlocked = true;
-        await completeLogin(user, { password: secret, securityKey: passkeysAvailableHere(), admissionToken }, { offerKey: false, legacy: true });
-      });
-    } catch (err: unknown) {
-      // Before the unlock: the passkey copy, and the password field is right
-      // there. After it: the ordinary login failed, reported as the form does.
-      if (!unlocked) {
-        setError(failureCopy(failureOf(err)));
-        document.getElementById('password')?.focus();
-      } else {
-        reportFailure(err);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleKeyLogin = async (account: string): Promise<void> => {
     const name: string = account.trim();
     if (!requireUsername(name)) return;
@@ -167,7 +133,7 @@ export function useLoginHandler({ onNext, initialUsername, initialServer, admiss
     const admissionToken: string | null | false = admit(); if (admissionToken === false) return;
     begin();
     try {
-      await completeLogin(name, { password: null, securityKey: true, admissionToken }, { offerKey: false, legacy: false });
+      await completeLogin(name, { password: null, securityKey: true, admissionToken }, { offerKey: false });
     } catch (err: unknown) {
       reportFailure(err);
     } finally {
@@ -184,7 +150,7 @@ export function useLoginHandler({ onNext, initialUsername, initialServer, admiss
       // credentials, and a live session answers SessionAlreadyActive (the redirect).
       // `securityKey`: this window can answer a PasswordAndKey account's mid-Connect touch.
       const available: boolean = passkeysAvailableHere();
-      await completeLogin(name, { password: secret, securityKey: available, admissionToken }, { offerKey: offerKey && available, legacy: false });
+      await completeLogin(name, { password: secret, securityKey: available, admissionToken }, { offerKey: offerKey && available });
     } catch (err: unknown) {
       reportFailure(err);
     } finally {
@@ -209,7 +175,7 @@ export function useLoginHandler({ onNext, initialUsername, initialServer, admiss
   return {
     username, setUsername, password, setPassword, mode, setMode, server, setServer,
     error, loading, securitySettings, setSecuritySettings, handleLogin, invalidField,
-    passkey, handlePasskeyLogin, handleKeyLogin, keyOffer,
+    handleKeyLogin, keyOffer,
     signInWithNewPassword: (user: string, secret: string): Promise<void> => {
       // On the form, as if typed: a human check it asks for, or a failure, is answered from there.
       setMode('password'); setUsername(user); setPassword(secret);

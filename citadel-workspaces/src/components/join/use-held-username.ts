@@ -25,7 +25,7 @@ export function useHeldUsername(username: string, serverAddress: string): string
     return (): void => { live = false; };
   }, [serverAddress]);
   const accounts: KnownAccount[] = useMemo(
-    (): KnownAccount[] => knownAccounts({ agent, stored: [], hints: [], device: [] }), [agent],
+    (): KnownAccount[] => knownAccounts({ agent, stored: [], hints: [] }), [agent],
   );
   const held: KnownAccount | null = target === null ? null : heldForAnotherServer(accounts, username, target);
   return held === null || held.server === null ? null : heldUsernameCopy(held.username, held.server);

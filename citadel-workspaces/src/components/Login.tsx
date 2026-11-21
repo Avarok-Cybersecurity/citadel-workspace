@@ -10,7 +10,6 @@ import { SecuritySettings, SecuritySettingsValues } from "./SecuritySettings";
 import { useLoginHandler, type LoginHandler } from "./useLoginHandler";
 import { SignInAccounts, SignInScopeLine } from "./sign-in/SignInAccounts";
 import { scopeDescribedBy, scopedSubmit, useSignInScope, type SignInScope } from "./sign-in/useSignInScope";
-import { usePasskeyAccounts } from "./passkey/usePasskeyAccounts";
 import { PASSWORD_THEN_KEY, passkeyAction, passkeyOffer, type PasskeyAction } from "./passkey/passkey-offer";
 import { LoginFactorFields } from "./LoginFactorFields";
 import { AddSecurityKeyCard } from "./sign-in/AddSecurityKeyCard";
@@ -55,22 +54,20 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
   const signInLevel: number | undefined = useSignInLevel(h.username);
   const {
     username, setUsername, error, invalidField, loading, securitySettings, setSecuritySettings,
-    handleLogin, passkey, handlePasskeyLogin, handleKeyLogin, keyOffer, mode,
+    handleLogin, handleKeyLogin, keyOffer, mode,
   } = h;
   const recovery: AccountRecovery = useAccountRecovery();
 
-  // Offered before a username is typed: option-A passkeys and this device's sign-in hints (passkey-offer.ts).
-  const legacyAccounts: string[] = usePasskeyAccounts();
-  const passkeyAccounts: string[] = passkeyOffer(username, mode, passkey.hasKeys, legacyAccounts, hints);
-  const scope: SignInScope = useSignInScope(h.server, h.setServer, username, passkeyAccounts, hints, legacyAccounts);
+  // Offered before a username is typed: this device's sign-in hints (passkey-offer.ts).
+  const passkeyAccounts: string[] = passkeyOffer(username, mode, hints);
+  const scope: SignInScope = useSignInScope(h.server, h.setServer, username, passkeyAccounts, hints);
   // A known server is the one the check binds to; a scoped sign-in is for that server.
   useEffect((): void => { setAccountServer(scope.server ?? knownServer); setTyped(h.username.trim()); }, [scope.server, knownServer, h.username]);
   const elsewhere: boolean = scope.typed.kind === 'elsewhere';
   const [keyNext, setKeyNext] = useState<string | null>(null);
   const signInAs = (account: string): void => {
-    const action: PasskeyAction = passkeyAction(account, legacyAccounts, hints);
-    if (action === 'legacy') void handlePasskeyLogin(account);
-    else if (action === 'key-first') void handleKeyLogin(account);
+    const action: PasskeyAction = passkeyAction(account, hints);
+    if (action === 'key-first') void handleKeyLogin(account);
     else { setUsername(account); setKeyNext(account); setTimeout((): void => { document.getElementById('password')?.focus(); }, 0); }
   };
 
@@ -192,7 +189,7 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
                 onConfigureSecurity={() => setShowSecuritySettings(true)}
                 securitySettings={securitySettings}
                 setSecuritySettings={setSecuritySettings}
-                passkey={passkey}
+                passkeysAvailable={passkeysAvailableHere()}
               />
 
               <AdmissionCheck gate={admission} />

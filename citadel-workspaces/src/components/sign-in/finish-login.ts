@@ -16,7 +16,7 @@ export interface FinishLoginDeps {
   toast: (toast: { title: string; description: string; variant?: 'destructive' }) => void;
 }
 
-export async function finishLogin(deps: FinishLoginDeps, user: string, factors: SignInFactors, opts: { offerKey: boolean; legacy: boolean }): Promise<void> {
+export async function finishLogin(deps: FinishLoginDeps, user: string, factors: SignInFactors, opts: { offerKey: boolean }): Promise<void> {
   const done: Completed = await completeSignIn({ login: deps.login, offerKey: deps.offerKey, signIn: browserSignInDeps() }, user, factors, opts);
   if (done.kind === 'redirected') return;
   deps.onNext(done.cid.toString());

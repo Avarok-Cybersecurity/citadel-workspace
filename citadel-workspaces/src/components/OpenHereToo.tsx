@@ -1,5 +1,5 @@
 /**
- * "Open here too": the password (or a passkey) that lets this window join a
+ * "Open here too": the password that lets this window join a
  * session another window holds, with both kept live (agent 0.8.6).
  *
  * Asked once per browser: the join earns a token that is kept sealed
@@ -7,7 +7,7 @@
  * session it joins without asking. "Move it here instead" is the older
  * takeover, for a user who wants the other window to stop.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { NavigateFunction } from 'react-router';
@@ -18,8 +18,6 @@ import { useConfirm } from '@/components/shared/confirm-dialog';
 import { useDialogOverlay } from '@/hooks/use-dialog-overlay';
 import { describeFailure } from '@/lib/failure-message';
 import { browserOpenHereToo, openHereToo, type OpenHereTooDeps } from '@/lib/sessions/open-here-too';
-import { browserPasskeyDeps, hasPasskeyLogin, passkeysAvailableHere, signInWithPasskey, failureOf } from '@/lib/passkey';
-import { failureCopy } from '@/lib/passkey/copy';
 
 export interface OpenHereTooProps {
   username: string;
@@ -35,26 +33,16 @@ export function OpenHereToo({ username, onClose, onMoveInstead }: OpenHereTooPro
   const [password, setPassword] = useState<string>('');
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [passkey, setPasskey] = useState<boolean>(false);
   const { ref, dialogProps } = useDialogOverlay({ label: `Open ${username} here too`, onDismiss: onClose });
 
-  useEffect(() => {
-    if (!passkeysAvailableHere()) return undefined;
-    let live: boolean = true;
-    const deps: ReturnType<typeof browserPasskeyDeps> = browserPasskeyDeps();
-    hasPasskeyLogin(deps.store, deps.rpId, username).then((has: boolean) => { if (live) setPasskey(has); }, () => undefined);
-    return (): void => { live = false; };
-  }, [username]);
-
-  // A passkey's own failures are already said in its words; anything else is the agent's.
-  const run = async (attempt: (deps: OpenHereTooDeps) => Promise<void>, passkeyAttempt: boolean): Promise<void> => {
+  const run = async (attempt: (deps: OpenHereTooDeps) => Promise<void>): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
       await attempt(browserOpenHereToo({ navigate, toast, confirm, signInAs: onMoveInstead, signInAgain: onMoveInstead }));
       onClose();
     } catch (e: unknown) {
-      setError(passkeyAttempt && failureOf(e) !== 'failed' ? failureCopy(failureOf(e)) : describeFailure(e, 'This window could not join the session.'));
+      setError(describeFailure(e, 'This window could not join the session.'));
     } finally {
       setBusy(false);
     }
@@ -62,10 +50,7 @@ export function OpenHereToo({ username, onClose, onMoveInstead }: OpenHereTooPro
 
   const submit = (event: FormEvent): void => {
     event.preventDefault();
-    void run((deps) => openHereToo(deps, username, password), false);
-  };
-  const usePasskey = (): void => {
-    void run((deps) => signInWithPasskey(browserPasskeyDeps(), username, (user: string, secret: string) => openHereToo(deps, user, secret)), true);
+    void run((deps) => openHereToo(deps, username, password));
   };
 
   return (
@@ -77,11 +62,6 @@ export function OpenHereToo({ username, onClose, onMoveInstead }: OpenHereTooPro
             The other window stays signed in. This browser is asked once; after that it joins on its own.
           </p>
         </div>
-        {passkey && (
-          <Button type="button" className="w-full" disabled={busy} onClick={usePasskey} data-testid="open-here-too-passkey">
-            Use a passkey
-          </Button>
-        )}
         <Input
           type="password"
           autoComplete="current-password"

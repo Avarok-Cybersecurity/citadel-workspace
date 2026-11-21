@@ -280,7 +280,7 @@ Tests use Chrome's CDP virtual authenticator (`WebAuthn.addVirtualAuthenticator`
 confirmed in `node_modules/devtools-protocol/json/browser_protocol.json`. That is
 production WebAuthn code against a spec authenticator, not a mock.
 
-1. **Envelope module** (`src/lib/passkey/envelope.ts`: `deriveKek`, `wrapDek`,
+1. **Envelope module** (lib/passkey envelope, since removed with option A: `deriveKek`, `wrapDek`,
    `sealPassword`, `open*`; pure, no I/O — SBIO).
    Test: vitest round-trip with fixed-vector PRF bytes, and AAD mismatch → throws.
    Negative control: drop `cid` from the AAD → the swap test must go red. Confirm the

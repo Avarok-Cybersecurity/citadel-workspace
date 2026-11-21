@@ -18,7 +18,6 @@ import type {
 } from '../authenticator';
 import { PasskeyError } from '../authenticator';
 import type { PasskeyStore } from '../repository';
-import type { PasskeyDeps } from '../unlock';
 
 const HMAC: 'HMAC' = 'HMAC';
 
@@ -94,16 +93,4 @@ export class FakeAuthenticator implements AuthenticatorPort {
   async signalUnknownCredential(_rpId: string, credentialId: Bytes): Promise<void> {
     this.signalled.push(toBase64Url(credentialId));
   }
-}
-
-export function testDeps(): PasskeyDeps & { store: MemoryStore; authenticator: FakeAuthenticator } {
-  let clock: number = 1_700_000_000_000;
-  return {
-    store: new MemoryStore(),
-    authenticator: new FakeAuthenticator(),
-    // A fixed test RP ID: the value only has to be consistent within a test.
-    rpId: 'work.avarok.net',
-    rpName: 'Citadel Workspace',
-    now: (): number => (clock += 1000),
-  };
 }
