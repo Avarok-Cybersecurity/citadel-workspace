@@ -104,7 +104,7 @@ export class ConversationManager {
     // Same predicate as the persisted side, deliberately: an own message is not
     // unread, and a message that has not been delivered is not yet news.
     const currentCid: bigint | null = await this.config.getCurrentCid();
-    if (message.senderCid !== currentCid && message.status === 'delivered') {
+    if (message.sender_cid !== currentCid && message.status === 'delivered') {
       conversation.unreadCount += 1;
     }
     return true;

@@ -21,7 +21,7 @@ import type { PeerConnectNotification } from 'citadel-workspace-client-ts';
 /**
  * A PeerConnectNotification as read here; the level is the one the initiator asked for.
  * `answered_by_agent`: the agent answers this offer itself, for an account it hosts, so the
- * account is reachable with no window showing it. An agent that predates it never sends it.
+ * account is reachable with no window showing it.
  */
 export type IncomingOffer = Partial<Pick<PeerConnectNotification, 'cid' | 'peer_cid' | 'answered_by_agent'>> & {
   session_security_settings?: { security_level?: unknown };

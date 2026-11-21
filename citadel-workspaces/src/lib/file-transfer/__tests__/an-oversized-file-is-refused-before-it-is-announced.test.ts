@@ -39,7 +39,7 @@ function transfer(fileSize: number): FileTransfer {
   return {
     id: 'transfer-1', fileName: 'big.bin', fileSize, fileType: 'application/octet-stream',
     state: 'pending', progress: 0,
-    senderCid: '7', recipientCid: '42',
+    sender_cid: '7', recipient_cid: '42',
     createdAt: 0, updatedAt: 0, isIncoming: false,
   };
 }

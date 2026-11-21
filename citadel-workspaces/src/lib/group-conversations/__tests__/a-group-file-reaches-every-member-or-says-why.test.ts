@@ -90,7 +90,7 @@ describe('sharing into the group', () => {
     expect(announced).toEqual([{ name: 'hello.txt', size: 5, mimeType: 'text/plain' }]);
     expect(own).toHaveLength(1);
     expect(own[0].messageId).toBe('msg-1');
-    expect(own[0].fileShare?.senderCid).toBe(SELF);
+    expect(own[0].fileShare?.sender_cid).toBe(SELF);
     expect(own[0].fileShare?.deliveries).toEqual(result.deliveries);
     expect(result.deliveries).toHaveLength(5);
   });

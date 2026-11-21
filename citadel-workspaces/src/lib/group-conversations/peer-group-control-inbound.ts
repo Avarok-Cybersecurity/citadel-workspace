@@ -14,7 +14,7 @@ import { toCid } from './group-wire-variants';
 export interface GroupControlEvent {
   groupId: string;
   /** Who the protocol says sent it. */
-  senderCid: bigint;
+  sender_cid: bigint;
   /** Who the group key names as owner; always permitted. */
   ownerCid: bigint;
   control: GroupControlBody;
@@ -28,9 +28,9 @@ export function peerGroupControlEvent(notification: Record<string, unknown>): Gr
   if (!Array.isArray(raw)) return null;
   const decoded: PeerGroupControl | null = decodeGroupControl(new Uint8Array(raw as number[]));
   if (!decoded) return null;
-  const senderCid: bigint | null = toCid(notification.peer_cid);
-  if (senderCid === null) return null;
+  const sender_cid: bigint | null = toCid(notification.peer_cid);
+  if (sender_cid === null) return null;
   // Throws on a malformed key, like every other arm; group-response-service catches and logs.
   const key: MessageGroupKey = parseGroupKey(notification.group_key);
-  return { groupId: groupKeyToId(key), senderCid, ownerCid: key.cid, control: decoded.control };
+  return { groupId: groupKeyToId(key), sender_cid, ownerCid: key.cid, control: decoded.control };
 }

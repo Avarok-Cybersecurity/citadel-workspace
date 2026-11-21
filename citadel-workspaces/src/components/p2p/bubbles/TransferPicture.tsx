@@ -37,7 +37,7 @@ export function TransferPicture({ message, isOwn }: { message: PaneMessage; isOw
 
   const open = (): void => {
     // A direct chat's pictures page through its peer's; without a peer (absent CIDs) only this one shows.
-    const peerCid: bigint | undefined = isOwn ? message.recipientCid : message.senderCid;
+    const peerCid: bigint | undefined = isOwn ? message.recipient_cid : message.sender_cid;
     const pictures: FileTransfer[] = peerCid === undefined ? [] : picturesWith(peerCid.toString());
     const at: number = pictures.findIndex((t: FileTransfer): boolean => t.id === transferId);
     const own: FileTransfer | undefined = fileTransferService.getTransfer(transferId);

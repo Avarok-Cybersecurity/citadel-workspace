@@ -96,11 +96,11 @@ export function MessageStatusDetails({ message }: MessageStatusDetailsProps): JS
         copyable
       />
       {/* A direct chat's two ends; a channel message has a sender's name and no recipient. */}
-      {message.senderCid !== undefined && (
-        <Row label="From" value={truncateCid(message.senderCid.toString())} fullValue={message.senderCid.toString()} copyable />
+      {message.sender_cid !== undefined && (
+        <Row label="From" value={truncateCid(message.sender_cid.toString())} fullValue={message.sender_cid.toString()} copyable />
       )}
-      {message.recipientCid !== undefined && (
-        <Row label="To" value={truncateCid(message.recipientCid.toString())} fullValue={message.recipientCid.toString()} copyable />
+      {message.recipient_cid !== undefined && (
+        <Row label="To" value={truncateCid(message.recipient_cid.toString())} fullValue={message.recipient_cid.toString()} copyable />
       )}
       {message.receipt !== undefined && (
         <>

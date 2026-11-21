@@ -40,7 +40,7 @@ describe('an empty P2P conversation', () => {
     render(
       <MessageList
         {...base}
-        messages={[between({ id: '1', content: 'hi', senderCid: 1n, recipientCid: 2n, timestamp: 0, index: 0, status: 'sent', message_type: 'text' })]}
+        messages={[between({ id: '1', content: 'hi', sender_cid: 1n, recipient_cid: 2n, timestamp: 0, index: 0, status: 'sent', message_type: 'text' })]}
       />,
     );
 
@@ -69,7 +69,7 @@ describe('the empty state waits until it is true', () => {
   });
 
   it('never says it when there are messages, loading or not', () => {
-    const withHistory: ListProps = { ...base, messages: [between({ id: 'm1', content: 'hello', senderCid: 2n, recipientCid: 1n, timestamp: 1, index: 0, status: 'delivered', message_type: 'text' })] };
+    const withHistory: ListProps = { ...base, messages: [between({ id: 'm1', content: 'hello', sender_cid: 2n, recipient_cid: 1n, timestamp: 1, index: 0, status: 'delivered', message_type: 'text' })] };
     render(<MessageList {...withHistory} isLoadingHistory />);
     expect(screen.queryByText(/No messages yet/i)).toBeNull();
   });

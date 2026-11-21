@@ -129,7 +129,7 @@ export const MessageList: React.ForwardRefExoticComponent<MessageListProps & Rea
                 key={message.id}
                 message={message}
                 isOwn={message.author.own}
-                quoted={message.replyTo ? quoteP2PReply(message.replyTo, byId, authorOf) : null}
+                quoted={message.reply_to ? quoteP2PReply(message.reply_to, byId, authorOf) : null}
                 onRetry={() => onRetryMessage(message)}
                 onOpenDocument={onOpenDocument}
                 onAcceptTransfer={onAcceptTransfer}

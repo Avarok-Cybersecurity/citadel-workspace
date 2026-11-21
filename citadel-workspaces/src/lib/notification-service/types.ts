@@ -32,7 +32,7 @@ export interface Notification {
   sourceId?: string; // ID of the message, connection request, etc.
   senderId?: string; // User ID who triggered this notification
   senderName?: string; // What to call them; the card's avatar initials come from this, never from the id
-  recipientCid?: string; // CID of the session this notification belongs to
+  recipient_cid?: string; // CID of the session this notification belongs to
   priority: NotificationPriority;
   read: boolean;
   timestamp: number;
@@ -58,13 +58,13 @@ export type NotificationHandler = (notification: Notification) => void;
  * filter one and not the other, which leaks exactly the same way as filtering
  * neither.
  *
- * An undefined `recipientCid` means the notification is not session-scoped
+ * An undefined `recipient_cid` means the notification is not session-scoped
  * (system messages), so it is always shown.
  */
 export function notificationBelongsTo(
-  notification: { recipientCid?: string },
+  notification: { recipient_cid?: string },
   cid: string | null
 ): boolean {
-  if (notification.recipientCid === undefined) return true;
-  return cid !== null && notification.recipientCid === cid;
+  if (notification.recipient_cid === undefined) return true;
+  return cid !== null && notification.recipient_cid === cid;
 }

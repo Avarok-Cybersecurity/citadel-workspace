@@ -97,7 +97,7 @@ describe('the composer while they have not accepted', () => {
 });
 
 describe('a message held for someone who has not accepted', () => {
-  const pending: P2PMessage = { id: 'm1', content: 'hi', senderCid: 1n, recipientCid: 2n, timestamp: 1, index: 0, status: 'pending', message_type: 'text' };
+  const pending: P2PMessage = { id: 'm1', content: 'hi', sender_cid: 1n, recipient_cid: 2n, timestamp: 1, index: 0, status: 'pending', message_type: 'text' };
 
   it('shows the clock and says when it sends', () => {
     render(<AwaitingAcceptContext.Provider value="Bob"><BubbleFooter message={pending} isOwn /></AwaitingAcceptContext.Provider>);

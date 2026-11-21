@@ -25,7 +25,7 @@ import { components } from '../mdxComponents';
 import { useCompiledMdx, type CompiledMdx } from '../use-compiled-mdx';
 
 function Document({ source }: { source: string }): JSX.Element {
-  const { compiled }: CompiledMdx = useCompiledMdx(source, components, undefined, false);
+  const { compiled }: CompiledMdx = useCompiledMdx(source, components, null, false);
   return <MDXProvider components={components}>{compiled}</MDXProvider>;
 }
 

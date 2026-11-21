@@ -28,8 +28,8 @@ function transfer(): FileTransfer {
     fileType: 'text/markdown',
         state: 'pending',
     progress: 0,
-    senderCid: ME.toString(),
-    recipientCid: PEER.toString(),
+    sender_cid: ME.toString(),
+    recipient_cid: PEER.toString(),
     createdAt: 1,
     updatedAt: 1,
     expiresAt: 2,
@@ -68,7 +68,7 @@ describe("the sender's own file offer", () => {
     expect(recorded.added).toHaveLength(1);
     const { peer, message } = recorded.added[0];
     expect(peer, 'filed under the wrong conversation').toBe(PEER);
-    expect(message.senderCid, 'not shown as the sender\'s own bubble').toBe(ME);
+    expect(message.sender_cid, 'not shown as the sender\'s own bubble').toBe(ME);
     expect(message.message_type).toBe('file_transfer');
     expect(message.transfer_id, 'the bubble cannot follow its transfer').toBe('t-1');
     expect(message.transfer_state).toBe('pending');

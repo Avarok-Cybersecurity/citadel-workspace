@@ -20,7 +20,7 @@ export interface FanOutDeps {
    */
   isRegistered: RegistrationLookup;
   /** The existing transfer service's send; resolves to the transfer id. */
-  sendFile: (recipientCid: string, file: File) => Promise<string>;
+  sendFile: (recipient_cid: string, file: File) => Promise<string>;
 }
 
 export const NOT_REGISTERED_REASON: string = 'not P2P-registered with you';

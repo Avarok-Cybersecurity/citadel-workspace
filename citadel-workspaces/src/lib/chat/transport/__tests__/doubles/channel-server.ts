@@ -127,7 +127,7 @@ export interface ChannelServer {
   /** Mocked in for the default export of `@/lib/workspace-service`. */
   readonly service: {
     getGroupMessages(groupId: string, before?: number | bigint, limit?: number): Promise<void>;
-    sendGroupMessage(groupId: string, content: string, type?: GroupMessageType, replyTo?: string): Promise<void>;
+    sendGroupMessage(groupId: string, content: string, type?: GroupMessageType, reply_to?: string): Promise<void>;
     editGroupMessage(groupId: string, messageId: string, content: string): Promise<void>;
     deleteGroupMessage(groupId: string, messageId: string): Promise<void>;
     reactGroupMessage(groupId: string, messageId: string, emoji: string, on: boolean): Promise<void>;
@@ -152,7 +152,7 @@ export interface ChannelServer {
 export const channelServer: ChannelServer = {
   service: {
     getGroupMessages: (groupId: string, before?: number | bigint, limit?: number): Promise<void> => messaging.getGroupMessages(sender, groupId, before, limit),
-    sendGroupMessage: (groupId: string, content: string, type?: GroupMessageType, replyTo?: string): Promise<void> => messaging.sendGroupMessage(sender, groupId, content, type, replyTo),
+    sendGroupMessage: (groupId: string, content: string, type?: GroupMessageType, reply_to?: string): Promise<void> => messaging.sendGroupMessage(sender, groupId, content, type, reply_to),
     editGroupMessage: (groupId: string, messageId: string, content: string): Promise<void> => messaging.editGroupMessage(sender, groupId, messageId, content),
     deleteGroupMessage: (groupId: string, messageId: string): Promise<void> => messaging.deleteGroupMessage(sender, groupId, messageId),
     reactGroupMessage: (groupId: string, messageId: string, emoji: string, on: boolean): Promise<void> => signals.reactGroupMessage(sender, groupId, messageId, emoji, on),

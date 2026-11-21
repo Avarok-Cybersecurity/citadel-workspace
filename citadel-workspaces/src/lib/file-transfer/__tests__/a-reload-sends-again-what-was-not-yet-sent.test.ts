@@ -60,7 +60,7 @@ function world(): World {
 function persisted(over: Partial<FileTransfer>): Partial<FileTransfer> {
   return {
     id: 'out-1', fileName: 'photo.jpg', fileSize: 10, fileType: 'image/jpeg', progress: 30,
-    senderCid: '7', recipientCid: '42', createdAt: 1, updatedAt: 2, isIncoming: false,
+    sender_cid: '7', recipient_cid: '42', createdAt: 1, updatedAt: 2, isIncoming: false,
     offerMessageId: 'offer-msg-1', ...over,
   };
 }

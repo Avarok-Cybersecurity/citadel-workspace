@@ -16,14 +16,14 @@ const pngFile = (name) => new File([Uint8Array.from(atob(PNG_B64), (c) => c.char
 
 const sent = (id, at) => ({
   id, fileName: `${id}.png`, fileSize: 74, fileType: 'image/png', state: 'complete', progress: 100,
-  senderCid: '7', recipientCid: '42', createdAt: at, updatedAt: at, isIncoming: false,
+  sender_cid: '7', recipient_cid: '42', createdAt: at, updatedAt: at, isIncoming: false,
 });
 
 function Viewer() {
   const [pictures, setPictures] = useState(null);
   useEffect(() => {
     const list = [sent('harbour-at-dusk', 1), sent('lighthouse', 2), sent('pier', 3)];
-    const keep = (t) => rememberSentPicture(browserSentPictureStore, { own: t.senderCid, peer: t.recipientCid, transferId: t.id }, pngFile(t.fileName), t.createdAt);
+    const keep = (t) => rememberSentPicture(browserSentPictureStore, { own: t.sender_cid, peer: t.recipient_cid, transferId: t.id }, pngFile(t.fileName), t.createdAt);
     void Promise.all(list.map(keep)).then(() => setPictures(list));
   }, []);
   return pictures === null ? null : <PictureViewer pictures={pictures} startIndex={1} onClose={() => {}} />;
@@ -31,7 +31,7 @@ function Viewer() {
 
 function PictureBubble() {
   const message = {
-    id: 'm1', content: 'File transfer: sunset.png', senderCid: 42n, recipientCid: 7n, timestamp: 1, status: 'delivered',
+    id: 'm1', content: 'File transfer: sunset.png', sender_cid: 42n, recipient_cid: 7n, timestamp: 1, status: 'delivered',
     message_type: 'file_transfer', transfer_id: 'not-on-this-device', file_name: 'sunset.png', file_size: 74, file_type: 'image/png',
     file_thumbnail: `data:image/png;base64,${PNG_B64}`, transfer_mode: 'p2p', transfer_state: 'pending',
   };

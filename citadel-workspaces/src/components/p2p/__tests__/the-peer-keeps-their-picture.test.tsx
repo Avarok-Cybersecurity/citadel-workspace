@@ -63,7 +63,7 @@ describe('a conversation row', () => {
 
 describe('a peer bubble that carries an avatar', () => {
   it("shows the sender's picture", () => {
-    const message: P2PMessage = { id: 'm1', content: 'hi', senderCid: 2n, recipientCid: 1n, timestamp: 1, index: 0, status: 'delivered', message_type: 'text' };
+    const message: P2PMessage = { id: 'm1', content: 'hi', sender_cid: 2n, recipient_cid: 1n, timestamp: 1, index: 0, status: 'delivered', message_type: 'text' };
     render(inWorkspace(<TextBubble message={message} isOwn={false} quoted={null} showSenderAvatar senderName="Ada Lovelace" senderUsername="ada" />));
     expect(screen.getByTestId('member-avatar-ada').getAttribute('data-avatar-src')).toBe(PICTURE);
   });

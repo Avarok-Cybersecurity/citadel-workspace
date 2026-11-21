@@ -63,7 +63,7 @@ export class FileTransferState {
 
   getTransfersForPeer(peerCid: string): FileTransfer[] {
     return Array.from(this.transfers.values()).filter(
-      t => t.senderCid === peerCid || t.recipientCid === peerCid
+      t => t.sender_cid === peerCid || t.recipient_cid === peerCid
     );
   }
 

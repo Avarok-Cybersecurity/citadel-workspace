@@ -49,7 +49,7 @@ export interface CdocChatSyncPayload {
 export interface CdocChatCommandEvent {
   readonly peerCid: bigint;
   /** The notification's recipient session; absent on the legacy PeerMessage path. */
-  readonly recipientCid: bigint | undefined;
+  readonly recipient_cid: bigint | undefined;
   readonly payload: CdocChatSyncPayload;
 }
 

@@ -19,7 +19,7 @@ export const pageAppNotices: NoticeSink = (notice: AppNotice): void => {
     }
     notificationService.addNotification({
       type: NotificationType.SYSTEM, priority: NotificationPriority.NORMAL,
-      title: notice.title, content: notice.body, senderName: notice.from, recipientCid: cid.toString(), data: { appId: notice.appId },
+      title: notice.title, content: notice.body, senderName: notice.from, recipient_cid: cid.toString(), data: { appId: notice.appId },
       inAppOnly: !appMayReachTheSystem(notice.appId),
     });
   }, (error: unknown): void => { console.error(`[apps] ${notice.from}'s notification could not be shown`, error); });

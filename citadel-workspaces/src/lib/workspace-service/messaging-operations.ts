@@ -27,7 +27,7 @@ export async function sendGroupMessage(
   groupId: string,
   content: string,
   messageType: GroupMessageType = 'Text',
-  replyTo?: string,
+  reply_to?: string,
   mentions?: string[]
 ): Promise<void> {
   const requestPart: WorkspaceProtocolRequest = {
@@ -35,7 +35,7 @@ export async function sendGroupMessage(
       group_id: groupId,
       message_type: messageType,
       content,
-      reply_to: replyTo ?? null,
+      reply_to: reply_to ?? null,
       mentions: mentions ?? null
     }
   };

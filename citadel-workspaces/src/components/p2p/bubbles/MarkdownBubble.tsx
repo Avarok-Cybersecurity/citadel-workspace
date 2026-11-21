@@ -134,7 +134,7 @@ export function MarkdownBubble({
         )}
 
         <div className={`min-w-0 rounded-lg px-3 py-2 ${bubbleStyles}`}>
-          {message.replyTo && <ReplyQuote quoted={quoted} isOwn={isOwn} />}
+          {message.reply_to && <ReplyQuote quoted={quoted} isOwn={isOwn} />}
           {/* Own bubbles invert UNCONDITIONALLY, because they are dark in both
               themes: `bg-primary text-primary-foreground`, and --primary is a
               dark purple in light mode too. `dark:prose-invert` alone meant that

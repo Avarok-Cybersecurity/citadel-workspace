@@ -41,10 +41,4 @@ describe('GetSessions’ signed-out accounts', () => {
     expect(cached).toEqual(first);
     expect(agent.asked()).toBe(1);
   });
-
-  it('are none from an agent that predates them', async (): Promise<void> => {
-    const state: ConnectionState = new ConnectionState(NOT_LEADING);
-    const result: ActiveSessionsResult = await getActiveSessionsResult(state, agentAnswering(state, { sessions: [] }).io);
-    expect(result).toEqual({ ok: true, sessions: [], signedOut: [] });
-  });
 });

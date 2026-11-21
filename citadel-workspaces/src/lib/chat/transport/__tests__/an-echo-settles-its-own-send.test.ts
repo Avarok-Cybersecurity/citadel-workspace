@@ -12,12 +12,12 @@ const local = (id: string, content: string): ChatMessage => ({
   id, content, timestamp: 1, index: 0, status: 'pending', message_type: 'text',
   author: { own: true, name: 'Ada', username: null }, share: null,
 });
-const echo = (content: string, replyTo: string | null): { content: string; reply_to: string | null; message_type: 'Text' } =>
-  ({ content, reply_to: replyTo, message_type: 'Text' });
+const echo = (content: string, reply_to: string | null): { content: string; reply_to: string | null; message_type: 'Text' } =>
+  ({ content, reply_to: reply_to, message_type: 'Text' });
 
 function held(...entries: Array<[string, string, string | null]>): PendingSends {
   const pending: PendingSends = pendingGroupSends();
-  for (const [id, content, replyTo] of entries) pending.add(local(id, content), echo(content, replyTo));
+  for (const [id, content, reply_to] of entries) pending.add(local(id, content), echo(content, reply_to));
   return pending;
 }
 

@@ -19,7 +19,7 @@ function inboxFor(world: World, db: FakeAgentLocalDb): { readonly outcomes: Prom
   const store: ChatStoreBackend = localDbChatStore(ALICE, db.connection([ALICE]));
   const outcomes: Promise<InboxOutcome>[] = [];
   world.channel.transport(ALICE, BOB).onMessage((payload: CdocChatSyncPayload): void => {
-    const event: CdocChatCommandEvent = { peerCid: BOB, recipientCid: ALICE, payload };
+    const event: CdocChatCommandEvent = { peerCid: BOB, recipient_cid: ALICE, payload };
     outcomes.push(recordClosedDocumentCommand(ALICE, event, store, CHAT_SYNC));
   });
   return { outcomes, store };
@@ -55,13 +55,13 @@ describe('a closed chat document', () => {
     const db: FakeAgentLocalDb = new FakeAgentLocalDb();
     const store: ChatStoreBackend = localDbChatStore(ALICE, db.connection([ALICE]));
     const update: CdocChatSyncPayload = { doc_id: doc, doc_version: CHAT_SYNC.docVersion, sync: { kind: 'update', updates: [new Uint8Array([1, 2])] } };
-    expect(await recordClosedDocumentCommand(ALICE, { peerCid: BOB, recipientCid: ALICE, payload: update }, store, CHAT_SYNC)).toBe('not kept');
+    expect(await recordClosedDocumentCommand(ALICE, { peerCid: BOB, recipient_cid: ALICE, payload: update }, store, CHAT_SYNC)).toBe('not kept');
     await store.saveEntry(doc, { peerCid: BOB, title: null });
     const stranger: bigint = BOB + 7n;
-    expect(await recordClosedDocumentCommand(ALICE, { peerCid: stranger, recipientCid: ALICE, payload: update }, store, CHAT_SYNC)).toBe('not kept');
-    expect(await recordClosedDocumentCommand(ALICE, { peerCid: BOB, recipientCid: ALICE, payload: { ...update, doc_version: CHAT_SYNC.docVersion + 1 } }, store, CHAT_SYNC)).toBe('refused');
+    expect(await recordClosedDocumentCommand(ALICE, { peerCid: stranger, recipient_cid: ALICE, payload: update }, store, CHAT_SYNC)).toBe('not kept');
+    expect(await recordClosedDocumentCommand(ALICE, { peerCid: BOB, recipient_cid: ALICE, payload: { ...update, doc_version: CHAT_SYNC.docVersion + 1 } }, store, CHAT_SYNC)).toBe('refused');
     expect(await store.loadPending(doc)).toEqual([]);
-    expect(await recordClosedDocumentCommand(ALICE, { peerCid: BOB, recipientCid: ALICE, payload: update }, store, CHAT_SYNC)).toBe('recorded');
+    expect(await recordClosedDocumentCommand(ALICE, { peerCid: BOB, recipient_cid: ALICE, payload: update }, store, CHAT_SYNC)).toBe('recorded');
     expect((await store.loadPending(doc)).map((u: Uint8Array): number[] => Array.from(u))).toEqual([[1, 2]]);
   });
 });

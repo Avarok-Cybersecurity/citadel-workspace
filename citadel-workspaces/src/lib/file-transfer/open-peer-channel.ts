@@ -14,9 +14,9 @@ import type { LifecycleDeps } from './transfer-lifecycle';
  * Not opening in time is reported, not thrown: the caller decides whether to
  * send anyway or hold the send for the peer (send-queue.ts).
  */
-export async function openChannelBeforeSending(deps: Pick<LifecycleDeps, 'openPeerChannel'>, recipientCid: string): Promise<boolean> {
-  const opened: boolean = await deps.openPeerChannel(BigInt(recipientCid));
-  if (!opened) debugLog('TransferLifecycle', 'P2P channel not confirmed open', { recipientCid });
+export async function openChannelBeforeSending(deps: Pick<LifecycleDeps, 'openPeerChannel'>, recipient_cid: string): Promise<boolean> {
+  const opened: boolean = await deps.openPeerChannel(BigInt(recipient_cid));
+  if (!opened) debugLog('TransferLifecycle', 'P2P channel not confirmed open', { recipient_cid });
   return opened;
 }
 

@@ -29,7 +29,7 @@ import { debugLog } from '@/lib/debug-config';
 /** What the protocol notification tells us, before any bubble has arrived. */
 interface PendingProtocolOffer {
   objectId: string;
-  senderCid: string;
+  sender_cid: string;
   fileName: string;
   fileSize: number;
   seenAt: number;
@@ -45,11 +45,11 @@ const OFFER_TTL_MS: number = 5 * 60 * 1000;
 /** Same sender, same name, same exact size. */
 function matches(
   offer: PendingProtocolOffer,
-  senderCid: string,
+  sender_cid: string,
   fileName: string,
   fileSize: number
 ): boolean {
-  return offer.senderCid === senderCid && offer.fileName === fileName && offer.fileSize === fileSize;
+  return offer.sender_cid === sender_cid && offer.fileName === fileName && offer.fileSize === fileSize;
 }
 
 export class ProtocolOfferCorrelator {
@@ -58,7 +58,7 @@ export class ProtocolOfferCorrelator {
   /** Buffered message-half arrivals, for when the bubble beats the bytes. */
   private awaitingBytes: Array<{
     transferId: string;
-    senderCid: string;
+    sender_cid: string;
     fileName: string;
     fileSize: number;
     seenAt: number;
@@ -82,13 +82,13 @@ export class ProtocolOfferCorrelator {
   }
 
   /** The protocol half arrived. */
-  noteProtocolOffer(objectId: string, senderCid: string, fileName: string, fileSize: number): void {
+  noteProtocolOffer(objectId: string, sender_cid: string, fileName: string, fileSize: number): void {
     const now: number = Date.now();
     this.prune(now);
 
     this.awaitingBytes = this.awaitingBytes.filter((a) => this.isOpen(a.transferId));
     const waitingIndex: number = this.awaitingBytes.findIndex((a) =>
-      matches({ objectId, senderCid, fileName, fileSize, seenAt: now }, a.senderCid, a.fileName, a.fileSize)
+      matches({ objectId, sender_cid, fileName, fileSize, seenAt: now }, a.sender_cid, a.fileName, a.fileSize)
     );
     if (waitingIndex !== -1) {
       const [waiting] = this.awaitingBytes.splice(waitingIndex, 1);
@@ -100,20 +100,20 @@ export class ProtocolOfferCorrelator {
       return;
     }
 
-    this.pending.push({ objectId, senderCid, fileName, fileSize, seenAt: now });
+    this.pending.push({ objectId, sender_cid, fileName, fileSize, seenAt: now });
   }
 
   /** The message half arrived. Returns true when the pair is now joined. */
   noteMessageOffer(
     transferId: string,
-    senderCid: string,
+    sender_cid: string,
     fileName: string,
     fileSize: number
   ): boolean {
     const now: number = Date.now();
     this.prune(now);
 
-    const index: number = this.pending.findIndex((o) => matches(o, senderCid, fileName, fileSize));
+    const index: number = this.pending.findIndex((o) => matches(o, sender_cid, fileName, fileSize));
     if (index !== -1) {
       const [offer] = this.pending.splice(index, 1);
       this.register(transferId, offer.objectId);
@@ -125,7 +125,7 @@ export class ProtocolOfferCorrelator {
     // dropping it: on a slow link the notification can trail the bubble, and a
     // transfer that cannot be accepted is indistinguishable to the user from one
     // that never arrived.
-    this.awaitingBytes.push({ transferId, senderCid, fileName, fileSize, seenAt: now });
+    this.awaitingBytes.push({ transferId, sender_cid, fileName, fileSize, seenAt: now });
     return false;
   }
 

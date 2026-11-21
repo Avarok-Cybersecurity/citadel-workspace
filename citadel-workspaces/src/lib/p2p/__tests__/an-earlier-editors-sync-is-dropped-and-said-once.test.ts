@@ -51,7 +51,7 @@ describe('the earlier chat editor’s sync, received', () => {
     await handler.handleP2PCommand(earlierSync(9), BOB, 100n);
     off();
     expect(heard).toEqual([]);
-    expect(stored.map((m: P2PMessage): [bigint, string, string] => [m.senderCid, m.message_type ?? '', m.content])).toEqual([
+    expect(stored.map((m: P2PMessage): [bigint, string, string] => [m.sender_cid, m.message_type ?? '', m.content])).toEqual([
       [ALICE, 'system_notice', 'alice is editing a chat document in an earlier version of the app. Their changes can\'t reach you until they update.'],
       [BOB, 'system_notice', 'bob is editing a chat document in an earlier version of the app. Their changes can\'t reach you until they update.'],
     ]);

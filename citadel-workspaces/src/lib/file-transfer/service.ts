@@ -85,14 +85,14 @@ export class FileTransferService {
     };
   }
 
-  async sendFile(recipientCid: string, file: File): Promise<string> {
-    return sendFile(this.deps, recipientCid, file);
+  async sendFile(recipient_cid: string, file: File): Promise<string> {
+    return sendFile(this.deps, recipient_cid, file);
   }
 
-  async sendAgentFile(senderCid: bigint, recipientCid: string, file: AgentFile, transferId: string): Promise<string> { return sendAgentFile(this.deps, senderCid, recipientCid, file, transferId); }
+  async sendAgentFile(sender_cid: bigint, recipient_cid: string, file: AgentFile, transferId: string): Promise<string> { return sendAgentFile(this.deps, sender_cid, recipient_cid, file, transferId); }
 
-  async sendFileWithNativePicker(recipientCid: string, title?: string, allowedExtensions?: string[]): Promise<string> {
-    return sendFileWithNativePicker(this.deps, recipientCid, title, allowedExtensions);
+  async sendFileWithNativePicker(recipient_cid: string, title?: string, allowedExtensions?: string[]): Promise<string> {
+    return sendFileWithNativePicker(this.deps, recipient_cid, title, allowedExtensions);
   }
 
   /** The sender's one click for a send a reload lost; see resend-transfer.ts. */

@@ -40,10 +40,10 @@ vi.mock('@/components/ui/scroll-area', () => ({
 const { MessageList }: typeof import('@/components/chat/pane/MessageList') = await import('@/components/chat/pane/MessageList');
 const { listProps: baseProps, between }: typeof import('@/components/chat/pane/__tests__/doubles/list-props') = await import('@/components/chat/pane/__tests__/doubles/list-props');
 
-interface Msg { id: string; timestamp: number; senderCid: bigint }
+interface Msg { id: string; timestamp: number; sender_cid: bigint }
 
 function messages(n: number): Msg[] {
-  return Array.from({ length: n }, (_, i) => ({ id: `m${i}`, timestamp: i, senderCid: 7n }));
+  return Array.from({ length: n }, (_, i) => ({ id: `m${i}`, timestamp: i, sender_cid: 7n }));
 }
 
 type ListProps = React.ComponentProps<typeof MessageList>;
@@ -52,7 +52,7 @@ type ListProps = React.ComponentProps<typeof MessageList>;
 const stamped: WeakMap<Msg[], ReturnType<typeof between>[]> = new WeakMap();
 function listProps(msgs: Msg[]): ListProps {
   const known: ReturnType<typeof between>[] | undefined = stamped.get(msgs);
-  const thread: ReturnType<typeof between>[] = known ?? msgs.map((m: Msg) => between({ ...m, content: 'x', recipientCid: 1n, index: 0, status: 'delivered', message_type: 'text' }));
+  const thread: ReturnType<typeof between>[] = known ?? msgs.map((m: Msg) => between({ ...m, content: 'x', recipient_cid: 1n, index: 0, status: 'delivered', message_type: 'text' }));
   stamped.set(msgs, thread);
   return baseProps(thread);
 }
@@ -84,7 +84,7 @@ describe('the P2P thread', () => {
     const { rerender }: ReturnType<typeof render> = render(<MessageList {...listProps(msgs)} />);
     const afterFirst: number = groupings.length;
 
-    rerender(<MessageList {...listProps([...msgs, { id: 'new', timestamp: 9, senderCid: 7n }])} />);
+    rerender(<MessageList {...listProps([...msgs, { id: 'new', timestamp: 9, sender_cid: 7n }])} />);
 
     expect(groupings.length, 'a new message did not reach the thread').toBeGreaterThan(afterFirst);
     expect(groupings[groupings.length - 1]).toBe(4);

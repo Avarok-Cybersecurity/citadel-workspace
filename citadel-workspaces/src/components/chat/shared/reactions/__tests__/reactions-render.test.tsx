@@ -27,7 +27,7 @@ function binding(onReact: (emoji: string) => void = (): void => {}): ReactionBin
   };
 }
 
-const p2pMessage: P2PMessage = { id: 'm1', content: 'hello', senderCid: ALICE, recipientCid: ME, timestamp: 1, index: 0, status: 'delivered', message_type: 'text' };
+const p2pMessage: P2PMessage = { id: 'm1', content: 'hello', sender_cid: ALICE, recipient_cid: ME, timestamp: 1, index: 0, status: 'delivered', message_type: 'text' };
 
 describe('reaction chips', () => {
   it('show each emoji with its count', () => {

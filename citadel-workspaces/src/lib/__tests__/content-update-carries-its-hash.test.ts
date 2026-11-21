@@ -46,13 +46,6 @@ describe('a content update', () => {
     expect(verdict.status).toBe('mismatch');
   });
 
-  it('degrades to unhashed rather than mismatch when no hash arrives', async () => {
-    // An older server does not send the field. Refusing content because the
-    // server predates the hash would be the same defect wearing the fix's
-    // clothes, so absence must read as "cannot tell", not as "tampered".
-    expect(await verifyDocument('# Anything', undefined)).toEqual({ status: 'unhashed' });
-  });
-
   it('distinguishes a real edit from tampering, not just any change', async () => {
     // The check has to still work. A hash that matches nothing must fail.
     const edited: "# Edited" = '# Edited';

@@ -31,7 +31,7 @@ function setup(transfer: FileTransfer): { deps: P2PTransferDeps; intents: Array<
 
 const incoming = (over: Partial<FileTransfer> = {}): FileTransfer => ({
   id: 'r-1', fileName: 'photo.jpg', fileSize: 10, fileType: 'image/jpeg', state: 'transferring', progress: 50,
-  senderCid: '42', recipientCid: '7', createdAt: 1, updatedAt: 1, isIncoming: true, ...over,
+  sender_cid: '42', recipient_cid: '7', createdAt: 1, updatedAt: 1, isIncoming: true, ...over,
 });
 const complete = (id: string): { type: MessagingLayerType.FileTransferComplete; transfer_id: string; success: boolean; timestamp: number } =>
   ({ type: MessagingLayerType.FileTransferComplete, transfer_id: id, success: true, timestamp: 1 });
@@ -52,7 +52,7 @@ describe('a transfer that finishes here', () => {
 
 describe('the peer saying it finished', () => {
   it('finishes a send whose own last tick this page missed', async () => {
-    const { deps } = setup({ ...incoming(), id: 's-1', isIncoming: false, senderCid: '7', recipientCid: '42' });
+    const { deps } = setup({ ...incoming(), id: 's-1', isIncoming: false, sender_cid: '7', recipient_cid: '42' });
     await handlePeerComplete(deps, complete('s-1'));
     expect(deps.state.getTransfer('s-1')?.state).toBe('complete');
   });

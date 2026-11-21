@@ -24,7 +24,7 @@ import {
 import { extractTargetCid } from '../message-routing';
 
 const targetCid: "1281805798482117626" = '1281805798482117626';
-const senderCid: "18170202856123884154" = '18170202856123884154';
+const sender_cid: "18170202856123884154" = '18170202856123884154';
 
 function notification(type: string, payload: Record<string, unknown>): Record<string, unknown> {
   return { [type]: payload };
@@ -37,25 +37,25 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
   // here, the loop test below will fail and force the author to add
   // coverage.
   const SHAPES: Record<string, Record<string, unknown>> = {
-    PeerRegisterNotification: { cid: targetCid, peer_cid: senderCid, peer_username: 'alice', request_id: 'r1' },
-    PeerConnectNotification: { cid: targetCid, peer_cid: senderCid, request_id: 'r2' },
-    MessageNotification: { cid: targetCid, peer_cid: senderCid, message: [1, 2, 3], request_id: 'r3' },
-    FileTransferRequestNotification: { cid: targetCid, peer_cid: senderCid, metadata: { object_id: '42' }, request_id: 'r4' },
-    FileTransferStatusNotification: { cid: targetCid, peer_cid: senderCid, status: 'in-progress', request_id: 'r5' },
-    FileTransferTickNotification: { cid: targetCid, peer_cid: senderCid, transmitted_bytes: 1024, request_id: 'r6' },
+    PeerRegisterNotification: { cid: targetCid, peer_cid: sender_cid, peer_username: 'alice', request_id: 'r1' },
+    PeerConnectNotification: { cid: targetCid, peer_cid: sender_cid, request_id: 'r2' },
+    MessageNotification: { cid: targetCid, peer_cid: sender_cid, message: [1, 2, 3], request_id: 'r3' },
+    FileTransferRequestNotification: { cid: targetCid, peer_cid: sender_cid, metadata: { object_id: '42' }, request_id: 'r4' },
+    FileTransferStatusNotification: { cid: targetCid, peer_cid: sender_cid, status: 'in-progress', request_id: 'r5' },
+    FileTransferTickNotification: { cid: targetCid, peer_cid: sender_cid, transmitted_bytes: 1024, request_id: 'r6' },
     // Media frames carry request_id: null — they are unsolicited, so `cid` is
     // the ONLY thing that can route them. Routed any other way, a second
     // session in the same browser would receive another session's call.
-    MediaFrameNotification: { cid: targetCid, peer_cid: senderCid, track: 1, kind: 1, sequence: 7, timestamp: 0, flags: 1, payload: [1, 2], request_id: null },
-    MediaGapNotification: { cid: targetCid, peer_cid: senderCid, track: 1, missing_from: 4, missing_to: 6, request_id: null },
+    MediaFrameNotification: { cid: targetCid, peer_cid: sender_cid, track: 1, kind: 1, sequence: 7, timestamp: 0, flags: 1, payload: [1, 2], request_id: null },
+    MediaGapNotification: { cid: targetCid, peer_cid: sender_cid, track: 1, missing_from: 4, missing_to: 6, request_id: null },
     // The generated binding: { cid, peer_cid, message, group_key, request_id }.
-    GroupMessageNotification: { cid: targetCid, peer_cid: senderCid, message: [1, 2, 3], group_key: { cid: senderCid, mgid: '42' }, request_id: 'r7' },
+    GroupMessageNotification: { cid: targetCid, peer_cid: sender_cid, message: [1, 2, 3], group_key: { cid: sender_cid, mgid: '42' }, request_id: 'r7' },
     // No peer_cid on this one: the agent's failure answer carries the sender's
     // own cid, a reason, and a transport-frame request_id.
     MessageSendFailure: { cid: targetCid, message: 'Peer connection for 42 not found', request_id: 'r9' },
     // The generated binding: { cid, peer_cid, path, upgrading, request_id }. Unsolicited, so
     // request_id is always null and `cid` is the only route to the owning tab.
-    PeerPathChangedNotification: { cid: targetCid, peer_cid: senderCid, path: 'direct', upgrading: false, request_id: null },
+    PeerPathChangedNotification: { cid: targetCid, peer_cid: sender_cid, path: 'direct', upgrading: false, request_id: null },
     // The agent's server-link notifications (types/agent-reconnect.ts): no
     // request_id and no peer, so `cid` is the only way to the owning tab.
     ServerConnectionLost: { cid: targetCid, reconnecting: true, request_id: null },
@@ -63,19 +63,19 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
     ServerReconnectFailed: { cid: targetCid, reason: 'The server did not accept the session', request_id: null },
     // The connection supervisor's report (types/agent-supervisor.ts): unsolicited,
     // so `cid` is the only route to the tab that holds the session it names.
-    SupervisorNotification: { cid: targetCid, peer_cid: senderCid, state: 'Healing', request_id: null },
+    SupervisorNotification: { cid: targetCid, peer_cid: sender_cid, state: 'Healing', request_id: null },
     // Multi-window (agent 0.8.6). A conversation change goes to every window of
     // the account; its request_id, when set, is the asking window's send, and
     // routed by it the event would consume the pending entry its answer needs.
-    ConversationEvent: { cid: targetCid, peer_cid: senderCid, seq: 1n, kind: 'Appended', message: null, message_id: 'm1', metadata: null, account_username: 'bob', peer_username: 'alice', preview: 'hi', request_id: 'r10' },
+    ConversationEvent: { cid: targetCid, peer_cid: sender_cid, seq: 1n, kind: 'Appended', message: null, message_id: 'm1', metadata: null, account_username: 'bob', peer_username: 'alice', preview: 'hi', request_id: 'r10' },
     SessionRoleNotification: { cid: targetCid, role: 'Secondary', attached: 2, request_id: null },
     // The generated binding: { cid, peer_cid, frame, request_id }. `cid` is the account whose
     // app host the frame is for; request_id, when set, is the sending peer's.
-    IhttpFrameNotification: { cid: targetCid, peer_cid: senderCid, frame: [0xa1, 1, 2], request_id: 'r11' },
+    IhttpFrameNotification: { cid: targetCid, peer_cid: sender_cid, frame: [0xa1, 1, 2], request_id: 'r11' },
     // The generated binding: { cid, group_key, refusal, request_id }; the agent never sets request_id.
-    GroupMessageRefusedNotification: { cid: targetCid, group_key: { cid: senderCid, mgid: 3n }, refusal: { RateLimited: { max_per_second: 2 } }, request_id: null },
+    GroupMessageRefusedNotification: { cid: targetCid, group_key: { cid: sender_cid, mgid: 3n }, refusal: { RateLimited: { max_per_second: 2 } }, request_id: null },
     // The generated binding: { cid, peer_cid, pinned_fingerprint, presented_fingerprint, request_id }.
-    PeerIdentityKeyChangedNotification: { cid: targetCid, peer_cid: senderCid, pinned_fingerprint: 'aaaa-bbbb-cccc-dddd', presented_fingerprint: 'eeee-ffff-gggg-hhhh', request_id: null },
+    PeerIdentityKeyChangedNotification: { cid: targetCid, peer_cid: sender_cid, pinned_fingerprint: 'aaaa-bbbb-cccc-dddd', presented_fingerprint: 'eeee-ffff-gggg-hhhh', request_id: null },
   };
 
   it('has a test fixture for every CID-routed notification type', () => {
@@ -144,8 +144,8 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
     // walks the list in order. Pinning this so a future "tighten extraction
     // to cid-only" change has to remove the fallback explicitly rather than
     // by accident.
-    const msg: Record<string, unknown> = notification('FileTransferRequestNotification', { peer_cid: senderCid, metadata: { object_id: '42' } });
-    expect(extractTargetCid(msg)).toBe(senderCid);
+    const msg: Record<string, unknown> = notification('FileTransferRequestNotification', { peer_cid: sender_cid, metadata: { object_id: '42' } });
+    expect(extractTargetCid(msg)).toBe(sender_cid);
   });
 
   it('returns null when no cid-like field is present anywhere', () => {

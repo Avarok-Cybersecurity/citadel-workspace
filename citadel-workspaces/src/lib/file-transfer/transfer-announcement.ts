@@ -31,13 +31,13 @@ import type { FileTransfer } from './types';
  */
 export function buildLayerPayload(
   layer: MessagingLayer,
-  senderCid: bigint,
-  recipientCid: bigint
+  sender_cid: bigint,
+  recipient_cid: bigint
 ): P2PMessagingLayerPayload {
   return {
     layer,
-    sender_cid: senderCid,
-    recipient_cid: recipientCid,
+    sender_cid: sender_cid,
+    recipient_cid: recipient_cid,
     message_id: crypto.randomUUID(),
     index: 0,
     message_type: 'file_transfer',
@@ -63,7 +63,7 @@ export function buildTransferAnnouncement(transfer: FileTransfer): P2PMessagingL
     },
   );
 
-  const payload: P2PMessagingLayerPayload = buildLayerPayload(layer, BigInt(transfer.senderCid), BigInt(transfer.recipientCid));
+  const payload: P2PMessagingLayerPayload = buildLayerPayload(layer, BigInt(transfer.sender_cid), BigInt(transfer.recipient_cid));
   // Announced again after a reload (reload-recovery.ts), the offer keeps its
   // message id, so the recipient's conversation files it once, not twice.
   return transfer.offerMessageId === undefined ? payload : { ...payload, message_id: transfer.offerMessageId };

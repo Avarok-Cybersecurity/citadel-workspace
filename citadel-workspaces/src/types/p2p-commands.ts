@@ -178,12 +178,12 @@ export function isYjsSyncPayload(payload: unknown): payload is P2PYjsSyncPayload
 
 export function createMessagingLayerCommand(
   layer: MessagingLayer,
-  senderCid: bigint,
-  recipientCid: bigint,
+  sender_cid: bigint,
+  recipient_cid: bigint,
   index: number,
   options?: {
     messageId?: string;
-    replyTo?: string;
+    reply_to?: string;
     mentions?: string[];
     attachments?: P2PAttachment[];
     messageType?: MessageType;
@@ -195,11 +195,11 @@ export function createMessagingLayerCommand(
     type: P2PCommandType.MessagingLayerCommand,
     payload: {
       layer,
-      sender_cid: senderCid,
-      recipient_cid: recipientCid,
+      sender_cid: sender_cid,
+      recipient_cid: recipient_cid,
       message_id: options?.messageId ?? crypto.randomUUID(),
       index,
-      reply_to: options?.replyTo,
+      reply_to: options?.reply_to,
       mentions: options?.mentions,
       attachments: options?.attachments,
       message_type: options?.messageType || 'text',

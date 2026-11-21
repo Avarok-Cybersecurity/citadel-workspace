@@ -85,7 +85,7 @@ export async function getActiveSessionsResult(
   }
 }
 
-interface WireSessions { sessions?: SessionInformation[]; signed_out?: SignedOutSession[] }
+interface WireSessions { sessions: SessionInformation[]; signed_out: SignedOutSession[] }
 
 async function fetchActiveSessions(
   state: ConnectionState,
@@ -130,9 +130,7 @@ async function fetchActiveSessions(
     await io.sendWebSocketMessage({ GetSessions: { request_id: requestId } });
 
     const response: WireSessions = await failOnSocketLoss('GetSessions', responsePromise);
-    // `signed_out` is absent from an agent older than 0.8.4, which signs no one
-    // out: the agent's own type defaults it to empty for exactly that case.
-    return { ok: true, sessions: response.sessions || [], signedOut: response.signed_out ?? [] };
+    return { ok: true, sessions: response.sessions, signedOut: response.signed_out };
   } catch (error) {
     debugLog('ConnectionService', 'Failed to get active sessions', error);
     return NO_ANSWER;

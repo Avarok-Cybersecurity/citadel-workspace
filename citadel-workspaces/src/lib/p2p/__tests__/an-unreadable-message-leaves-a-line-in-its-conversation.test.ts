@@ -35,7 +35,7 @@ describe('an inbound message that cannot be read', () => {
     const w: World = world();
     await dispatchInboundCommand(new Uint8Array([0xff, 0xff, 0xff]), async (): Promise<void> => undefined, w.config, 42n);
     expect(w.stored).toHaveLength(1);
-    expect(w.stored[0]).toMatchObject({ message_type: 'system_notice', senderCid: 42n, content: "A message from alice couldn't be read" });
+    expect(w.stored[0]).toMatchObject({ message_type: 'system_notice', sender_cid: 42n, content: "A message from alice couldn't be read" });
     expect(w.notified).toEqual(w.stored);
   });
 

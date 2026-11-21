@@ -18,19 +18,11 @@ export function emitMembers(response: WorkspaceProtocolResponse, connectionInfo:
   // user-search corpus and the group-call roster -- so a list fetched for one
   // domain rendered inside another, and the admin tab then sent role changes
   // naming ITS entity with users taken from somebody else's list.
-  //
-  // Tolerates the old shape (a bare array) so a client running against a
-  // server that predates the field still works, with the domain unknown.
   type Members = Extract<WorkspaceProtocolResponse, { Members: unknown }>['Members'];
-  // Every field but the members may be absent from an older server; the members are mapped one by one.
-  type MembersWire = Partial<Omit<Members, 'members'>> & { members: Record<string, unknown>[] };
-  const payload: MembersWire | Record<string, unknown>[] = response.Members as MembersWire | Record<string, unknown>[];
-  const rawMembers: Record<string, unknown>[] = Array.isArray(payload) ? payload : payload.members;
-  const domainId: string | undefined = Array.isArray(payload) ? undefined : payload.domain_id ?? undefined;
-  // Absent from a server that predates it, which lists direct members only.
-  const inheritedFrom: Members['inherited_from'] = Array.isArray(payload) ? {} : payload.inherited_from ?? {};
-  // Absent from a server that predates booking guests, which has none.
-  const guests: readonly string[] = Array.isArray(payload) ? [] : payload.guests ?? [];
+  // The members are mapped one by one from their wire records.
+  type MembersWire = Omit<Members, 'members'> & { members: Record<string, unknown>[] };
+  const { members: rawMembers, domain_id: domainId, inherited_from: inheritedFrom, guests }: MembersWire =
+    response.Members as MembersWire;
 
   const mappedMembers: MappedMember[] = rawMembers.map((m: Record<string, unknown>): MappedMember => mapWasmMember(m));
   recordMemberNames(mappedMembers);

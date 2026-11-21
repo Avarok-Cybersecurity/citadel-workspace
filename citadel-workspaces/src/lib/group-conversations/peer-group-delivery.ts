@@ -31,7 +31,7 @@ export interface PeerGroupDelivery {
   senderName: string;
   content: string;
   timestamp: number;
-  replyTo?: string;
+  reply_to?: string;
   /** A shared file; see group-file-codec. */
   fileShare?: GroupFileShare;
 }
@@ -45,7 +45,7 @@ export function deliverPeerGroupMessage(delivery: PeerGroupDelivery): void {
     message_type: 'Text',
     content: delivery.content,
     timestamp: BigInt(delivery.timestamp),
-    reply_to: delivery.replyTo ?? null,
+    reply_to: delivery.reply_to ?? null,
     reply_count: 0,
     mentions: [],
     edited_at: null,

@@ -30,7 +30,7 @@ afterEach(cleanup);
 
 function message(state: string, isIncoming: boolean): P2PMessage {
   return {
-    id: 'msg-t1', content: 'File transfer: a.bin', senderCid: isIncoming ? 42n : 7n, recipientCid: isIncoming ? 7n : 42n,
+    id: 'msg-t1', content: 'File transfer: a.bin', sender_cid: isIncoming ? 42n : 7n, recipient_cid: isIncoming ? 7n : 42n,
     timestamp: 1, status: 'delivered', message_type: 'file_transfer', transfer_id: 't1',
     file_name: 'a.bin', file_size: 3000, transfer_mode: 'p2p', transfer_state: state,
   } as P2PMessage;

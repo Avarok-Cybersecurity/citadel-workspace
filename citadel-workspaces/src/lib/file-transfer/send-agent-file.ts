@@ -21,11 +21,11 @@ export interface AgentFile {
   size: number;
 }
 
-/** Record, announce and send `file` to `recipientCid` as transfer `transferId`. */
+/** Record, announce and send `file` to `recipient_cid` as transfer `transferId`. */
 export async function sendAgentFile(
   deps: Pick<LifecycleDeps, 'io' | 'state' | 'saveTransfer' | 'emitStateChange'>,
-  senderCid: bigint,
-  recipientCid: string,
+  sender_cid: bigint,
+  recipient_cid: string,
   file: AgentFile,
   transferId: string,
 ): Promise<string> {
@@ -39,8 +39,8 @@ export async function sendAgentFile(
     // only starts once they do.
     state: 'pending',
     progress: 0,
-    senderCid: senderCid.toString(),
-    recipientCid,
+    sender_cid: sender_cid.toString(),
+    recipient_cid,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     // Without a deadline an offer whose sender goes offline leaves the
@@ -57,8 +57,8 @@ export async function sendAgentFile(
   try {
     await deps.io.executeIntent({
       type: 'send-file-via-protocol',
-      cid: senderCid.toString(),
-      peerCid: recipientCid,
+      cid: sender_cid.toString(),
+      peerCid: recipient_cid,
       filePath: file.path,
       transferId,
       // Carries the record the executor announces to the recipient — the

@@ -459,7 +459,7 @@ async function checkFileTransferBubble(
           messages: conv.messages?.slice(-3).map((m: any) => ({
             id: m.id?.slice(0, 8),
             message_type: m.message_type,
-            senderCid: m.senderCid?.slice(0, 12),
+            sender_cid: m.sender_cid?.slice(0, 12),
             transfer_state: m.transfer_state
           }))
         });
@@ -1149,8 +1149,8 @@ async function runTest(): Promise<boolean> {
     const page1 = await context.newPage();
     const page2 = await context2.newPage(); // Use separate context for Bob
 
-    setupConsoleCapture(page1, 'Alice', ['P2P', 'file', 'transfer', 'error', 'FileTransferBubble', 'P2PChat', 'isOwn', 'senderCid', 'ILM']);
-    setupConsoleCapture(page2, 'Bob', ['P2P', 'file', 'transfer', 'error', 'FileTransferBubble', 'P2PChat', 'isOwn', 'senderCid', 'ILM']);
+    setupConsoleCapture(page1, 'Alice', ['P2P', 'file', 'transfer', 'error', 'FileTransferBubble', 'P2PChat', 'isOwn', 'sender_cid', 'ILM']);
+    setupConsoleCapture(page2, 'Bob', ['P2P', 'file', 'transfer', 'error', 'FileTransferBubble', 'P2PChat', 'isOwn', 'sender_cid', 'ILM']);
 
     // ========== STEP 1: Create accounts ==========
     console.log('\n' + '-'.repeat(50));

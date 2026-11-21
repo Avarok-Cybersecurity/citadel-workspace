@@ -50,7 +50,7 @@ export async function shareFileWithGroup(
   const messageId: string = await deps.announce(groupId, info);
   const deliveries: MemberDelivery[] = await fanOutFile(members, file, deps);
 
-  const fileShare: GroupFileShare = { ...info, senderCid: deps.selfCid, deliveries };
+  const fileShare: GroupFileShare = { ...info, sender_cid: deps.selfCid, deliveries };
   deps.deliverOwn({
     groupId,
     messageId,

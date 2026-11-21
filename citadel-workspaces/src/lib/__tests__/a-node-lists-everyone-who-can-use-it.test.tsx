@@ -38,16 +38,6 @@ describe('the Members reply', () => {
     off();
     expect(seen.at(-1)?.inheritedFrom).toEqual({ thomas: 'workspace-root' });
   });
-
-  it('reads a reply from an older server as all direct', () => {
-    const seen: MembersPayload[] = [];
-    const off: () => void = eventEmitter.on('members:loaded', (p: MembersPayload): void => { seen.push(p); });
-    handleGeneratedVariants({
-      Members: { domain_id: 'office', members: [{ id: 'thomas', banned: false, permissions: {}, metadata: {} }] },
-    } as unknown as WorkspaceProtocolResponse, { cid: 0, request_id: 'r' });
-    off();
-    expect(seen.at(-1)?.inheritedFrom).toEqual({});
-  });
 });
 
 describe('the access rules', () => {

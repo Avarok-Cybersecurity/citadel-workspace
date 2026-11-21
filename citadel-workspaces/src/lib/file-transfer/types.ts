@@ -19,8 +19,8 @@ export interface FileTransfer {
   thumbnail?: string;
   state: FileTransferState;
   progress: number; // 0-100
-  senderCid: string;
-  recipientCid: string;
+  sender_cid: string;
+  recipient_cid: string;
   downloadPath?: string;
   errorMessage?: string;
   createdAt: number;
@@ -193,8 +193,8 @@ export type FileTransferIntent =
 
 export interface IncomingFileTransferMessage {
   layer: unknown;
-  senderCid: string;
-  recipientCid: string;
+  sender_cid: string;
+  recipient_cid: string;
 }
 
 /** A picked file: the generated `PickFileSuccess`, less its addressing. */

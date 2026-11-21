@@ -17,7 +17,7 @@ const BOB: bigint = 22n;
 
 function message(id: string, from: bigint, extra: Partial<P2PMessage> = {}): P2PMessage {
   return {
-    id, content: `text of ${id}`, senderCid: from, recipientCid: from === ME ? BOB : ME,
+    id, content: `text of ${id}`, sender_cid: from, recipient_cid: from === ME ? BOB : ME,
     timestamp: 1000, index: 1, status: 'delivered', message_type: 'text', ...extra,
   };
 }

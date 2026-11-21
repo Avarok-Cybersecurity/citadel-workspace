@@ -23,7 +23,7 @@ export function bindPeerGroupDelivery(): () => void {
     senderName?: string;
     content: string;
     timestamp?: number;
-    replyTo?: string;
+    reply_to?: string;
     fileShare?: GroupFileShare;
   }): void => {
     if (groupSendTransport(data.groupId) !== 'peer') return;
@@ -39,7 +39,7 @@ export function bindPeerGroupDelivery(): () => void {
       senderName: data.senderName ?? data.senderId,
       content: data.content,
       timestamp: data.timestamp ?? Date.now(),
-      replyTo: data.replyTo,
+      reply_to: data.reply_to,
       fileShare: data.fileShare,
     });
   };

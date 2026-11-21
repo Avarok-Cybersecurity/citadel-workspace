@@ -101,7 +101,7 @@ describe('a file send', () => {
 describe('an in-band file signal', () => {
   const transfer: FileTransfer = {
     id: 'x', fileName: 'a.txt', fileSize: 3, fileType: 'text/plain', state: 'pending', progress: 0,
-    senderCid: '100', recipientCid: '900', createdAt: 0, updatedAt: 0, isIncoming: false,
+    sender_cid: '100', recipient_cid: '900', createdAt: 0, updatedAt: 0, isIncoming: false,
   };
 
   it('goes through the reliable send, once', async () => {

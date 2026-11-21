@@ -43,7 +43,7 @@ const ALICE: bigint = 42n;
 
 function offerEntry(transferId: string): P2PMessage {
   return {
-    id: `msg-${transferId}`, content: 'File transfer: a.bin', senderCid: ALICE, recipientCid: BOB,
+    id: `msg-${transferId}`, content: 'File transfer: a.bin', sender_cid: ALICE, recipient_cid: BOB,
     timestamp: 1, status: 'delivered', message_type: 'file_transfer', transfer_id: transferId,
     file_name: 'a.bin', file_size: 3000, transfer_mode: 'p2p', transfer_state: 'pending',
   } as P2PMessage;
@@ -59,7 +59,7 @@ function announce(transferId: string, objectId: bigint): void {
       file_size: 3000, file_type: '', transfer_mode: 'p2p', timestamp: Date.now(),
       expiry_timestamp: Date.now() + 60_000,
     },
-    senderCid: ALICE.toString(), recipientCid: BOB.toString(),
+    sender_cid: ALICE.toString(), recipient_cid: BOB.toString(),
   });
   const metadata: VirtualObjectMetadata = {
     name: 'a.bin', date_created: '', author: 'alice', plaintext_length: 3000, group_count: 1,
@@ -96,7 +96,7 @@ describe('a file-transfer bubble', () => {
     localStorage.setItem(scopedTransfersKey(), JSON.stringify({
       'history-1': {
         id: 'history-1', fileName: 'a.bin', fileSize: 3000, state: 'complete', isIncoming: true,
-        mode: 'p2p', senderCid: '42', recipientCid: '7', createdAt: 1, updatedAt: Date.now(),
+        mode: 'p2p', sender_cid: '42', recipient_cid: '7', createdAt: 1, updatedAt: Date.now(),
       },
     }));
     act((): void => { eventEmitter.emit('instance:cid-changed', { cid: BOB }); });

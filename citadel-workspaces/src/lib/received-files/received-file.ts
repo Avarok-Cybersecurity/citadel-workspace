@@ -36,7 +36,7 @@ export type ReceivedFileRead =
 export function receivedFileAsk(transfer: FileTransfer): ReceivedFileAsk | string {
   if (!transfer.isIncoming) return 'This file was sent from this device.';
   if (!transfer.downloadPath) return 'This device has no record of where the agent saved this file.';
-  return { cid: BigInt(transfer.recipientCid), peerCid: BigInt(transfer.senderCid), savedPath: transfer.downloadPath };
+  return { cid: BigInt(transfer.recipient_cid), peerCid: BigInt(transfer.sender_cid), savedPath: transfer.downloadPath };
 }
 
 /** The received file's bytes, typed and named for the browser, read through `io`. */

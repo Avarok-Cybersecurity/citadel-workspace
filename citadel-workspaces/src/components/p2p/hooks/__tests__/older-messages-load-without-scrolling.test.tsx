@@ -30,7 +30,7 @@ import { installHostingAgent, settle, PEER, OWN } from './hosting-agent';
 import type { ConversationMetadata } from 'citadel-workspace-client-ts';
 
 function stored(id: string, timestamp: number): Record<string, unknown> {
-  return { id, content: `text ${id}`, senderCid: PEER, recipientCid: OWN, timestamp, index: timestamp, status: 'delivered', messageType: 'text' };
+  return { id, content: `text ${id}`, sender_cid: PEER, recipient_cid: OWN, timestamp, index: timestamp, status: 'delivered', messageType: 'text' };
 }
 
 const NEWEST: Record<string, unknown>[] = [stored('new-1', 2_000), stored('new-2', 2_001)];

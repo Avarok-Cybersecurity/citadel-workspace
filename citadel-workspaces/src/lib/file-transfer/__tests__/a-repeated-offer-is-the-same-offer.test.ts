@@ -41,7 +41,7 @@ function offer(transferId: string, objectId: bigint): void {
       type: MessagingLayerType.FileTransferRequest, transfer_id: transferId, file_name: name, file_size: 165_000,
       file_type: 'image/jpeg', timestamp: Date.now(), expiry_timestamp: Date.now() + 60_000,
     },
-    senderCid: PEER.toString(), recipientCid: ME.toString(),
+    sender_cid: PEER.toString(), recipient_cid: ME.toString(),
   });
   const metadata: VirtualObjectMetadata = {
     name, date_created: '', author: 'peer', plaintext_length: 165_000, group_count: 1,

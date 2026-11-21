@@ -30,10 +30,10 @@ export async function handleIncomingRegistrationWithCid(
   registeredPeers: Map<bigint, Peer>,
 ): Promise<void> {
   const action: IncomingRequestAction = await handleIncomingRegistration(
-    { recipientCid: notificationCid, peerCid, peerUsername },
+    { recipient_cid: notificationCid, peerCid, peerUsername },
     {
       trustedByWorkspace: async (r: IncomingRegistration): Promise<boolean> => {
-        const answer: PeerTrust = await askPeerTrust(messagingTrustApi, r.recipientCid, r.peerUsername);
+        const answer: PeerTrust = await askPeerTrust(messagingTrustApi, r.recipient_cid, r.peerUsername);
         return answer.trusted;
       },
       acceptsRequestsFromStrangers: (): boolean => getPrivacySettings().acceptRequestsFromStrangers,
@@ -42,9 +42,9 @@ export async function handleIncomingRegistrationWithCid(
       readAutoAccept: getAutoAcceptSetting,
       accept: (r: IncomingRegistration): Promise<void> => acceptRegistrationRequest(r.peerCid, r.peerUsername, pendingRequests),
       ask: (r: IncomingRegistration): Promise<void> => peerRegistrationStore.handleIncomingRequest({
-        cid: r.recipientCid, peer_cid: r.peerCid, peer_username: r.peerUsername ?? '',
+        cid: r.recipient_cid, peer_cid: r.peerCid, peer_username: r.peerUsername ?? '',
       }),
-      decline: (r: IncomingRegistration): Promise<void> => sendRegistrationDecline(r.recipientCid, r.peerCid),
+      decline: (r: IncomingRegistration): Promise<void> => sendRegistrationDecline(r.recipient_cid, r.peerCid),
     },
   );
   debugLog('P2PRegistrationService', `[P2P] Registration from ${peerUsername || peerCid.toString()} for ${notificationCid.toString()}: ${action}`);

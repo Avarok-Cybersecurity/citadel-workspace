@@ -27,7 +27,7 @@ function transfer(state: LifecycleState, isIncoming: boolean): FileTransfer {
   return {
     id: 'transfer-1', fileName: 'notes.md', fileSize: 1024, fileType: 'text/markdown',
     state, progress: 0,
-    senderCid: '7', recipientCid: '42',
+    sender_cid: '7', recipient_cid: '42',
     createdAt: 0, updatedAt: 0, expiresAt: 1_000, isIncoming,
   };
 }

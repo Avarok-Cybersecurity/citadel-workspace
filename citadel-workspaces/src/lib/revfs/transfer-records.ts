@@ -38,8 +38,8 @@ export function recordForCompletedTransfer(transfer: FileTransfer): TransferReco
     fileType: transfer.fileType,
     transferId: transfer.id,
   };
-  const sender: bigint = BigInt(transfer.senderCid);
-  const recipient: bigint = BigInt(transfer.recipientCid);
+  const sender: bigint = BigInt(transfer.sender_cid);
+  const recipient: bigint = BigInt(transfer.recipient_cid);
   if (transfer.isIncoming) {
     return {
       kind: 'received', myCid: recipient, peerCid: sender,

@@ -34,21 +34,16 @@ export interface MemberPayload {
 export interface MembersPayload {
   members: WorkspaceMember[];
   connection: ConnectionInfo;
-  /**
-   * Which domain this list is for, when the server said. Undefined against a
-   * server that predates the field -- a subscriber that cannot tell should keep
-   * its old behaviour rather than discard the list.
-   */
-  domainId?: string;
+  /** Which domain this list is for. */
+  domainId: string;
   /**
    * Member id -> the level above that gives them access to `domainId`. Empty
-   * when everyone is listed on the domain itself, and against a server that
-   * predates the field, which lists direct members only.
+   * when everyone is listed on the domain itself.
    */
   inheritedFrom: Readonly<Record<string, string>>;
   /**
    * Listed members a live booking link names as guests. The server sends them only to callers
-   * who can manage roles; empty for everyone else, and from a server that predates the field.
+   * who can manage roles; empty for everyone else.
    */
   guests: readonly string[];
 }
@@ -118,14 +113,8 @@ export interface WorkspaceEventMap {
   'node:content-updated': {
     nodeId: string;
     mdxContent: string;
-    /**
-     * The new content's hash, so a watcher verifies what it just received.
-     *
-     * Absent when the server predates the field, which reads as "unhashed"
-     * rather than "mismatch" — refusing content because the server is older
-     * would be the same defect the hash exists to prevent.
-     */
-    mdxContentHash?: string;
+    /** The new content's hash, so a watcher verifies what it just received. */
+    mdxContentHash: string;
     updatedBy: string;
     timestamp: number;
     connection: ConnectionInfo;

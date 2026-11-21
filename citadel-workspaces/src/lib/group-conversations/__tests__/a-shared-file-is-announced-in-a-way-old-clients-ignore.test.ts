@@ -70,7 +70,7 @@ describe('the shared-file envelope', () => {
     expect(summary?.senderName).toBe('ada');
     expect(summary?.content).toBe('Shared a file: report.pdf (120.6 KB)');
     expect(summary?.fileShare).toEqual({
-      name: 'report.pdf', size: 123_456, mimeType: 'application/pdf', senderCid: envelope.sender_cid,
+      name: 'report.pdf', size: 123_456, mimeType: 'application/pdf', sender_cid: envelope.sender_cid,
     });
   });
 

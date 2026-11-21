@@ -15,7 +15,7 @@ import type { FileTransfer } from '../types';
 function held(id: string): FileTransfer {
   return {
     id, fileName: 'a.txt', fileSize: 3, fileType: 'text/plain', state: 'queued', progress: 0,
-    senderCid: '7', recipientCid: '42', createdAt: 1, updatedAt: 1, isIncoming: false, waitingFor: 'Alexi',
+    sender_cid: '7', recipient_cid: '42', createdAt: 1, updatedAt: 1, isIncoming: false, waitingFor: 'Alexi',
   };
 }
 

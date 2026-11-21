@@ -21,7 +21,7 @@ function transfer(over: Partial<FileTransfer>): FileTransfer {
   return {
     id: 't-1', fileName: 'report.pdf', fileSize: 10, fileType: 'application/pdf',
     state: 'complete', progress: 100,
-    senderCid: ALICE.toString(), recipientCid: BOB.toString(),
+    sender_cid: ALICE.toString(), recipient_cid: BOB.toString(),
     createdAt: 1, updatedAt: 2, isIncoming: false, ...over,
   };
 }
@@ -45,7 +45,7 @@ describe('recordForCompletedTransfer (pure)', () => {
 
   it('records an incoming completion as Received under the recipient, with where it was saved', () => {
     const t: FileTransfer = transfer({
-      isIncoming: true, senderCid: BOB.toString(), recipientCid: ALICE.toString(), downloadPath: '/data/x.pdf',
+      isIncoming: true, sender_cid: BOB.toString(), recipient_cid: ALICE.toString(), downloadPath: '/data/x.pdf',
     });
     expect(recordForCompletedTransfer(t)).toEqual({
       kind: 'received', myCid: ALICE, peerCid: BOB,
@@ -85,7 +85,7 @@ describe('a completed chat transfer appears in the file manager', () => {
     const service: RevfsService = createTestService(defaultIntentHandler());
     await service.getTree(ALICE, BOB);
     eventEmitter.emit(FILE_TRANSFER_EVENTS.COMPLETED, transfer({
-      id: 'got-it', isIncoming: true, senderCid: BOB.toString(), recipientCid: ALICE.toString(),
+      id: 'got-it', isIncoming: true, sender_cid: BOB.toString(), recipient_cid: ALICE.toString(),
       downloadPath: 'C:\\Users\\a\\x.pdf',
     }));
     await settle();

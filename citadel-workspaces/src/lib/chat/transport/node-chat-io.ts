@@ -30,7 +30,7 @@ export interface NodeChatIO {
   /** Each resolves once the page is in the log, and rejects when it does not come. */
   latest(): Promise<void>;
   older(before: bigint): Promise<void>;
-  send(content: string, kind: 'text' | 'markdown', replyTo: string | null): Promise<void>;
+  send(content: string, kind: 'text' | 'markdown', reply_to: string | null): Promise<void>;
   edit(messageId: string, content: string): Promise<void>;
   remove(messageId: string): Promise<void>;
   focus(): () => void;
@@ -87,8 +87,8 @@ export function nodeChatIO(groupId: string, nodeId: string): NodeChatIO {
       return pageArrives(groupId, `group-messages-more:${groupId}`, (): Promise<void> => WorkspaceService.getGroupMessages(groupId, before))
         .catch((error: unknown): never => { groupMessagingManager.clearLoadingOlder(groupId); throw error; });
     },
-    send: (content: string, kind: 'text' | 'markdown', replyTo: string | null): Promise<void> =>
-      WorkspaceService.sendGroupMessage(groupId, content, kind === 'markdown' ? 'Markdown' : 'Text', replyTo ?? undefined),
+    send: (content: string, kind: 'text' | 'markdown', reply_to: string | null): Promise<void> =>
+      WorkspaceService.sendGroupMessage(groupId, content, kind === 'markdown' ? 'Markdown' : 'Text', reply_to ?? undefined),
     edit: (messageId: string, content: string): Promise<void> => WorkspaceService.editGroupMessage(groupId, messageId, content),
     remove: (messageId: string): Promise<void> => WorkspaceService.deleteGroupMessage(groupId, messageId),
     focus: (): (() => void) => markChannelOpen(groupId),

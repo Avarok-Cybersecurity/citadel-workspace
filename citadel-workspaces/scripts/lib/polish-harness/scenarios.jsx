@@ -73,7 +73,7 @@ const PEER = 2n;
 const NOON = new Date().setHours(12, 0, 0, 0);
 
 const message = (index, from, extra) => ({
-  id: `m${index}`, content: `Message number ${index}`, senderCid: from, recipientCid: from === ME ? PEER : ME,
+  id: `m${index}`, content: `Message number ${index}`, sender_cid: from, recipient_cid: from === ME ? PEER : ME,
   timestamp: NOON + index * 60_000, index, status: 'delivered', message_type: 'text', ...extra,
 });
 

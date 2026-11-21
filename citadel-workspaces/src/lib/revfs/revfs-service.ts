@@ -144,10 +144,10 @@ export class RevfsService {
   // ── Incoming Operation Handler ────────────────────────────────────────
 
   /** An operation that arrived from a peer. See revfs-inbound.ts. */
-  async handleRevfsOperation(senderCid: bigint, myCid: bigint, op: RevfsOperation): Promise<void> {
+  async handleRevfsOperation(sender_cid: bigint, myCid: bigint, op: RevfsOperation): Promise<void> {
     // Serialised against this tree's local mutators; see revfs-inbound.ts for
     // the window that leaves open and why Ack is exempt from it.
-    return applyInboundOperationSerially(this.inboundCtx(), senderCid, myCid, op);
+    return applyInboundOperationSerially(this.inboundCtx(), sender_cid, myCid, op);
   }
 
   private inboundCtx(): InboundContext {

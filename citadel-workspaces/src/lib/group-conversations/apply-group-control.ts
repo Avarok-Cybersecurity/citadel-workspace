@@ -89,7 +89,7 @@ export function applyGroupControl(
     return adopted ? groups.map((g) => (g.id === group.id ? adopted : g)) : groups;
   }
 
-  const standing: SenderStanding = senderStanding(group, event.senderCid, event.ownerCid);
+  const standing: SenderStanding = senderStanding(group, event.sender_cid, event.ownerCid);
   const { control } = event;
 
   const offeredName: string | undefined = control.name?.trim();

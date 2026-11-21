@@ -44,13 +44,13 @@ import type { P2PMessage } from '@/lib/p2p';
 function transfer(id: string, at: number): FileTransfer {
   return {
     id, fileName: `${id}.png`, fileSize: PNG_1X1.length, fileType: 'image/png', state: 'complete', progress: 100,
-    senderCid: '42', recipientCid: '7', downloadPath: `/agent/transfers/42/${id}.png`, createdAt: at, updatedAt: at, isIncoming: true,
+    sender_cid: '42', recipient_cid: '7', downloadPath: `/agent/transfers/42/${id}.png`, createdAt: at, updatedAt: at, isIncoming: true,
   };
 }
 
 function bubbleOf(t: FileTransfer, thumbnail?: string): P2PMessage {
   return {
-    id: `msg-${t.id}`, content: `File transfer: ${t.fileName}`, senderCid: 42n, recipientCid: 7n, timestamp: 1, status: 'delivered',
+    id: `msg-${t.id}`, content: `File transfer: ${t.fileName}`, sender_cid: 42n, recipient_cid: 7n, timestamp: 1, status: 'delivered',
     message_type: 'file_transfer', transfer_id: t.id, file_name: t.fileName, file_size: t.fileSize, file_type: t.fileType,
     file_thumbnail: thumbnail, transfer_mode: 'p2p', transfer_state: 'complete',
   } as P2PMessage;

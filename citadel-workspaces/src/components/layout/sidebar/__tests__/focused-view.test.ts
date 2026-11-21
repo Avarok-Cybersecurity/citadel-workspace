@@ -6,6 +6,7 @@
  * default template's, because nothing in the view may depend on them.
  */
 import { describe, it, expect } from 'vitest';
+import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 import type { DomainNode } from '../tree-node-types';
 import { workspaceRoot } from '../tree-node-utils';
 import { childIndex, focusedView, stackRows, STACK_VISIBLE_ROWS, type FocusedView, type StackRow } from '../focused-view';
@@ -15,7 +16,7 @@ import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 function node(id: string, parent: string | null, type: string, name: string = id): DomainNode {
   return {
     id, parent_id: parent, entity_type: { Child: type }, depth: 0, name, description: '', owner_id: '',
-    members: [], children: [], mdx_content: '', mdx_content_hash: null, rules: null, chat_enabled: false,
+    members: [], children: [], mdx_content: '', mdx_content_hash: EMPTY_DOCUMENT_HASH, rules: null, chat_enabled: false,
     chat_channel_id: null, default_permissions: {} as DomainNode['default_permissions'], metadata: [],
     allowed_child_types: [], is_default: false, created_at: 0n, updated_at: 0n,
   };

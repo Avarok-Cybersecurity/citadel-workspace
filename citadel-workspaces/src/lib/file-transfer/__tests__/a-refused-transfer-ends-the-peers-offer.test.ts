@@ -28,7 +28,7 @@ const { handleProtocolStatus } = await import('../protocol-transfer-events');
 function outgoing(state: FileTransfer['state']): FileTransfer {
   return {
     id: 'T1', fileName: 'a.bin', fileSize: 3, fileType: 'application/octet-stream', mode: 'p2p',
-    state, progress: 0, senderCid: '7', recipientCid: '42', createdAt: 0, updatedAt: 0, isIncoming: false,
+    state, progress: 0, sender_cid: '7', recipient_cid: '42', createdAt: 0, updatedAt: 0, isIncoming: false,
   } as FileTransfer;
 }
 

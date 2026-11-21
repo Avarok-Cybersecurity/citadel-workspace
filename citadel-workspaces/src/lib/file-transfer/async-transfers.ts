@@ -31,7 +31,7 @@ export interface AsyncTransferDeps {
 export async function handleTransferRequest(
   deps: AsyncTransferDeps,
   data: FileTransferRequestData & { type: MessagingLayerType.FileTransferRequest },
-  senderCid: string,
+  sender_cid: string,
   getAutoAccept: (cid: string) => boolean,
   acceptTransfer: (id: string) => Promise<void>
 ): Promise<void> {
@@ -46,8 +46,8 @@ export async function handleTransferRequest(
     thumbnail: data.thumbnail,
     state: 'pending',
     progress: 0,
-    senderCid,
-    recipientCid: currentCid.toString(),
+    sender_cid,
+    recipient_cid: currentCid.toString(),
     createdAt: data.timestamp,
     updatedAt: Date.now(),
     expiresAt: data.expiry_timestamp,
@@ -57,7 +57,7 @@ export async function handleTransferRequest(
   deps.state.setTransfer(transfer);
   await deps.saveTransfer(transfer);
 
-  if (getAutoAccept(senderCid)) {
+  if (getAutoAccept(sender_cid)) {
     try {
       await acceptTransfer(transfer.id);
       return;

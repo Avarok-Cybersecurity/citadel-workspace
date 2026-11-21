@@ -55,7 +55,7 @@ const MB: number = 1024 * 1024;
 const video: File = new File([new Uint8Array(17 * MB)], 'video.mov');
 const transfer: FileTransfer = {
   id: 't1', fileName: 'video.mov', fileSize: video.size, fileType: '', state: 'preparing', progress: 0,
-  senderCid: '7', recipientCid: '42', createdAt: 0, updatedAt: 0, isIncoming: false,
+  sender_cid: '7', recipient_cid: '42', createdAt: 0, updatedAt: 0, isIncoming: false,
 };
 // The real router's send, over the stood-in socket.
 const router: RealProtocolIORouter = { sendFile: executeSendFile } as unknown as RealProtocolIORouter;

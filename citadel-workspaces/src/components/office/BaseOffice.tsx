@@ -59,7 +59,7 @@ export const BaseOffice = ({ title, getInitialContent, nodeId }: BaseOfficeProps
     // Only the STORED document is verified. While the user is editing, `content`
     // is their unsaved buffer and will not match any hash — refusing to render
     // their own typing would be absurd.
-    isEditing || isNewContent ? undefined : entityData?.mdx_content_hash,
+    isEditing || isNewContent ? null : (entityData?.mdx_content_hash ?? null),
     isEditing,
   );
 

@@ -16,7 +16,7 @@ import { restoreTransfer } from '../restore-transfer';
 function t(id: string, over: Partial<FileTransfer> = {}): FileTransfer {
   return {
     id, fileName: `${id}.png`, fileSize: 10, fileType: 'image/png', state: 'queued', progress: 0,
-    senderCid: '7', recipientCid: '42', createdAt: 1, updatedAt: 1, isIncoming: false, ...over,
+    sender_cid: '7', recipient_cid: '42', createdAt: 1, updatedAt: 1, isIncoming: false, ...over,
   };
 }
 
@@ -57,8 +57,8 @@ describe('what a returning peer releases', () => {
   const held: FileTransfer[] = [
     t('later', { createdAt: 5 }),
     t('first', { createdAt: 2 }),
-    t('other-peer', { recipientCid: '99' }),
-    t('other-account', { senderCid: '8' }),
+    t('other-peer', { recipient_cid: '99' }),
+    t('other-account', { sender_cid: '8' }),
     t('incoming', { isIncoming: true }),
     t('sent', { state: 'complete' }),
   ];

@@ -38,7 +38,7 @@ export async function handleMessagingLayerCommand(
   fileTransferHandler: FileTransferMessageHandler,
   payload: P2PMessagingLayerPayload,
   peerCid: bigint,
-  recipientCid?: bigint
+  recipient_cid?: bigint
 ): Promise<void> {
   const { layer } = payload;
 
@@ -47,7 +47,7 @@ export async function handleMessagingLayerCommand(
 
   switch (layer.type) {
     case MessagingLayerType.Message:
-      await handleIncomingMessage(config, payload, peerCid, recipientCid);
+      await handleIncomingMessage(config, payload, peerCid, recipient_cid);
       break;
 
     case MessagingLayerType.Typing:
@@ -103,7 +103,7 @@ export async function handleMessagingLayerCommand(
     case MessagingLayerType.FileTransferCancel:
     case MessagingLayerType.FileTransferChunk: {
       debugLog('P2PMessageHandler', 'Received file transfer message:', layer.type, 'from:', peerCid?.toString().slice(0, 8));
-      const effectiveRecipientCid: bigint | null = recipientCid || (await config.getCurrentCid());
+      const effectiveRecipientCid: bigint | null = recipient_cid || (await config.getCurrentCid());
       // Its only listener is FileTransferService, whose module the build puts in
       // a chunk the page components load; this router is in one index loads on
       // its own. Emitted before that chunk had run, an offer reached nobody: no
@@ -112,8 +112,8 @@ export async function handleMessagingLayerCommand(
       await import('../file-transfer/service');
       eventEmitter.emit('p2p:file-transfer-message', {
         layer,
-        senderCid: peerCid.toString(),
-        recipientCid: effectiveRecipientCid?.toString(),
+        sender_cid: peerCid.toString(),
+        recipient_cid: effectiveRecipientCid?.toString(),
       });
       await fileTransferHandler.handleFileTransferMessage(payload, peerCid);
       break;
@@ -133,7 +133,7 @@ async function handleIncomingMessage(
   config: MessageHandlerConfig,
   payload: P2PMessagingLayerPayload,
   peerCid: bigint,
-  recipientCid?: bigint
+  recipient_cid?: bigint
 ): Promise<void> {
   const layer: MessagingLayer = payload.layer;
   if (!isMessage(layer)) {
@@ -150,12 +150,12 @@ async function handleIncomingMessage(
     content: layer.contents,
     // Transport peer: `sender_cid` is attacker-chosen, and the victim's own
     // CID would render a forged message as "You" in their own transcript.
-    senderCid: peerCid,
-    recipientCid: BigInt(payload.recipient_cid),
+    sender_cid: peerCid,
+    recipient_cid: BigInt(payload.recipient_cid),
     timestamp: layer.timestamp,
     index: payload.index,
     status: 'delivered',
-    replyTo: payload.reply_to,
+    reply_to: payload.reply_to,
     mentions: payload.mentions,
     attachments: payload.attachments,
     message_type: payload.message_type || 'text',
@@ -183,7 +183,7 @@ async function handleIncomingMessage(
   if (wasAdded) {
     if (shouldAck(outcome)) {
       try {
-        await config.sendMessageAck(message.id, 'delivered', peerCid, recipientCid);
+        await config.sendMessageAck(message.id, 'delivered', peerCid, recipient_cid);
       } catch (error) {
         debugLog('P2PMessageHandler', 'Delivery ACK send failed (non-blocking):', error);
       }
@@ -200,7 +200,7 @@ async function handleIncomingMessage(
       message,
     });
 
-    notifyMessageArrived(config, peerCid, message, recipientCid);
+    notifyMessageArrived(config, peerCid, message, recipient_cid);
   } else {
     debugLog('P2PMessageHandler', 'Skipping duplicate message notification:', message.id);
   }

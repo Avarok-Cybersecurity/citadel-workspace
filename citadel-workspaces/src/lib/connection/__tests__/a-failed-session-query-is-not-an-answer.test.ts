@@ -88,7 +88,7 @@ describe('asking which sessions exist', () => {
       sendWebSocketMessage: vi.fn().mockImplementation(() => {
         // Resolve the pending request the way the response handler would.
         const call: unknown[] = (state.setPendingRequest as ReturnType<typeof vi.fn>).mock.calls[0];
-        (call[1] as { resolve: (v: unknown) => void }).resolve({ sessions: [] });
+        (call[1] as { resolve: (v: unknown) => void }).resolve({ sessions: [], signed_out: [] });
         return Promise.resolve();
       }),
     };

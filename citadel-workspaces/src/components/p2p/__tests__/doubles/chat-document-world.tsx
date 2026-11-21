@@ -68,7 +68,7 @@ export class ChatDocumentWorld {
     vi.spyOn(websocketService, 'sendP2PMessageBytes').mockImplementation(async (from: bigint, to: bigint, bytes: Uint8Array): Promise<void> => {
       const command: P2PCommand = deserializeP2PCommand(bytes.slice());
       if (command.type !== P2PCommandType.CdocChatSync || !isCdocChatSyncPayload(command.payload)) return;
-      const event: CdocChatCommandEvent = { peerCid: from, recipientCid: to, payload: command.payload };
+      const event: CdocChatCommandEvent = { peerCid: from, recipient_cid: to, payload: command.payload };
       this.carried.push(command.payload.sync.kind);
       // Asynchronous, as the network is: the sender's step finishes before the peer hears it.
       setTimeout((): void => { eventEmitter.emit(CDOC_CHAT_COMMAND_EVENT, event); }, 0);
@@ -90,7 +90,7 @@ export class ChatDocumentWorld {
   /** An invitation `from` sent before this release: a bare UUID, the earlier editor's document. */
   earlierInvitation(from: bigint, to: bigint, docId: string, title: string): P2PMessage {
     return {
-      id: `earlier-${docId}`, content: `Created live document: ${title}`, senderCid: from, recipientCid: to, timestamp: 1_600_000_000_000, index: 0,
+      id: `earlier-${docId}`, content: `Created live document: ${title}`, sender_cid: from, recipient_cid: to, timestamp: 1_600_000_000_000, index: 0,
       status: 'delivered', message_type: 'live_document', document_id: docId, document_title: title,
     };
   }
@@ -99,7 +99,7 @@ export class ChatDocumentWorld {
   invitationAsReceived(index: number): P2PMessage {
     const sent: Invitation = this.invitations[index];
     return {
-      id: `invitation-${index}`, content: sent.content, senderCid: sent.from, recipientCid: sent.to, timestamp: 1_700_000_000_000 + index, index,
+      id: `invitation-${index}`, content: sent.content, sender_cid: sent.from, recipient_cid: sent.to, timestamp: 1_700_000_000_000 + index, index,
       status: 'delivered', message_type: 'live_document', document_id: sent.options.documentId, document_title: sent.options.documentTitle,
     };
   }

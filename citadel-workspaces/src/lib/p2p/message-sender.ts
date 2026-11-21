@@ -31,24 +31,24 @@ export class MessageSender {
   }
 
   public async sendMessage(
-    recipientCid: bigint,
+    recipient_cid: bigint,
     content: string,
     options?: SendMessageOptions
   ): Promise<P2PMessage> {
-    debugLog('MessageSender', `[P2P] *** sendMessage ENTRY *** recipientCid=${recipientCid?.toString().slice(0, 8)}..., content="${content.slice(0, 20)}..."`);
+    debugLog('MessageSender', `[P2P] *** sendMessage ENTRY *** recipient_cid=${recipient_cid?.toString().slice(0, 8)}..., content="${content.slice(0, 20)}..."`);
 
     // No PeerRegister from here -- the connect banner owns that request.
-    const isAlreadyConnected: boolean = await p2pAutoConnectService.isPeerConnected(recipientCid) || this.config.isConnected(recipientCid);
-    if (p2pRegistrationService.isPeerRegistered(recipientCid) || isAlreadyConnected) {
-      void p2pAutoConnectService.ensurePeerConnectedInBackground(recipientCid);
-      const peerReady: boolean = await this.config.tryEnsurePeerReady(recipientCid);
+    const isAlreadyConnected: boolean = await p2pAutoConnectService.isPeerConnected(recipient_cid) || this.config.isConnected(recipient_cid);
+    if (p2pRegistrationService.isPeerRegistered(recipient_cid) || isAlreadyConnected) {
+      void p2pAutoConnectService.ensurePeerConnectedInBackground(recipient_cid);
+      const peerReady: boolean = await this.config.tryEnsurePeerReady(recipient_cid);
       if (!peerReady) {
-        debugLog('MessageSender', `[P2P] Sending to ${recipientCid.toString()} without CheckState confirmation (transport handles delivery)`);
+        debugLog('MessageSender', `[P2P] Sending to ${recipient_cid.toString()} without CheckState confirmation (transport handles delivery)`);
       }
     }
 
     // The agent stores and sends it, and announces it to every window.
-    return sendThroughAgent(this.config.agent(), recipientCid, content, options);
+    return sendThroughAgent(this.config.agent(), recipient_cid, content, options);
   }
 
   /** Retry a message that previously failed. */
@@ -56,21 +56,21 @@ export class MessageSender {
     return resendThroughAgent(this.config.agent(), peerCid, messageId);
   }
 
-  public async sendRawMessage(recipientCid: bigint, layer: MessagingLayer): Promise<void> {
-    return rawMessageOp(this.config, recipientCid, layer);
+  public async sendRawMessage(recipient_cid: bigint, layer: MessagingLayer): Promise<void> {
+    return rawMessageOp(this.config, recipient_cid, layer);
   }
 
   public async sendMessageAck(
     messageId: string,
     ackType: 'delivered' | 'read' | 'failed',
     peerCid: bigint,
-    senderCid?: bigint
+    sender_cid?: bigint
   ): Promise<void> {
-    return messageAckOp(this.config, messageId, ackType, peerCid, senderCid);
+    return messageAckOp(this.config, messageId, ackType, peerCid, sender_cid);
   }
 
-  public async sendP2PCommand(peerCid: bigint, command: import('@/types/p2p-types').P2PCommand, senderCid?: bigint): Promise<void> {
-    return p2pCommandOp(this.config, peerCid, command, senderCid);
+  public async sendP2PCommand(peerCid: bigint, command: import('@/types/p2p-types').P2PCommand, sender_cid?: bigint): Promise<void> {
+    return p2pCommandOp(this.config, peerCid, command, sender_cid);
   }
 
   public async sendRawBytes(peerCid: bigint, bytes: Uint8Array, compressionHint?: CompressionHint): Promise<void> {

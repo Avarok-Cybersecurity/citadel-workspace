@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h: {
   pressed: { accept?: () => void; decline?: () => void };
-  told: Array<{ title: string; content: string; recipientCid?: string }>;
+  told: Array<{ title: string; content: string; recipient_cid?: string }>;
 } = vi.hoisted(() => ({ pressed: {}, told: [] }));
 
 vi.mock('../../notification-service', () => ({
@@ -21,8 +21,8 @@ vi.mock('../../notification-service', () => ({
     addPeerRegistrationNotification: (...args: unknown[]): void => {
       h.pressed = { accept: args[3] as () => void, decline: args[4] as () => void };
     },
-    addSystemNotification: (title: string, content: string, _priority: unknown, recipientCid?: string): void => {
-      h.told.push({ title, content, recipientCid });
+    addSystemNotification: (title: string, content: string, _priority: unknown, recipient_cid?: string): void => {
+      h.told.push({ title, content, recipient_cid });
     },
   },
 }));
@@ -41,7 +41,7 @@ describe('the notification card for a peer request', () => {
     await vi.waitFor(() => expect(h.told).toHaveLength(1));
     expect(h.told[0].title).toBe('Could not accept the request from alice');
     expect(h.told[0].content).toContain('socket down');
-    expect(h.told[0].recipientCid).toBe('7');
+    expect(h.told[0].recipient_cid).toBe('7');
   });
 
   it('says so when Decline fails', async () => {

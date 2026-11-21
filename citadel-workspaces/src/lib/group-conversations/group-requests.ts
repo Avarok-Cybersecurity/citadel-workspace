@@ -205,7 +205,7 @@ export async function sendGroupEnd(groupId: string): Promise<void> {
 export async function sendPeerGroupMessage(
   groupId: string,
   content: string,
-  replyTo?: string,
+  reply_to?: string,
   /** The group's name, for the owner to tell members; see ownerAnnouncedName. */
   groupName?: string,
 ): Promise<string> {
@@ -215,7 +215,7 @@ export async function sendPeerGroupMessage(
     sender_cid: cid,
     content,
     timestamp: Date.now(),
-    reply_to: replyTo,
+    reply_to: reply_to,
     group_name: groupName,
   }));
 }
@@ -223,7 +223,7 @@ export async function sendPeerGroupMessage(
 /** One `GroupMessage` send for any body the peers agree on -- chat or control. */
 export async function sendPeerGroupBody(
   groupId: string,
-  encode: (senderCid: bigint, messageId: string) => Uint8Array,
+  encode: (sender_cid: bigint, messageId: string) => Uint8Array,
 ): Promise<string> {
   const cid: bigint = await requireCid();
   const groupKey: MessageGroupKey = groupIdToKey(groupId);

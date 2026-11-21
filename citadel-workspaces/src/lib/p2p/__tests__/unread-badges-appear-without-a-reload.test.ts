@@ -38,8 +38,8 @@ function message(overrides: Partial<P2PMessage> = {}): P2PMessage {
   return {
     id: `m${counter}`,
     content: 'hello',
-    senderCid: PEER,
-    recipientCid: ME,
+    sender_cid: PEER,
+    recipient_cid: ME,
     timestamp: counter,
     index: counter,
     status: 'delivered',
@@ -62,7 +62,7 @@ describe('the in-memory unread count', () => {
   it('does not count the user\'s own messages', async () => {
     const m: ConversationManager = manager();
 
-    await m.addMessageToConversation(PEER, message({ senderCid: ME, recipientCid: PEER }));
+    await m.addMessageToConversation(PEER, message({ sender_cid: ME, recipient_cid: PEER }));
 
     expect(m.getConversationsMap().get(PEER)?.unreadCount).toBe(0);
   });

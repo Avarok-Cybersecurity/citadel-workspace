@@ -40,7 +40,7 @@ describe('a P2P bubble menu', () => {
   // The same flaw in the P2P chat's own menus, measured live; one hook serves both.
   it.each(['Edit', 'Reply'])('%s gives the composer focus as the menu closes', async (item: string) => {
     const focusComposer: ReturnType<typeof vi.fn> = vi.fn();
-    const message: PaneMessage = { id: 'p1', content: 'hi', senderCid: 1n, timestamp: 1, status: 'delivered' } as PaneMessage;
+    const message: PaneMessage = { id: 'p1', content: 'hi', sender_cid: 1n, timestamp: 1, status: 'delivered' } as PaneMessage;
     render(<TextBubble message={message} isOwn quoted={null} onEdit={(): void => {}} onReply={(): void => {}} focusComposer={focusComposer} />);
     await userEvent.click(screen.getByRole('button', { name: /message actions/i }));
     await userEvent.click(screen.getByRole('menuitem', { name: item }));

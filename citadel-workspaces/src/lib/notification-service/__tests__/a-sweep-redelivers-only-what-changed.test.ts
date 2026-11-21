@@ -39,7 +39,7 @@ describe('the read-sweep handler fan-out', () => {
     service.markAllAsReadForCid(ALICE);
 
     // Bob's untouched notification must not be replayed to the handlers.
-    expect(received.map((n) => n.recipientCid)).toEqual([ALICE]);
+    expect(received.map((n) => n.recipient_cid)).toEqual([ALICE]);
     expect(received[0].read).toBe(true);
   });
 

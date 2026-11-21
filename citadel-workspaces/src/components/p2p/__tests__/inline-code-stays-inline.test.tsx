@@ -27,7 +27,7 @@ const CONTENT: string = 'run `npm ci` now\n\n```\nnpm run build\n```';
 
 function message(): P2PMessage {
   return {
-    id: 'm1', content: CONTENT, senderCid: 2n, recipientCid: 1n, timestamp: 1_700_000_000_000,
+    id: 'm1', content: CONTENT, sender_cid: 2n, recipient_cid: 1n, timestamp: 1_700_000_000_000,
     index: 0, status: 'delivered', message_type: 'markdown',
   } as unknown as P2PMessage;
 }

@@ -38,10 +38,10 @@ export function groupControlSnapshot(group: GroupConversation): GroupControlBody
  */
 export async function sendGroupControl(groupId: string, control: GroupControlBody): Promise<string> {
   const { sendPeerGroupBody } = await import('./group-requests');
-  return sendPeerGroupBody(groupId, (senderCid: bigint, messageId: string): Uint8Array => encodeGroupControl({
+  return sendPeerGroupBody(groupId, (sender_cid: bigint, messageId: string): Uint8Array => encodeGroupControl({
     group_id: groupId,
     message_id: messageId,
-    sender_cid: senderCid,
+    sender_cid: sender_cid,
     timestamp: Date.now(),
     control,
   }));

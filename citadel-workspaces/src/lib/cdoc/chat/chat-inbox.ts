@@ -54,7 +54,7 @@ export function recordClosedDocumentCommand(account: bigint, event: CdocChatComm
 
 /** The app's inbox: the notification's recipient is the account; the legacy path, which names none, is not recorded. */
 export function recordForClosedDocument(event: CdocChatCommandEvent): void {
-  const account: bigint | undefined = event.recipientCid;
+  const account: bigint | undefined = event.recipient_cid;
   if (account === undefined) return;
   recordClosedDocumentCommand(account, event, appChatStore(account), CHAT_SYNC).then(
     (outcome: InboxOutcome): void => {

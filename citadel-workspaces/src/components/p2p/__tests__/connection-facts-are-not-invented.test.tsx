@@ -13,7 +13,7 @@ import type { FileTransfer } from '@/lib/file-transfer/types';
 
 function transfer(overrides: Partial<FileTransfer>): FileTransfer {
   return { id: 't', fileName: 'a.bin', fileSize: 1000, fileType: 'x', mode: 'browser', state: 'complete', progress: 100,
-    senderCid: '1', recipientCid: '2', createdAt: 5000, updatedAt: 5000, isIncoming: false, ...overrides } as FileTransfer;
+    sender_cid: '1', recipient_cid: '2', createdAt: 5000, updatedAt: 5000, isIncoming: false, ...overrides } as FileTransfer;
 }
 
 afterEach((): void => { vi.restoreAllMocks(); });

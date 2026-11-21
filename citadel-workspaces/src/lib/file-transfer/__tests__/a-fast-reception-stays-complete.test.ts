@@ -89,8 +89,8 @@ describe('a reception that completes during the accept round trip', () => {
         file_name: metadata.name, file_size: 3000, file_type: 'application/octet-stream',
         transfer_mode: 'p2p', timestamp: Date.now(), expiry_timestamp: Date.now() + 60_000,
       },
-      senderCid: ALICE.toString(),
-      recipientCid: BOB.toString(),
+      sender_cid: ALICE.toString(),
+      recipient_cid: BOB.toString(),
     });
     frame({ FileTransferRequestNotification: { cid: BOB, peer_cid: ALICE, metadata, request_id: null } });
     await settle();
@@ -125,7 +125,7 @@ describe('a send that completes during the cancel signal', () => {
   it('keeps its completion rather than being rewritten as cancelled', async () => {
     const state: FileTransferState = new FileTransferState();
     const outgoing: FileTransfer = {
-      id: 'out-1', fileName: 'a.bin', fileSize: 3000, fileType: '',       state: 'transferring', progress: 0, senderCid: '7', recipientCid: '42',
+      id: 'out-1', fileName: 'a.bin', fileSize: 3000, fileType: '',       state: 'transferring', progress: 0, sender_cid: '7', recipient_cid: '42',
       createdAt: 0, updatedAt: 0, isIncoming: false,
     };
     state.setTransfer(outgoing);

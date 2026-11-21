@@ -65,8 +65,8 @@ export class P2PMessengerManager extends EventListenerManager {
     const arrival: ArrivalNotice = {
       shouldShowNotification: (peerCid): boolean => !conversationInFront(this.activeConversationPeerCid === peerCid),
       getConversations: (): Map<bigint, P2PConversation> => cm.getConversationsMap(),
-      addNotification: (title, body, senderId, messageId, recipientCid, options): AppNotification =>
-        notificationService.addMessageNotification(title, body, senderId, messageId, recipientCid, options),
+      addNotification: (title, body, senderId, messageId, recipient_cid, options): AppNotification =>
+        notificationService.addMessageNotification(title, body, senderId, messageId, recipient_cid, options),
     };
     this.agent = bindAgentConversations((e, h) => this.listen(e, h), { ownCid: resolveCurrentCid, getOrCreateConversation: (p, u) => cm.getOrCreateConversation(p, u), holdInMemory: (p, m) => cm.holdInMemory(p, m), clearMessages: (p) => cm.clearMessages(p), notifyMessage: (m) => notifyEach(this.messageListeners, 'p2p message', m), notifyStatus: (id, st) => notifyEach(this.messageStatusListeners, 'p2p message status', id, st), notifyArrived: (p, m) => notifyMessageArrived(arrival, p, m), emit: (e, d) => this.emit(e, d), resync: () => this.loadCachedMessages().then(() => this.emit('p2p:messages-loaded')), peers: () => cm.getAllConversations().map((c) => c.peerCid), activePeer: () => this.activeConversationPeerCid, findMessage: async (p, id) => cm.getConversation(p)?.messages.find((m) => m.id === id) ?? messagePaginationStore.findMessageInPages(p, id) });
     this.presenceManager = new PresenceManager({
@@ -102,7 +102,7 @@ export class P2PMessengerManager extends EventListenerManager {
       notifyMessageStatusListeners: (messageId, status): void => notifyEach(this.messageStatusListeners, 'p2p message status', messageId, status),
       notifyTypingListeners: (peerCid, isTyping): void => this.presenceManager.notifyTypingChange(peerCid, isTyping),
       notifyPresenceListeners: (peerCid, presence): void => this.presenceManager.notifyPresenceChange(peerCid, presence),
-      sendMessageAck: (messageId, ackType, peerCid, recipientCid): Promise<void> => this.messageSender.sendMessageAck(messageId, ackType, peerCid, recipientCid),
+      sendMessageAck: (messageId, ackType, peerCid, recipient_cid): Promise<void> => this.messageSender.sendMessageAck(messageId, ackType, peerCid, recipient_cid),
       handleCheckState: (peerCid): Promise<void> => this.checkStateManager.handleCheckState(peerCid),
       handleCheckStateResponse: (peerCid): void => this.checkStateManager.handleCheckStateResponse(peerCid),
       markPeerReady: (peerCid): void => this.checkStateManager.markPeerReady(peerCid),
@@ -166,9 +166,9 @@ export class P2PMessengerManager extends EventListenerManager {
 
   private async loadCachedMessages(): Promise<void> { await this.conversationManager.loadFromStorage(); this.cachedMessagesLoaded = true; }
   // ===== Public API: Messaging =====
-  public async sendMessage(recipientCid: bigint, content: string, options?: SendMessageOptions): Promise<P2PMessage> { return this.messageSender.sendMessage(recipientCid, content, options); }
+  public async sendMessage(recipient_cid: bigint, content: string, options?: SendMessageOptions): Promise<P2PMessage> { return this.messageSender.sendMessage(recipient_cid, content, options); }
   public async resendMessage(peerCid: bigint, messageId: string): Promise<void> { return this.messageSender.resendMessage(peerCid, messageId); }
-  public async sendRawMessage(recipientCid: bigint, layer: MessagingLayer): Promise<void> { return this.messageSender.sendRawMessage(recipientCid, layer); }
+  public async sendRawMessage(recipient_cid: bigint, layer: MessagingLayer): Promise<void> { return this.messageSender.sendRawMessage(recipient_cid, layer); }
   // The agent writes the account's conversations and tells every window (agent-actions.ts).
   public async editMessage(peerCid: bigint, messageId: string, contents: string): Promise<void> { return editThroughAgent(this.agent, peerCid, messageId, contents); }
   public async deleteMessage(peerCid: bigint, messageId: string): Promise<void> { return deleteThroughAgent(this.agent, peerCid, messageId); }
@@ -176,12 +176,12 @@ export class P2PMessengerManager extends EventListenerManager {
   public async markMessagesAsRead(peerCid: bigint): Promise<void> { return markReadThroughAgent(this.agent, peerCid); }
 
   // ===== Public API: Presence =====
-  public async sendPresenceUpdate(recipientCid: bigint, presence: MessagingLayer): Promise<void> { return this.presenceManager.sendPresenceUpdate(recipientCid, presence); }
+  public async sendPresenceUpdate(recipient_cid: bigint, presence: MessagingLayer): Promise<void> { return this.presenceManager.sendPresenceUpdate(recipient_cid, presence); }
   public async broadcastPresence(presence: MessagingLayer): Promise<void> { return this.presenceManager.broadcastPresence(presence); }
   public getOwnPresence(): PeerPresence { return this.presenceManager.getOwnPresence(); }
-  public startTypingPolling(recipientCid: bigint, getCurrentText: () => string): void { this.presenceManager.startTypingPolling(recipientCid, getCurrentText); }
-  public stopTypingPolling(recipientCid: bigint): void { this.presenceManager.stopTypingPolling(recipientCid); }
-  public async sendTypingIndicator(recipientCid: bigint): Promise<void> { return this.presenceManager.sendTypingIndicator(recipientCid); }
+  public startTypingPolling(recipient_cid: bigint, getCurrentText: () => string): void { this.presenceManager.startTypingPolling(recipient_cid, getCurrentText); }
+  public stopTypingPolling(recipient_cid: bigint): void { this.presenceManager.stopTypingPolling(recipient_cid); }
+  public async sendTypingIndicator(recipient_cid: bigint): Promise<void> { return this.presenceManager.sendTypingIndicator(recipient_cid); }
 
   // ===== Public API: Conversations =====
   public getConversation(peerCid: bigint): P2PConversation | undefined { return this.conversationManager.getConversation(peerCid); }
