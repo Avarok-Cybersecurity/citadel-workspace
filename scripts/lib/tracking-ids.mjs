@@ -16,9 +16,28 @@ export function scan(text) {
     .filter(({ line }) => PATTERNS.some((p) => p.test(line)));
 }
 
-/** One message per offending line, for [{ where, text }] sources. */
-export function findings(sources) {
-  return sources.flatMap(({ where, text }) => scan(text).map(({ n, line }) => `${where} line ${n}: ${line.trim()}`));
+/** Where the exempt commits are listed, in every repository that runs this check. */
+export const EXEMPTIONS_FILE = '.github/tracking-id-exemptions';
+
+/**
+ * The commits named in an exemptions file: one full 40-hex SHA per line and nothing else, so the
+ * file cannot itself carry an identifier. Throws naming the line numbers (not their text) of any
+ * other line. An empty file exempts nothing.
+ */
+export function parseExemptions(text) {
+  const lines = text.endsWith('\n') ? text.slice(0, -1).split('\n') : text === '' ? [] : text.split('\n');
+  const bad = lines.map((line, i) => ({ n: i + 1, line })).filter(({ line }) => !/^[0-9a-f]{40}$/.test(line));
+  if (bad.length) {
+    throw new Error(`${EXEMPTIONS_FILE}: line(s) ${bad.map((b) => b.n).join(', ')} are not a full 40-hex commit SHA`);
+  }
+  return new Set(lines);
+}
+
+/** One message per offending line, for [{ sha, where, text }] sources, skipping `exempt` commits. */
+export function findings(sources, exempt) {
+  return sources
+    .filter(({ sha }) => sha === undefined || !exempt.has(sha))
+    .flatMap(({ where, text }) => scan(text).map(({ n, line }) => `${where} line ${n}: ${line.trim()}`));
 }
 
 /** Split `git log --format=%H%x00%B%x1e` output into [{ where, text }] sources. */
@@ -27,7 +46,8 @@ export function parseLog(log) {
     .split('\x1e')
     .filter((record) => record.includes('\x00'))
     .map((record) => {
-      const [sha, text] = record.split('\x00');
-      return { where: `commit ${sha.trim().slice(0, 12)}`, text };
+      const [raw, text] = record.split('\x00');
+      const sha = raw.trim();
+      return { sha, where: `commit ${sha.slice(0, 12)}`, text };
     });
 }
