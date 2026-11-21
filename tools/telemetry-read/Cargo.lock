@@ -250,7 +250,7 @@ dependencies = [
 [[package]]
 name = "citadel_io"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=ce7acace#ce7acace13bdbbdb124cae34f79b712a49da36e8"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=721029bb#721029bb41b6bdd74486d1b00f0fb7a6233fecd9"
 dependencies = [
  "bincode",
  "bytes",
@@ -270,7 +270,7 @@ dependencies = [
 [[package]]
 name = "citadel_io_macros"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=ce7acace#ce7acace13bdbbdb124cae34f79b712a49da36e8"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=721029bb#721029bb41b6bdd74486d1b00f0fb7a6233fecd9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -280,7 +280,7 @@ dependencies = [
 [[package]]
 name = "citadel_types"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=ce7acace#ce7acace13bdbbdb124cae34f79b712a49da36e8"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=721029bb#721029bb41b6bdd74486d1b00f0fb7a6233fecd9"
 dependencies = [
  "bincode",
  "bytes",
