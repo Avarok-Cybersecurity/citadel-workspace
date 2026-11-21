@@ -1,10 +1,9 @@
 /**
- * Trees stored under the old shared pair key are not lost by the move to
- * per-account keys, and are shown from the reader's side.
- *
- * The account with the SMALLER cid keeps its key (`min_max` is also its own
- * `mine_peer`). The other account's key changed, so without adoption its tree
- * would read as absent and be replaced by an empty default.
+ * A tree under the sorted-pair key an earlier build shared between both
+ * accounts is not adopted by the account whose key differs from it: that
+ * account starts from an empty tree. The account whose own key happens to be
+ * the same string (`min_max` is its `mine_peer`) reads it in place, from its
+ * own side.
  *
  * Drives the real service, IO and OPFS adapter against an in-memory OPFS.
  */
@@ -44,15 +43,14 @@ function page(me: bigint): RevfsService {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('a tree under the shared key', () => {
-  it('is adopted by the account whose key changed, from its own side', async () => {
+  it('is not adopted by the account whose key differs from it', async () => {
     installFakeOpfs();
     const disk: RevfsOpfsStorage = new RevfsOpfsStorage();
     await disk.saveTree('100_200', aliceUploaded());
 
     const tree: RevfsNode = await page(BOB).getTree(BOB, ALICE);
-    expect(findNode(tree, '/Docs/a.bin')?.fileState).toBe(RevfsFileState.Hosted);
-    expect(await disk.loadTree('200_100')).not.toBeNull();
-    expect(findNode((await disk.loadTree('100_200'))!, '/Docs/a.bin')?.fileState).toBe(RevfsFileState.Remote);
+    expect(findNode(tree, '/Docs/a.bin')).toBeNull();
+    expect(findNode((await disk.loadTree('200_100'))!, '/Docs/a.bin')).toBeNull();
   });
 
   it('is read in place by the account whose key did not change', async () => {

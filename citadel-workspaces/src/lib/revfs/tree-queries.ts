@@ -31,13 +31,6 @@ export function peerTreeKey(mine: bigint, peer: bigint): PeerPairKey {
   return `${mine}_${peer}`;
 }
 
-/** Where both accounts' trees were stored before `peerTreeKey` was directional. */
-export function legacyPairKey(cidA: bigint, cidB: bigint): PeerPairKey {
-  const a: bigint = cidA < cidB ? cidA : cidB;
-  const b: bigint = cidA < cidB ? cidB : cidA;
-  return `${a}_${b}`;
-}
-
 /**
  * Generate a server-scoped tree key for a client's server storage.
  * Format: `server_${cid}`

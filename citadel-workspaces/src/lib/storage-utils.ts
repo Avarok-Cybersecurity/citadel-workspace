@@ -232,18 +232,11 @@ export function persistJSON(data: unknown): string {
   );
 }
 
-/**
- * Inverse of persistJSON. `legacyBigIntFields` names keys older builds wrote
- * as bare strings: that data has no tag, so the field name is the only signal.
- */
-export function parsePersistedJSON<T>(text: string, legacyBigIntFields: readonly string[] = []): T {
-  const legacy: Set<string> = new Set(legacyBigIntFields);
-  return JSON.parse(text, (key, value) => {
+/** Inverse of persistJSON: only tagged values become bigints. */
+export function parsePersistedJSON<T>(text: string): T {
+  return JSON.parse(text, (_key, value) => {
     if (value && typeof value === 'object' && '__bigint__' in value) {
       return BigInt((value as { __bigint__: string }).__bigint__);
-    }
-    if (legacy.has(key) && typeof value === 'string' && /^\d+$/.test(value)) {
-      return BigInt(value);
     }
     return value;
   }) as T;

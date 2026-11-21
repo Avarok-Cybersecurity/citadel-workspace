@@ -16,7 +16,6 @@ import { withSerialLock } from '@/lib/serial-queue';
 import {
   peerTreeKey,
   serverTreeKey,
-  legacyPairKey,
 } from './tree-operations';
 import { RevfsState, type TreeChangedCallback } from './revfs-state';
 import { RevfsIO, type RevfsIODeps } from './revfs-io';
@@ -100,13 +99,11 @@ export class RevfsService {
 
   /** Throws RevfsTreeUnreadableError when the saved tree cannot be read; see tree-load. */
   async getTree(myCid: bigint, peerCid: bigint): Promise<RevfsNode> {
-    const key: TreeKey = peerTreeKey(myCid, peerCid);
-    const legacy: TreeKey = legacyPairKey(myCid, peerCid);
-    return loadTree(this.state, this.ensureIO(), { key, viewer: myCid, legacyKey: legacy === key ? null : legacy });
+    return loadTree(this.state, this.ensureIO(), { key: peerTreeKey(myCid, peerCid), viewer: myCid });
   }
 
   async getServerTree(myCid: bigint): Promise<RevfsNode> {
-    return loadTree(this.state, this.ensureIO(), { key: serverTreeKey(myCid), viewer: null, legacyKey: null });
+    return loadTree(this.state, this.ensureIO(), { key: serverTreeKey(myCid), viewer: null });
   }
 
   // ── Peer-Scoped Operations (delegated) ────────────────────────────────

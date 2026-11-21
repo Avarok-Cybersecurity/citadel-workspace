@@ -166,7 +166,7 @@ export class ConnectionIOWebSocket {
         const jsonStr: string = bytesToString(result.value);
         // StoredSession.cid is a bigint and exists specifically so an orphaned
         // session can be reclaimed; a bare JSON.parse gave it back as a string.
-        const parsed: StoredSessions = parsePersistedJSON<StoredSessions>(jsonStr, ['cid']);
+        const parsed: StoredSessions = parsePersistedJSON<StoredSessions>(jsonStr);
         return await this.withLegacyEntriesRepaired(parsed);
       } catch (decodeError) {
         debugLog('ConnectionIO', 'Failed to decode stored sessions:', decodeError);

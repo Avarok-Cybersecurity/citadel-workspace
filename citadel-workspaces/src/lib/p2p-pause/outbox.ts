@@ -15,14 +15,12 @@
  * promises delivery after Resume and a reload in between must not break that.
  *
  * The key also carries the send's security level and compression hint, so a
- * held message leaves on Resume exactly as it would have left at once. Keys
- * written before that have neither, and flush as they always did.
+ * held message leaves on Resume exactly as it would have left at once.
  *
  * And why it is held. A message to someone who has not yet accepted your
  * request waits here too (`'unregistered'`), and leaves when they accept, not
  * on Resume. One outbox, so one key order and one durability story; the reason
- * is the last key field. Keys written before reasons existed were written only
- * by the pause, so they read as `'paused'`.
+ * is the last key field. A key in any shorter, earlier shape is unreadable.
  */
 import type { CompressionHint } from 'citadel-workspace-client-ts';
 import { readPauseStatus, type PauseStorage } from './pause-store';
@@ -72,11 +70,10 @@ interface HeldEntry { options: ReliableSendOptions; reason: HoldReason }
 /** Inverse of entrySuffix. A key this module did not write is an error, not a guess. */
 function entryFromKey(key: string, prefix: string): HeldEntry {
   const parts: string[] = key.slice(prefix.length).split('_');
-  if (parts.length === 2) return { options: {}, reason: 'paused' };
   const [, , level, hint, written] = parts;
   const securityLevel: ChatSecurityLevel | undefined = CHAT_SECURITY_LEVELS.find((l: ChatSecurityLevel): boolean => l === level);
-  const reason: HoldReason | undefined = parts.length === 4 ? 'paused' : HOLD_REASONS.find((r: HoldReason): boolean => r === written);
-  if (parts.length < 4 || parts.length > 5 || reason === undefined
+  const reason: HoldReason | undefined = HOLD_REASONS.find((r: HoldReason): boolean => r === written);
+  if (parts.length !== 5 || reason === undefined
     || (level !== ABSENT && securityLevel === undefined) || (hint !== ABSENT && !isCompressionHint(hint))) {
     throw new Error(`Unreadable held-message key ${key}; nothing further was flushed`);
   }

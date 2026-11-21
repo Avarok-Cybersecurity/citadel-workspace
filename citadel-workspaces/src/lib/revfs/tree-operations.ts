@@ -14,7 +14,6 @@
 // Queries & utilities
 export {
   peerTreeKey,
-  legacyPairKey,
   serverTreeKey,
   makeOpId,
   now,
