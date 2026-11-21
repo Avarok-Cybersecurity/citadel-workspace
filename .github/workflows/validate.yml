@@ -811,6 +811,8 @@ jobs:
         run: node scripts/check-agent-binds-loopback.mjs
       - name: The agent's TLS mode matches every proxy that fronts it
         run: node scripts/check-agent-tls-matches-its-proxies.mjs
+      - name: The shipped agent verifies every server's certificate
+        run: node scripts/check-shipped-agent-verifies-server-certificates.mjs
       - name: The loopback agent origin is wired end to end
         run: node scripts/check-the-loopback-agent-origin-is-wired.mjs
       - name: Every variable envsubst can substitute is validated first

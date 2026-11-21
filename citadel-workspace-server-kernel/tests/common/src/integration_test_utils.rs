@@ -45,6 +45,7 @@ pub async fn new_internal_service_with_admin(
             bind_address_internal_service,
             citadel_internal_service::SERVER_RECONNECT,
             citadel_internal_service_test_common::test_transfers(),
+            citadel_internal_service_test_common::TEST_SERVER_CERTIFICATE,
         )
         .await?;
     let internal_service = NodeBuilder::default()

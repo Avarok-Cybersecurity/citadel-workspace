@@ -16,6 +16,10 @@ native-dialogs = ["citadel-internal-service/native-dialogs"]
 # artefacts the release builds turn this on (.github/actions/build-agent): the docker image and a
 # developer's `cargo run` must never replace themselves.
 self-update = []
+# Take a workspace server whose certificate says it is self-signed (server_certificate.rs). Only
+# the local development image (docker/internal-service/Dockerfile, its `dev` stage) turns this
+# on; every shipped agent verifies the server's certificate.
+self-signed-servers = []
 
 [[bin]]
 name = "citadel-workspace-internal-service"

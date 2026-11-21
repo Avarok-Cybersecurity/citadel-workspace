@@ -50,9 +50,9 @@ pub mod config {
     // every boot, so the secret would land in `docker compose logs`
     // and any log aggregator the operator wires up.
     #[derive(Deserialize, Clone)]
+    #[serde(deny_unknown_fields)]
     pub struct ServerConfig {
         pub bind_addr: String,
-        pub dangerous_skip_cert_verification: Option<bool>,
         pub backend: Option<String>,
         /// Data directory for filesystem backend (defaults to "./data")
         pub data_dir: Option<String>,
@@ -150,10 +150,6 @@ pub mod config {
             };
             f.debug_struct("ServerConfig")
                 .field("bind_addr", &self.bind_addr)
-                .field(
-                    "dangerous_skip_cert_verification",
-                    &self.dangerous_skip_cert_verification,
-                )
                 .field("backend", &self.backend)
                 .field("data_dir", &self.data_dir)
                 .field("workspace_master_password", &password_state)
@@ -1116,7 +1112,7 @@ pub async fn run_server_with_site_verify(
 
     let stun_servers = network::native_stun_servers(config.stun_servers.as_deref())?;
     let path_policy = path_policy::native_path_policy(config.path_policy.as_ref())?;
-    let mut builder = NodeBuilder::default();
+    let mut builder = NodeBuilder::<StackedRatchet>::default();
     builder
         .with_node_type(node_type)
         .with_stun_servers(network::builder_list(&stun_servers))
@@ -1136,17 +1132,6 @@ pub async fn run_server_with_site_verify(
             ..production_server_misc_settings()
         })
         .with_server_limits(server_limits::production_server_limits());
-
-    if config.dangerous_skip_cert_verification.unwrap_or(false) {
-        citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED. This should ONLY be used for local development with self-signed certificates. Never use in production!");
-        // `with_insecure_skip_cert_verification` is `&mut self -> &mut Self`
-        // (see citadel_sdk::builder::node_builder), so the call mutates
-        // `builder` in place — discarding the returned `&mut Self` is
-        // intentional and correct, not a bug. The static analysers that
-        // flag this expect a `self -> Self` consuming-builder pattern;
-        // the SDK builder uses the in-place variant.
-        builder.with_insecure_skip_cert_verification();
-    }
 
     // A planned restart must reach the clients, not just the process.
     //
@@ -1564,7 +1549,6 @@ mod server_config_debug_tests {
     fn cfg(password: &str) -> ServerConfig {
         ServerConfig {
             bind_addr: "0.0.0.0:12349".to_string(),
-            dangerous_skip_cert_verification: Some(true),
             backend: Some("filesystem".to_string()),
             data_dir: Some("/srv/data".to_string()),
             workspace_master_password: password.to_string(),

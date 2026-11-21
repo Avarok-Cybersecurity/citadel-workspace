@@ -209,6 +209,13 @@ CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --no-tls --b
 # =============================================================================
 FROM builder AS dev
 
+# The local stack's workspace server presents a self-signed certificate, which the shipped agent
+# (built above, copied by `production`) refuses. Only this stage rebuilds the agent to take it;
+# just the agent crate recompiles. scripts/check-shipped-agent-verifies-server-certificates.mjs
+# holds the feature to this stage.
+RUN cargo build --release -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features self-signed-servers \
+    && cp ./target/release/citadel-workspace-internal-service /usr/local/bin/
+
 ARG INTERNAL_SERVICE_PORT
 ENV INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT}
 

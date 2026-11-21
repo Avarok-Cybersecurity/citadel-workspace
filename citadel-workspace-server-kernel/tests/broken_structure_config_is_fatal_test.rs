@@ -24,7 +24,6 @@ use std::io::Write;
 fn config_naming(structure_file: Option<&str>) -> ServerConfig {
     ServerConfig {
         bind_addr: "127.0.0.1:12349".to_string(),
-        dangerous_skip_cert_verification: None,
         backend: None,
         data_dir: None,
         workspace_master_password: "test-password".to_string(),
