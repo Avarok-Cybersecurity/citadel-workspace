@@ -43,9 +43,6 @@ stun_servers = ["stun.cloudflare.com:3478", "stun1.l.google.com:19302", "stun4.l
 #   - CONTENT.md: Required for each office and room
 content_base_dir = "./documents/defaults/root"
 
-# Legacy: Path to workspace structure JSON (deprecated, use content_base_dir)
-# workspace_structure = "./workspaces.json"
-
 # =============================================================================
 # File Transfer Configuration
 # =============================================================================

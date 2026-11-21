@@ -60,9 +60,6 @@ pub mod config {
         /// Server refuses to start if neither config nor env var provides a non-empty password.
         #[serde(default)]
         pub workspace_master_password: String,
-        /// Path to the workspace structure JSON file (relative to kernel.toml)
-        /// DEPRECATED: Use content_base_dir instead
-        pub workspace_structure: Option<String>,
         /// Path to directory containing workspace.json and office/room CONTENT.md files
         /// The directory structure defines offices (subdirs) and rooms (nested subdirs)
         pub content_base_dir: Option<String>,
@@ -153,7 +150,6 @@ pub mod config {
                 .field("backend", &self.backend)
                 .field("data_dir", &self.data_dir)
                 .field("workspace_master_password", &password_state)
-                .field("workspace_structure", &self.workspace_structure)
                 .field("content_base_dir", &self.content_base_dir)
                 .field("file_transfer", &self.file_transfer)
                 .field("allow_first_connect_admin", &self.allow_first_connect_admin)
@@ -271,14 +267,6 @@ pub mod config {
     }
 
     impl WorkspaceStructureConfig {
-        /// Load workspace structure from a JSON file
-        pub fn from_file(path: &std::path::Path) -> Result<Self, String> {
-            let content = std::fs::read_to_string(path)
-                .map_err(|e| format!("Failed to read workspace structure file: {}", e))?;
-            serde_json::from_str(&content)
-                .map_err(|e| format!("Failed to parse workspace structure JSON: {}", e))
-        }
-
         /// Load workspace structure from a directory hierarchy
         ///
         /// The directory must contain:
@@ -481,9 +469,7 @@ pub mod config {
 /// Resolve the configured workspace structure, or `None` when none is configured.
 ///
 /// Extracted from the boot sequence so the decision is testable: a configured
-/// structure that cannot be read must STOP the boot, and that was true of the
-/// `content_base_dir` branch and not of the deprecated `workspace_structure`
-/// one, which logged at info and carried on.
+/// structure that cannot be read must STOP the boot.
 ///
 /// Carrying on is not harmless. The seed-pending marker is armed only when a
 /// structure actually loaded — deliberately, so that a later deploy adding a
@@ -518,46 +504,8 @@ pub fn resolve_workspace_structure(
                 "Failed to load workspace structure from directory: {e}"
             ))),
         }
-    } else if let Some(structure_path) = &config.workspace_structure {
-        // Legacy JSON file configuration
-        let full_path = if let Some(base) = config_base_path {
-            base.join(structure_path)
-        } else {
-            std::path::PathBuf::from(structure_path)
-        };
-
-        info!(target: "citadel", "Loading workspace structure from file: {:?} (deprecated, use content_base_dir)", full_path);
-        match WorkspaceStructureConfig::from_file(&full_path) {
-            Ok(structure) => {
-                info!(target: "citadel", "Loaded workspace structure: {} with {} offices",
-                    structure.name, structure.offices.len());
-                Ok(Some((
-                    structure,
-                    full_path.parent().map(|p| p.to_path_buf()),
-                )))
-            }
-            Err(e) => {
-                // Fatal, exactly as the `content_base_dir` branch above is.
-                //
-                // Continuing without a structure looks harmless and is not: the
-                // seed-pending marker is armed only when a structure loaded, so
-                // a first boot that swallowed this error records NEITHER marker.
-                // The next boot then sees no marker at all, takes the
-                // "predates the markers" back-fill branch, and stamps the
-                // workspace seeded — permanently. The result is a workspace with
-                // no offices, forever, reachable only by wiping the backend, and
-                // announced by a single info-level line saying "Warning".
-                //
-                // A configured structure that cannot be read is a configuration
-                // error. Refusing to boot is the only outcome an operator can
-                // act on.
-                Err(NetworkError::msg(format!(
-                    "Failed to load workspace structure from {full_path:?}: {e}"
-                )))
-            }
-        }
     } else {
-        info!(target: "citadel", "No workspace structure configured. Use content_base_dir or workspace_structure in kernel.toml");
+        info!(target: "citadel", "No workspace structure configured. Use content_base_dir in kernel.toml");
         Ok(None)
     }
 }
@@ -1552,7 +1500,6 @@ mod server_config_debug_tests {
             backend: Some("filesystem".to_string()),
             data_dir: Some("/srv/data".to_string()),
             workspace_master_password: password.to_string(),
-            workspace_structure: None,
             content_base_dir: Some("/srv/content".to_string()),
             file_transfer: Some(FileTransferConfig::default()),
             allow_first_connect_admin: None,
