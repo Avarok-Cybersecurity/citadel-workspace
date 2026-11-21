@@ -187,10 +187,7 @@ export class ConversationManager {
       // any record it cannot attribute to this account. Without it, one user
       // logging in deleted every other user's history on the device.
       await Promise.all(
-        staleCids.map((cid) => messagePaginationStore.deleteConversationPages(cid, {
-          ownerCid: currentCid,
-          includeUnattributed: false,
-        }))
+        staleCids.map((cid) => messagePaginationStore.deleteConversationPages(cid, { ownerCid: currentCid }))
       );
       eventEmitter.emit('p2p:conversations-cleaned');
     }

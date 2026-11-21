@@ -20,6 +20,12 @@ vi.mock('../../websocket-service', () => ({
   },
 }));
 
+vi.mock('@/lib/multi-instance/instance-manager', async (importOriginal: () => Promise<typeof import('@/lib/multi-instance/instance-manager')>) => {
+  const { instanceManagerWith } = await import('@/test/instance-manager-double');
+  const real: typeof import('@/lib/multi-instance/instance-manager') = await importOriginal();
+  return { ...real, instanceManager: instanceManagerWith(real.instanceManager, { get cid(): bigint | null { return 3n; } }) };
+});
+
 const { loadMetadata, tryLoadMetadata } = await import('../message-page-operations');
 
 describe('a read that fails is not a conversation that is absent', () => {

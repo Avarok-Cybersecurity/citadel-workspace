@@ -13,9 +13,8 @@
  * cache with other accounts' rows and the P2P peer list renders them — who
  * Alice talks to, and her unread counts, shown to Bob.
  *
- * Unattributed legacy records are still returned. An unknown owner is exactly
- * the case where withholding is as wrong as leaking: those predate the stamp
- * and belong to whoever is reading.
+ * Records under the peer alone, or without an owner stamp, predate both and
+ * are not returned to anyone.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -24,7 +23,7 @@ let currentCid: bigint | null = 111n;
 
 vi.mock('../../websocket-service', () => ({
   websocketService: {
-    sendLocalDBListKeys: async (): Promise<string[]> => [...stored.keys()],
+    sendLocalDBListKeys: async (_cid: bigint, prefix: string): Promise<string[]> => [...stored.keys()].filter((k) => k.startsWith(prefix)),
     sendLocalDBGet: async (_cid: bigint, key: string): Promise<{ value: string }> => {
       const value: string | undefined = stored.get(key);
       if (value === undefined) throw new Error(`no such key: ${key}`);
@@ -76,14 +75,20 @@ describe('loading every conversation on a shared device', () => {
     expect(all.map((m) => m.peerCid)).toEqual([900n]);
   });
 
-  it('still returns records written before the owner stamp existed', async () => {
-    // An unknown owner is the case where withholding is as wrong as leaking:
-    // these predate the stamp and belong to whoever is reading.
+  it('does not return a record written before the owner was in the key', async () => {
     seed(null, 902n);
 
     const all: ConversationMetadata[] = await messagePaginationStore.loadAllMetadata();
 
-    expect(all.map((m) => m.peerCid)).toEqual([902n]);
+    expect(all).toEqual([]);
+  });
+
+  it('does not return a record under this account\'s key that is stamped for another', async () => {
+    stored.set(metadataKey(MINE, 903n), JSON.stringify({ peerCid: '903', ownerCid: THEIRS.toString(), totalMessageCount: 1, oldestMessageTimestamp: 1, newestMessageTimestamp: 1, latestPage: 0, messagesPerPage: 50, unreadCount: 0, lastMessageIndex: 0, lastUpdated: 1 }));
+
+    const all: ConversationMetadata[] = await messagePaginationStore.loadAllMetadata();
+
+    expect(all).toEqual([]);
   });
 
   it('returns the other account’s rows when THEY are the one reading', async () => {
@@ -98,14 +103,12 @@ describe('loading every conversation on a shared device', () => {
     expect(all.map((m) => m.peerCid)).toEqual([901n]);
   });
 
-  it('returns everything attributable when no session is selected yet', async () => {
-    // Boot before a cid is known. Filtering to "nothing" here would empty the
-    // list for a legitimate reader; the caller re-runs once the cid arrives.
+  it('returns nothing before a session is selected; the caller re-runs once the cid arrives', async () => {
     seed(MINE, 900n);
     currentCid = null;
 
     const all: ConversationMetadata[] = await messagePaginationStore.loadAllMetadata();
 
-    expect(all.map((m) => m.peerCid)).toEqual([900n]);
+    expect(all).toEqual([]);
   });
 });

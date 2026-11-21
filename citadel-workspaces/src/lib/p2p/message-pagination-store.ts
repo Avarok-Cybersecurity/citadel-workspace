@@ -116,11 +116,12 @@ export class MessagePaginationStore {
     const isNewConversation: boolean = !metadata;
 
     const ownerCid: bigint | null = await getCurrentCid();
+    if (ownerCid === null) throw new Error('No signed-in account: a conversation is stored under its owner');
 
     if (!metadata) {
       metadata = {
         peerCid,
-        ownerCid: ownerCid ?? undefined,
+        ownerCid,
         peerUsername: getPeerUsername(),
         totalMessageCount: 0,
         oldestMessageTimestamp: message.timestamp,
@@ -133,14 +134,6 @@ export class MessagePaginationStore {
       };
     }
 
-    // Adopt an unstamped record the first time the account that is actually
-    // using it writes to it. Attribution by USE is the only signal available —
-    // the key carries no owner — and it is safe in the direction that matters:
-    // it can only ever move a record from "nobody may delete this" to "one
-    // specific account may".
-    if (metadata.ownerCid === undefined && ownerCid !== null) {
-      metadata.ownerCid = ownerCid;
-    }
 
     let currentPage: MessagePage | null = await loadMessagePage(peerCid, metadata.latestPage);
     if (!currentPage) {

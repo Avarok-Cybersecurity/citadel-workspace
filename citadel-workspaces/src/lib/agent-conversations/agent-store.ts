@@ -52,7 +52,7 @@ export interface AgentStore {
   findUnreadFromPeer(peerCid: bigint): Promise<P2PMessage[]>;
   appendMessageToPage(peerCid: bigint, message: P2PMessage): Promise<void>;
   updateMessageInPages(peerCid: bigint, messageId: string, updates: Partial<P2PMessage>): Promise<boolean>;
-  deleteConversationPages(peerCid: bigint, scope: { includeUnattributed: boolean }): Promise<void>;
+  deleteConversationPages(peerCid: bigint): Promise<void>;
   updatePeerUsernameInMetadata(): Promise<void>;
   deleteOldFormat(): Promise<void>;
   reactToMessageInPages(): never;
@@ -97,8 +97,8 @@ export const agentStore: AgentStore = {
   async updateMessageInPages(peerCid: bigint, messageId: string, updates: Partial<P2PMessage>): Promise<boolean> {
     return (await agentConversations.patch(await own(), peerCid, messageId, toPatch(updates))) !== null;
   },
-  async deleteConversationPages(peerCid: bigint, scope: { includeUnattributed: boolean }): Promise<void> {
-    await agentConversations.clear(await own(), peerCid, scope.includeUnattributed);
+  async deleteConversationPages(peerCid: bigint): Promise<void> {
+    await agentConversations.clear(await own(), peerCid);
   },
   /** The agent records peer names itself, from registration and the peer list. */
   async updatePeerUsernameInMetadata(): Promise<void> {},

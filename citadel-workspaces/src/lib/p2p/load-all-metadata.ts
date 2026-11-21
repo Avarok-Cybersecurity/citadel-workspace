@@ -19,7 +19,8 @@ import { websocketService } from '../websocket-service';
 import { instanceManager } from '@/lib/multi-instance/instance-manager';
 import { loadMetadataByKey } from './message-page-operations';
 import { isGenuinelyAbsent } from '@/lib/storage/absence';
-import { PAGINATED_PREFIX, type ConversationMetadata } from './p2p-types';
+import type { ConversationMetadata } from './p2p-types';
+import { ownConversationPrefix } from './message-page-keys';
 import { debugLog } from '@/lib/debug-config';
 
 /**
@@ -58,7 +59,7 @@ export async function loadAllMetadata(): Promise<ConversationMetadata[]> {
     const results: ConversationMetadata[] = [];
 
     try {
-      const allKeys: string[] = await websocketService.sendLocalDBListKeys(0n, `${PAGINATED_PREFIX}`);
+      const allKeys: string[] = await websocketService.sendLocalDBListKeys(0n, ownConversationPrefix());
 
       if (!allKeys || allKeys.length === 0) {
         debugLog('MessagePaginationStore', '[P2P] No paginated conversations found (fresh install)');
@@ -68,18 +69,7 @@ export async function loadAllMetadata(): Promise<ConversationMetadata[]> {
       const metadataKeys: string[] = allKeys.filter((key: string) => key.endsWith('_metadata'));
       debugLog('MessagePaginationStore', `[P2P] Found ${metadataKeys.length} conversation metadata keys`);
 
-      // Bucket 0n is shared by every account on this device -- the product
-      // expects several -- so these keys include other accounts' conversations.
-      // `ownerCid` was added for exactly that reason, and its doc-comment
-      // records what happened without it: `cleanupStaleConversations` deleted
-      // every other account's history as stale. The stamp was wired into the
-      // DELETE path and not this one, so the P2P peer list showed whom the
-      // other account talks to, with their unread counts.
-      //
-      // An unattributed record is returned, not withheld: those predate the
-      // stamp, cannot be assigned to anyone, and belong to whoever is reading.
-      // Same rule as `loadMetadata`, and the same reason destroying them is
-      // unsafe.
+      // Only this account's keys are listed (the owner is in the key); the stamp is checked too.
       const own: bigint | null = instanceManager.cid;
 
       // Read the conversations CONCURRENTLY.
@@ -109,8 +99,7 @@ export async function loadAllMetadata(): Promise<ConversationMetadata[]> {
       metadataKeys.forEach((key: string, index: number) => {
         const metadata: ConversationMetadata | null = loaded[index] ?? null;
         if (!metadata) return;
-        const belongsToAnother: boolean =
-          own !== null && metadata.ownerCid !== undefined && metadata.ownerCid !== own;
+        const belongsToAnother: boolean = metadata.ownerCid !== own;
         if (belongsToAnother) {
           debugLog('MessagePaginationStore', `[P2P] Skipping ${key}: another account's conversation`);
         } else {

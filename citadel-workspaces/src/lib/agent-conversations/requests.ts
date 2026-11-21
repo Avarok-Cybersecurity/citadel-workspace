@@ -71,7 +71,7 @@ export const agentConversations: {
   markRead(cid: bigint, peer: bigint): Promise<void>;
   record(cid: bigint, peer: bigint, message: ConversationMessage): Promise<void>;
   patch(cid: bigint, peer: bigint, messageId: string, patch: MessagePatch): Promise<ConversationMessage | null>;
-  clear(cid: bigint, peer: bigint, includeUnattributed: boolean): Promise<void>;
+  clear(cid: bigint, peer: bigint): Promise<void>;
   list(cid: bigint): Promise<ConversationMetadata[]>;
   page(cid: bigint, peer: bigint, page: number | null): Promise<{ metadata: ConversationMetadata | null; page: ConversationPage | null }>;
   setPreferences(cid: bigint, preferences: AccountPreferences): Promise<void>;
@@ -95,8 +95,8 @@ export const agentConversations: {
     ask('ConversationRecord', { cid, peer_cid: peer, message }, 'ConversationUpdated', matched).then(done),
   patch: (cid, peer, messageId, patch) =>
     ask('ConversationPatch', { cid, peer_cid: peer, message_id: messageId, patch }, 'ConversationUpdated', touched),
-  clear: (cid, peer, includeUnattributed) =>
-    ask('ConversationClear', { cid, peer_cid: peer, include_unattributed: includeUnattributed }, 'ConversationUpdated', matched).then(done),
+  clear: (cid, peer) =>
+    ask('ConversationClear', { cid, peer_cid: peer }, 'ConversationUpdated', matched).then(done),
   list: (cid) =>
     ask('ConversationList', { cid }, 'ConversationListResponse', (a) => (a.conversations as ConversationMetadata[] | undefined) ?? []),
   page: (cid, peer, page) =>

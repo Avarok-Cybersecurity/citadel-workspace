@@ -21,7 +21,7 @@ vi.mock('@/lib/websocket-service', () => ({
   },
 }));
 vi.mock('../message-page-operations', () => ({
-  loadMetadataByKey: async (key: string): Promise<{ peerCid: bigint; messageCount: number; }> => {
+  loadMetadataByKey: async (key: string): Promise<{ peerCid: bigint; ownerCid: bigint; messageCount: number; }> => {
     started.push(key);
     inFlight += 1;
     peakInFlight = Math.max(peakInFlight, inFlight);
@@ -32,10 +32,10 @@ vi.mock('../message-page-operations', () => ({
     // stands in for, and the assertion below then had to cast the result to
     // `{ peerCid: string }` to compile -- a cast that made the test agree with
     // the fixture rather than with production.
-    return { peerCid: BigInt(key.replace(/\D/g, '')), messageCount: 1 };
+    return { peerCid: BigInt(key.replace(/\D/g, '')), ownerCid: 5n, messageCount: 1 };
   },
 }));
-vi.mock('@/lib/multi-instance', () => ({ instanceManager: { cid: null } }));
+vi.mock('@/lib/multi-instance/instance-manager', () => ({ instanceManager: { cid: 5n } }));
 vi.mock('@/lib/debug-config', () => ({ debugEnabled: false, debugLog: (): void => {} }));
 
 import { loadAllMetadata } from '../load-all-metadata';

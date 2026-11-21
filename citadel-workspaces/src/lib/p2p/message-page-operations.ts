@@ -17,7 +17,7 @@ import type {
   MessagePage,
   P2PMessage,
 } from './p2p-types';
-import { conversationPrefix, legacyConversationPrefix, hasLegacyFallback } from './message-page-keys';
+import { conversationPrefix } from './message-page-keys';
 import { instanceManager } from '@/lib/multi-instance/instance-manager';
 import { debugLog } from '@/lib/debug-config';
 import { isGenuinelyAbsent } from '@/lib/storage/absence';
@@ -46,7 +46,7 @@ export async function loadMetadataByKey(key: string): Promise<ConversationMetada
         // as one, every ownership comparison is string-vs-bigint and therefore
         // always false — which silently turns the delete guard into "refuse
         // everything", including the account's own sweep.
-        ownerCid: typeof parsed.ownerCid === 'string' ? BigInt(parsed.ownerCid) : parsed.ownerCid,
+        ownerCid: BigInt(parsed.ownerCid as string),
         peerCid: typeof parsed.peerCid === 'string' ? BigInt(parsed.peerCid) : parsed.peerCid
       } as ConversationMetadata;
     }
@@ -63,28 +63,12 @@ export async function loadMetadataByKey(key: string): Promise<ConversationMetada
  * Load metadata for a specific peer.
  */
 export async function loadMetadata(peerCid: bigint): Promise<ConversationMetadata | null> {
-  const scoped: ConversationMetadata | null = await loadMetadataByKey(`${conversationPrefix(peerCid)}_metadata`);
-  if (scoped || !hasLegacyFallback(peerCid)) return scoped;
-
-  // Nothing under the account-scoped key. Records written before conversations
-  // were scoped live under the peer-only prefix; read them so existing history
-  // is not orphaned by the rename.
-  //
-  // Only OURS, though: an unattributed record predates the ownerCid stamp and
-  // could belong to anyone, but adopting it is the same guess the old shared
-  // key made. A record stamped for a different account is left alone.
-  const legacy: ConversationMetadata | null = await loadMetadataByKey(`${legacyConversationPrefix(peerCid)}_metadata`);
-  if (!legacy) return null;
-  if (legacy.ownerCid !== undefined && legacy.ownerCid !== instanceManager.cid) {
-    debugLog('MessagePageOperations', `[P2P] Legacy conversation ${peerCid.toString().slice(0, 8)} belongs to another account`);
+  const found: ConversationMetadata | null = await loadMetadataByKey(`${conversationPrefix(peerCid)}_metadata`);
+  if (found && found.ownerCid !== instanceManager.cid) {
+    debugLog('MessagePageOperations', `[P2P] Conversation ${peerCid.toString().slice(0, 8)} is stamped for another account`);
     return null;
   }
-  return legacy;
-}
-
-/** Read a page under the legacy peer-only prefix, for conversations not yet migrated. */
-async function loadLegacyMessagePage(peerCid: bigint, pageNumber: number): Promise<MessagePage | null> {
-  return loadMessagePageByKey(`${legacyConversationPrefix(peerCid)}_${pageNumber}`);
+  return found;
 }
 
 /**
@@ -92,11 +76,10 @@ async function loadLegacyMessagePage(peerCid: bigint, pageNumber: number): Promi
  */
 export async function saveMetadata(peerCid: bigint, metadata: ConversationMetadata): Promise<void> {
   const key: string = `${conversationPrefix(peerCid)}_metadata`;
-  const serializableMetadata: { peerCid: string; ownerCid: string | undefined; peerUsername?: string; totalMessageCount: number; oldestMessageTimestamp: number; newestMessageTimestamp: number; latestPage: number; messagesPerPage: number; unreadCount: number; lastMessageIndex: number; lastUpdated: number; } = {
+  const serializableMetadata: { peerCid: string; ownerCid: string; peerUsername?: string; totalMessageCount: number; oldestMessageTimestamp: number; newestMessageTimestamp: number; latestPage: number; messagesPerPage: number; unreadCount: number; lastMessageIndex: number; lastUpdated: number; } = {
     ...metadata,
     peerCid: metadata.peerCid.toString(),
-    // Stamped so this record can later be proved ours — see ConversationMetadata.
-    ownerCid: metadata.ownerCid === undefined ? undefined : metadata.ownerCid.toString(),
+    ownerCid: metadata.ownerCid.toString(),
   };
   const valueStr: string = JSON.stringify(serializableMetadata);
   const valueBytes: number[] = stringToBytes(valueStr);
@@ -107,11 +90,7 @@ export async function saveMetadata(peerCid: bigint, metadata: ConversationMetada
  * Load a specific page of messages for a peer.
  */
 export async function loadMessagePage(peerCid: bigint, pageNumber: number): Promise<MessagePage | null> {
-  const scoped: MessagePage | null = await loadMessagePageByKey(`${conversationPrefix(peerCid)}_${pageNumber}`);
-  if (scoped || !hasLegacyFallback(peerCid)) return scoped;
-  // Pre-scoping history: loadMetadata has already refused a record owned by
-  // another account, so reaching here means this conversation is ours.
-  return loadLegacyMessagePage(peerCid, pageNumber);
+  return loadMessagePageByKey(`${conversationPrefix(peerCid)}_${pageNumber}`);
 }
 
 async function loadMessagePageByKey(key: string): Promise<MessagePage | null> {
