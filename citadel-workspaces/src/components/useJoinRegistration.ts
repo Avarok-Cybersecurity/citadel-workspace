@@ -95,7 +95,7 @@ export function useJoinRegistration(
   // the defaults instead, permanently, with nothing said. Landing already
   // lifted the server address out of the cache for exactly this reason and did
   // not carry the fix here.
-  const securitySettings: SecuritySettingsValues | { readonly securityLevel: "Standard"; readonly secrecyMode: "BestEffort"; readonly encryptionAlgorithm: "AES_GCM_256"; readonly kemAlgorithm: "MlKem"; readonly sigAlgorithm: "None"; readonly headerObfuscatorSettings: {}; readonly enrolPasskey: false; } = providedSecuritySettings ?? DEFAULT_SECURITY_SETTINGS;
+  const securitySettings: SecuritySettingsValues | { readonly securityLevel: "Standard"; readonly secrecyMode: "BestEffort"; readonly encryptionAlgorithm: "AES_GCM_256"; readonly kemAlgorithm: "MlKem1024Fips203"; readonly sigAlgorithm: "None"; readonly headerObfuscatorSettings: {}; readonly enrolPasskey: false; } = providedSecuritySettings ?? DEFAULT_SECURITY_SETTINGS;
 
   const setField = <K extends keyof JoinFormData>(name: K, value: JoinFormData[K]): void => {
     setFormData(prev => {

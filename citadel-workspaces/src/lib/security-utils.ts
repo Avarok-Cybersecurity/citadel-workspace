@@ -6,6 +6,7 @@
 import type { SecuritySettingsValues } from '@/components/SecuritySettings';
 import type { HeaderObfuscatorSettings, SessionSecuritySettings } from '@avarok/citadel-protocol-types';
 import { isVariant } from 'citadel-workspace-client-ts';
+import { DEFAULT_SECURITY_SETTINGS } from '@/components/security-settings-defaults';
 
 /** The protocol's own types (citadel_types, generated): `EnabledWithKey` is a u128, so a bigint. */
 export type { HeaderObfuscatorSettings, SessionSecuritySettings };
@@ -20,7 +21,7 @@ export function getDefaultSecuritySettings(): SessionSecuritySettings {
     secrecy_mode: "BestEffort",
     crypto_params: {
       encryption_algorithm: "AES_GCM_256",
-      kem_algorithm: "MlKem",
+      kem_algorithm: DEFAULT_SECURITY_SETTINGS.kemAlgorithm,
       sig_algorithm: "None",
     },
     header_obfuscator_settings: "Disabled"
