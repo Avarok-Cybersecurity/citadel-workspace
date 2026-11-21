@@ -10,6 +10,7 @@ import { AdmissionRefusal, RegisteredAwaitingSignIn, admissionChallengeOf, admis
 import type { WebSocketMessage } from '@/types/ws-message-types';
 import { UsernameHeldElsewhere } from '@/lib/sessions/known-accounts';
 import { UNKNOWN_REASON_COPY } from '@/lib/connection/connect-refusal';
+import { versionRefusalCopy } from '@/lib/connection/version-refusal-copy';
 import { phraseOf, type RecoveryPhrase } from '@/lib/recovery/secret';
 
 export interface RegistrationHandlerDeps {
@@ -49,6 +50,8 @@ export function createRegistrationResponseHandler(
     cleanup();
     const message: string = (v.message as string) || fallback;
     if (v.reason_code === 'unknown') { reject(new Error(UNKNOWN_REASON_COPY)); return; }
+    const update: string | null = versionRefusalCopy(v.reason_code);
+    if (update !== null) { reject(new Error(update)); return; }
     // The agent's typed refusal: this device holds the name for another server (one per username).
     if (v.reason_code === 'username_held_for_another_server' && typeof v.held_for_server === 'string') {
       reject(new UsernameHeldElsewhere(deps.username.trim(), v.held_for_server)); return;

@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { connectRefusal, UNKNOWN_REASON_COPY } from '../connect-refusal';
+import { VERSION_REFUSAL_COPY } from '../version-refusal-copy';
 import { AdmissionRefusal } from '@/lib/admission/refusal';
 import { SIGN_IN_SERVER_COPY, SignInServerRefusal } from '@/lib/sessions/sign-in-server';
 import type { FailureReason } from 'citadel-workspace-client-ts';
@@ -28,6 +29,13 @@ describe('a refused Connect', () => {
     const error: Error = connectRefusal(failed('admission_required'), 'alice');
     expect(error).toBeInstanceOf(AdmissionRefusal);
     expect(error).not.toBeInstanceOf(SignInServerRefusal);
+  });
+
+  it('a server on another protocol version, or an unreadable seal: plain copy, not the raw message', () => {
+    expect(connectRefusal(failed('protocol_version_unsupported'), 'alice').message)
+      .toBe(VERSION_REFUSAL_COPY.protocol_version_unsupported);
+    expect(connectRefusal(failed('revfs_seal_unrecognised'), 'alice').message)
+      .toBe(VERSION_REFUSAL_COPY.revfs_seal_unrecognised);
   });
 
   it('a reason newer than this page: reload it, not the raw message', () => {
