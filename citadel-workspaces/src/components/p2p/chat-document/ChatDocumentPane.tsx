@@ -1,22 +1,21 @@
 /**
  * A chat's document tab: the Citadel Docs canvas, kept live with the chat's peer or channel, under
- * a strip saying who it is shared with (and its rename, where one is carried), with a moved document's loss banner above it;
- * or, when the document does not open as a canvas, the notice that says why.
+ * a strip saying who it is shared with (and its rename, where one is carried); or, when the
+ * document does not open as a canvas, the notice that says why.
  */
 import { useState, useSyncExternalStore } from 'react';
 import { Pencil, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppLoadingPane } from '@/components/app-loading/AppLoadingPane';
 import { DocumentHost, type DocumentPermissions } from '@/components/documents/DocumentHost';
-import { LossReportBanner } from '@/components/documents/migration/LossReportBanner';
 import type { DocumentSource } from '@/lib/cdoc/document-source';
 import { loadCdocRuntime } from '@/lib/cdoc/runtime-loader';
 import { browserDocumentFiles } from '@/lib/document-files';
 import type { LoadStage } from '@/lib/app-loading/load-stage';
 import type { ValueStore } from '@/lib/value-store';
 import { RenameDocumentDialog } from '../RenameDocumentDialog';
-import type { ChatDocumentOpening, MovedBanner } from './chat-document-opening';
-import { UnmovedDocument } from './UnmovedDocument';
+import type { ChatDocumentOpening } from './chat-document-opening';
+import { UnopenedDocument } from './UnopenedDocument';
 
 const OPENING: LoadStage = { kind: 'app' };
 /** The replica is what opens (chat-replica.ts); the source is only what a replica-less view would show. */
@@ -31,7 +30,7 @@ interface ChatDocumentPaneProps {
   /** Who it is kept live with, as the strip above it says it (the transport's `sharedWith`). */
   readonly sharedWith: string;
   readonly selfName: string;
-  /** Null while it is being opened (or moved). */
+  /** Null while it is being opened. */
   readonly opening: ChatDocumentOpening | null;
   readonly onRetry: () => void;
   readonly onRename: (title: string) => Promise<void>;
@@ -48,10 +47,9 @@ export function ChatDocumentPane({ docId, title, peerName, sharedWith, selfName,
   const [renaming, setRenaming] = useState<boolean>(false);
   const canvas: Extract<ChatDocumentOpening, { kind: 'canvas' }> | null = opening?.kind === 'canvas' ? opening : null;
   const shownTitle: string = useStore(canvas?.document.title ?? null) ?? title;
-  const banner: MovedBanner | null = useStore(canvas?.moved?.banner ?? null);
   if (opening === null) return <AppLoadingPane appName="Citadel Docs" stage={OPENING} />;
-  if (opening.kind === 'unmoved') {
-    return <UnmovedDocument docId={docId} title={title} peerName={peerName} reason={opening.reason} loadOriginal={opening.loadOriginal} onRetry={onRetry} />;
+  if (opening.kind === 'unopened') {
+    return <UnopenedDocument title={title} peerName={peerName} reason={opening.reason} onRetry={onRetry} />;
   }
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-background" data-testid="chat-document-pane" data-document-id={docId}>
@@ -66,12 +64,6 @@ export function ChatDocumentPane({ docId, title, peerName, sharedWith, selfName,
           Rename
         </Button>}
       </div>
-      {opening.moved !== null && banner !== null && (
-        <LossReportBanner
-          docId={docId} report={banner.report} conflict={banner.conflict} loadOriginal={opening.moved.loadOriginal}
-          files={browserDocumentFiles} loadCdocRuntime={loadCdocRuntime}
-        />
-      )}
       <div className="flex min-h-0 flex-1 flex-col">
         <DocumentHost
           nodeId={docId} appId="docs" title={shownTitle} permissions={MAY_EDIT} documentSource={KEPT_REPLICA}

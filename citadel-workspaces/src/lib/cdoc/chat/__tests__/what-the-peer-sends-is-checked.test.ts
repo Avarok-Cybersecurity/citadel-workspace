@@ -5,11 +5,11 @@
  * hello. Carets cross the P2P channel through the shared presence code and are drawn.
  */
 import { describe, expect, it } from 'vitest';
-import type { CdocChatSync } from '@/types/cdoc-chat-sync';
+import type { CdocChatSync, CdocChatSyncPayload } from '@/types/cdoc-chat-sync';
 import type { PeerPresence } from '../../editor/peer-overlay';
 import { typeInto } from '../../collab/__tests__/doubles/real-replicas';
 import { CHAT_SYNC } from '../chat-config';
-import { encodeChatSync } from '../chat-wire';
+import { encodeChatSync, readChatSync } from '../chat-wire';
 import { ALICE, BLANK, BOB, DOC, newWorld, openSide, settle, textOf, type ChatSide, type World } from './doubles/chat-pair';
 import { FakeAgentLocalDb } from './doubles/fake-agent-local-db';
 import { CLEAN } from './doubles/fake-channel';
@@ -64,6 +64,24 @@ describe('a payload from the peer', () => {
     await alice.sync().settled();
     expect(alice.problems.map((p): string => p.kind)).toEqual(['unreadable']);
     expect(Array.from(await alice.editor().snapshot())).toEqual(Array.from(before));
+  });
+
+  it('a hello naming an earlier move is read without it', () => {
+    const payload: CdocChatSyncPayload = { doc_id: DOC, doc_version: CHAT_SYNC.docVersion, sync: { kind: 'hello', state_vector: new Uint8Array(0), answer: true, title: null } };
+    const named: CdocChatSyncPayload = { ...payload, sync: { ...payload.sync, migration_origin: 'yjs:other' } as unknown as CdocChatSync };
+    expect(Object.keys(readChatSync(named))).not.toContain('migration_origin');
+  });
+
+  it('a hello naming an earlier move is answered as any other: the copies still merge', async () => {
+    const world: World = newWorld();
+    const { alice, bob } = await bothOpen(world);
+    await typeInto(bob.editor(), 'still merged');
+    // What an earlier build's hello carried: the field is not in this client's type, so it is cast in.
+    const hello: CdocChatSync = { kind: 'hello', state_vector: await alice.editor().stateVector(), answer: false, migration_origin: 'yjs:other', title: null } as CdocChatSync;
+    await sendAsBob(world, CHAT_SYNC.docVersion, hello);
+    await settle(world, [alice, bob]);
+    expect(await textOf(alice.editor())).toContain('still merged');
+    expect(alice.problems).toEqual([]);
   });
 });
 

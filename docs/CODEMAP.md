@@ -82,7 +82,7 @@
 | P2P chat | `P2PChat` → `P2PChatHeader` + `P2PMessageList` + `P2PMessageInput` | Full messaging: text, typing indicators, message bubbles |
 | Chat settings | `ChatSettingsPanel` → File tab, Remote tab | Per-conversation settings |
 | File transfer | `FileTransferModal`, `FileDropZone` | Send/receive files via drag-drop or picker |
-| Chat document | `LiveDocumentModal` → `ChatDocumentPane` → `DocumentHost` (the Citadel Docs canvas) | A document shared live with the peer, kept in step by CdocChatSync; an earlier editor's document is moved once per device (`LossReportBanner`) |
+| Chat document | `LiveDocumentModal` → `ChatDocumentPane` → `DocumentHost` (the Citadel Docs canvas) | A document shared live with the peer, kept in step by CdocChatSync; an earlier editor's document is not opened |
 | Chat tab bar | `ChatTabBar` + `TypeSelectorBar` | Switch between chat views |
 | Markdown toolbar | `MarkdownToolbar` | Rich text formatting in messages |
 

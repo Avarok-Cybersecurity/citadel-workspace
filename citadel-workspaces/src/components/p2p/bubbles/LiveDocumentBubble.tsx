@@ -9,7 +9,7 @@ export function LiveDocumentBubble({ message, isOwn, onRetry, onOpenDocument }: 
   const handleClick = (): void => {
     if (message.document_id && onOpenDocument) {
       // The message's sender made the document: what decides whose move of an earlier one is kept.
-      onOpenDocument({ documentId: message.document_id, title: message.document_title || 'Untitled Document', mine: isOwn });
+      onOpenDocument({ documentId: message.document_id, title: message.document_title || 'Untitled Document' });
     }
   };
 

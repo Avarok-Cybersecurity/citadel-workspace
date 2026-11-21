@@ -42,10 +42,10 @@ const copy = (view: ArrayBufferView): Uint8Array => new Uint8Array(view.buffer, 
 
 function readBase(value: unknown): StoredBase {
   const v: Fields = fields(value, 'the stored chat document');
-  if (typeof v.doc_version !== 'number' || !ArrayBuffer.isView(v.snapshot) || (v.migration_origin !== null && typeof v.migration_origin !== 'string')) {
+  if (typeof v.doc_version !== 'number' || !ArrayBuffer.isView(v.snapshot)) {
     throw new Error('the stored chat document is not in the shape this client writes');
   }
-  return { docVersion: v.doc_version, snapshot: copy(v.snapshot), migrationOrigin: v.migration_origin };
+  return { docVersion: v.doc_version, snapshot: copy(v.snapshot) };
 }
 
 function readPending(value: unknown): readonly Uint8Array[] {
@@ -58,7 +58,6 @@ interface IndexRecord {
   readonly doc_id: string;
   readonly peer_cid: bigint;
   readonly title: CdocChatTitleStamp | null;
-  readonly held_apart: boolean;
 }
 
 /** A list, not an object keyed by id: an id is the peer's data, and `__proto__` is a valid one. */
@@ -69,8 +68,7 @@ function readIndex(value: unknown): Map<string, ChatIndexEntry> {
   for (const raw of entries) {
     const e: Fields = fields(raw, 'an index entry');
     if (typeof e.doc_id !== 'string' || typeof e.peer_cid !== 'bigint') throw new Error('an index entry names no document or no peer');
-    if (typeof e.held_apart !== 'boolean') throw new Error('an index entry does not say whether it is held apart');
-    index.set(e.doc_id, { peerCid: e.peer_cid, title: e.title === null ? null : readTitleStamp(e.title), heldApart: e.held_apart });
+    index.set(e.doc_id, { peerCid: e.peer_cid, title: e.title === null ? null : readTitleStamp(e.title) });
   }
   return index;
 }
@@ -101,7 +99,7 @@ export function localDbChatStore(account: bigint, db: LocalDbPort): ChatStoreBac
       return stored === undefined ? null : readBase(stored);
     },
     saveBase: (docId: string, base: StoredBase): Promise<void> =>
-      put(docKey(account, docId, 'base'), { doc_version: base.docVersion, snapshot: base.snapshot, migration_origin: base.migrationOrigin }),
+      put(docKey(account, docId, 'base'), { doc_version: base.docVersion, snapshot: base.snapshot }),
     loadPending: async (docId: string): Promise<readonly Uint8Array[]> => {
       const stored: unknown = await get(docKey(account, docId, 'pending'));
       return stored === undefined ? [] : readPending(stored);
@@ -113,7 +111,7 @@ export function localDbChatStore(account: bigint, db: LocalDbPort): ChatStoreBac
       const step = async (): Promise<void> => {
         const all: Map<string, ChatIndexEntry> = await index();
         all.set(docId, entry);
-        const entries: IndexRecord[] = [...all].map(([id, e]: [string, ChatIndexEntry]): IndexRecord => ({ doc_id: id, peer_cid: e.peerCid, title: e.title, held_apart: e.heldApart }));
+        const entries: IndexRecord[] = [...all].map(([id, e]: [string, ChatIndexEntry]): IndexRecord => ({ doc_id: id, peer_cid: e.peerCid, title: e.title }));
         await put(indexKey(account), { entries });
       };
       const next: Promise<void> = (indexTails.get(account) ?? Promise.resolve()).then(step, step);

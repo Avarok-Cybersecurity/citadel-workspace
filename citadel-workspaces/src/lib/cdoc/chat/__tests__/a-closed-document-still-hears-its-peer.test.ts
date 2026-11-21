@@ -56,7 +56,7 @@ describe('a closed chat document', () => {
     const store: ChatStoreBackend = localDbChatStore(ALICE, db.connection([ALICE]));
     const update: CdocChatSyncPayload = { doc_id: doc, doc_version: CHAT_SYNC.docVersion, sync: { kind: 'update', updates: [new Uint8Array([1, 2])] } };
     expect(await recordClosedDocumentCommand(ALICE, { peerCid: BOB, recipientCid: ALICE, payload: update }, store, CHAT_SYNC)).toBe('not kept');
-    await store.saveEntry(doc, { peerCid: BOB, title: null, heldApart: false });
+    await store.saveEntry(doc, { peerCid: BOB, title: null });
     const stranger: bigint = BOB + 7n;
     expect(await recordClosedDocumentCommand(ALICE, { peerCid: stranger, recipientCid: ALICE, payload: update }, store, CHAT_SYNC)).toBe('not kept');
     expect(await recordClosedDocumentCommand(ALICE, { peerCid: BOB, recipientCid: ALICE, payload: { ...update, doc_version: CHAT_SYNC.docVersion + 1 } }, store, CHAT_SYNC)).toBe('refused');

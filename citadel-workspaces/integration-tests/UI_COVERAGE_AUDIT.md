@@ -201,7 +201,6 @@ App.tsx
 | "Create" button | LiveDocumentModal | ✅ | live-doc-sync |
 | Citadel Docs canvas for a chat document | ChatDocumentPane | ✅ | live-doc-sync |
 | Real-time content sync | ChatDocumentPane | ✅ | live-doc-sync |
-| Earlier editor's document moved once, original kept | ChatDocumentPane, LossReportBanner | written, not yet run | live-doc-migration |
 | Live document tabs in ChatTabBar | ChatTabBar | ✅ | live-doc-sync |
 | LiveDocumentBubble (link in chat) | LiveDocumentBubble | ✅ | live-doc-sync |
 

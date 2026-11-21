@@ -59,12 +59,10 @@ export function readChatSync(payload: CdocChatSyncPayload): CdocChatSync {
   switch (payload.sync.kind) {
     case 'hello': {
       if (typeof s.answer !== 'boolean') return fail('hello.answer is not a boolean');
-      if (s.migration_origin !== null && typeof s.migration_origin !== 'string') return fail('hello.migration_origin is not a string or null');
       return {
         kind: 'hello',
         state_vector: bytes(s.state_vector, 'hello.state_vector'),
         answer: s.answer,
-        migration_origin: s.migration_origin,
         title: s.title === null ? null : readTitleStamp(s.title),
       };
     }

@@ -30,7 +30,7 @@ import { MessageInput } from './MessageInput';
 import { paneTestIds, type PaneTestIds } from './pane-test-ids';
 import { useChatPane, type ChatPaneModel } from './use-chat-pane';
 
-const NO_ACCOUNT: ChatDocumentOpening = { kind: 'unmoved', reason: { kind: 'no-account' }, loadOriginal: null };
+const NO_ACCOUNT: ChatDocumentOpening = { kind: 'unopened', reason: { kind: 'no-account' } };
 
 /** What the pane knows that the part above its tabs shows. */
 export interface ChatPaneStatus {
