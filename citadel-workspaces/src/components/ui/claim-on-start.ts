@@ -29,7 +29,6 @@ export type StartClaim =
   | { kind: 'nothing-to-claim' }
   /** Every attempt went unanswered; nothing about the sessions is known. */
   | { kind: 'agent-unreachable' }
-  | { kind: 'owned-by-another-tab' }
   | { kind: 'held-by-another-connection'; username: string }
   /** The agent had the session listed, then ended it: signing in to it is the way back. */
   | { kind: 'session-ended'; username: string; server: string; reason: string };
@@ -84,7 +83,6 @@ export async function claimOnStart(io: StartClaimIO, retry: StartRetry): Promise
     const server: string = session.server_host ?? session.server_address;
     return { kind: 'session-ended', username: session.username, server, reason: error.message };
   }
-  if (outcome.status === 'owned-by-another-tab') return { kind: 'owned-by-another-tab' };
   if (outcome.status === 'held-by-another-connection') {
     return { kind: 'held-by-another-connection', username: session.username };
   }

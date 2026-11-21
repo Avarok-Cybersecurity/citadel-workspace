@@ -1,5 +1,4 @@
 import { messagePaginationStore } from './message-pagination-store';
-import { resolveCurrentCid } from './messenger-cid-resolver';
 import { eventEmitter } from '@/lib/event-emitter';
 import type { ConversationManager } from './conversation-manager';
 
@@ -17,7 +16,7 @@ import type { ConversationManager } from './conversation-manager';
  * reload; clearMessages clears what is on screen now.
  */
 export async function clearConversationHistory(conversationManager: ConversationManager, peerCid: bigint): Promise<void> {
-  await messagePaginationStore.deleteConversationPages(peerCid, { ownerCid: await resolveCurrentCid() });
+  await messagePaginationStore.deleteConversationPages(peerCid);
   conversationManager.clearMessages(peerCid);
   eventEmitter.emit('p2p:conversation-cleared', { peerCid });
 }

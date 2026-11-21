@@ -24,8 +24,6 @@ export type DisconnectAction = 'disconnect' | 'deregister';
 /** What the sequence needs from the world. Injected so it can be tested. */
 export interface SignOutIO {
   markUserDisconnected: (username: string, serverAddress: string) => Promise<void>;
-  currentWasmCid: () => string | null;
-  stopWasm: () => void;
   deregister: (cid: bigint) => Promise<void>;
   disconnect: (cid: bigint) => Promise<void>;
   invalidateSessionCache: () => void;
@@ -89,8 +87,6 @@ export async function signOutSession(
     if (claimRefusal !== null) return { status: 'refused', message: claimRefusal };
 
     await io.markUserDisconnected(target.username, target.serverAddress);
-
-    if (io.currentWasmCid() === cid.toString()) io.stopWasm();
 
     if (action === 'deregister') await io.deregister(cid);
     else await io.disconnect(cid);

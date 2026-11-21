@@ -19,8 +19,6 @@ import { getPrivacySettings } from '@/lib/privacy-settings';
 import { peerDisplayName } from '@/lib/peer-display';
 import { p2pRegistrationService } from '../p2p-registration-service';
 import { eventEmitter } from '../event-emitter';
-import { applyIncomingEdit, applyIncomingDelete } from './inbound-revision';
-import { applyIncomingReaction } from './inbound-reaction';
 import { p2pAutoConnectService } from '../p2p-auto-connect-service';
 import { debugLog, debugEnabled } from '@/lib/debug-config';
 import { deliverToConversation, shouldAck } from './inbound-message-delivery';
@@ -50,18 +48,6 @@ export async function handleMessagingLayerCommand(
   switch (layer.type) {
     case MessagingLayerType.Message:
       await handleIncomingMessage(config, payload, peerCid, recipientCid);
-      break;
-
-    case MessagingLayerType.MessageEdit:
-      await applyIncomingEdit(config, peerCid, layer.message_id, layer.contents, layer.edited_at);
-      break;
-
-    case MessagingLayerType.MessageDelete:
-      await applyIncomingDelete(config, peerCid, layer.message_id);
-      break;
-
-    case MessagingLayerType.MessageReaction:
-      await applyIncomingReaction(config, peerCid, layer);
       break;
 
     case MessagingLayerType.Typing:

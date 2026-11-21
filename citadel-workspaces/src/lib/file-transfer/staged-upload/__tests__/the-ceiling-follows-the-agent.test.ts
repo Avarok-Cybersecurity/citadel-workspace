@@ -50,7 +50,7 @@ describe('the greeting', () => {
   }
 
   it('reads stages_uploads, and its absence as no', async () => {
-    expect((await offers({ agent_ilm: true, stages_uploads: true })).stagesUploads).toBe(true);
-    expect((await offers({ agent_ilm: true })).stagesUploads).toBe(false);
+    expect((await offers({ stages_uploads: true })).stagesUploads).toBe(true);
+    expect((await offers({})).stagesUploads).toBe(false);
   });
 });

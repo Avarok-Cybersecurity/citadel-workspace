@@ -13,7 +13,7 @@
 import '@/lib/session-startup-service';
 import { eventEmitter } from '@/lib/event-emitter';
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
-import { claimSessionForThisTab, SESSION_OWNED_ELSEWHERE } from '@/lib/sessions/claim-session';
+import { claimSessionForThisTab } from '@/lib/sessions/claim-session';
 import { claimOnStart, type StartClaim } from './claim-on-start';
 import { AGENT_START_RETRY } from '@/lib/connection/constants';
 import { ConnectionManager } from '@/lib/connection';
@@ -166,7 +166,6 @@ useEffect(() => {
       }, AGENT_START_RETRY);
       debugLog('WorkspaceLoader', ' Start-up claim:', result.kind);
 
-      if (result.kind === 'owned-by-another-tab') toast(SESSION_OWNED_ELSEWHERE);
       if (result.kind === 'held-by-another-connection') onHeldElsewhere(result.username);
       if (result.kind === 'session-ended') onSessionEnded(result.username, result.server, result.reason);
       if (result.kind !== 'claimed') return;

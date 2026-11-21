@@ -142,8 +142,6 @@ export type StatusChange =
 export interface AcceptancePort {
   accepted(): boolean;
   onAccepted(listener: () => void): () => void;
-  /** Sends what was held until they accepted. */
-  flushHeld(): void;
 }
 
 /** What only an asynchronous question answers; `presence` is null when it brought no news. */

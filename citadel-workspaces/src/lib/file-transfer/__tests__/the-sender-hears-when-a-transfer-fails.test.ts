@@ -20,7 +20,7 @@ import type { FileTransfer } from '../types';
 const wire: { from: bigint; to: bigint; bytes: Uint8Array }[] = [];
 vi.mock('../../tab-context', () => ({ getSelectedUser: async (): Promise<{ selectedCid: bigint }> => ({ selectedCid: 42n }) }));
 vi.mock('../../p2p/message-send-operations', () => ({
-  sendAllowingForAConcurrentOpen: async (from: bigint, to: bigint, bytes: Uint8Array): Promise<void> => {
+  sendAtChatLevel: async (from: bigint, to: bigint, bytes: Uint8Array): Promise<void> => {
     wire.push({ from, to, bytes });
   },
 }));

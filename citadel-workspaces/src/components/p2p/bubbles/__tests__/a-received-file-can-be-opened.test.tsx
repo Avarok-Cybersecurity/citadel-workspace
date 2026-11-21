@@ -18,7 +18,6 @@ vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
     sendRequest: async (): Promise<void> => undefined,
     sendP2PMessageReliable: async (): Promise<void> => undefined,
-    ensureMessengerOpen: async (): Promise<boolean> => false,
     canSendRequests: (): boolean => false,
   },
 }));

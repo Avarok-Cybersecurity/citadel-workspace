@@ -2,7 +2,7 @@
  * A chat with someone you are not registered with opens anyway (owner, 2026-10-15) and says
  * what to do: under the workspace's messaging trust the request goes out on open, otherwise the
  * banner offers it. A message written before they accept is not refused (owner, 2026-10-16): it
- * is held, shown pending, and says it sends when they accept (lib/p2p/held-until-registered.ts).
+ * is shown pending, and says it sends when they accept.
  *
  * The hook runs with its three effects injected (the trust check, the send, the outgoing record);
  * the composer and the bubble footer are the production components.

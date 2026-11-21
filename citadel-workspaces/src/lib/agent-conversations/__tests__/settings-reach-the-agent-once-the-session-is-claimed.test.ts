@@ -17,7 +17,6 @@ function harness(): Harness {
   const deferred: bigint[] = [];
   const attached: { value: boolean } = { value: false };
   const teller: PreferencesTeller = createPreferencesTeller({
-    hosts: async (): Promise<boolean> => true,
     ownCid: async (): Promise<bigint | null> => OWN,
     push: async (cid: bigint): Promise<void> => {
       if (!attached.value) throw new Error(OWNERSHIP_REFUSAL);
@@ -57,7 +56,6 @@ describe("the account's settings", () => {
 
   it('any other failure before the claim is still a failure', async () => {
     const teller: PreferencesTeller = createPreferencesTeller({
-      hosts: async (): Promise<boolean> => true,
       ownCid: async (): Promise<bigint | null> => OWN,
       push: async (): Promise<void> => { throw new Error('GetPreferences request timed out'); },
       deferred: (): void => { throw new Error('a timeout is not a refusal'); },

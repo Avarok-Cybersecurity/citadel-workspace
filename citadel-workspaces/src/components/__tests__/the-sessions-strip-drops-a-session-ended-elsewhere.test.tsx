@@ -19,7 +19,7 @@ import { MemoryRouter } from 'react-router-dom';
 type Row = Pick<SessionInformation, 'cid' | 'username' | 'server_address'>;
 const live: { rows: Row[] } = vi.hoisted(() => ({ rows: [] }));
 
-vi.mock('../sync-selected-session-to-wasm', () => ({ syncSelectedSessionToWasm: async (): Promise<void> => undefined }));
+vi.mock('../sync-selected-session-peers', () => ({ syncSelectedSessionPeers: async (): Promise<void> => undefined }));
 
 import { useOrphanSessions } from '../useOrphanSessions';
 import { ConfirmDialogProvider } from '@/components/shared/confirm-dialog';

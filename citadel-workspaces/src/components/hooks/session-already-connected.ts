@@ -1,6 +1,6 @@
 import type React from 'react';
 import { debugLog } from '@/lib/debug-config';
-import { claimSessionForThisTab, SESSION_OWNED_ELSEWHERE , type ClaimOutcome } from '@/lib/sessions/claim-session';
+import { claimSessionForThisTab, type ClaimOutcome } from '@/lib/sessions/claim-session';
 import { describeFailure } from '@/lib/failure-message';
 import { onSuccess, type RetryVisibility } from './connection-retry-visibility';
 
@@ -47,10 +47,6 @@ return async (event: { cid: string; message: string }): Promise<void> => {
         void (async (): Promise<void> => {
           try {
             const outcome: ClaimOutcome = await claimSessionForThisTab(BigInt(event.cid));
-            if (outcome.status === 'owned-by-another-tab') {
-              toast(SESSION_OWNED_ELSEWHERE);
-              return;
-            }
             // Nothing moved: the agent will not hand over a session another connection holds.
             if (outcome.status === 'held-by-another-connection') {
               toast({ title: 'Open in another browser window', description: 'Sign in with your password to move it here.', variant: 'destructive' });

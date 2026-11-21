@@ -45,10 +45,6 @@ const LEADER_ONLY: Record<string, { why: string; requires?: RegExp }> = {
   'lib/websocket-service/core.ts': {
     why: 'defines getClient/isConnected/canSendRequests',
   },
-  'lib/websocket/messenger-operations.ts': {
-    why: 'guarded by instanceManager.isLeader; followers proxy',
-    requires: /instanceManager\.isLeader/,
-  },
   'lib/websocket/session-management.ts': {
     why: 'returns silently without a client, so a follower no-ops rather than throwing',
     requires: /Cannot release session|if \(!client\)/,

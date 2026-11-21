@@ -90,7 +90,6 @@ const ALLOW = new Map(Object.entries({
   'citadel-workspaces/src/lib/websocket/session-management.ts#SessionManagementResult': 'the outcome a session-management call returns to the UI, not a group-leave notification',
   'citadel-workspaces/src/lib/calendar/invite-notices.ts#Notice': 'a calendar invitation notice with its told-marker key, before it is posted; not the agent\'s NativeNotice',
   'citadel-workspaces/src/lib/citadel-apps/host/wire-schemas.ts#rect': 'the schema fragment that validates DrawCommand\'s rect fields; it is typed by Schema<DrawCommand>',
-  'citadel-workspaces/src/lib/p2p/__tests__/another-accounts-contacts-do-not-leak.test.ts#record': 'a legacy localStorage record, JSON with string CIDs, as an older build wrote it',
 }));
 
 function sources(dir) {

@@ -117,7 +117,7 @@ describe('connectToServer', () => {
     expect(claimSession).not.toHaveBeenCalled();
   });
 
-  it('treats "not orphaned" as already ours when no other tab holds it', async () => {
+  it('treats "not orphaned" as already ours', async () => {
     h.activeSessions = [{ cid: 9n, username: 'alice', server_address: SERVER }];
     claimSession.mockRejectedValueOnce(new Error('session is not orphaned'));
 
@@ -125,18 +125,5 @@ describe('connectToServer', () => {
 
     expect(outcome).toEqual({ kind: 'connected', cid: 9n });
     expect(postAuthSetup).toHaveBeenCalledWith(9n);
-  });
-
-  it('refuses to adopt a session another tab is using', async () => {
-    const { instanceManager } = await import('@/lib/multi-instance');
-    h.activeSessions = [{ cid: 9n, username: 'alice', server_address: SERVER }];
-    claimSession.mockRejectedValueOnce(new Error('session is not orphaned'));
-    vi.mocked(instanceManager.findInstanceByCid).mockReturnValueOnce('other-tab');
-
-    // Adopting here is what put two tabs on one CID: findInstanceByCid returns
-    // the first map hit, so every message, transfer tick and call frame went to
-    // one of them while the other showed the same conversation and never moved.
-    await expect(connectToServer(SERVER)).rejects.toThrow(/another tab/i);
-    expect(postAuthSetup).not.toHaveBeenCalled();
   });
 });

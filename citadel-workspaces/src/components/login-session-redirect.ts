@@ -4,7 +4,7 @@
 // unknown for everyone, peer lists empty, on every password sign-in).
 import type { SessionInformation } from 'citadel-workspace-client-ts';
 import '@/lib/session-startup-service';
-import { claimSessionForThisTab, type ClaimOutcome } from '@/lib/sessions/claim-session';
+import { claimSessionForThisTab } from '@/lib/sessions/claim-session';
 import { sessionSwitchToasts, type SessionSwitchToasts } from '@/lib/sessions/session-switch-toasts';
 import { markLastAccessed } from '@/lib/sessions/last-accessed';
 import { connectionManager } from "@/lib/connection";
@@ -47,11 +47,7 @@ export async function redirectToExistingSession(
 
     markLastAccessed(session.cid);
 
-    const outcome: ClaimOutcome = await claimSessionForThisTab(session.cid);
-    if (outcome.status === 'owned-by-another-tab') {
-      toast(notices.ownedElsewhere);
-      return;
-    }
+    await claimSessionForThisTab(session.cid);
 
     const storedSessions: StoredSessions = connectionManager.getStoredSessions();
     const storedIndex: number = storedSessions.sessions.findIndex(

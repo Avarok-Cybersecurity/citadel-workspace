@@ -38,8 +38,8 @@ export async function sendFileWithNativePicker(
   if (!senderCid) {
     throw new Error('No active session');
   }
-  // Only an agent that SAID it has no picker is refused: one that said nothing is an older agent.
-  // The words are the ones the send dialog already reads as "no picker here".
+  // An agent without a picker is refused before any dialog is asked for. The words are the
+  // ones the send dialog already reads as "no picker here".
   if ((await deps.agentNativePicker?.()) === false) throw new Error('File picker not available: this agent has no desktop session to show it in');
 
   // Opened while the user picks; its answer decides what happens to the pick. It was

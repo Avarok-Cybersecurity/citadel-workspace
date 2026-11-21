@@ -168,9 +168,8 @@ re-check rather than trust it.
 - [x] TypeScript WASM binding for `send_p2p_message` — exists in
       `citadel-workspace-client-ts/pkg/*.d.ts`.
 - [x] Message subprotocol defined in `message-protocol.ts`.
-- [x] Message history/persistence — IndexedDB `messages` object store
-      (`lib/storage-migrations.ts`), written via `lib/p2p/conversation-manager.ts`
-      and paged by `lib/p2p/message-page-operations.ts`.
+- [x] Message history/persistence — kept by the agent, per account; the window
+      reads and files through `lib/agent-conversations/agent-store.ts`.
 - [ ] Read receipts — `MessageEventType.createReadReceipt` exists in
       `types/message-protocol.ts`, but nothing sends it and no handler consumes
       it. Defined only.

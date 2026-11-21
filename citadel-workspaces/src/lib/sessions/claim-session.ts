@@ -1,32 +1,23 @@
 /**
- * Taking ownership of a session for THIS tab.
+ * Taking a session for THIS tab.
  *
- * "Not orphaned" from the agent means somebody already has this session — and
- * that somebody may be another tab in this browser, not a stale server-side
- * record. Treating the refusal as success lets two tabs register the same CID,
- * and `findInstanceByCid` returns the first map hit: every CID-routed
- * notification (messages, transfer ticks, call media) goes to one tab while the
- * other renders the same conversation and silently never updates, with the
- * winner able to flip on re-registration.
- *
- * Round 153 fixed that — in the auto-claim path, and in none of the other
- * three: the workspace switcher, the orphan-sessions navbar, and the
- * post-login redirect all still swallowed the refusal and adopted. Four copies
- * of a check is how three of them come to differ, so this is the check, once.
+ * "Not orphaned" from the agent means somebody already has this session: this
+ * connection, or another one. Several tabs may hold an account at once -- the
+ * agent hosts its ILM and conversations, and the router hands every tab what is
+ * addressed to the session -- but a session live on ANOTHER connection is not
+ * this socket's, and is joined (with a remembered token) or offered, never
+ * adopted. The workspace switcher, the orphan-sessions navbar, the post-login
+ * redirect and the auto-claim all ask here, so the check is made once.
  */
 
 import { websocketService } from '../websocket-service';
-import { instanceManager } from '../multi-instance';
 import { debugLog } from '../debug-config';
-import { agentHostsConversations } from '../agent-conversations/capabilities';
 
 export type ClaimOutcome =
   /** The session was orphaned and is now ours. */
   | { status: 'claimed' }
-  /** Live, and no other tab in this browser holds it — safe to select. */
+  /** Live on this connection — safe to select. */
   | { status: 'already-active' }
-  /** Live, and another tab in this browser is using it. Do not adopt. */
-  | { status: 'owned-by-another-tab'; instanceId: string }
   /**
    * Live on ANOTHER localhost connection: another browser window, or one the
    * agent still holds after it dropped. This tab's socket does not carry it, so
@@ -85,12 +76,6 @@ async function rejoinWithToken(cid: bigint): Promise<boolean> {
   return joinWithRememberedToken(browserAttach, cid);
 }
 
-/** Does another instance already own this CID? */
-function otherTabOwns(cid: bigint): string | null {
-  const owner: string | null = instanceManager.findInstanceByCid(cid);
-  return owner && owner !== instanceManager.instanceId ? owner : null;
-}
-
 /**
  * Claim `cid` for this tab, or report why not.
  *
@@ -107,33 +92,17 @@ export async function claimSessionForThisTab(cid: bigint): Promise<ClaimOutcome>
       throw error;
     }
 
-    // With an agent that hosts the account, several tabs may hold it at once:
-    // the router hands every one of them what is addressed to the session, and
-    // none of them writes the store. An older agent's browser ILM allows one.
-    const owner: string | null = otherTabOwns(cid);
-    if (owner && !(await agentHostsConversations())) {
-      debugLog('ClaimSession', `${cid} is owned by instance ${owner}; not adopting`);
-      return { status: 'owned-by-another-tab', instanceId: owner };
-    }
-
     if (!(await heldHere(cid))) {
       // A browser that opened this session here once before joins again, beside
-      // the window that holds it, without being asked (agent 0.8.6).
-      if ((await agentHostsConversations()) && (await rejoinWithToken(cid))) {
+      // the window that holds it, without being asked.
+      if (await rejoinWithToken(cid)) {
         debugLog('ClaimSession', `${cid} is live on another connection; joined it here too`);
         return { status: 'already-active' };
       }
       debugLog('ClaimSession', `${cid} is live on another connection; not adopting`);
       return { status: 'held-by-another-connection' };
     }
-    debugLog('ClaimSession', `${cid} is live on this connection and unowned by a tab; selecting it`);
+    debugLog('ClaimSession', `${cid} is live on this connection; selecting it`);
     return { status: 'already-active' };
   }
 }
-
-/** What to tell the user when another tab has it. */
-export const SESSION_OWNED_ELSEWHERE: { readonly title: "Already Open Elsewhere"; readonly description: "This session is open in another tab. Switch to it, or pick a different session here."; } = {
-  title: 'Already Open Elsewhere',
-  description:
-    'This session is open in another tab. Switch to it, or pick a different session here.',
-} as const;

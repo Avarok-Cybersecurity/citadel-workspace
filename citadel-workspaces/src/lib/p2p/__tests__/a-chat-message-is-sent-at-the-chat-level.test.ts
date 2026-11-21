@@ -17,14 +17,13 @@ const PEER: bigint = 6002n;
 const sends: Array<{ peer: bigint; level: unknown }> = [];
 vi.mock('../../websocket-service', () => ({
   websocketService: {
-    ensureMessengerOpen: async (): Promise<boolean> => false,
     sendP2PMessageReliable: async (_cid: bigint, peer: bigint, _bytes: Uint8Array, level: unknown): Promise<void> => {
       sends.push({ peer, level });
     },
   },
 }));
 
-const { sendAllowingForAConcurrentOpen } = await import('../message-send-operations');
+const { sendAtChatLevel } = await import('../message-send-operations');
 const { chatAdvancedSettings } = await import('../chat-advanced-settings');
 
 describe('the level a chat message is sent at', () => {
@@ -32,12 +31,12 @@ describe('the level a chat message is sent at', () => {
 
   it('is the level this chat chose', async () => {
     await chatAdvancedSettings.set(OURS, PEER, { securityLevel: 'Extreme' });
-    await sendAllowingForAConcurrentOpen(OURS, PEER, new Uint8Array([1]));
+    await sendAtChatLevel(OURS, PEER, new Uint8Array([1]));
     expect(sends).toEqual([{ peer: PEER, level: 'Extreme' }]);
   });
 
   it('is Standard, stated, for a chat that chose nothing', async () => {
-    await sendAllowingForAConcurrentOpen(OURS, PEER, new Uint8Array([1]));
+    await sendAtChatLevel(OURS, PEER, new Uint8Array([1]));
     expect(sends).toEqual([{ peer: PEER, level: 'Standard' }]);
   });
 });

@@ -7,8 +7,8 @@
  * carry these yet; when they do, the shapes below are replaced by the generated
  * ones and the functions keep their signatures.
  *
- * - Capability `supervises_p2p`, a field of the agent's greeting like
- *   `agent_ilm`: the agent dials, retries and heals this browser's peer links
+ * - Capability `supervises_p2p`, a field of the agent's greeting: the agent
+ *   dials, retries and heals this browser's peer links
  *   itself, so the UI's auto-connect stands down.
  * - Request `ConnectionManagement::Interest { session_cid, peer_cid, until }` (built in
  *   lib/agent-supervisor/interest.ts, which loads only once a supervising agent is
@@ -35,7 +35,7 @@ export const WIRE_STATES: Readonly<Record<SupervisorState, SupervisorPhase>> = {
   Degraded: 'degraded',
 };
 
-/** Whether a greeting declares the capability; an older agent's has no such field. */
+/** Whether a greeting declares the capability. */
 export function greetingSupervises(greeting: Record<string, unknown>): boolean {
   return greeting[SUPERVISES_P2P_CAPABILITY] === true;
 }

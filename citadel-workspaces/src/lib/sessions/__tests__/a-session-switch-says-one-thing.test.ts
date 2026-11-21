@@ -33,7 +33,6 @@ vi.mock('@/lib/connection', async (importOriginal: () => Promise<typeof import('
   };
 });
 vi.mock('@/lib/tab-context', () => ({ setSelectedUser: async (): Promise<void> => {} }));
-vi.mock('@/lib/start-messaging', () => ({ startMessagingForSession: async (): Promise<void> => {} }));
 vi.mock('@/lib/multi-instance', () => ({
   instanceManager: { setCid: (): void => {} },
   instanceChannel: { announcePresence: (): void => {} },
@@ -77,14 +76,5 @@ describe.each(flows)('switching sessions from %s', (_where: string, run: Flow): 
   it('does not dress the notice that is still working as a success', async () => {
     const [progress]: ToastOptions[] = await raisedBy(run);
     expect(progress.variant).not.toBe('success');
-  });
-
-  it('replaces it with the refusal when another tab holds the session', async () => {
-    claim.status = 'owned-by-another-tab';
-    const raised: ToastOptions[] = await raisedBy(run);
-    expect(raised).toHaveLength(2);
-    expect(raised[1].title).toBe('Already Open Elsewhere');
-    expect(raised[0].id).toBeDefined();
-    expect(raised[1].id).toBe(raised[0].id);
   });
 });

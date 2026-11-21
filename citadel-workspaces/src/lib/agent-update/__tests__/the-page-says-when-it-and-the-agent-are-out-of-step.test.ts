@@ -11,7 +11,7 @@ const B: string = 'b'.repeat(64);
 
 describe('the types handshake', () => {
   it('reads the agent\'s hash from its greeting', () => {
-    expect(readGreetingFacts({ agent_ilm: true, types_hash: A }).typesHash).toBe(A);
+    expect(readGreetingFacts({ types_hash: A }).typesHash).toBe(A);
   });
 
   it('is silent while either side has not said', () => {
@@ -32,6 +32,6 @@ describe('the types handshake', () => {
   });
 
   it('says an agent from before the handshake cannot be checked, rather than guess it matches', () => {
-    expect(typesStep(readGreetingFacts({ agent_ilm: true }), A)?.kind).toBe('agent-too-old');
+    expect(typesStep(readGreetingFacts({}), A)?.kind).toBe('agent-too-old');
   });
 });

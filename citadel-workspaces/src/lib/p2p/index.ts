@@ -20,8 +20,7 @@ export {
 } from './p2p-types';
 
 // Storage
-export { MessagePaginationStore, messagePaginationStore } from './message-pagination-store';
-export { startRetentionSweeper } from './retention-sweep';
+export { messagePaginationStore, type MessagePaginationStore } from './message-pagination-store';
 
 // Conversation
 export { ConversationManager } from './conversation-manager';

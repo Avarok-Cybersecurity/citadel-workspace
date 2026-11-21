@@ -1,5 +1,5 @@
 import { forgetSession, withoutForgotten } from '@/lib/sessions/forgotten-sessions';
-import { syncSelectedSessionToWasm } from './sync-selected-session-to-wasm';
+import { syncSelectedSessionPeers } from './sync-selected-session-peers';
 import { useState, useCallback } from "react";
 import type { UseOrphanSessionsResult } from './useOrphanSessions-types';
 import { useAttentionGlow } from './use-attention-glow';
@@ -16,7 +16,6 @@ import type { DisconnectAction } from "./DisconnectConfirmModal";
 import type { DisconnectStatus } from "./LoadingModal";
 import { useToast } from "@/hooks/use-toast";
 import { useEventListener } from "@/hooks/use-event-listener";
-import { wasmConnectionManager } from "@/lib/wasm-connection-manager";
 import { notificationService, type UnreadCountChange } from "@/lib/notification-service";
 import { serverAutoConnectService } from "@/lib/server-auto-connect-service";
 import { SESSION_CLAIMED } from '@/lib/multi-instance/claim-relay';
@@ -77,7 +76,7 @@ export function useOrphanSessions(): UseOrphanSessionsResult {
       );
       setSessions(sessionsWithWorkspace);
 
-      await syncSelectedSessionToWasm(sessionsWithWorkspace);
+      await syncSelectedSessionPeers(sessionsWithWorkspace);
     } catch (error) {
       // Keep whatever was last known good. Clearing here asserted "you have no
       // sessions" on the strength of a failure.
@@ -111,8 +110,6 @@ export function useOrphanSessions(): UseOrphanSessionsResult {
       {
         markUserDisconnected: (username, serverAddress) =>
           serverAutoConnectService.markUserDisconnected(username, serverAddress),
-        currentWasmCid: () => wasmConnectionManager.getCurrentCid(),
-        stopWasm: () => wasmConnectionManager.stop(),
         deregister: (cid) => websocketService.deregister(cid),
         disconnect: (cid) => websocketService.disconnect(cid),
         invalidateSessionCache: () => connectionManager.invalidateSessionCache(),

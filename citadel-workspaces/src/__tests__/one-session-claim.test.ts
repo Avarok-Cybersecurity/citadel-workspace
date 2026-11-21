@@ -1,17 +1,15 @@
 /**
- * There is one place that claims a session, and it checks for another tab.
+ * There is one place that claims a session.
  *
- * "Not orphaned" from the agent means somebody has this session, and that
- * somebody may be another tab in this browser. Adopting it anyway lets two tabs
- * register the same CID, after which `findInstanceByCid` returns the first map
- * hit and every CID-routed notification — messages, transfer ticks, call media
- * — goes to one tab while the other renders the same conversation and silently
- * never updates.
+ * "Not orphaned" from the agent means somebody has this session. Several
+ * windows may hold one account, each receiving what is addressed to it, so the
+ * claim either adopts an orphan or rejoins with what this browser remembers;
+ * a window that reads the refusal itself and adopts anyway is a second answer
+ * to a settled question.
  *
- * Round 153 fixed that in the auto-claim path. It reached one site of FOUR: the
- * workspace switcher, the orphan-sessions navbar and the post-login redirect
- * all still swallowed the refusal and adopted, so the defect stayed reachable
- * through three unfixed doors. This is that lesson made mechanical.
+ * A fix in the auto-claim path once reached one site of four: the workspace
+ * switcher, the orphan-sessions navbar and the post-login redirect each read
+ * the refusal their own way. This is that lesson made mechanical.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -65,9 +63,8 @@ describe('claiming a session', () => {
 
     expect(
       offenders,
-      'this claims a session without checking whether another tab in this ' +
-        'browser already owns it. Use claimSessionForThisTab, which returns ' +
-        "'owned-by-another-tab' instead of adopting.",
+      'this claims a session outside claimSessionForThisTab, the one place ' +
+        'that reads the agent\'s answer and rejoins a session held elsewhere.',
     ).toEqual([]);
   });
 
@@ -104,7 +101,7 @@ describe('claiming a session', () => {
     expect(source).toMatch(/websocketService\.claimSession\s*\(/);
     expect(
       source,
-      'the whole point is that it consults the instance registry',
-    ).toMatch(/findInstanceByCid/);
+      'the whole point is that a session held elsewhere is rejoined, not adopted',
+    ).toMatch(/joinWithRememberedToken\(/);
   });
 });

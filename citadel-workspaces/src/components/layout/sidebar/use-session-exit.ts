@@ -17,7 +17,6 @@ import { toastSuccess } from '@/lib/toast-helpers';
 import { connectionManager } from '@/lib/connection';
 import { clearSelectedUser, getSelectedUser } from '@/lib/tab-context';
 import { clearSignOutResidue } from '@/lib/sessions/sign-out-residue';
-import { wasmConnectionManager } from '@/lib/wasm-connection-manager';
 import type { DisconnectStatus } from '@/components/LoadingModal';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 import { debugLog } from '@/lib/debug-config';
@@ -36,9 +35,6 @@ export function useSessionExit(): { showDisconnectModal: boolean; disconnectStat
     // Asked before the tab lets go of its session: the landing page unmounts
     // the editor, and an open document edit would go with it.
     if (!(await mayLeaveEditor(confirm))) return;
-
-    // Stop WASM connection manager polling (session stays active but this tab won't poll)
-    wasmConnectionManager.stop();
 
     // Just navigate to landing page, keep session active
     runAsyncSetup(clearSelectedUser);
@@ -108,7 +104,6 @@ export function useSessionExit(): { showDisconnectModal: boolean; disconnectStat
       debugLog('TopBar', 'No CID available for backend disconnect, skipping');
     }
 
-    wasmConnectionManager.stop();
     setDisconnectStatus("cleaning");
 
     try {
