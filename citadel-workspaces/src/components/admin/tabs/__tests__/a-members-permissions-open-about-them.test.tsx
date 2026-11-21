@@ -6,6 +6,7 @@
  * is the only stand-in, and answers arrive on the event emitter as the server's do.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -27,7 +28,7 @@ import type { DomainNode } from '@/components/layout/sidebar/tree-node-types';
 
 const HQ: DomainNode = {
   id: 'hq', parent_id: WORKSPACE_ROOT_ID, entity_type: { Child: 'Office' }, depth: 0, name: 'HQ', description: '', owner_id: '',
-  members: [], children: [], mdx_content: '', mdx_content_hash: null, rules: null, chat_enabled: false, chat_channel_id: null,
+  members: [], children: [], mdx_content: '', mdx_content_hash: EMPTY_DOCUMENT_HASH, rules: null, chat_enabled: false, chat_channel_id: null,
   default_permissions: {} as DomainNode['default_permissions'], metadata: [], allowed_child_types: [], is_default: false,
   created_at: 0n, updated_at: 0n,
 };
@@ -40,7 +41,7 @@ describe('Permissions on one member in the admin panel', () => {
   it('opens the editor about that member, at the level the tab is for -- not the role matrix', async () => {
     render(<PermissionsProvider><WorkspaceProvider state={STATE}><MembersTab entityType="office" entityId="hq" onClose={() => {}} /></WorkspaceProvider></PermissionsProvider>);
     act(() => {
-      eventEmitter.emit('members:loaded', { domainId: 'hq', members: [{ id: 'ada', username: 'ada', displayName: 'Ada Lovelace', role: 'Member' }] });
+      eventEmitter.emit('members:loaded', { domainId: 'hq', members: [{ id: 'ada', username: 'ada', displayName: 'Ada Lovelace', banned: false }] });
     });
     await userEvent.click(await screen.findByTestId('members-advanced-toggle'));
     await userEvent.click(screen.getByTestId('member-permissions-ada'));

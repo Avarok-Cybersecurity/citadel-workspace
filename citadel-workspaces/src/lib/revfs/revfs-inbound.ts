@@ -39,12 +39,12 @@ export interface InboundContext {
 
 export async function applyInboundOperation(
   ctx: InboundContext,
-  senderCid: bigint,
+  sender_cid: bigint,
   myCid: bigint,
   op: RevfsOperation,
 ): Promise<void> {
-    debugLog('RevfsService', `[revfs] handleRevfsOperation: sender=${senderCid} myCid=${myCid} op=${op.op_type} path=${op.path}`);
-    const key: string = peerTreeKey(myCid, senderCid);
+    debugLog('RevfsService', `[revfs] handleRevfsOperation: sender=${sender_cid} myCid=${myCid} op=${op.op_type} path=${op.path}`);
+    const key: string = peerTreeKey(myCid, sender_cid);
 
     // The one place a SyncResponse is produced, so the rate limit cannot be
     // bypassed by whichever branch happens to reach it first.
@@ -59,7 +59,7 @@ export async function applyInboundOperation(
       } else {
         noteSyncAnswered(key, now);
       }
-      const tree: RevfsNode = await ctx.getTree(myCid, senderCid);
+      const tree: RevfsNode = await ctx.getTree(myCid, sender_cid);
       const syncResponse: RevfsOperation = {
         op_id: crypto.randomUUID(),
         op_type: RevfsOpType.SyncResponse,
@@ -67,7 +67,7 @@ export async function applyInboundOperation(
         tree: withoutLocalRecords(tree),
         timestamp: Date.now(),
       };
-      await ctx.sendOp(senderCid, syncResponse);
+      await ctx.sendOp(sender_cid, syncResponse);
     };
 
     // Applied once, however many times it arrives. An Ack is exempt: it is
@@ -109,7 +109,7 @@ export async function applyInboundOperation(
           op_id: crypto.randomUUID(), op_type: RevfsOpType.Ack,
           path: op.path, ack_op_id: op.op_id, success: true, timestamp: Date.now(),
         };
-        await ctx.sendOp(senderCid, ack);
+        await ctx.sendOp(sender_cid, ack);
       }
       return;
     }
@@ -124,10 +124,10 @@ export async function applyInboundOperation(
       return;
     }
 
-    if (op.op_type === RevfsOpType.ShareRequest) return ctx.answerShareRequest(senderCid, myCid, op);
+    if (op.op_type === RevfsOpType.ShareRequest) return ctx.answerShareRequest(sender_cid, myCid, op);
 
     if (op.op_type === RevfsOpType.SyncResponse && op.tree) {
-      const loaded: RevfsNode = await ctx.getTree(myCid, senderCid);
+      const loaded: RevfsNode = await ctx.getTree(myCid, sender_cid);
       const currentTree: RevfsNode = ctx.state.getTree(key) ?? loaded;
       // Paths we have already VACATED and the peer has not yet been told
       // about. Without it their SyncResponse restores those paths, naming
@@ -167,7 +167,7 @@ export async function applyInboundOperation(
     // Re-read AFTER the await: `getTree` yields even when cached, so two ops
     // arriving together both read before either writes. See
     // concurrent-remote-ops-do-not-clobber.test.ts.
-    const loaded: RevfsNode = await ctx.getTree(myCid, senderCid);
+    const loaded: RevfsNode = await ctx.getTree(myCid, sender_cid);
     const tree: RevfsNode = ctx.state.getTree(key) ?? loaded;
 
     // The outcome, not just the tree. `applyRemoteOp` returns the tree unchanged
@@ -189,12 +189,12 @@ export async function applyInboundOperation(
       forgetOperation(key, op.op_id);
       debugLog('RevfsService', `[revfs] handleRevfsOperation: ${op.op_type} threw, forgetting so a retry is real`, error);
       const failed: RevfsOperation = { op_id: crypto.randomUUID(), op_type: RevfsOpType.Ack, path: op.path, ack_op_id: op.op_id, success: false, timestamp: Date.now() };
-      const told: boolean = await ctx.sendOp(senderCid, failed);
+      const told: boolean = await ctx.sendOp(sender_cid, failed);
       if (!told) {
         // Not fatal, and worth saying. The sender's ack timeout covers a
         // failure notice that never arrives -- it retries either way -- but a
         // silent drop here is why the op appears to vanish rather than fail.
-        debugLog('RevfsService', `[revfs] could not tell ${senderCid} that ${op.op_id} failed`);
+        debugLog('RevfsService', `[revfs] could not tell ${sender_cid} that ${op.op_id} failed`);
       }
       return;
     }
@@ -209,7 +209,7 @@ export async function applyInboundOperation(
     }
 
     const ackOp: RevfsOperation = { op_id: crypto.randomUUID(), op_type: RevfsOpType.Ack, path: op.path, ack_op_id: op.op_id, success: outcome.applied, timestamp: Date.now() };
-    await ctx.sendOp(senderCid, ackOp);
+    await ctx.sendOp(sender_cid, ackOp);
 }
 
 /**
@@ -234,15 +234,15 @@ export async function applyInboundOperation(
  */
 export function applyInboundOperationSerially(
   ctx: InboundContext,
-  senderCid: bigint,
+  sender_cid: bigint,
   myCid: bigint,
   op: RevfsOperation,
 ): Promise<void> {
   // A ShareRequest mutates no tree either; its answer waits on a pull, which the lock would stall.
   if (op.op_type === RevfsOpType.Ack || op.op_type === RevfsOpType.ShareRequest) {
-    return applyInboundOperation(ctx, senderCid, myCid, op);
+    return applyInboundOperation(ctx, sender_cid, myCid, op);
   }
-  return withSerialLock(peerTreeKey(myCid, senderCid), () =>
-    applyInboundOperation(ctx, senderCid, myCid, op),
+  return withSerialLock(peerTreeKey(myCid, sender_cid), () =>
+    applyInboundOperation(ctx, sender_cid, myCid, op),
   );
 }

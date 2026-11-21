@@ -63,7 +63,7 @@ export function TextBubble({
         )}
 
         <div className={`min-w-0 rounded-lg px-3 py-2 ${bubbleStyles}`}>
-          {message.replyTo && <ReplyQuote quoted={quoted} isOwn={isOwn} />}
+          {message.reply_to && <ReplyQuote quoted={quoted} isOwn={isOwn} />}
           {/* break-words, like the group bubble beside it. `pre-wrap` only
               wraps at EXISTING opportunities, and a pasted URL or path has
               none — so it painted outside the bubble and was cut at the panel

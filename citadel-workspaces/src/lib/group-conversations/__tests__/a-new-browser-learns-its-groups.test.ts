@@ -70,7 +70,7 @@ describe('the state a learnt group asks for', () => {
 
   it('adopts the first snapshot a member sends, roster included, and stops awaiting', () => {
     const learnt: GroupConversation[] = addJoinedGroups([], ['7:42'], SELF, 'self', peerName);
-    const [after] = applyGroupControl(learnt, { groupId: '7:42', senderCid: 9n, ownerCid: OWNER, control: groupControlSnapshot(full) }, peerName);
+    const [after] = applyGroupControl(learnt, { groupId: '7:42', sender_cid: 9n, ownerCid: OWNER, control: groupControlSnapshot(full) }, peerName);
     expect(after.name).toBe('Sweep Group');
     expect(after.members.map((m) => [m.cid, m.roleId])).toEqual(full.members.map((m) => [m.cid, m.roleId]));
     expect(after.settings).toEqual(full.settings);
@@ -80,7 +80,7 @@ describe('the state a learnt group asks for', () => {
   it('judges a snapshot for a group it already holds by the usual rules', () => {
     // 9n is a plain Member here, and a Member may not rename: adoption is for learnt groups only.
     const held: GroupConversation[] = [{ ...full, name: 'Kept', members: full.members.map((m) => (m.cid === 9n ? { ...m, roleId: full.settings.defaultRoleId } : m)) }];
-    const [after] = applyGroupControl(held, { groupId: '7:42', senderCid: 9n, ownerCid: OWNER, control: { name: 'Renamed' } }, peerName);
+    const [after] = applyGroupControl(held, { groupId: '7:42', sender_cid: 9n, ownerCid: OWNER, control: { name: 'Renamed' } }, peerName);
     expect(after.name).toBe('Kept');
   });
 

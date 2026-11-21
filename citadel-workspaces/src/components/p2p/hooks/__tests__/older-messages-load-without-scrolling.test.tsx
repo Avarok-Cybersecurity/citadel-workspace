@@ -27,14 +27,15 @@ import { listProps } from '@/components/chat/pane/__tests__/doubles/list-props';
 import { peerTransportFor } from '@/components/p2p/__tests__/doubles/peer-transport';
 import type { ChatTransport } from '@/lib/chat/transport/chat-transport';
 import { installHostingAgent, settle, PEER, OWN } from './hosting-agent';
+import type { ConversationMetadata } from 'citadel-workspace-client-ts';
 
 function stored(id: string, timestamp: number): Record<string, unknown> {
-  return { id, content: `text ${id}`, senderCid: PEER, recipientCid: OWN, timestamp, index: timestamp, status: 'delivered', messageType: 'text' };
+  return { id, content: `text ${id}`, sender_cid: PEER, recipient_cid: OWN, timestamp, index: timestamp, status: 'delivered', messageType: 'text' };
 }
 
 const NEWEST: Record<string, unknown>[] = [stored('new-1', 2_000), stored('new-2', 2_001)];
 const OLDER: Record<string, unknown>[] = [stored('old-1', 1_000), stored('old-2', 1_001)];
-const METADATA: Record<string, unknown> = {
+const METADATA: ConversationMetadata = {
   peerCid: PEER, ownerCid: OWN, totalMessageCount: 52, oldestMessageTimestamp: 1_000, newestMessageTimestamp: 2_001,
   latestPage: 1, messagesPerPage: 50, unreadCount: 0, lastMessageIndex: 52, lastUpdated: 2_001,
 };

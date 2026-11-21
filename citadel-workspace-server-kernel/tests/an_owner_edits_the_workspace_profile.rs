@@ -10,9 +10,10 @@
 use base64::Engine;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{UserRole, Workspace, WorkspaceLogoChange};
+use citadel_workspace_types::structs::{Workspace, WorkspaceLogoChange};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_PASSWORD, TEST_ADMIN_USER_ID};
 use std::time::Duration;
 
@@ -105,7 +106,7 @@ async fn an_owner_renames_without_the_master_password_and_members_hear_it() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_member_without_the_permission_is_refused_the_same_whatever_they_send() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "mia", UserRole::Member).await;
+    insert_user_with_role(&kernel, "mia", MEMBER_ROLE_ID).await;
     join_root(&kernel, "mia").await;
 
     let valid = send(&kernel, profile(Some("Mine now"), None), "mia").await;

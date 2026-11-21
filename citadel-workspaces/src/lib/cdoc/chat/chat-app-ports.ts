@@ -34,7 +34,7 @@ export function appChatStore(account: bigint): ChatStoreBackend {
 
 /** Whether a received command is the peer's, addressed to this account (the legacy path names no recipient). */
 export function isFromPeerToUs(event: CdocChatCommandEvent, selfCid: bigint, peerCid: bigint): boolean {
-  return event.peerCid === peerCid && (event.recipientCid === undefined || event.recipientCid === selfCid);
+  return event.peerCid === peerCid && (event.recipient_cid === undefined || event.recipient_cid === selfCid);
 }
 
 export function p2pChatTransport(selfCid: bigint, peerCid: bigint): ChatTransport {

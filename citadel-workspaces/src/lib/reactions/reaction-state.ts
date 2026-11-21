@@ -17,20 +17,19 @@
  * is the whole of "only the reactor can remove their own".
  */
 
+import type { GroupReaction } from 'citadel-workspace-client-ts';
+
+export type { GroupReaction };
+
 /** The fixed set offered by the picker and accepted off the wire. */
 export const REACTION_EMOJIS: readonly string[] = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
-export interface MessageReaction {
-  emoji: string;
-  reactorCid: bigint;
-  /** The reactor's clock when they last changed this entry; orders and dedupes. */
-  at: number;
-  /** False is a retraction, kept so a late copy of the add cannot resurrect it. */
-  active: boolean;
-}
-
-/** A change is the entry it produces. */
-export type ReactionChange = MessageReaction;
+/**
+ * One reaction entry is the generated `GroupReaction`: `at` is the reactor's clock when they last
+ * changed it (orders and dedupes); `active: false` is a retraction, kept so a late copy of the
+ * add cannot resurrect it. A change is the entry it produces.
+ */
+export type ReactionChange = GroupReaction;
 
 export interface ReactionChip {
   emoji: string;
@@ -44,7 +43,7 @@ export function isReactionEmoji(value: unknown): value is string {
   return typeof value === 'string' && REACTION_EMOJIS.includes(value);
 }
 
-function sameSlot(entry: MessageReaction, change: ReactionChange): boolean {
+function sameSlot(entry: GroupReaction, change: ReactionChange): boolean {
   return entry.reactorCid === change.reactorCid && entry.emoji === change.emoji;
 }
 
@@ -54,14 +53,14 @@ function sameSlot(entry: MessageReaction, change: ReactionChange): boolean {
  * Null rather than the same array so a caller can skip the write and the event.
  */
 export function foldReaction(
-  current: readonly MessageReaction[] | undefined,
+  current: readonly GroupReaction[] | undefined,
   change: ReactionChange,
-): MessageReaction[] | null {
+): GroupReaction[] | null {
   if (!isReactionEmoji(change.emoji) || !Number.isFinite(change.at)) return null;
-  const list: readonly MessageReaction[] = current ?? [];
-  const held: MessageReaction | undefined = list.find((entry) => sameSlot(entry, change));
+  const list: readonly GroupReaction[] = current ?? [];
+  const held: GroupReaction | undefined = list.find((entry) => sameSlot(entry, change));
   if (held && held.at >= change.at) return null;
-  const entry: MessageReaction = { emoji: change.emoji, reactorCid: change.reactorCid, at: change.at, active: change.active };
+  const entry: GroupReaction = { emoji: change.emoji, reactorCid: change.reactorCid, at: change.at, active: change.active };
   return held ? list.map((e) => (sameSlot(e, change) ? entry : e)) : [...list, entry];
 }
 
@@ -71,12 +70,12 @@ export function foldReaction(
  * same millisecond are still two changes rather than a dropped second one.
  */
 export function toggleReaction(
-  current: readonly MessageReaction[] | undefined,
+  current: readonly GroupReaction[] | undefined,
   emoji: string,
   self: bigint,
   now: number,
 ): ReactionChange {
-  const held: MessageReaction | undefined = (current ?? []).find((e) => e.reactorCid === self && e.emoji === emoji);
+  const held: GroupReaction | undefined = (current ?? []).find((e) => e.reactorCid === self && e.emoji === emoji);
   return {
     emoji,
     reactorCid: self,
@@ -86,8 +85,8 @@ export function toggleReaction(
 }
 
 /** One chip per emoji with at least one live reaction, in picker order. */
-export function reactionChips(current: readonly MessageReaction[] | undefined, self: bigint | null): ReactionChip[] {
-  const live: MessageReaction[] = (current ?? []).filter((e) => e.active);
+export function reactionChips(current: readonly GroupReaction[] | undefined, self: bigint | null): ReactionChip[] {
+  const live: GroupReaction[] = (current ?? []).filter((e) => e.active);
   return REACTION_EMOJIS.flatMap((emoji: string): ReactionChip[] => {
     const reactorCids: bigint[] = live.filter((e) => e.emoji === emoji).map((e) => e.reactorCid);
     if (reactorCids.length === 0) return [];

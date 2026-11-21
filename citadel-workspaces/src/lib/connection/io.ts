@@ -5,8 +5,8 @@
  * Follows SBIO principle - all I/O is routed through this class.
  */
 
-import type { StoredSessions, GetSessionsResponse } from '@/types/session-types';
-import type { SessionSecuritySettings } from '../p2p-registration-service';
+import type { StoredSessions } from '@/types/session-types';
+import type { GetSessionsResponse } from 'citadel-workspace-client-ts';
 import type { ConnectionIntent, TabSelectionContext, PendingRequest } from './types';
 import { ConnectionIOWebSocket } from './io-websocket';
 import { ConnectionIOServices } from './io-services';
@@ -29,8 +29,6 @@ export class ConnectionIO {
         return this.svc.updateConnectionService(intent.status);
       case 'set-workspace-connection-id':
         return this.svc.setWorkspaceConnectionId(intent.cid);
-      case 'mark-user-disconnected':
-        return this.svc.markUserDisconnected(intent.username, intent.serverAddress);
       case 'emit-event':
         return this.svc.emitEvent(intent.event, intent.data);
       case 'set-instance-cid':
@@ -54,7 +52,6 @@ export class ConnectionIO {
   async sendWebSocketMessage(message: unknown): Promise<void> { return this.ws.sendWebSocketMessage(message); }
   canSendRequests(): boolean { return this.ws.canSendRequests(); }
   async waitForWebSocketInit(): Promise<void> { return this.ws.waitForWebSocketInit(); }
-  async connect(params: { requestId: string; username: string; serverAddress: string; password: string; sessionSecuritySettings?: SessionSecuritySettings }): Promise<void> { return this.ws.connect(params); }
   async disconnect(cid: bigint): Promise<void> { return this.ws.disconnect(cid); }
   /** The agent's accounts with the server each is on (GetAccountInformation); loaded when asked. */
   async agentAccounts(): Promise<AccountHost[]> {
@@ -84,10 +81,6 @@ export class ConnectionIO {
   async setSelectedUser(context: TabSelectionContext): Promise<void> { return this.svc.setSelectedUser(context); }
   async getSelectedUser(): Promise<TabSelectionContext | null> { return this.svc.getSelectedUser(); }
   async clearSelectedUser(): Promise<void> { return this.svc.clearSelectedUser(); }
-  async initServerAutoConnect(): Promise<void> { return this.svc.initServerAutoConnect(); }
-  async markUserDisconnected(username: string, serverAddress: string): Promise<void> { return this.svc.markUserDisconnected(username, serverAddress); }
-  markUserDisconnectedNow(username: string, serverAddress: string): void { this.svc.markUserDisconnectedNow(username, serverAddress); }
-  async persistUserDisconnected(): Promise<void> { return this.svc.persistUserDisconnected(); }
   async initPeerRegistrationStore(): Promise<void> { return this.svc.initPeerRegistrationStore(); }
 }
 

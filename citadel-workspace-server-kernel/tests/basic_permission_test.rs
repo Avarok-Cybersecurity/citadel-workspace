@@ -1,5 +1,6 @@
-use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission};
 use citadel_workspace_types::WorkspaceProtocolRequest;
+use common::roles_fixture::{ADMIN_ROLE_ID, GUEST_ROLE_ID, MEMBER_ROLE_ID};
 
 use common::async_test_helpers::*;
 use common::member_test_utils::insert_user_with_role;
@@ -45,14 +46,14 @@ async fn test_permission_set() {
     let office = extract_node(create_office_response).expect("Failed to create office");
 
     // A registered account: AddMember admits no other.
-    insert_user_with_role(&kernel, "test_user", UserRole::Member).await;
+    insert_user_with_role(&kernel, "test_user", MEMBER_ROLE_ID).await;
     // Add a member to the office
     let add_member_response = execute_command(
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
             domain_id: Some(office.id.clone()),
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         },
     )
@@ -122,7 +123,7 @@ async fn test_permission_inheritance() {
     let office = extract_node(create_office_response).expect("Failed to create office");
 
     // A registered account: AddMember admits no other.
-    insert_user_with_role(&kernel, "admin_member", UserRole::Member).await;
+    insert_user_with_role(&kernel, "admin_member", MEMBER_ROLE_ID).await;
     // An Admin may not hand out the admin role, even as a grant on one office: it is their
     // own position, and only the Owner assigns that.
     let as_admin = execute_command(
@@ -130,7 +131,7 @@ async fn test_permission_inheritance() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "admin_member".to_string(),
             domain_id: Some(office.id.clone()),
-            role: UserRole::Admin.into(),
+            role: ADMIN_ROLE_ID.to_string(),
             metadata: None,
         },
     )
@@ -145,7 +146,7 @@ async fn test_permission_inheritance() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "admin_member".to_string(),
             domain_id: Some(office.id.clone()),
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         },
     )
@@ -198,14 +199,14 @@ async fn test_permission_denial() {
     let office = extract_node(create_office_response).expect("Failed to create office");
 
     // A registered account: AddMember admits no other.
-    insert_user_with_role(&kernel, "guest_user", UserRole::Guest).await;
+    insert_user_with_role(&kernel, "guest_user", GUEST_ROLE_ID).await;
     // Add a guest member
     let add_member_response = execute_command(
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "guest_user".to_string(),
             domain_id: Some(office.id.clone()),
-            role: UserRole::Guest.into(),
+            role: GUEST_ROLE_ID.to_string(),
             metadata: None,
         },
     )

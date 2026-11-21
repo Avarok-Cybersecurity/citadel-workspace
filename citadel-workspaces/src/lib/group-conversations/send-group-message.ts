@@ -18,7 +18,6 @@
  *    printed twice.
  */
 import WorkspaceService from '@/lib/workspace-service';
-import { GroupMessageTypeTS } from '@/types/workspace-protocol';
 import { instanceManager } from '@/lib/multi-instance/instance-manager';
 import { groupSendTransport } from './group-send-transport';
 import { sendPeerGroupMessage } from './group-requests';
@@ -30,10 +29,10 @@ import { getGroups } from './group-store';
 export async function sendGroupMessageAnywhere(
   groupId: string,
   content: string,
-  replyTo?: string,
+  reply_to?: string,
 ): Promise<void> {
   if (groupSendTransport(groupId) !== 'peer') {
-    await WorkspaceService.sendGroupMessage(groupId, content, GroupMessageTypeTS.Text, replyTo);
+    await WorkspaceService.sendGroupMessage(groupId, content, 'Text', reply_to);
     return;
   }
 
@@ -41,7 +40,7 @@ export async function sendGroupMessageAnywhere(
   const groupName: string | undefined = self === null
     ? undefined
     : ownerAnnouncedName(getGroups().find((group) => group.id === groupId), self);
-  const messageId: string = await sendPeerGroupMessage(groupId, content, replyTo, groupName);
+  const messageId: string = await sendPeerGroupMessage(groupId, content, reply_to, groupName);
 
   const delivery: Parameters<typeof deliverPeerGroupMessage>[0] = {
     groupId,
@@ -50,7 +49,7 @@ export async function sendGroupMessageAnywhere(
     senderName: 'You',
     content,
     timestamp: Date.now(),
-    replyTo,
+    reply_to,
   };
 
   // BOTH halves, because they are different halves.
@@ -76,6 +75,6 @@ export async function sendGroupMessageAnywhere(
     senderName: 'You',
     content,
     timestamp: Date.now(),
-    replyTo,
+    reply_to,
   });
 }

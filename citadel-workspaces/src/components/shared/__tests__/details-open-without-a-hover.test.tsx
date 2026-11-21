@@ -16,7 +16,7 @@ import type { PaneMessage } from '@/lib/chat/transport/chat-transport';
 
 describe('details that used to wait for a hover', () => {
   it('a sent P2P message names its status and opens its details on a press', async () => {
-    const message: P2PMessage = { id: 'm1', content: 'hi', senderCid: 1n, recipientCid: 2n, timestamp: 1, status: 'delivered' } as unknown as P2PMessage;
+    const message: P2PMessage = { id: 'm1', content: 'hi', sender_cid: 1n, recipient_cid: 2n, timestamp: 1, status: 'delivered' } as unknown as P2PMessage;
     render(<BubbleFooter message={message} isOwn />);
     const tick: HTMLElement = screen.getByRole('button', { name: 'Delivered to peer. Show details' });
     expect(tick.getAttribute('aria-expanded')).toBe('false');

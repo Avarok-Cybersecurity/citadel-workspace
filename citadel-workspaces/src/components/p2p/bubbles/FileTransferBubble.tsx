@@ -49,8 +49,8 @@ export function FileTransferBubble({
   debugLog('FileTransferBubble', '[FileTransferBubble] Debug:', {
     isOwn,
     state,
-    senderCid: message.senderCid,
-    recipientCid: message.recipientCid,
+    sender_cid: message.sender_cid,
+    recipient_cid: message.recipient_cid,
     transfer_id: message.transfer_id,
     fileName: message.file_name
   });

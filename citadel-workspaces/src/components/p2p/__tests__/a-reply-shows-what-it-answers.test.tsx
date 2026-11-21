@@ -1,7 +1,7 @@
 /**
  * A P2P reply showed nothing of the message it answered.
  *
- * The composer sent `replyTo`, the inbound path kept it, and no bubble read it:
+ * The composer sent `reply_to`, the inbound path kept it, and no bubble read it:
  * a reply looked exactly like any other message, so "yes" under two questions
  * answered neither. The quote is found among the loaded messages; when the
  * original is not loaded the reply says so rather than pretending it is not a
@@ -25,10 +25,10 @@ beforeEach((): void => {
   };
 });
 
-function message(id: string, senderCid: bigint, content: string, replyTo?: string): ChatMessage {
+function message(id: string, sender_cid: bigint, content: string, reply_to?: string): ChatMessage {
   return between({
-    id, content, senderCid, recipientCid: senderCid === 1n ? 2n : 1n,
-    timestamp: 1_700_000_000_000, index: 0, status: 'sent', message_type: 'text', replyTo,
+    id, content, sender_cid, recipient_cid: sender_cid === 1n ? 2n : 1n,
+    timestamp: 1_700_000_000_000, index: 0, status: 'sent', message_type: 'text', reply_to,
   });
 }
 

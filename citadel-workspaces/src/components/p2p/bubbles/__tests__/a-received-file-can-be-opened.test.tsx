@@ -18,7 +18,6 @@ vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
     sendRequest: async (): Promise<void> => undefined,
     sendP2PMessageReliable: async (): Promise<void> => undefined,
-    ensureMessengerOpen: async (): Promise<boolean> => false,
     canSendRequests: (): boolean => false,
   },
 }));
@@ -30,7 +29,7 @@ afterEach(cleanup);
 
 function received(): P2PMessage {
   return {
-    id: 'msg-t1', content: 'File transfer: a.bin', senderCid: 42n, recipientCid: 7n,
+    id: 'msg-t1', content: 'File transfer: a.bin', sender_cid: 42n, recipient_cid: 7n,
     timestamp: 1, status: 'delivered', message_type: 'file_transfer', transfer_id: 't1',
     file_name: 'a.bin', file_size: 3000, transfer_mode: 'p2p', transfer_state: 'complete',
   } as P2PMessage;

@@ -17,7 +17,7 @@
  * the neighbouring function used it, and it was never applied here.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { PeerInfoResponse } from '@/lib/p2p-registration-service/types';
+import type { PeerInformation } from 'citadel-workspace-client-ts';
 import { listAllPeers } from '../discovery';
 
 const h: { response: Record<string, unknown>; } = vi.hoisted((): { response: Record<string, unknown>; } => ({ response: {} as Record<string, unknown> }));
@@ -50,9 +50,9 @@ vi.mock('../connection', () => ({
 // discovery keeps no state between calls: every re-import fetched its graph again
 // from the vitest main process, one round trip per module, which a loaded runner
 // turned into a 5 s timeout.
-async function callListAllPeers(): Promise<PeerInfoResponse[]> {
+async function callListAllPeers(): Promise<PeerInformation[]> {
   const pending: Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; }> = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
-  const promise: Promise<PeerInfoResponse[]> = listAllPeers(pending as never);
+  const promise: Promise<PeerInformation[]> = listAllPeers(pending as never);
   // Settle whatever request was registered with the response under test.
   await vi.waitFor((): void => { if (pending.size === 0) throw new Error('not sent yet'); });
   for (const [, entry] of pending) entry.resolve(h.response);
@@ -72,7 +72,7 @@ describe('listAllPeers', () => {
       ]),
     };
 
-    const peers: PeerInfoResponse[] = await callListAllPeers();
+    const peers: PeerInformation[] = await callListAllPeers();
 
     // `Object.values` on this returns [] — an empty peer list reported as fact.
     expect(peers.map((p) => (p as { username: string }).username)).toEqual(['alice', 'bob']);
@@ -81,7 +81,7 @@ describe('listAllPeers', () => {
   it('still reads a plain object, which JSON-parsed payloads really are', async () => {
     h.response = { peer_information: { '42': { cid: '42', username: 'alice' } } };
 
-    const peers: PeerInfoResponse[] = await callListAllPeers();
+    const peers: PeerInformation[] = await callListAllPeers();
 
     expect(peers).toHaveLength(1);
   });

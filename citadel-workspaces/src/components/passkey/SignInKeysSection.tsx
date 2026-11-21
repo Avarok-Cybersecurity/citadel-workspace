@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState, type LazyExoticComponent } from 'react';
+import type { RecoveryPhrasePanel as RecoveryPhrasePanelComponent } from '@/components/recovery/RecoveryPhrasePanel';
 import { KeyRound, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,13 +13,14 @@ import { SIGN_IN_COPY } from '@/lib/sign-in/copy';
 import type { SignInCredential, SignInPolicy } from '@/lib/sign-in/types';
 import { defaultPasskeyLabel } from '@/components/sign-in/default-key-label';
 import { PolicyChoice } from '@/components/sign-in/PolicyChoice';
-import { RecoveryCodesPanel } from '@/components/sign-in/RecoveryCodesPanel';
+import { PHRASE_COPY } from '@/lib/recovery/copy';
 import { StepUpDialog } from '@/components/sign-in/StepUpDialog';
 import { useStepUpPrompt, type StepUpPrompt } from '@/components/sign-in/useStepUpPrompt';
 import { CredentialRow } from './CredentialRow';
 import { useSignInKeys, type SignInKeys } from './useSignInKeys';
 
 const POLICIES: readonly SignInPolicy[] = ['Password', 'PasswordAndKey', 'KeyOnly'];
+const RecoveryPhrasePanel: LazyExoticComponent<typeof RecoveryPhrasePanelComponent> = lazy(() => import('@/components/recovery/RecoveryPhrasePanel').then((m) => ({ default: m.RecoveryPhrasePanel })));
 
 /** Settings -> Security -> Sign-in keys: the account's factors, as the server holds them. */
 export function SignInKeysSection(): JSX.Element | null {
@@ -28,10 +30,12 @@ export function SignInKeysSection(): JSX.Element | null {
   const [removing, setRemoving] = useState<SignInCredential | null>(null);
 
   if (!k.account) return null;
-  if (k.freshCodes) {
+  if (k.freshPhrase) {
     return (
       <div className="p-3 rounded-lg bg-background/50">
-        <RecoveryCodesPanel codes={k.freshCodes} account={k.account.username} onDone={k.forgetCodes} />
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+          <RecoveryPhrasePanel words={k.freshPhrase} account={k.account.username} server={k.account.tenant} onDone={k.forgetPhrase} />
+        </Suspense>
       </div>
     );
   }
@@ -86,14 +90,14 @@ export function SignInKeysSection(): JSX.Element | null {
 
         <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-background/50">
           <div>
-            <p className="text-sm font-medium">Recovery codes</p>
-            <p className="text-xs text-muted-foreground" data-testid="recovery-codes-left">
-              {`${k.listing.codesLeft} unused. ${SIGN_IN_COPY.regenerateWarning}`}
+            <p className="text-sm font-medium">{PHRASE_COPY.settingsTitle}</p>
+            <p className="text-xs text-muted-foreground" data-testid="recovery-phrase-state">
+              {`${PHRASE_COPY.settingsBody} ${PHRASE_COPY.regenerateWarning}`}
             </p>
           </div>
-          <Button type="button" size="sm" variant="outline" className="gap-2 shrink-0" disabled={k.busy}
-            onClick={() => { void k.regenerateCodes(); }} data-testid="regenerate-recovery-codes">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />{SIGN_IN_COPY.regenerate}
+          <Button type="button" size="sm" variant="outline" className="gap-2 shrink-0 min-h-[44px]" disabled={k.busy}
+            onClick={() => { void k.regeneratePhrase(); }} data-testid="regenerate-recovery-phrase">
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />{PHRASE_COPY.regenerate}
           </Button>
         </div>
       </>)}

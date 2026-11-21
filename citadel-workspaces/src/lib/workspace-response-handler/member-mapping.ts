@@ -22,8 +22,8 @@ export interface MappedMember {
   id?: string;
   username: string;
   displayName: string;
-  /** The legacy mirror; only `Banned` means anything. */
-  role?: string;
+  /** Banned from the workspace: a standing, not a role, so they hold none. */
+  banned: boolean;
   /** Their role in the workspace's table: `workspace_roles[root]`. */
   roleId?: string;
   /** Visible to other members; see lib/profile-metadata.ts. */
@@ -66,7 +66,6 @@ export function mapWasmMember(raw: Record<string, unknown>): MappedMember {
         : undefined;
   const username: string | undefined = typeof raw.username === 'string' ? raw.username : undefined;
   const displayName: string | undefined = typeof raw.displayName === 'string' ? raw.displayName : undefined;
-  const role: string | undefined = typeof raw.role === 'string' ? raw.role : undefined;
 
   return {
     ...raw,
@@ -77,7 +76,7 @@ export function mapWasmMember(raw: Record<string, unknown>): MappedMember {
     // differed, and every self-match and P2P lookup by username then missed.
     username: username ?? id ?? name ?? '',
     displayName: displayName ?? name ?? username ?? id ?? '',
-    role,
+    banned: raw.banned === true,
     roleId: rootRoleIdOf(raw.workspace_roles),
     avatarUrl: avatarUrlFromMetadata(raw.metadata),
     ...profileFieldsFromMetadata(raw.metadata),

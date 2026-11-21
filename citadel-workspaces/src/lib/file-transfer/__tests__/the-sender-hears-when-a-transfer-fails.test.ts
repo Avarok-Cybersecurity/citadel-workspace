@@ -20,7 +20,7 @@ import type { FileTransfer } from '../types';
 const wire: { from: bigint; to: bigint; bytes: Uint8Array }[] = [];
 vi.mock('../../tab-context', () => ({ getSelectedUser: async (): Promise<{ selectedCid: bigint }> => ({ selectedCid: 42n }) }));
 vi.mock('../../p2p/message-send-operations', () => ({
-  sendAllowingForAConcurrentOpen: async (from: bigint, to: bigint, bytes: Uint8Array): Promise<void> => {
+  sendAtChatLevel: async (from: bigint, to: bigint, bytes: Uint8Array): Promise<void> => {
     wire.push({ from, to, bytes });
   },
 }));
@@ -35,7 +35,7 @@ type Deps = Parameters<typeof handleProtocolComplete>[0];
 function transfer(isIncoming: boolean, state: FileTransfer['state']): FileTransfer {
   return {
     id: 'T1', fileName: 'shot.png', fileSize: 3, fileType: 'image/png', mode: 'async',
-    state, progress: 0, senderCid: '7', recipientCid: '42', createdAt: 0, updatedAt: 0, isIncoming,
+    state, progress: 0, sender_cid: '7', recipient_cid: '42', createdAt: 0, updatedAt: 0, isIncoming,
   } as FileTransfer;
 }
 

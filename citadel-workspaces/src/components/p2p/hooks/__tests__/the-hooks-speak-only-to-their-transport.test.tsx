@@ -83,8 +83,8 @@ describe('useP2PCompose over a transport', () => {
     act(() => result.current.setInputMessage('**hi**'));
     await act(async () => { await result.current.handleSendMessage(); });
 
-    expect(recorded.texts.map(({ content, messageType, replyTo }) => ({ content, messageType, replyTo })))
-      .toEqual([{ content: '**hi**', messageType: 'markdown', replyTo: 'm1' }]);
+    expect(recorded.texts.map(({ content, messageType, reply_to }) => ({ content, messageType, reply_to })))
+      .toEqual([{ content: '**hi**', messageType: 'markdown', reply_to: 'm1' }]);
     expect(result.current.inputMessage).toBe('');
     expect(recorded.calls).toContain('status.stopTyping');
   });

@@ -27,7 +27,7 @@ import { MemberAvatar } from '@/components/shared/MemberAvatar';
 import { MemberActionItems } from './MemberActionItems';
 import type { MemberActionBlocks } from './member-actions-gate';
 import { blocksForMember } from '@/lib/member-access';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 const MEMBERS_TO_SHOW: number = 5;
 

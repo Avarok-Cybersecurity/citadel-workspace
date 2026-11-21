@@ -24,15 +24,14 @@ export function useCompiledMdx(
   content: string,
   components: MDXComponents,
   /**
-   * The hash the SERVER stored for this content, if any.
+   * The hash the SERVER stored for this content, or `null` while `content` is
+   * the user's own unsaved buffer, which is not checked.
    *
    * Rendering executes the document, so the bytes have to be the bytes the
-   * server stored. `null`/`undefined` means the server has no hash for it —
-   * documents written before the field existed — which renders normally; a hash
-   * that is present and different does not. See lib/mdx-integrity.ts for what
+   * server stored: a stored document whose hash differs does not render. See lib/mdx-integrity.ts for what
    * this covers and, more importantly, what it does not.
    */
-  expectedHash: string | null | undefined,
+  expectedHash: string | null,
   /** True only while the user is editing the buffer; see the header. */
   keepLastGood: boolean,
 ): CompiledMdx {
@@ -47,8 +46,9 @@ export function useCompiledMdx(
         // Pre-pass escapes JSX-significant chars inside `~~...~~` regions
         // so `~~value < 5~~` doesn't fail MDX parsing before remark-gfm
         // consumes it. See `applyGfmStrikethrough` for details.
-        const verdict: IntegrityVerdict = await verifyDocument(content, expectedHash);
-        if (verdict.status === 'mismatch') {
+        const verdict: IntegrityVerdict | null =
+          expectedHash === null ? null : await verifyDocument(content, expectedHash);
+        if (verdict?.status === 'mismatch') {
           debugLog('BaseOffice', 'MDX integrity mismatch', verdict);
           setCompiled(null);
           setRenderError(

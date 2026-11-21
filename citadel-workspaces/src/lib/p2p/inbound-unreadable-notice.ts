@@ -29,8 +29,8 @@ export async function noteFromPeer(config: MessageHandlerConfig, peerCid: bigint
   const message: P2PMessage = {
     id: crypto.randomUUID(),
     content: text(peerName),
-    senderCid: peerCid,
-    recipientCid: ownCid,
+    sender_cid: peerCid,
+    recipient_cid: ownCid,
     timestamp: Date.now(),
     index: 0,
     status: 'delivered',

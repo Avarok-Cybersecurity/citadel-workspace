@@ -30,6 +30,6 @@ export interface OfferAnnounced {
 
 /** Raised as a send begins, while the picked File is still in hand. */
 export interface FileSent {
-  transfer: { id: string; senderCid: bigint; recipientCid: bigint };
+  transfer: { id: string; sender_cid: bigint; recipient_cid: bigint };
   file: File;
 }

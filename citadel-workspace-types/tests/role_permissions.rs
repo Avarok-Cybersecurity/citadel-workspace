@@ -10,7 +10,7 @@
 use citadel_workspace_types::roles::{
     WorkspaceRoles, ADMIN_ROLE_ID, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID,
 };
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::{Permission, User};
 use std::collections::HashSet;
 
 /// The built-ins as a fresh workspace's table holds them.
@@ -94,6 +94,16 @@ fn admin_holds_the_wildcard() {
 }
 
 #[test]
-fn banned_holds_nothing() {
-    assert!(Permission::for_legacy_role(&UserRole::Banned).is_empty());
+fn a_banned_account_holds_no_role_anywhere() {
+    let root = citadel_workspace_types::WORKSPACE_ROOT_ID;
+    let mut user = User::new("bo".into(), "Bo".into());
+    user.workspace_roles
+        .insert(root.to_string(), ADMIN_ROLE_ID.to_string());
+    assert_eq!(user.role_id_in(root), Some(ADMIN_ROLE_ID));
+    user.banned = true;
+    assert_eq!(
+        user.role_id_in(root),
+        None,
+        "a ban is outranked by a stale role id"
+    );
 }

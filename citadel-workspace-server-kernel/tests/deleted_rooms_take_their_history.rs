@@ -47,7 +47,7 @@ fn mk_node(id: &str, parent: Option<&str>, children: Vec<String>, depth: u32) ->
         members: vec![],
         children,
         mdx_content: String::new(),
-        mdx_content_hash: None,
+        mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(""),
         rules: None,
         chat_enabled: true,
         chat_channel_id: Some(channel_of(id)),

@@ -12,7 +12,6 @@ import { broadcastChannelService } from '../broadcast-channel-service';
 import { healthCheckService } from '../health-check';
 import { eventEmitter } from '../event-emitter';
 import { peerRegistrationStore } from '../peer-registration-store';
-import { serverAutoConnectService } from '../server-auto-connect-service';
 import { instanceManager, instanceChannel } from '../multi-instance';
 import { setSelectedUser, getSelectedUser, clearSelectedUser } from '../tab-context';
 import type { TabSelectionContext } from './types';
@@ -108,26 +107,6 @@ export class ConnectionIOServices {
 
   async clearSelectedUser(): Promise<void> {
     await clearSelectedUser();
-  }
-
-  // ============================================================================
-  // Server Auto Connect
-  // ============================================================================
-
-  async initServerAutoConnect(): Promise<void> {
-    await serverAutoConnectService.init();
-  }
-
-  markUserDisconnectedNow(username: string, serverAddress: string): void {
-    serverAutoConnectService.markUserDisconnectedNow(username, serverAddress);
-  }
-
-  async persistUserDisconnected(): Promise<void> {
-    await serverAutoConnectService.persistUserDisconnected();
-  }
-
-  async markUserDisconnected(username: string, serverAddress: string): Promise<void> {
-    await serverAutoConnectService.markUserDisconnected(username, serverAddress);
   }
 
   // ============================================================================

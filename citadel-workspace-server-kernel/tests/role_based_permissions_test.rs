@@ -1,6 +1,7 @@
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
-use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission};
 use citadel_workspace_types::WorkspaceProtocolRequest;
+use common::roles_fixture::{ADMIN_ROLE_ID, GUEST_ROLE_ID, MEMBER_ROLE_ID};
 
 use common::async_test_helpers::*;
 use common::permissions_test_utils::{create_test_user, join_root_workspace};
@@ -32,9 +33,9 @@ async fn test_role_based_permissions() {
     let workspace_id = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 
     // Create test users with different roles
-    let owner_user = create_test_user("owner", UserRole::Admin);
-    let member_user = create_test_user("member", UserRole::Member);
-    let guest_user = create_test_user("guest", UserRole::Guest);
+    let owner_user = create_test_user("owner", ADMIN_ROLE_ID);
+    let member_user = create_test_user("member", MEMBER_ROLE_ID);
+    let guest_user = create_test_user("guest", GUEST_ROLE_ID);
 
     // Insert users into the kernel
     kernel

@@ -10,9 +10,9 @@
 use citadel_workspace_types::messaging_trust::{
     MessagingTrustPolicy as Policy, MessagingTrustRequest as Req, WORKSPACE_ROOT_ID as ROOT,
 };
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::WorkspaceProtocolResponse;
 use common::member_test_utils::insert_user_with_role;
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::trust_test_utils::{check, on, refusal, set_mine, set_workspace, settings_after, tree};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::time::Duration;
@@ -152,7 +152,7 @@ async fn disjoint_workspace_and_personal_roots_trust_nobody() {
 async fn nobody_outside_the_workspace_is_trusted_either_way() {
     let kernel = create_test_kernel().await;
     tree(&kernel).await;
-    insert_user_with_role(&kernel, "out", UserRole::Member).await;
+    insert_user_with_role(&kernel, "out", MEMBER_ROLE_ID).await;
     assert_eq!(check(&kernel, "out", "eve").await, (false, false));
     assert_eq!(check(&kernel, "eve", "out").await, (false, false));
     assert_eq!(check(&kernel, "eve", "nobody-at-all").await, (false, false));

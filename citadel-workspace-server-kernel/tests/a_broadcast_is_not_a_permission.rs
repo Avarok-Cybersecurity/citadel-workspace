@@ -15,8 +15,9 @@ use citadel_workspace_server_kernel::handlers::domain::async_ops::{
 };
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
 use citadel_workspace_server_kernel::kernel::async_kernel::BroadcastAudience;
-use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission};
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
@@ -48,7 +49,7 @@ async fn may_view(kernel: &Kernel, user: &str, node: &str) -> bool {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_member_of_the_office_may_receive_its_content() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "insider", UserRole::Member).await;
+    insert_user_with_role(&kernel, "insider", MEMBER_ROLE_ID).await;
     join_root(&kernel, "insider").await;
     let node = office(&kernel).await;
     kernel
@@ -57,7 +58,7 @@ async fn a_member_of_the_office_may_receive_its_content() {
             TEST_ADMIN_USER_ID,
             "insider",
             &node,
-            UserRole::Member.into(),
+            MEMBER_ROLE_ID.to_string(),
         )
         .await
         .expect("an admin may add a member to an office");
@@ -72,7 +73,7 @@ async fn a_member_of_the_office_may_receive_its_content() {
 async fn a_banned_account_may_not_receive_node_content() {
     // The case the old broadcast could not express: still connected, no longer entitled.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "outcast", UserRole::Member).await;
+    insert_user_with_role(&kernel, "outcast", MEMBER_ROLE_ID).await;
     join_root(&kernel, "outcast").await;
     let node = office(&kernel).await;
     kernel
@@ -81,7 +82,7 @@ async fn a_banned_account_may_not_receive_node_content() {
             TEST_ADMIN_USER_ID,
             "outcast",
             &node,
-            UserRole::Member.into(),
+            MEMBER_ROLE_ID.to_string(),
         )
         .await
         .expect("an admin may add a member to an office");
@@ -89,7 +90,7 @@ async fn a_banned_account_may_not_receive_node_content() {
 
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "outcast", ROOT, UserRole::Banned.into())
+        .ban_member(TEST_ADMIN_USER_ID, "outcast")
         .await
         .expect("an admin may ban");
 

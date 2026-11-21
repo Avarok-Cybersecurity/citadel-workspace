@@ -33,8 +33,12 @@ const failed = (reason) => ({ refuse: REFUSAL.failed, reason });
 /** Said when the check itself could not be done; the detail goes to the log only. */
 export const CHECK_UNAVAILABLE = "the check could not be completed";
 
-/** The widget's `data-action` for each kind of admission (UI lib/admission/copy.ts ADMISSION_ACTION). */
-export const ACTION = Object.freeze({ SignIn: "sign-in", Register: "register" });
+/**
+ * The widget's `data-action` for each kind of admission (UI lib/admission/copy.ts ADMISSION_ACTION;
+ * the SDK's `AdmissionKind::action`). Recover is a sign-in or a new device's recovery with the
+ * recovery phrase or a code.
+ */
+export const ACTION = Object.freeze({ SignIn: "sign-in", Register: "register", Recover: "recover" });
 
 /** Turnstile tokens are at most 2048 characters (as control/tenants.mjs bounds them). */
 const MAX_TOKEN_CHARS = 2048;

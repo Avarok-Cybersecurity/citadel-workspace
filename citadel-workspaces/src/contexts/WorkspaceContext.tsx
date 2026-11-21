@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo } from 'react';
-import { User } from '../types/workspace-entities';
+import { WorkspaceMember } from '../types/workspace-entities';
 // From the type module, not the component that re-exports it: this context is
 // read above the router (PeerRefusalNotice), and the component uses router hooks.
 import type { DomainNode, TreeSchema } from '@/components/layout/sidebar/tree-node-types';
@@ -18,7 +18,7 @@ export interface WorkspaceState {
     id: string;
     username: string;
     name: string;
-    /** The legacy role mirror; only `Banned` means anything. Authority is `roleId`. */
+    /** Your role's name as remembered with the session, shown only until the table has `roleId`. */
     role?: string;
     /** Your role in the workspace's role table (`workspace_roles[root]`); undefined until known. */
     roleId?: string;
@@ -30,7 +30,7 @@ export interface WorkspaceState {
     /** Server-enforced; undefined until the own record has arrived. See lib/profile-privacy.ts. */
     showProfileToStrangers?: boolean;
   };
-  members: Record<string, User>;
+  members: Record<string, WorkspaceMember>;
   nodes: Record<string, DomainNode>;
   treeSchema: TreeSchema | null;
   loading: {

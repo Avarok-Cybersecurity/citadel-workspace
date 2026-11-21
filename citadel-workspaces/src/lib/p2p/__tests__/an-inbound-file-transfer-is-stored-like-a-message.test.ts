@@ -106,7 +106,7 @@ describe('an inbound file-transfer offer', () => {
       PEER,
     );
 
-    expect(added[0].senderCid).toBe(PEER);
+    expect(added[0].sender_cid).toBe(PEER);
   });
 
   it('does not re-announce an offer that was redelivered', async (): Promise<void> => {

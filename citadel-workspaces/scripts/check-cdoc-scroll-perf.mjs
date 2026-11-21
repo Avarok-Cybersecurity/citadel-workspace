@@ -30,7 +30,6 @@ import { serveDocsHarness } from './lib/docs-harness/serve.mjs';
 import { contrast, framesOf, FRAME_MARK, startTrace } from './lib/docs-harness/frame-trace.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.DOCS_HARNESS_PORT ?? 4199);
 const DOC = join(HERE, 'lib/docs-harness/fixtures/500p.docx');
 const THROTTLE = Number(process.env.SCROLL_THROTTLE ?? 1);
 const FRAMES_OUT = process.env.SCROLL_FRAMES ?? 'scroll-frames.json';
@@ -70,7 +69,7 @@ function scrollPass({ slack, mark }) {
   });
 }
 
-const harness = await serveDocsHarness(PORT);
+const harness = await serveDocsHarness();
 const browser = await chromium.launch();
 let ok = false;
 try {

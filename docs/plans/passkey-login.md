@@ -91,7 +91,7 @@ an account has passkeys.
 
 **Recovery.** The password stays valid (v1), so losing every key only costs the
 convenience. If passwordless accounts are wanted later (a random 32-byte password
-generated at registration and never shown), a printable recovery code must be a second
+generated at registration and never shown), the recovery phrase must be a second
 KEK, created at registration. Otherwise losing the key locks the account out for good.
 
 **Attacker with the disk / agent storage:** gets the CNAC files and the wrapped blobs. The
@@ -280,7 +280,7 @@ Tests use Chrome's CDP virtual authenticator (`WebAuthn.addVirtualAuthenticator`
 confirmed in `node_modules/devtools-protocol/json/browser_protocol.json`. That is
 production WebAuthn code against a spec authenticator, not a mock.
 
-1. **Envelope module** (`src/lib/passkey/envelope.ts`: `deriveKek`, `wrapDek`,
+1. **Envelope module** (lib/passkey envelope, since removed with option A: `deriveKek`, `wrapDek`,
    `sealPassword`, `open*`; pure, no I/O — SBIO).
    Test: vitest round-trip with fixed-vector PRF bytes, and AAD mismatch → throws.
    Negative control: drop `cid` from the AAD → the swap test must go red. Confirm the
@@ -327,7 +327,7 @@ production WebAuthn code against a spec authenticator, not a mock.
   subdomains and future native apps share credentials, with a larger blast radius).
 - D2. Blob location: agent CID-0 KV (recommended), IndexedDB, or both.
 - D3. v1 keeps the password as the recovery path (recommended), or ship passwordless
-  accounts now (generated password + mandatory recovery code).
+  accounts now (generated password + mandatory recovery phrase).
 - D4. Should enrolling a key delete the plaintext "Remember credentials" copy? Should that
   toggle be removed entirely?
 - D5. Require UV (recommended; excludes PIN-less and U2F-only keys).

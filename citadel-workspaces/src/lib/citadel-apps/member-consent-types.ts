@@ -3,7 +3,10 @@
  * generated S2 types (citadel-workspace-client-ts: PeerConsent, PeerForMe, PeerDirection,
  * IhttpFrom).
  */
-import type { IhttpFrom, PeerDirection } from 'citadel-workspace-client-ts';
+import type { IhttpFrom, PeerConsent, PeerDirection } from 'citadel-workspace-client-ts';
+
+/** A member's answer for one install's peer planes: the consent record less when it was given. */
+export type ConsentChoice = Readonly<Pick<PeerConsent, 'serve' | 'call' | 'topics'>>;
 
 /** What a member decides for one install: the three planes, each on its own. */
 export type ConsentPlane = 'serve' | 'call' | 'topics';

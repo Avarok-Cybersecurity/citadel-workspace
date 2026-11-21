@@ -20,15 +20,16 @@ use citadel_workspace_server_kernel::handlers::domain::async_ops::{
     AsyncPermissionOperations, AsyncUserManagementOperations, AsyncWorkspaceOperations,
 };
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
-use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission};
 use citadel_workspace_types::UpdateOperation;
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::{GUEST_ROLE_ID, MEMBER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 
 /// An office the member is a member of, with a per-node grant of its own.
-async fn office_with(kernel: &Kernel, user: &str, role: UserRole) -> String {
+async fn office_with(kernel: &Kernel, user: &str, role: &str) -> String {
     let office = kernel
         .domain_operations
         .create_node(
@@ -62,9 +63,9 @@ async fn may(kernel: &Kernel, user: &str, domain: &str, permission: Permission) 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_ban_revokes_the_room_grants_too() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "outcast", UserRole::Member).await;
+    insert_user_with_role(&kernel, "outcast", MEMBER_ROLE_ID).await;
     join_root(&kernel, "outcast").await;
-    let office = office_with(&kernel, "outcast", UserRole::Member).await;
+    let office = office_with(&kernel, "outcast", MEMBER_ROLE_ID).await;
 
     // Without this the assertions below pass on a build where the member never
     // held the grant in the first place.
@@ -79,9 +80,9 @@ async fn a_ban_revokes_the_room_grants_too() {
 
     kernel
         .domain_operations
-        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned.into(), None)
+        .ban_member(TEST_ADMIN_USER_ID, "outcast")
         .await
-        .expect("an admin may set a role to Banned");
+        .expect("an admin may ban a member");
 
     assert!(
         !may(&kernel, "outcast", &office, Permission::ViewContent).await,
@@ -110,9 +111,9 @@ async fn a_demotion_that_is_not_a_ban_leaves_a_deliberate_grant_alone() {
     // grant survived or not, which is how the first version of this test passed
     // against a build that cleared everything.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "member", UserRole::Member).await;
+    insert_user_with_role(&kernel, "member", MEMBER_ROLE_ID).await;
     join_root(&kernel, "member").await;
-    let office = office_with(&kernel, "member", UserRole::Member).await;
+    let office = office_with(&kernel, "member", MEMBER_ROLE_ID).await;
 
     kernel
         .domain_operations
@@ -132,7 +133,12 @@ async fn a_demotion_that_is_not_a_ban_leaves_a_deliberate_grant_alone() {
 
     kernel
         .domain_operations
-        .update_workspace_member_role(TEST_ADMIN_USER_ID, "member", UserRole::Guest.into(), None)
+        .update_workspace_member_role(
+            TEST_ADMIN_USER_ID,
+            "member",
+            GUEST_ROLE_ID.to_string(),
+            None,
+        )
         .await
         .expect("an admin may set a role to Guest");
 
@@ -147,15 +153,15 @@ async fn a_banned_member_is_refused_the_tree_as_well() {
     // The gate that already worked, kept beside the one that did not, so a
     // future change cannot fix one and break the other without saying so.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "outcast", UserRole::Member).await;
+    insert_user_with_role(&kernel, "outcast", MEMBER_ROLE_ID).await;
     join_root(&kernel, "outcast").await;
-    let _office = office_with(&kernel, "outcast", UserRole::Member).await;
+    let _office = office_with(&kernel, "outcast", MEMBER_ROLE_ID).await;
 
     kernel
         .domain_operations
-        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned.into(), None)
+        .ban_member(TEST_ADMIN_USER_ID, "outcast")
         .await
-        .expect("an admin may set a role to Banned");
+        .expect("an admin may ban a member");
 
     assert!(
         kernel
@@ -173,7 +179,7 @@ async fn a_banned_member_is_not_listed_the_workspace_either() {
     // membership alone and returned the same record — name, description, owner,
     // member count — that its sibling had just been taught to withhold.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "outcast", UserRole::Member).await;
+    insert_user_with_role(&kernel, "outcast", MEMBER_ROLE_ID).await;
     join_root(&kernel, "outcast").await;
     assert!(
         !kernel
@@ -187,9 +193,9 @@ async fn a_banned_member_is_not_listed_the_workspace_either() {
 
     kernel
         .domain_operations
-        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned.into(), None)
+        .ban_member(TEST_ADMIN_USER_ID, "outcast")
         .await
-        .expect("an admin may set a role to Banned");
+        .expect("an admin may ban a member");
 
     assert!(
         kernel

@@ -17,7 +17,13 @@
  * was said, and the user kept a group in their sidebar the server never counted
  * them into.
  */
-export const GROUP_FAILURE_VARIANTS: readonly string[] = [
+import type { ResponseType } from 'citadel-workspace-client-ts';
+import { everyMember } from '@/types/every-member';
+
+/** The wire's group failures; the list below fails to compile when one is added or removed. */
+type GroupFailure = Extract<ResponseType, `Group${string}Failure`>;
+
+export const GROUP_FAILURE_VARIANTS: readonly GroupFailure[] = everyMember<GroupFailure>()([
   'GroupBroadcastHandleFailure',
   'GroupChannelCreateFailure',
   'GroupCreateFailure',
@@ -30,4 +36,4 @@ export const GROUP_FAILURE_VARIANTS: readonly string[] = [
   'GroupMessageFailure',
   'GroupRequestJoinFailure',
   'GroupRespondRequestFailure',
-];
+]);

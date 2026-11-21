@@ -10,6 +10,7 @@ pub use crate::group_channel_test_utils::{
     add_room_with_chat, add_user_with_role, ask, CHANNEL, ROOM_ID,
 };
 use crate::member_test_utils::GateKernel;
+use crate::roles_fixture::{GUEST_ROLE_ID, MEMBER_ROLE_ID};
 use crate::workspace_test_utils::create_configured_test_kernel;
 use async_trait::async_trait;
 use citadel_sdk::prelude::{SqlHost, SqlRow, SqlStatement, StorageQuota};
@@ -19,7 +20,6 @@ use citadel_workspace_types::chat_attachments::{
     ChatAttachmentRefusal, ChatAttachmentsRequest, ChatAttachmentsResponse,
     CHAT_ATTACHMENT_CHUNK_BYTES,
 };
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{
     GroupMessageType, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
@@ -71,10 +71,10 @@ pub async fn rooms_with(quota: StorageQuota, limits: ChatAttachmentLimits) -> Ar
     })
     .await;
     for (who, role) in [
-        (MEMBER, UserRole::Member),
-        (SECOND, UserRole::Member),
-        (GUEST, UserRole::Guest),
-        (OUTSIDER, UserRole::Member),
+        (MEMBER, MEMBER_ROLE_ID),
+        (SECOND, MEMBER_ROLE_ID),
+        (GUEST, GUEST_ROLE_ID),
+        (OUTSIDER, MEMBER_ROLE_ID),
     ] {
         add_user_with_role(&kernel, who, role).await;
     }

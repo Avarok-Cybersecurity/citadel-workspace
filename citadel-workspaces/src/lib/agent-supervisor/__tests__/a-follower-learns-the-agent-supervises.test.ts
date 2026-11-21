@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  agentHostsConversations, agentSupervisesP2p, forgetCapabilities, registerCapabilityRoute, supervision,
+  agentSupervisesP2p, forgetCapabilities, registerCapabilityRoute, supervision,
 } from '@/lib/agent-conversations/capabilities';
 import { FakeAgent } from './fake-supervising-agent';
 
@@ -15,14 +15,13 @@ beforeEach((): void => forgetCapabilities());
 
 describe('a follower tab', () => {
   it('learns from the leader that the agent supervises', async (): Promise<void> => {
-    registerCapabilityRoute({ isLeader: () => false, askLeader: async () => ({ agentIlm: true, supervisesP2p: true, noticesHeard: false, stagesUploads: false, takesConsole: false, servesApps: false }) });
+    registerCapabilityRoute({ isLeader: () => false, askLeader: async () => ({ supervisesP2p: true, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false }) });
     expect(await agentSupervisesP2p()).toBe(true);
-    expect(await agentHostsConversations()).toBe(true);
     expect(supervision.get()).toBe(true);
   });
 
   it('learns that it does not, from a leader that says so', async (): Promise<void> => {
-    registerCapabilityRoute({ isLeader: () => false, askLeader: async () => ({ agentIlm: true, supervisesP2p: false, noticesHeard: false, stagesUploads: false, takesConsole: false, servesApps: false }) });
+    registerCapabilityRoute({ isLeader: () => false, askLeader: async () => ({ supervisesP2p: false, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false }) });
     expect(await agentSupervisesP2p()).toBe(false);
     expect(supervision.get()).toBe(false);
   });

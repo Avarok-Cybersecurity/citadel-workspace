@@ -11,7 +11,7 @@ import { refreshWorkspacePeers, workspacePeerNamed } from '@/lib/workspace-peers
 import { resolveMemberChat, type MemberChatTarget } from './member-chat-target';
 import { toast } from '@/hooks/use-toast';
 import { unreachableMemberCopy } from '@/pages/reachable-peer';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 /** Null for yourself: there is no chat with yourself to open. */
 export type MemberChatOpener = (member: WorkspaceMember) => (() => void) | null;

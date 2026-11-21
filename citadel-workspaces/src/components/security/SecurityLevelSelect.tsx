@@ -1,3 +1,4 @@
+import { CHAT_SECURITY_LEVELS } from "@/lib/p2p/chat-advanced-settings";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { HelpHint } from "@/components/shared/HelpHint";
 import { Label } from "@/components/ui/label";
@@ -11,7 +12,6 @@ interface SecurityLevelSelectProps {
   maxLevel?: number;
 }
 
-const OFFERED: readonly string[] = ['Standard', 'Reinforced', 'High', 'Extreme'];
 
 export const SecurityLevelSelect = ({ value = 'Standard', onChange, maxLevel }: SecurityLevelSelectProps): JSX.Element => {
   const handleValueChange = (newValue: string): void => {
@@ -40,7 +40,7 @@ export const SecurityLevelSelect = ({ value = 'Standard', onChange, maxLevel }: 
             <SelectValue placeholder="Select security level" />
           </SelectTrigger>
           <SelectContent className="bg-card border border-primary-accent/30 text-foreground shadow-xl p-1">
-            {OFFERED.map((level: string) => (
+            {CHAT_SECURITY_LEVELS.map((level: string) => (
               <SelectItem key={level} value={level} disabled={exceeds(level)} data-testid={`security-level-${level}`} className="hover:bg-primary-accent/20 focus:bg-primary-accent/20 rounded-sm">{level}</SelectItem>
             ))}
           </SelectContent>

@@ -6,9 +6,10 @@
  * serialized versions of these types.
  */
 
-// Message content types - determines how the message is rendered
-// 'system_notice': a line the app writes into the thread (e.g. a screenshot notice), not a bubble anyone typed.
-export type MessageType = 'text' | 'markdown' | 'live_document' | 'file_transfer' | 'system_notice';
+// Message content types - determines how the message is rendered: the agent's generated
+// `MessageType`. 'system_notice' is a line the app writes into the thread, not a bubble anyone typed.
+import type { MessageType } from 'citadel-workspace-client-ts';
+export type { MessageType };
 
 // Message event types that can be sent between peers
 export type MessageEventType = 
@@ -32,7 +33,7 @@ export interface TextMessageData {
   message_type: MessageType;     // Content type (text, markdown, live_document)
   text: string;                  // Message content
   timestamp: number;             // Unix timestamp
-  replyTo?: string;             // ID of message being replied to
+  reply_to?: string;             // ID of message being replied to
   mentions?: string[];          // User IDs mentioned in the message
   metadata?: Record<string, unknown>; // Additional metadata
   // Live document specific fields (only when message_type === 'live_document')
@@ -135,7 +136,7 @@ export class MessageProtocol {
    */
   static createTextMessage(text: string, options?: {
     messageType?: MessageType;
-    replyTo?: string;
+    reply_to?: string;
     mentions?: string[];
     metadata?: Record<string, unknown>;
     documentId?: string;
@@ -148,7 +149,7 @@ export class MessageProtocol {
         message_type: options?.messageType || 'text',
         text,
         timestamp: Date.now(),
-        replyTo: options?.replyTo,
+        reply_to: options?.reply_to,
         mentions: options?.mentions,
         metadata: options?.metadata,
         document_id: options?.documentId,

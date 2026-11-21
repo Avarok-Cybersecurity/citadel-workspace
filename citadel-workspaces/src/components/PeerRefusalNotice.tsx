@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { eventEmitter } from '@/lib/event-emitter';
 import { useToast } from '@/hooks/use-toast';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 /**
  * Tell somebody their peer registration request was refused.
@@ -26,7 +26,7 @@ import type { User } from '@/types/workspace-entities';
  */
 export function PeerRefusalNotice(): null {
   const { toast } = useToast();
-  const members: Record<string, User> = useWorkspace().state.members;
+  const members: Record<string, WorkspaceMember> = useWorkspace().state.members;
 
   useEffect(() => {
     const onRefused = (payload: { peerUsername?: string; reason?: string }): void => {
@@ -36,7 +36,7 @@ export function PeerRefusalNotice(): null {
       if (!payload.peerUsername) return;
       // The SDK's decline carries no reason, so a refusal made by the other
       // person's "strangers" setting is told apart by the policy they publish.
-      const peer: User | undefined = Object.values(members).find((m: User) => m.username === payload.peerUsername);
+      const peer: WorkspaceMember | undefined = Object.values(members).find((m: WorkspaceMember) => m.username === payload.peerUsername);
       if (peer?.acceptsRequestsFromStrangers === false) {
         toast({
           variant: 'destructive',

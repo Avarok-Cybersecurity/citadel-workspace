@@ -14,9 +14,9 @@ use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Domain, DomainNode, TreeSchema, User, Workspace};
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
-    /// Initialize the backend transaction manager and run migration if needed.
+    /// Initialize the backend transaction manager: refuse a store an earlier server wrote.
     pub async fn init(&self) -> Result<(), NetworkError> {
-        self.migrate_if_needed().await
+        self.refuse_earlier_store().await
     }
 
     /// Simple method to get a domain (per-entity key lookup, O(1))
@@ -424,12 +424,11 @@ mod rollback_tests {
     }
 
     fn usr(id: &str) -> User {
-        use citadel_workspace_types::structs::UserRole;
         use std::collections::HashMap;
         User {
             id: id.to_string(),
             name: format!("user-{id}"),
-            role: UserRole::Member,
+            banned: false,
             workspace_roles: Default::default(),
             permissions: HashMap::new(),
             metadata: HashMap::new(),

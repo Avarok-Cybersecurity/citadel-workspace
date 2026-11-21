@@ -11,6 +11,11 @@
  *
  * Values are CBOR (bytes stay bytes, cids bigints) carried as the agent's number arrays. A key
  * that is not there reads as nothing; a failed read is an error, never "nothing kept".
+ *
+ * The base and the index carry `store_version`, and one written in another layout is refused
+ * rather than read. Version 2 dropped the migration fields of the first, unversioned layout
+ * (the base's origin and an index entry's `held_apart`): read without them, two copies held
+ * apart would be merged and hold the document twice.
  */
 import { decode as cborDecode, encode as cborEncode } from 'cbor-x';
 import { isGenuinelyAbsent } from '@/lib/storage/absence';
@@ -25,6 +30,14 @@ export interface LocalDbPort {
 }
 
 type Fields = Record<string, unknown>;
+
+export const CHAT_STORE_VERSION: number = 2;
+
+function ensureStoreVersion(v: Fields, what: string): void {
+  if (v.store_version !== CHAT_STORE_VERSION) {
+    throw new Error(`${what} was written in another layout (store version ${String(v.store_version ?? 1)}; this client reads ${CHAT_STORE_VERSION})`);
+  }
+}
 
 const prefix = (account: bigint): string => `cdoc-chat:${account.toString()}:`;
 const docKey = (account: bigint, docId: string, record: 'base' | 'pending'): string => {
@@ -42,10 +55,11 @@ const copy = (view: ArrayBufferView): Uint8Array => new Uint8Array(view.buffer, 
 
 function readBase(value: unknown): StoredBase {
   const v: Fields = fields(value, 'the stored chat document');
-  if (typeof v.doc_version !== 'number' || !ArrayBuffer.isView(v.snapshot) || (v.migration_origin !== null && typeof v.migration_origin !== 'string')) {
+  ensureStoreVersion(v, 'the stored chat document');
+  if (typeof v.doc_version !== 'number' || !ArrayBuffer.isView(v.snapshot)) {
     throw new Error('the stored chat document is not in the shape this client writes');
   }
-  return { docVersion: v.doc_version, snapshot: copy(v.snapshot), migrationOrigin: v.migration_origin };
+  return { docVersion: v.doc_version, snapshot: copy(v.snapshot) };
 }
 
 function readPending(value: unknown): readonly Uint8Array[] {
@@ -58,19 +72,19 @@ interface IndexRecord {
   readonly doc_id: string;
   readonly peer_cid: bigint;
   readonly title: CdocChatTitleStamp | null;
-  readonly held_apart: boolean;
 }
 
 /** A list, not an object keyed by id: an id is the peer's data, and `__proto__` is a valid one. */
 function readIndex(value: unknown): Map<string, ChatIndexEntry> {
-  const entries: unknown = fields(value, 'the chat documents index').entries;
+  const v: Fields = fields(value, 'the chat documents index');
+  ensureStoreVersion(v, 'the chat documents index');
+  const entries: unknown = v.entries;
   if (!Array.isArray(entries)) throw new Error('the chat documents index is not in the shape this client writes');
   const index: Map<string, ChatIndexEntry> = new Map<string, ChatIndexEntry>();
   for (const raw of entries) {
     const e: Fields = fields(raw, 'an index entry');
     if (typeof e.doc_id !== 'string' || typeof e.peer_cid !== 'bigint') throw new Error('an index entry names no document or no peer');
-    if (typeof e.held_apart !== 'boolean') throw new Error('an index entry does not say whether it is held apart');
-    index.set(e.doc_id, { peerCid: e.peer_cid, title: e.title === null ? null : readTitleStamp(e.title), heldApart: e.held_apart });
+    index.set(e.doc_id, { peerCid: e.peer_cid, title: e.title === null ? null : readTitleStamp(e.title) });
   }
   return index;
 }
@@ -101,7 +115,7 @@ export function localDbChatStore(account: bigint, db: LocalDbPort): ChatStoreBac
       return stored === undefined ? null : readBase(stored);
     },
     saveBase: (docId: string, base: StoredBase): Promise<void> =>
-      put(docKey(account, docId, 'base'), { doc_version: base.docVersion, snapshot: base.snapshot, migration_origin: base.migrationOrigin }),
+      put(docKey(account, docId, 'base'), { store_version: CHAT_STORE_VERSION, doc_version: base.docVersion, snapshot: base.snapshot }),
     loadPending: async (docId: string): Promise<readonly Uint8Array[]> => {
       const stored: unknown = await get(docKey(account, docId, 'pending'));
       return stored === undefined ? [] : readPending(stored);
@@ -113,8 +127,8 @@ export function localDbChatStore(account: bigint, db: LocalDbPort): ChatStoreBac
       const step = async (): Promise<void> => {
         const all: Map<string, ChatIndexEntry> = await index();
         all.set(docId, entry);
-        const entries: IndexRecord[] = [...all].map(([id, e]: [string, ChatIndexEntry]): IndexRecord => ({ doc_id: id, peer_cid: e.peerCid, title: e.title, held_apart: e.heldApart }));
-        await put(indexKey(account), { entries });
+        const entries: IndexRecord[] = [...all].map(([id, e]: [string, ChatIndexEntry]): IndexRecord => ({ doc_id: id, peer_cid: e.peerCid, title: e.title }));
+        await put(indexKey(account), { store_version: CHAT_STORE_VERSION, entries });
       };
       const next: Promise<void> = (indexTails.get(account) ?? Promise.resolve()).then(step, step);
       indexTails.set(account, next.then((): void => undefined, (): void => undefined));

@@ -11,7 +11,6 @@
 import { eventEmitter } from './event-emitter';
 import { p2pRegistrationService } from './p2p-registration-service';
 import { p2pAutoConnectService } from './p2p-auto-connect-service';
-import { startMessagingForSession } from './start-messaging';
 import { toast } from '@/hooks/use-toast';
 import { debugLog } from '@/lib/debug-config';
 import type { SessionActivatedEvent } from './session-startup-service';
@@ -63,16 +62,6 @@ export async function runStartupSequence(
       debugLog('SessionStartupService', `SessionStartup: Waiting ${SDK_TEARDOWN_SETTLE_MS}ms for SDK stabilization after login`);
       await new Promise(resolve => setTimeout(resolve, SDK_TEARDOWN_SETTLE_MS));
     }
-
-    // 0.5. CRITICAL: Start WASM connection manager to open ILM messenger handle
-    // This MUST happen before P2P operations so that the ILM layer is ready
-    // to send and receive messages. Without this, ACKs are never sent for
-    // inbound messages, causing outbound messages to block waiting for ACKs.
-    // Startup continues either way -- P2P may still work without ILM -- but the
-    // failure is no longer silent. It used to be caught into a debugLog, which
-    // is stripped from production, so a session whose messaging never came up
-    // was indistinguishable from a healthy one until messages stopped arriving.
-    await startMessagingForSession(event.cid);
 
     // 1. Start P2P registration service (idempotent - won't restart if already running)
     // This handles peer discovery and registration notifications

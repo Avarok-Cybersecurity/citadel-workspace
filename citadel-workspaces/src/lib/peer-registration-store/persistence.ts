@@ -8,11 +8,6 @@
 import { bytesToString } from '../utils/encoding-utils';
 import { parsePersistedJSON } from '../storage-utils';
 
-/**
- * Keys older builds wrote as bare strings via safeJSONStringify. New writes are
- * tagged, so this list only exists to rescue data already on disk.
- */
-const PERSISTED_CID_FIELDS: readonly ["fromCid", "toCid", "cid", "peer_cid"] = ['fromCid', 'toCid', 'cid', 'peer_cid'] as const;
 import { debugLog } from '@/lib/debug-config';
 import type { PendingPeerRequest, OutgoingPeerRequest, KVPendingEntry } from './types';
 import {
@@ -129,7 +124,7 @@ export function resolveKVResponse(
       // typed bigint and every lookup in state.ts compares them with ===, so
       // strings coming back here made incoming requests invisible to the UI
       // and the badge, and outgoing ones impossible to dedupe or remove.
-      pending.resolve(parsePersistedJSON(bytesToString(value), PERSISTED_CID_FIELDS));
+      pending.resolve(parsePersistedJSON(bytesToString(value)));
     } else {
       pending.resolve(null);
     }

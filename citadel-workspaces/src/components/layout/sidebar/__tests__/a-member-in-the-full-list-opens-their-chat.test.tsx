@@ -9,9 +9,9 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AllMembersRow } from '../AllMembersRow';
 import type { MemberActionBlocks } from '../member-actions-gate';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
-const member: WorkspaceMember = { id: 'bob', username: 'bob', displayName: 'Bob', role: 'member' } as WorkspaceMember;
+const member: WorkspaceMember = { id: 'bob', username: 'bob', displayName: 'Bob', banned: false, roleId: 'member' } as WorkspaceMember;
 const NO_BLOCKS: MemberActionBlocks = { managePermissions: null, changeRole: null, remove: null };
 const noop = (): void => {};
 

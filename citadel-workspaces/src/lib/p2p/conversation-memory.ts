@@ -2,9 +2,8 @@
  * The in-memory window onto a conversation: what is on screen without a read.
  *
  * Split from conversation-manager.ts so the two writers of that window share
- * one rule set: the browser store's path (which also writes the page) and the
- * agent's event stream (multi-window, agent 0.8.6), which must not write the
- * page -- the agent already has.
+ * one rule set: a record this window files (which the agent also stores) and
+ * the agent's event stream, which must not file anything -- the agent already has.
  */
 import { debugLog } from '@/lib/debug-config';
 import type { P2PMessage, P2PConversation, MessageCache } from './p2p-types';

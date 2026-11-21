@@ -18,7 +18,7 @@ import type { Member } from '@/lib/calendar/__tests__/booking-rig';
 const half = (iso: string): { start_ms: bigint; end_ms: bigint; } => ({ start_ms: utc(iso), end_ms: utc(iso) + 1_800_000n });
 const POLL: Poll = { id: 'p1', type_id: 'plan', host: 'ana', title: 'Planning', zone: NY, proposals: [half('2024-07-16T13:00:00Z')], state: 'open' };
 const draft: PollDraft = { title: ' Planning ', typeId: 'plan', durationMin: 30, proposals: [{ date: '2024-07-17', time: '09:00' }, { date: '2024-07-16', time: '14:30' }] };
-const who: { id: string; host: string; zone: string; } = { id: 'p2', host: 'ana', zone: NY };
+const who: Pick<Poll, 'id' | 'host' | 'zone'> = { id: 'p2', host: 'ana', zone: NY };
 
 describe('the poll screens', () => {
   it("list every member's poll, and not one written under another member's name", async () => {

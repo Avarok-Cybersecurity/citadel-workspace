@@ -3,7 +3,7 @@
 //!
 //! "No limit" is only ever what the host said. A limit the host left out, or wrote as anything
 //! but a count or `null`, is refused rather than read as either answer: whoever cannot read a
-//! limit grants nothing. A host that predates v2 sends counts only, which read exactly as before.
+//! limit grants nothing.
 
 use citadel_sdk::prelude::StorageQuota;
 use serde::de::{self, Deserializer, Visitor};

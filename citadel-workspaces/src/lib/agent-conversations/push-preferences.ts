@@ -9,7 +9,7 @@ import type { NotificationPreview } from 'citadel-internal-service-wasm-client';
 import { accountPreferences } from './preferences';
 import { agentConversations } from './requests';
 import { getPrivacySettings } from '../privacy-settings';
-import { chatAdvancedSettings, type ChatSecurityLevel, type Retention } from '../p2p/chat-advanced-settings';
+import { chatAdvancedSettings, type ChatSecurityLevel, type RetentionChoice } from '../p2p/chat-advanced-settings';
 
 /**
  * `preview` replaces the account's notification preview when given (the
@@ -19,7 +19,7 @@ export async function pushAccountPreferences(ownCid: bigint, peers: () => bigint
   const keep: NotificationPreview = preview ?? (await agentConversations.getPreferences(ownCid)).notification_preview;
   await agentConversations.setPreferences(ownCid, await accountPreferences(ownCid, {
     privacy: getPrivacySettings,
-    retentionFor: async (own: bigint, peer: bigint): Promise<Retention> => (await chatAdvancedSettings.get(own, peer)).retention,
+    retentionFor: async (own: bigint, peer: bigint): Promise<RetentionChoice> => (await chatAdvancedSettings.get(own, peer)).retention,
     levelFor: async (own: bigint, peer: bigint): Promise<ChatSecurityLevel> => (await chatAdvancedSettings.get(own, peer)).securityLevel,
     peers,
   }, keep));

@@ -4,14 +4,14 @@
   "wasm_opt_version": "123",
   "artefacts": {
     "editor": {
-      "wasm_sha256": "35a2c39f82b6d9cb010be248c275ba3efca99876d54e343f0b238f8eed04fe03",
-      "wasm_bytes": 3873559,
+      "wasm_sha256": "91b0a3d44d1604dea546d4dac4f808f69822c8e200149d29aa0b5cf222cf5a6a",
+      "wasm_bytes": 3873127,
       "glue_sha256": "512588d372ee3cc0bd2bfb97272ff4a1fc09714ddb673bda8e2785470c3d7760",
       "dts_sha256": "9fabafacbbeeb03de13d0c699376e74c390c9b99c54593d41f85def88844dec3"
     },
     "pdf": {
-      "wasm_sha256": "7ac19bc3c292da5b16ca44ca139cd5e0d71b02f4990e428916ca768efe368bcf",
-      "wasm_bytes": 2287173,
+      "wasm_sha256": "9413ba86e5d52f7d5cc66c6d393a7170ad365990e4f07fa7a615025d1011154a",
+      "wasm_bytes": 2285476,
       "glue_sha256": "3ca64763c54bafb09426beb2aeaa02140f3da464f91c6e1aa7670025ef166066",
       "dts_sha256": "d5d7bd7448604f629363af2317a8020fb012f24d6bc72820e34220b11decaf56"
     }

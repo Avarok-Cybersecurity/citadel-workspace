@@ -14,19 +14,19 @@ import type {
   Retention as AgentRetention,
 } from 'citadel-internal-service-wasm-client';
 import type { PrivacySettings } from '../privacy-settings';
-import type { ChatSecurityLevel, Retention } from '../p2p/chat-advanced-settings';
+import type { ChatSecurityLevel, RetentionChoice } from '../p2p/chat-advanced-settings';
 
 export interface PreferenceSources {
   privacy: () => PrivacySettings;
   /** This chat's retention period, as the chat settings hold it. */
-  retentionFor: (ownCid: bigint, peerCid: bigint) => Promise<Retention>;
+  retentionFor: (ownCid: bigint, peerCid: bigint) => Promise<RetentionChoice>;
   /** This chat's encryption level: the agent declines offers below it when it answers. */
   levelFor: (ownCid: bigint, peerCid: bigint) => Promise<ChatSecurityLevel>;
   /** The peers this account has conversations with. */
   peers: () => bigint[];
 }
 
-export function toAgentRetention(retention: Retention): AgentRetention {
+export function toAgentRetention(retention: RetentionChoice): AgentRetention {
   return retention === 'forever' ? 'Forever' : { Days: retention };
 }
 

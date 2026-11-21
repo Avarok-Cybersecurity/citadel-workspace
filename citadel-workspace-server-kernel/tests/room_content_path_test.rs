@@ -39,7 +39,7 @@ fn mk_node(
         members: vec![],
         children,
         mdx_content: String::new(),
-        mdx_content_hash: None,
+        mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(""),
         rules: None,
         chat_enabled: false,
         chat_channel_id: None,

@@ -10,11 +10,12 @@
 //! request goes through `process_command_with_user`, as the named account.
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
-use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use common::member_test_utils::{
     insert_user_with_role, join_root, member_holding, seed_role, GateKernel as Kernel,
 };
+use common::roles_fixture::{MEMBER_ROLE_ID, OWNER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
@@ -35,7 +36,7 @@ async fn node(kernel: &Kernel, parent: &str, kind: &str, name: &str) -> String {
         .id
 }
 
-async fn member(kernel: &Kernel, id: &str, role: UserRole) {
+async fn member(kernel: &Kernel, id: &str, role: &str) {
     insert_user_with_role(kernel, id, role).await;
     join_root(kernel, id).await;
 }
@@ -94,7 +95,7 @@ async fn stored_flag(kernel: &Kernel, node_id: &str) -> bool {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn switching_it_off_hides_the_roster_from_a_member() {
     let kernel = create_test_kernel().await;
-    member(&kernel, "ann", UserRole::Member).await;
+    member(&kernel, "ann", MEMBER_ROLE_ID).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
     // The control: before the switch, ann sees the list.
     assert!(matches!(
@@ -117,7 +118,7 @@ async fn switching_it_off_hides_the_roster_from_a_member() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_reaches_every_node_below_and_no_sibling() {
     let kernel = create_test_kernel().await;
-    member(&kernel, "ann", UserRole::Member).await;
+    member(&kernel, "ann", MEMBER_ROLE_ID).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
     let room = node(&kernel, &office, "Room", "Standup").await;
     let sibling = node(&kernel, ROOT, "Office", "Sales").await;
@@ -140,7 +141,7 @@ async fn it_reaches_every_node_below_and_no_sibling() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn admins_and_owners_still_see_it() {
     let kernel = create_test_kernel().await;
-    member(&kernel, "olga", UserRole::Owner).await;
+    member(&kernel, "olga", OWNER_ROLE_ID).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
     let room = node(&kernel, &office, "Room", "Standup").await;
     set_visible(&kernel, TEST_ADMIN_USER_ID, &office, false).await;
@@ -156,7 +157,7 @@ async fn admins_and_owners_still_see_it() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn switching_it_back_on_restores_the_roster() {
     let kernel = create_test_kernel().await;
-    member(&kernel, "ann", UserRole::Member).await;
+    member(&kernel, "ann", MEMBER_ROLE_ID).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
     set_visible(&kernel, TEST_ADMIN_USER_ID, &office, false).await;
     set_visible(&kernel, TEST_ADMIN_USER_ID, &office, true).await;
@@ -173,7 +174,7 @@ async fn switching_it_back_on_restores_the_roster() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn only_a_role_that_configures_the_workspace_may_set_it() {
     let kernel = create_test_kernel().await;
-    member(&kernel, "ann", UserRole::Member).await;
+    member(&kernel, "ann", MEMBER_ROLE_ID).await;
     seed_role(
         &kernel,
         "role-curator",
@@ -204,7 +205,7 @@ async fn only_a_role_that_configures_the_workspace_may_set_it() {
     )
     .await;
     member_holding(&kernel, "sam", "role-steward").await;
-    member(&kernel, "olga", UserRole::Owner).await;
+    member(&kernel, "olga", OWNER_ROLE_ID).await;
     for (actor, visible) in [("sam", false), ("olga", true)] {
         let answer = set_visible(&kernel, actor, &office, visible).await;
         assert!(
@@ -218,7 +219,7 @@ async fn only_a_role_that_configures_the_workspace_may_set_it() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_stranger_is_refused_before_learning_anything() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "stranger", UserRole::Member).await;
+    insert_user_with_role(&kernel, "stranger", MEMBER_ROLE_ID).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
     set_visible(&kernel, TEST_ADMIN_USER_ID, &office, false).await;
 

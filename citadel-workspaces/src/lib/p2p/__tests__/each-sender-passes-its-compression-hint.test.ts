@@ -18,7 +18,6 @@ const PEER: bigint = 8002n;
 const sends: Array<{ peer: bigint; hint: CompressionHint | undefined; args: number }> = [];
 vi.mock('../../websocket-service', () => ({
   websocketService: {
-    ensureMessengerOpen: async (): Promise<boolean> => false,
     sendP2PMessageReliable: async (...args: [bigint, bigint, Uint8Array, unknown, CompressionHint | undefined]): Promise<void> => {
       sends.push({ peer: args[1], hint: args[4], args: args.length });
     },
@@ -28,7 +27,7 @@ vi.mock('../../p2p-auto-connect-service', () => ({
   p2pAutoConnectService: { ensurePeerConnectedInBackground: async (): Promise<void> => {} },
 }));
 
-const { sendAllowingForAConcurrentOpen, sendP2PCommand, sendRawMessage } = await import('../message-send-operations');
+const { sendAtChatLevel, sendP2PCommand, sendRawMessage } = await import('../message-send-operations');
 const { sendTransferResponseSignal } = await import('../../file-transfer/in-band-signals');
 const { CheckStateManager } = await import('../checkstate-manager');
 const { RevfsIO } = await import('../../revfs/revfs-io');
@@ -60,7 +59,7 @@ describe('a reliable send', () => {
   });
 
   it('with no hint from its caller sends none', async () => {
-    await sendAllowingForAConcurrentOpen(OURS, PEER, new Uint8Array([1]));
+    await sendAtChatLevel(OURS, PEER, new Uint8Array([1]));
     expect(sends).toEqual([{ peer: PEER, hint: undefined, args: 5 }]);
   });
 });

@@ -5,7 +5,6 @@
  * refuses windows that overlap or touch out of order, so what a member saves is what they meant.
  */
 import type { Availability } from './generated/Availability';
-import type { CivilDate } from './generated/CivilDate';
 import type { DateOverride } from './generated/DateOverride';
 import type { Window } from './generated/Window';
 import { dateKey } from './grid-keyboard';
@@ -57,13 +56,11 @@ export function checkWindows(typed: readonly WindowText[]): WindowsCheck {
 export const windowTexts = (windows: readonly Window[]): WindowText[] =>
   windows.map((w: Window): WindowText => ({ start: clockText(w.start_min), end: clockText(w.end_min) }));
 
-export interface AvailabilityDraft {
-  name: string;
-  zone: string;
-  /** Monday first, as `Availability.weekly`. */
+/** An availability as its editor holds it: windows as typed text; `weekly` is Monday first, as the core's. */
+export type AvailabilityDraft = Pick<Availability, 'name' | 'zone'> & {
   weekly: WindowText[][];
-  overrides: { date: CivilDate; windows: WindowText[] }[];
-}
+  overrides: (Pick<DateOverride, 'date'> & { windows: WindowText[] })[];
+};
 
 export type AvailabilityCheck = { ok: true; availability: Availability } | { ok: false; errors: ReadonlyMap<string, string> };
 

@@ -14,4 +14,4 @@ const MOTIONS = [
   { name: 'lite', reducedMotion: 'no-preference', tier: 'lite' },
 ];
 
-process.exit(await runMatrix(CHAT_FILE_CHECKS, Number(process.env.CHAT_FILES_PORT ?? 4199), { viewports: VIEWPORTS, motions: MOTIONS }));
+process.exit(await runMatrix(CHAT_FILE_CHECKS, { viewports: VIEWPORTS, motions: MOTIONS }));

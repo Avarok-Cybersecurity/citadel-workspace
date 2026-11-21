@@ -23,7 +23,7 @@ afterEach(() => { act(() => { signInNeededFor.set(null); }); });
 
 describe('an account nobody can place', () => {
   it('opens its sign-in when handed over, and closes it on Escape', async () => {
-    await greetAs(true);
+    await greetAs();
     mount();
     expect(screen.queryByTestId('login-notice')).toBeNull();
     act(() => { signInNeededFor.set('alice'); });
@@ -39,7 +39,7 @@ describe('an account nobody can place', () => {
   });
 
   it('shows a hand-off made before it mounted', async () => {
-    await greetAs(true);
+    await greetAs();
     signInNeededFor.set('bob');
     mount();
     expect(await screen.findByDisplayValue('bob', {}, { timeout: 5000 })).toBeInTheDocument();

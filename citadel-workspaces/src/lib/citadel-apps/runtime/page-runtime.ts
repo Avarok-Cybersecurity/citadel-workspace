@@ -9,7 +9,7 @@
 import { loadWasmModule } from 'citadel-workspace-client-ts';
 import { eventEmitter } from '@/lib/event-emitter';
 import { websocketService } from '@/lib/websocket-service';
-import { agentCapabilities, type AgentCapabilities } from '@/lib/agent-conversations/capabilities';
+import { agentCapabilities, type AgentOffers } from '@/lib/agent-conversations/capabilities';
 import { getCurrentCid } from '@/lib/p2p/current-cid';
 import type { AppsFailure } from '@/lib/workspace-service/apps-operations';
 import { sessionAppsTransport } from '../apps-api';
@@ -57,7 +57,7 @@ const log: LogPort = {
 
 /** The session the agent ports act for: only when the agent says it serves apps and someone is signed in. */
 async function agentSession(): Promise<{ readonly cid: bigint } | null> {
-  const caps: AgentCapabilities | null = await agentCapabilities().catch((): null => null);
+  const caps: AgentOffers | null = await agentCapabilities().catch((): null => null);
   if (caps === null || !caps.servesApps) return null;
   const cid: bigint | null = await getCurrentCid();
   return cid === null ? null : { cid };

@@ -6,6 +6,7 @@
  * the server's do, on the event emitter.
  */
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -26,7 +27,7 @@ const { MemberPermissionsDialog } = await import('../MemberPermissionsDialog');
 import type { WorkspaceState } from '@/contexts/WorkspaceContext';
 import { registerDocumentSync } from '@/lib/document-sync-requests';
 import type { DomainNode, TreeSchema } from '@/components/layout/sidebar/tree-node-types';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 const config = (type: string, label: string): TreeSchema['entity_type_configs'][number] => ({
   type_name: type, icon: 'folder', label, plural_label: `${label}s`, name_placeholder: '', description_placeholder: '',
@@ -35,7 +36,7 @@ const config = (type: string, label: string): TreeSchema['entity_type_configs'][
 function node(id: string, parent: string, type: string, name: string): DomainNode {
   return {
     id, parent_id: parent, entity_type: { Child: type }, depth: 0, name, description: '', owner_id: '',
-    members: [], children: [], mdx_content: '', mdx_content_hash: null, rules: null, chat_enabled: false,
+    members: [], children: [], mdx_content: '', mdx_content_hash: EMPTY_DOCUMENT_HASH, rules: null, chat_enabled: false,
     chat_channel_id: null, default_permissions: {} as DomainNode['default_permissions'], metadata: [],
     allowed_child_types: [], is_default: false, created_at: 0n, updated_at: 0n,
   };
@@ -52,7 +53,7 @@ const STATE: WorkspaceState = {
 } as WorkspaceState;
 
 function answer(domainId: string, permissions: string[]): void {
-  act(() => { eventEmitter.emit('user:permissions:loaded', { userId: 'ada', domainId, role: 'Member', permissions }); });
+  act(() => { eventEmitter.emit('user:permissions:loaded', { userId: 'ada', domainId, roleId: 'member', permissions }); });
 }
 
 function answerEveryLevel(): void {

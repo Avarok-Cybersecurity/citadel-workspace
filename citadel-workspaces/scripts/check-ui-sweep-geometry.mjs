@@ -11,6 +11,7 @@
  * A node channel's shared-file cards (file, picture, downloading, refused), its upload strip (storing, shared,
  * refused) and the composer's destination line fit 375px and desktop, under Full and Lite motion, with 44px targets.
  * A node's tab row at its fullest fits a phone: 44px tabs that scroll, "+" and the tab menu always in reach.
+ * Account recovery's phrase, its check, the recover form and the recovery console fit a phone with 44px actions and pass axe.
  * Serves the real components (see lib/polish-harness) and asserts bounding boxes, in Chromium and WebKit,
  * light and dark, at desktop and phone widths.
  */
@@ -25,11 +26,12 @@ import { FILE_MANAGER_CHECKS } from './lib/polish-harness/checks-file-manager.mj
 import { BREADCRUMB_CHECKS } from './lib/polish-harness/checks-breadcrumbs.mjs';
 import { SHARE_CHECKS } from './lib/polish-harness/checks-share.mjs';
 import { RIBBON_CHECKS } from './lib/polish-harness/checks-ribbons.mjs';
-import { MIGRATION_CHECKS } from './lib/polish-harness/checks-migration.mjs';
 import { APP_TOOLBAR_CHECKS } from './lib/polish-harness/checks-app-toolbar.mjs';
 import { PEER_CONSENT_CHECKS } from './lib/polish-harness/checks-peer-consent.mjs';
 import { DIALOG_FOOTER_CHECKS } from './lib/polish-harness/checks-dialog-footers.mjs';
+import { SIGN_IN_CHECKS } from './lib/polish-harness/checks-sign-in.mjs';
+import { RECOVERY_CHECKS } from './lib/polish-harness/checks-recovery.mjs';
 import { SERVER_FILE_CHECKS } from './lib/polish-harness/checks-server-files.mjs';
 import { NODE_TAB_CHECKS } from './lib/polish-harness/checks-node-tabs.mjs';
 
-process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...MIGRATION_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS }, Number(process.env.SWEEP_PORT ?? 4198)));
+process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS }));

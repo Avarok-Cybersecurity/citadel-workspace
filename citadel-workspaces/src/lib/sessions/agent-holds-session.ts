@@ -8,10 +8,10 @@
  * "gone".
  */
 import type { ActiveSessionsResult } from '@/lib/connection/queries';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 export function agentLacksSession(cid: bigint, result: ActiveSessionsResult): boolean {
-  return result.ok && !result.sessions.some((s: ActiveSession) => s.cid === cid);
+  return result.ok && !result.sessions.some((s: SessionInformation) => s.cid === cid);
 }
 
 /**

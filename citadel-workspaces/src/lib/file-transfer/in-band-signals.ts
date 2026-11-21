@@ -16,7 +16,7 @@
  * state.
  */
 
-import { sendAllowingForAConcurrentOpen } from '../p2p/message-send-operations';
+import { sendAtChatLevel } from '../p2p/message-send-operations';
 import {
   createFileTransferResponse,
   createFileTransferCancel,
@@ -32,17 +32,14 @@ import { debugLog } from '@/lib/debug-config';
 /**
  * Serialize a layer payload and send it over the reliable P2P channel.
  *
- * Through the message path's own send, which opens this session's messenger
- * first. Sending straight to `sendP2PMessageReliable` skipped that, so once
- * an agent reconnect or server restart had dropped the handle, every file
- * offer, accept, decline and cancel failed with "No messaging handle found
- * for local CID" -- while a text message to the same peer reopened it and
- * went through.
+ * Through the message path's own send, at the chat's level, so a file offer,
+ * accept, decline and cancel leave exactly as a text message to the same peer
+ * does.
  */
 export async function sendLayerPayload(payload: P2PMessagingLayerPayload): Promise<void> {
   const command: P2PCommand = { type: P2PCommandType.MessagingLayerCommand, payload };
   const bytes: Uint8Array<ArrayBufferLike> = serializeP2PCommand(command);
-  await sendAllowingForAConcurrentOpen(payload.sender_cid, payload.recipient_cid, bytes, compressionHintFor(command));
+  await sendAtChatLevel(payload.sender_cid, payload.recipient_cid, bytes, compressionHintFor(command));
 }
 
 /** Tell the sender we accepted or declined their offer. */

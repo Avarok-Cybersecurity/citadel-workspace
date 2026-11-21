@@ -26,7 +26,7 @@ export function world(touchWhenAsked: boolean): World {
   const agent: FakeAgent = new FakeAgent();
   const authenticator: FakeAuthenticator = new FakeAuthenticator();
   const deps: World['deps'] = {
-    authenticator, rpId: 'work.avarok.net', rpName: 'Citadel Workspace', send: agent.send, store: new MemoryStore(),
+    authenticator, rpName: 'Citadel Workspace', send: agent.send, store: new MemoryStore(),
   };
   const answers: KeyAnswerResult[] = [];
   const busy: Set<string> = new Set<string>();

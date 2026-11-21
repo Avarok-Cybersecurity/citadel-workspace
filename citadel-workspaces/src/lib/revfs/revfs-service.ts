@@ -16,7 +16,6 @@ import { withSerialLock } from '@/lib/serial-queue';
 import {
   peerTreeKey,
   serverTreeKey,
-  legacyPairKey,
 } from './tree-operations';
 import { RevfsState, type TreeChangedCallback } from './revfs-state';
 import { RevfsIO, type RevfsIODeps } from './revfs-io';
@@ -100,13 +99,11 @@ export class RevfsService {
 
   /** Throws RevfsTreeUnreadableError when the saved tree cannot be read; see tree-load. */
   async getTree(myCid: bigint, peerCid: bigint): Promise<RevfsNode> {
-    const key: TreeKey = peerTreeKey(myCid, peerCid);
-    const legacy: TreeKey = legacyPairKey(myCid, peerCid);
-    return loadTree(this.state, this.ensureIO(), { key, viewer: myCid, legacyKey: legacy === key ? null : legacy });
+    return loadTree(this.state, this.ensureIO(), { key: peerTreeKey(myCid, peerCid), viewer: myCid });
   }
 
   async getServerTree(myCid: bigint): Promise<RevfsNode> {
-    return loadTree(this.state, this.ensureIO(), { key: serverTreeKey(myCid), viewer: null, legacyKey: null });
+    return loadTree(this.state, this.ensureIO(), { key: serverTreeKey(myCid), viewer: null });
   }
 
   // ── Peer-Scoped Operations (delegated) ────────────────────────────────
@@ -147,10 +144,10 @@ export class RevfsService {
   // ── Incoming Operation Handler ────────────────────────────────────────
 
   /** An operation that arrived from a peer. See revfs-inbound.ts. */
-  async handleRevfsOperation(senderCid: bigint, myCid: bigint, op: RevfsOperation): Promise<void> {
+  async handleRevfsOperation(sender_cid: bigint, myCid: bigint, op: RevfsOperation): Promise<void> {
     // Serialised against this tree's local mutators; see revfs-inbound.ts for
     // the window that leaves open and why Ack is exempt from it.
-    return applyInboundOperationSerially(this.inboundCtx(), senderCid, myCid, op);
+    return applyInboundOperationSerially(this.inboundCtx(), sender_cid, myCid, op);
   }
 
   private inboundCtx(): InboundContext {

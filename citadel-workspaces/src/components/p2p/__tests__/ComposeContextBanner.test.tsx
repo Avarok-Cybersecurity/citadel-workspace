@@ -5,7 +5,7 @@ import { ComposeContextBanner } from '../ComposeContextBanner';
 import type { P2PMessage } from '@/lib/p2p/p2p-types';
 
 const message = (content: string): P2PMessage =>
-  ({ id: 'm1', content, senderCid: 1n, recipientCid: 2n, timestamp: 1, index: 0,
+  ({ id: 'm1', content, sender_cid: 1n, recipient_cid: 2n, timestamp: 1, index: 0,
      status: 'delivered', message_type: 'text' }) as P2PMessage;
 
 describe('ComposeContextBanner', () => {

@@ -10,7 +10,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { p2pRegistrationService } from '@/lib/p2p-registration-service';
 import { AutoConnectState } from '../state';
 import { refreshOnlineStatus } from '../polling';
-import type { PeerInfoResponse } from '@/lib/p2p-registration-service/types';
+import type { PeerInformation } from 'citadel-workspace-client-ts';
 
 const ON: bigint = 1n;
 const OFF: bigint = 2n;
@@ -18,11 +18,11 @@ const SILENT: bigint = 3n;
 
 describe('refreshOnlineStatus', () => {
   it('keeps online, offline and unreported apart', async () => {
-    const listed: PeerInfoResponse[] = [
+    const listed: PeerInformation[] = [
       { cid: ON, online_status: true },
       { cid: OFF, online_status: false },
       { cid: SILENT },
-    ] as PeerInfoResponse[];
+    ] as PeerInformation[];
     vi.spyOn(p2pRegistrationService, 'listAllPeers').mockResolvedValue(listed);
     const state: AutoConnectState = new AutoConnectState();
 

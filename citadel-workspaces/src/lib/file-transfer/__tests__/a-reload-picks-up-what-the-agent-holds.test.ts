@@ -24,7 +24,6 @@ vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
     sendRequest: (r: unknown): Promise<void> => sendRequest(r),
     sendP2PMessageReliable: async (): Promise<void> => undefined,
-    ensureMessengerOpen: async (): Promise<boolean> => false,
     canSendRequests: (): boolean => false,
   },
 }));
@@ -43,13 +42,13 @@ const frame = (message: Record<string, unknown>): void => { eventEmitter.emit('w
 const tick = (requestId: string, status: unknown): void =>
   frame({ FileTransferTickNotification: { cid: ME, peer_cid: PEER, request_id: requestId, status } });
 const fromPeer = (layer: Record<string, unknown>): void =>
-  eventEmitter.emit('p2p:file-transfer-message', { layer: { ...layer, timestamp: Date.now() }, senderCid: PEER.toString(), recipientCid: ME.toString() });
+  eventEmitter.emit('p2p:file-transfer-message', { layer: { ...layer, timestamp: Date.now() }, sender_cid: PEER.toString(), recipient_cid: ME.toString() });
 
 function record(id: string, over: Partial<FileTransfer>): Partial<FileTransfer> {
   const outgoing: boolean = over.isIncoming !== true;
   return {
     id, fileName: `${id}.jpg`, fileSize: 165_000, fileType: 'image/jpeg', progress: 40,
-    senderCid: (outgoing ? ME : PEER).toString(), recipientCid: (outgoing ? PEER : ME).toString(),
+    sender_cid: (outgoing ? ME : PEER).toString(), recipient_cid: (outgoing ? PEER : ME).toString(),
     createdAt: 1, updatedAt: 2, isIncoming: false, ...over,
   };
 }

@@ -34,7 +34,7 @@ export function notifyMessageArrived(
   config: ArrivalNotice,
   peerCid: bigint,
   message: P2PMessage,
-  recipientCid?: bigint,
+  recipient_cid?: bigint,
 ): void {
   if (!config.shouldShowNotification(peerCid)) return;
 
@@ -50,7 +50,7 @@ export function notifyMessageArrived(
     message.content.substring(0, PREVIEW_LENGTH),
     peerCid.toString(),
     message.id,
-    recipientCid?.toString(),
+    recipient_cid?.toString(),
     {
       peerCid: peerCid.toString(),
       // `onCardClick` is the key NotificationItem reads. It was `onOpen` here.

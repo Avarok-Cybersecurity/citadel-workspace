@@ -7,7 +7,7 @@ use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::WORKSPACE_ROOT_ID;
 use citadel_sdk::prelude::MonoRatchet;
 use citadel_workspace_types::secure_links::LinkGrant;
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::structs::User;
 use std::sync::Arc;
 
 pub(crate) type Kernel = AsyncWorkspaceServerKernel<MonoRatchet>;
@@ -21,7 +21,14 @@ pub(crate) async fn kernel_with_member(id: &str) -> Kernel {
         .inject_admin_user("a-master-password")
         .await
         .expect("workspace");
-    let user = User::new(id.to_string(), id.to_string(), UserRole::Member);
+    let user = User {
+        workspace_roles: std::iter::once((
+            WORKSPACE_ROOT_ID.to_string(),
+            citadel_workspace_types::roles::MEMBER_ROLE_ID.to_string(),
+        ))
+        .collect(),
+        ..User::new(id.to_string(), id.to_string())
+    };
     backend
         .insert_user(id.to_string(), user)
         .await

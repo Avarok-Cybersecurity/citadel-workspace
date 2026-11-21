@@ -18,7 +18,7 @@ import type { RosterEntry } from '@/lib/chat/transport/read-receipts';
 import { browserClock } from '@/lib/browser-clock';
 import { nodeOpeningPorts } from '@/components/p2p/chat-document/use-chat-documents';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 interface NodeChatProps {
   /** The office or room the channel belongs to, whose page its live documents sit beside. */
@@ -31,7 +31,7 @@ interface NodeChatProps {
   /** The channel's rules, shown above its messages; null when it has none. */
   rules: string | null;
   /** The node's members (use-node-roster); null until they are known. */
-  members: readonly User[] | null;
+  members: readonly WorkspaceMember[] | null;
   /** Whether the reader may manage the workspace's subscription, so a limit notice says where packs are bought. */
   managesSubscription: boolean;
 }
@@ -39,7 +39,7 @@ interface NodeChatProps {
 const mintLocalId = (): string => `local-${crypto.randomUUID()}`;
 
 /** The roster as the live value a transport holds, which is built once per channel. */
-function useRosterStore(channelId: string, members: readonly User[] | null): Roster {
+function useRosterStore(channelId: string, members: readonly WorkspaceMember[] | null): Roster {
   const [roster] = useState<ValueStore<readonly RosterEntry[] | null>>(() => createValueStore(`node-roster:${channelId}`, rosterEntries(members)));
   useEffect((): void => roster.set(rosterEntries(members)), [roster, members]);
   return roster;

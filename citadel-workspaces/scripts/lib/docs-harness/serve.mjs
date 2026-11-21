@@ -12,16 +12,18 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stubWasmClient } from '../stub-wasm-client.mjs';
+import { boundPort } from '../free-port.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(HERE, '..', '..', '..');
 
-export function serveDocsHarness(port) {
-  return serveHarness(HERE, port);
+export function serveDocsHarness() {
+  return serveHarness(HERE);
 }
 
 /** The same build and preview for another harness page: `root` holds its index.html. */
-export async function serveHarness(root, port) {
+/** Served on a port the OS picks (0), so concurrent runs never contend for one. */
+export async function serveHarness(root) {
   const app = await loadConfigFromFile({ command: 'build', mode: 'production', isSsrBuild: false, isPreview: false }, resolve(APP_ROOT, 'vite.config.ts'));
   if (app === null || app.config.esbuild === undefined || app.config.worker === undefined) throw new Error('vite.config.ts gave no esbuild or worker settings');
   const outDir = mkdtempSync(join(tmpdir(), 'harness-'));
@@ -43,9 +45,9 @@ export async function serveHarness(root, port) {
     resolve: { alias: { '@': resolve(APP_ROOT, 'src') } },
   };
   await build({ ...shared, build: { outDir, emptyOutDir: true, chunkSizeWarningLimit: 100_000 } });
-  const server = await preview({ ...shared, build: { outDir }, preview: { port, strictPort: true, host: '127.0.0.1' } });
+  const server = await preview({ ...shared, build: { outDir }, preview: { port: 0, strictPort: true, host: '127.0.0.1' } });
   return {
-    origin: `http://127.0.0.1:${port}`,
+    origin: `http://127.0.0.1:${boundPort(server)}`,
     close: async () => {
       await server.close();
       rmSync(outDir, { recursive: true, force: true });

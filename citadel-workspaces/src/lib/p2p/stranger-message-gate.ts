@@ -6,7 +6,7 @@
  */
 import { getPrivacySettings } from '@/lib/privacy-settings';
 import { p2pRegistrationService } from '../p2p-registration-service';
-import type { PeerInfoResponse } from '../p2p-registration-service/types';
+import type { PeerInformation } from 'citadel-workspace-client-ts';
 
 export interface StrangerGateDeps {
   acceptsRequestsFromStrangers: () => boolean;
@@ -33,8 +33,8 @@ export function productionStrangerGate(isConnected: (peerCid: bigint) => boolean
       isConnected(peerCid) || p2pRegistrationService.isPeerRegistered(peerCid),
     agentSaysRegistered: async (peerCid: bigint): Promise<boolean | null> => {
       try {
-        const listed: PeerInfoResponse[] = await p2pRegistrationService.listRegisteredPeers();
-        return listed.some((p: PeerInfoResponse) => p.cid === peerCid);
+        const listed: PeerInformation[] = await p2pRegistrationService.listRegisteredPeers();
+        return listed.some((p: PeerInformation) => p.cid === peerCid);
       } catch {
         return null;
       }

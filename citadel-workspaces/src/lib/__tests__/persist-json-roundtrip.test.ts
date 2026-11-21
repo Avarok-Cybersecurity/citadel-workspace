@@ -33,12 +33,10 @@ describe('bigints survive being persisted', () => {
     expect(round.rows.map((r) => r.toCid)).toEqual([7n, 8n]);
   });
 
-  it('rescues bare strings written by the old safeJSONStringify path', () => {
-    // Data already on disk carries no tag, so the field name is the only
-    // signal available. This argument goes away once no such data can remain.
-    const legacy: string = safeJSONStringify({ toCid: 9n, note: '9' });
-    const round: { toCid: bigint; note: string; } = parsePersistedJSON<{ toCid: bigint; note: string }>(legacy, ['toCid']);
-    expect(round.toCid).toBe(9n);
+  it('leaves an untagged digit string a string: bare strings from earlier builds are not rescued', () => {
+    const earlier: string = safeJSONStringify({ toCid: 9n, note: '9' });
+    const round: { toCid: unknown; note: string; } = parsePersistedJSON<{ toCid: unknown; note: string }>(earlier);
+    expect(round.toCid).toBe('9');
     expect(round.note).toBe('9');
   });
 

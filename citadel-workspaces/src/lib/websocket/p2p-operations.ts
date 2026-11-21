@@ -5,6 +5,7 @@
  * Extracted from websocket-service.ts to reduce file size.
  */
 
+import type { AgentRequestBody } from '@/types/agent-request';
 import { requestResponse, requestResponseSoft } from './request-response';
 import { debugLog, errorLog } from '../debug-config';
 import { getDefaultSecuritySettings } from '../security-utils';
@@ -13,7 +14,7 @@ import { disconnectP2P } from './p2p-disconnect';
 import { TIMEOUT } from '../timeout-constants';
 import type { SessionSecuritySettings } from '@/lib/security-utils';
 import { withTurn, type TurnSource } from '../ice-servers/peer-connect-turn';
-import type { TurnConfig } from '@/types/ice-servers';
+import type { InternalServiceRequest, PeerTurnConfig, UdpMode } from 'citadel-workspace-client-ts';
 import type { ChatSecurityLevel } from '@/lib/p2p/chat-advanced-settings';
 import type { SendDelivery } from '@/lib/p2p/send-failure';
 
@@ -27,13 +28,9 @@ export interface P2PConfig {
   securityFor: (cid: bigint, peerCid: bigint) => Promise<ChatSecurityLevel>;
 }
 
-interface PeerConnectBody {
-  request_id: string;
-  cid: bigint;
-  peer_cid: bigint;
-  udp_mode: string;
-  session_security_settings: SessionSecuritySettings;
-}
+/** The PeerConnect body; `turn` is added by withTurn only when this session has relay credentials. */
+type PeerConnectBody = Omit<AgentRequestBody<'PeerConnect'>, 'turn'>;
+type AcceptBody = Omit<AgentRequestBody<'PeerConnectAccept'>, 'turn'>;
 
 export class P2POperations {
   private readonly config: P2PConfig;
@@ -86,11 +83,12 @@ export class P2POperations {
       // acceptor's settings are ignored by the agent. So this is where a
       // chat's level is kept -- see chat-advanced-settings.
       session_security_settings: { ...getDefaultSecuritySettings(), security_level: await this.config.securityFor(cid, targetCid) },
+      peer_session_password: null,
     };
     // Fetched for `cid`, the session that initiates: its workspace server mints
     // the credentials, and its agent is the one that will use them.
-    const turn: TurnConfig | null = await this.config.turnFor(cid);
-    const peerConnectRequest: { PeerConnect: PeerConnectBody | (PeerConnectBody & { turn: TurnConfig }) } = {
+    const turn: PeerTurnConfig | null = await this.config.turnFor(cid);
+    const peerConnectRequest: InternalServiceRequest = {
       PeerConnect: withTurn(base, turn),
     };
 
@@ -144,10 +142,9 @@ export class P2POperations {
     debugLog('P2POperations', accept ? 'Accepting P2P connection' : 'Declining P2P connection', { cid: cid.toString(), peerCid: peerCid.toString() });
 
     const requestId: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();
-    type AcceptBody = { request_id: string; cid: bigint; peer_cid: bigint; accept: boolean; udp_mode: string; session_security_settings: {}; peer_session_password: null; };
     // For `cid`, the ACCEPTING session's own server and agent; a refusal opens no path.
-    const turn: TurnConfig | null = accept ? await this.config.turnFor(cid) : null;
-    const acceptRequest: { PeerConnectAccept: AcceptBody | (AcceptBody & { turn: TurnConfig }) } = {
+    const turn: PeerTurnConfig | null = accept ? await this.config.turnFor(cid) : null;
+    const acceptRequest: InternalServiceRequest = {
       PeerConnectAccept: withTurn<AcceptBody>({
         request_id: requestId,
         cid: cid,
@@ -156,8 +153,8 @@ export class P2POperations {
         // Mirrors the initiator, defaulting to Enabled: a call needs BOTH ends
         // to have negotiated a datagram path, so an acceptor that quietly
         // dropped to Disabled would make every call it answered media-less.
-        udp_mode: (notification?.udp_mode as string) || 'Enabled',
-        session_security_settings: notification?.session_security_settings || getDefaultSecuritySettings(),
+        udp_mode: (notification?.udp_mode as UdpMode | undefined) || 'Enabled',
+        session_security_settings: (notification?.session_security_settings as SessionSecuritySettings | undefined) || getDefaultSecuritySettings(),
         peer_session_password: null
       }, turn),
     };

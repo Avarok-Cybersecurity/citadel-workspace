@@ -32,7 +32,7 @@
 
 import { eventEmitter } from '@/lib/event-emitter';
 import { TIMEOUT } from '@/lib/timeout-constants';
-import type { DomainPermissions } from './types';
+import type { DomainPermissionEntry } from './types';
 
 /**
  * `askedAt` is when the request went out. An answer that landed before this was called
@@ -42,12 +42,12 @@ import type { DomainPermissions } from './types';
  */
 export function awaitPermissionsLoaded(
   domainId: string,
-  readCache: () => DomainPermissions | undefined,
+  readCache: () => DomainPermissionEntry | undefined,
   askedAt: number,
-): Promise<DomainPermissions> {
-  const landed: DomainPermissions | undefined = readCache();
+): Promise<DomainPermissionEntry> {
+  const landed: DomainPermissionEntry | undefined = readCache();
   if (landed && landed.lastUpdated >= askedAt) return Promise.resolve(landed);
-  return new Promise<DomainPermissions>((resolve, reject) => {
+  return new Promise<DomainPermissionEntry>((resolve, reject) => {
     // The timeout closes over `handler`, which is declared below it. That is
     // safe and not a hoisting trick: the callback body does not evaluate the
     // binding until the timer fires, and by then the const is initialised. The
@@ -61,7 +61,7 @@ export function awaitPermissionsLoaded(
     const handler = (payload: { domainId: string }): void => {
       if (payload.domainId !== domainId) return;
 
-      const cached: DomainPermissions | undefined = readCache();
+      const cached: DomainPermissionEntry | undefined = readCache();
       // The event says the cache holds this domain. If it does not, something
       // else emitted it -- stay listening rather than concluding, because the
       // real fill may still be coming and the timeout is what decides when to

@@ -14,7 +14,7 @@ fn mk_node(id: &str, children: &[&str], depth: u32) -> DomainNode {
         members: vec![],
         children: children.iter().map(|s| s.to_string()).collect(),
         mdx_content: String::new(),
-        mdx_content_hash: None,
+        mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(""),
         rules: None,
         chat_enabled: false,
         chat_channel_id: None,

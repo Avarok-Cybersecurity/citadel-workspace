@@ -3,8 +3,10 @@
  * exact shape, or `Refused` with a refusal it knows. Anything else -- an unknown variant, a field
  * missing or extra, a wrong type -- is `malformed`, which every request treats as a refusal.
  */
-import type { AppInstall, AppListing, AppsRefusal, PeerForMe, Permission } from 'citadel-workspace-client-ts';
-import { Permission as PermissionNames } from '@/lib/permissions-service/types';
+import type { AppInstall, AppListing, AppsRefusal, Capability, PeerForMe, Permission } from 'citadel-workspace-client-ts';
+import { everyMember } from '@/types/every-member';
+import type { VariantName } from '@/types/variant-name';
+import { ALL_PERMISSIONS } from '@/lib/permissions-service/types';
 import { exactly, isAppInstall, isAppListing, isCapability, isObject, isString, isStrings, single } from './install-shape';
 import { readRuntimeAnswer, type RuntimeAnswer } from './apps-runtime-answer';
 import { isPeerForMe, readPeerAnswer, type PeerAnswer } from './apps-peer-answer';
@@ -33,12 +35,17 @@ export type AppsAnswer =
   | { kind: 'refused'; refusal: AppsRefusal }
   | { kind: 'malformed' };
 
-const UNIT_REFUSALS: readonly string[] = [
+type BodyRefusal = Exclude<AppsRefusal, string>;
+type RefusalName = VariantName<BodyRefusal>;
+/** The refusals that name a capability. Both lists fail to compile when the enum changes under them. */
+type CapabilityRefusal = { [K in RefusalName]: Extract<BodyRefusal, Record<K, unknown>>[K] extends Capability ? K : never }[RefusalName];
+
+const UNIT_REFUSALS: readonly string[] = everyMember<Extract<AppsRefusal, string>>()([
   'Unavailable', 'ScopeNotSupported', 'ScopeOutsideAudience', 'BadSignature', 'ArtifactMismatch', 'VersionNotNewer',
   'NotActive', 'Policy', 'NoHost', 'HeaderManaged', 'ServerFeatureUnavailable', 'InstallRequestsNotOffered', 'ArtifactUnreachable',
-];
-const CAPABILITY_REFUSALS: readonly string[] = ['CapabilityNotGrantable', 'FirstPartyOnly', 'NotRequested', 'RequiredCapabilityLeftOut', 'Ungranted'];
-const isPermission = (v: unknown): v is Permission => isString(v) && (Object.values(PermissionNames) as string[]).includes(v);
+]);
+const CAPABILITY_REFUSALS: readonly string[] = everyMember<CapabilityRefusal>()(['CapabilityNotGrantable', 'FirstPartyOnly', 'NotRequested', 'RequiredCapabilityLeftOut', 'Ungranted']);
+const isPermission = (v: unknown): v is Permission => isString(v) && (ALL_PERMISSIONS as string[]).includes(v);
 
 export function isAppsRefusal(v: unknown): v is AppsRefusal {
   if (isString(v)) return UNIT_REFUSALS.includes(v);

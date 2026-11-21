@@ -9,7 +9,9 @@ import type { ConnectionState } from './state';
 import { isConnectAlreadyInProgress } from '@/lib/connection/is-connect-in-progress';
 import { failOnSocketLoss } from '../websocket/request-response';
 import type { ConnectionIO } from './io';
-import type { ActiveSession, SignedOutAccount, StoredSession } from '@/types/session-types';
+import type { StoredSession } from '@/types/session-types';
+import type { SignedOutSession } from 'citadel-workspace-client-ts';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import {
   WEBSOCKET_INIT_TIMEOUT_MS,
   GET_SESSIONS_TIMEOUT_MS,
@@ -28,9 +30,9 @@ import { tabSelectedSession } from './tab-session';
  */
 export interface ActiveSessionsResult {
   ok: boolean;
-  sessions: ActiveSession[];
-  /** Accounts the agent signed out after a failed reconnect; see SignedOutAccount. */
-  signedOut: SignedOutAccount[];
+  sessions: SessionInformation[];
+  /** Accounts the agent signed out after a failed reconnect; see SignedOutSession. */
+  signedOut: SignedOutSession[];
 }
 
 /** One GetSessions answer, as cached: what an `ok` result carries. */
@@ -49,7 +51,7 @@ const NO_ANSWER: ActiveSessionsResult = { ok: false, sessions: [], signedOut: []
 export async function getActiveSessions(
   state: ConnectionState,
   io: ConnectionIO,
-): Promise<ActiveSession[]> {
+): Promise<SessionInformation[]> {
   return (await getActiveSessionsResult(state, io)).sessions;
 }
 
@@ -83,7 +85,7 @@ export async function getActiveSessionsResult(
   }
 }
 
-interface WireSessions { sessions?: ActiveSession[]; signed_out?: SignedOutAccount[] }
+interface WireSessions { sessions: SessionInformation[]; signed_out: SignedOutSession[] }
 
 async function fetchActiveSessions(
   state: ConnectionState,
@@ -128,9 +130,7 @@ async function fetchActiveSessions(
     await io.sendWebSocketMessage({ GetSessions: { request_id: requestId } });
 
     const response: WireSessions = await failOnSocketLoss('GetSessions', responsePromise);
-    // `signed_out` is absent from an agent older than 0.8.4, which signs no one
-    // out: the agent's own type defaults it to empty for exactly that case.
-    return { ok: true, sessions: response.sessions || [], signedOut: response.signed_out ?? [] };
+    return { ok: true, sessions: response.sessions, signedOut: response.signed_out };
   } catch (error) {
     debugLog('ConnectionService', 'Failed to get active sessions', error);
     return NO_ANSWER;
@@ -144,7 +144,7 @@ export async function handleConnectFailure(
   failure: { message?: string },
   state: ConnectionState,
   io: ConnectionIO,
-  getActiveSessionsFn: () => Promise<ActiveSession[]>,
+  getActiveSessionsFn: () => Promise<SessionInformation[]>,
 ): Promise<void> {
   debugLog('ConnectionService', 'ConnectionManager: Received ConnectFailure:', failure);
   const errorMessage: string = failure.message || '';
@@ -164,12 +164,12 @@ export async function handleConnectFailure(
 
   debugLog('ConnectionService', 'ConnectionManager: No CID in error message, fetching active sessions...');
   try {
-    const activeSessions: ActiveSession[] = await getActiveSessionsFn();
+    const activeSessions: SessionInformation[] = await getActiveSessionsFn();
     debugLog('ConnectionService', 'ConnectionManager: Active sessions after error:', activeSessions);
 
     const currentSession: StoredSession | null = tabSelectedSession(state.storedSessions, await io.getSelectedUser());
 
-    const matchingSession: ActiveSession | undefined = activeSessions.find(
+    const matchingSession: SessionInformation | undefined = activeSessions.find(
       (s) =>
         currentSession &&
         s.username === currentSession.username &&

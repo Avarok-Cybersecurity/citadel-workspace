@@ -15,7 +15,8 @@
 //! could see"); the file path never received it.
 
 use citadel_types::proto::ObjectTransferOrientation;
-use citadel_workspace_types::structs::{Permission, User, UserRole};
+use citadel_workspace_types::structs::{Permission, User};
+use common::roles_fixture::{roles_for, BANNED, GUEST_ROLE_ID, MEMBER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::collections::HashMap;
 
@@ -28,12 +29,12 @@ const UPLOAD: ObjectTransferOrientation = ObjectTransferOrientation::Receiver {
 };
 const DOWNLOAD: ObjectTransferOrientation = ObjectTransferOrientation::Sender;
 
-async fn add_user(kernel: &Kernel, id: &str, role: UserRole) {
+async fn add_user(kernel: &Kernel, id: &str, role: &str) {
     let user = User {
         id: id.to_string(),
         name: id.to_string(),
-        role,
-        workspace_roles: Default::default(),
+        banned: role == BANNED,
+        workspace_roles: roles_for(role),
         permissions: HashMap::new(),
         metadata: Default::default(),
     };
@@ -61,7 +62,7 @@ async fn add_user(kernel: &Kernel, id: &str, role: UserRole) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_guest_may_not_upload_or_download() {
     let kernel = create_test_kernel().await;
-    add_user(&kernel, "guest", UserRole::Guest).await;
+    add_user(&kernel, "guest", GUEST_ROLE_ID).await;
 
     assert!(
         !kernel.may_transfer(Some("guest"), &UPLOAD).await,
@@ -78,7 +79,7 @@ async fn a_guest_may_not_upload_or_download() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_member_may_still_upload_and_download() {
     let kernel = create_test_kernel().await;
-    add_user(&kernel, "member", UserRole::Member).await;
+    add_user(&kernel, "member", MEMBER_ROLE_ID).await;
 
     assert!(
         kernel.may_transfer(Some("member"), &UPLOAD).await,

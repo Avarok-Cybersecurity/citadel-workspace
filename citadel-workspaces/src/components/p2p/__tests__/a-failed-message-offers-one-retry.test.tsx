@@ -8,7 +8,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { TextBubble } from '../bubbles/TextBubble';
 import type { P2PMessage } from '@/lib/p2p';
 
-const FAILED: P2PMessage = { id: 'm', content: 'hello', senderCid: 1n, recipientCid: 2n, timestamp: 1, status: 'failed', error: 'peer unreachable' } as unknown as P2PMessage;
+const FAILED: P2PMessage = { id: 'm', content: 'hello', sender_cid: 1n, recipient_cid: 2n, timestamp: 1, status: 'failed', error: 'peer unreachable' } as unknown as P2PMessage;
 
 describe('a failed message', () => {
   it('offers exactly one Retry, and it retries', () => {

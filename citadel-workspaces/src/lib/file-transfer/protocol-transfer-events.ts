@@ -28,12 +28,12 @@ import { applyTransferOutcome, isTerminalTransferState } from './transfer-outcom
 
 /** The side of the transfer that is US, which the notification's cid names. */
 function ownCidOf(transfer: FileTransfer): string {
-  return transfer.isIncoming ? transfer.recipientCid : transfer.senderCid;
+  return transfer.isIncoming ? transfer.recipient_cid : transfer.sender_cid;
 }
 
 /** The other side, which the notification's peer_cid names. */
 function peerCidOf(transfer: FileTransfer): string {
-  return transfer.isIncoming ? transfer.senderCid : transfer.recipientCid;
+  return transfer.isIncoming ? transfer.sender_cid : transfer.recipient_cid;
 }
 
 function matchesDirection(

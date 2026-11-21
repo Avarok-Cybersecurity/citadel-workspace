@@ -43,7 +43,7 @@ vi.mock('citadel-workspace-client-ts', async () => {
           throw new Error('WebSocket connection failed: ConnectionFailed { code: 1006 }');
         }
         attempts.ok.push(Date.now());
-        // Every agent's first message; this one predates agent hosting.
+        // Every agent's first message.
         (this.config.messageHandler as (m: unknown) => void)({ ServiceConnectionAccepted: { cid: 0n, request_id: null } });
         // Connected; the communication task then ends.
         setTimeout(() => {
@@ -52,7 +52,17 @@ vi.mock('citadel-workspace-client-ts', async () => {
       }
       stopMessageProcessing(): void {}
       async close(): Promise<void> {}
-      async sendDirectToInternalService(): Promise<void> {}
+      private answer: ((request: Record<string, unknown>) => void) | null = null;
+      /** The declaration's answer, as every agent gives one. */
+      nextResponse<T>(extract: (message: unknown) => T | undefined): Promise<T> {
+        return new Promise<T>((resolve: (value: T) => void): void => {
+          this.answer = (request: Record<string, unknown>): void => {
+            const id: string = (request.ConnectionManagement as { request_id: string }).request_id;
+            resolve(extract({ AgentCapabilities: { request_id: id } }) as T);
+          };
+        });
+      }
+      async sendDirectToInternalService(request: Record<string, unknown>): Promise<void> { this.answer?.(request); }
     },
   };
 });

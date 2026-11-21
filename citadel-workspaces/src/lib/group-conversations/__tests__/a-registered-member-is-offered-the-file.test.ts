@@ -54,13 +54,13 @@ beforeEach((): void => { world.cached = []; world.listed = []; world.sent = []; 
 
 describe('who is registered with the sender', () => {
   it('believes the agent\'s listing over an empty cache', async () => {
-    const lookup: RegistrationLookup = await registrationLookup([], async () => [{ cid: 2n }]);
+    const lookup: RegistrationLookup = await registrationLookup([], async () => [{ cid: 2n, username: 'bob', name: null, online_status: true }]);
     expect(lookup(2n)).toBe(true);
     expect(lookup(3n)).toBe(false);
   });
 
   it('keeps a cached registration the listing has not caught up with', async () => {
-    const lookup: RegistrationLookup = await registrationLookup([3n], async () => [{ cid: 2n }]);
+    const lookup: RegistrationLookup = await registrationLookup([3n], async () => [{ cid: 2n, username: 'bob', name: null, online_status: true }]);
     expect(lookup(3n)).toBe(true);
   });
 

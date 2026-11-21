@@ -22,6 +22,7 @@ import type { HeldOutbox, ReliableSendOptions } from '@/lib/p2p-pause/outbox';
 import type { ChatSecurityLevel } from '@/lib/p2p/chat-advanced-settings';
 import type { SendDelivery } from '@/lib/p2p/send-failure';
 import type { SignInFactors } from '@/lib/sign-in/types';
+import { pageTypesHash } from '@/lib/agent-update/types-step';
 
 export class WebSocketServiceCore {
   client: WorkspaceClient | null = null;
@@ -29,7 +30,7 @@ export class WebSocketServiceCore {
   initializationPromise: Promise<void> | null = null;
 
   private readonly modules: ServiceModules;
-  /** The one held outbox. Public for the registration hold (lib/p2p/held-until-registered.ts), which flushes through the normal send. */
+  /** The one held outbox (p2p-pause/outbox.ts). */
   readonly outbox: HeldOutbox = heldOutboxOver(this);
 
   // Exposed for initialization.ts
@@ -59,7 +60,7 @@ export class WebSocketServiceCore {
         disconnect: (cid) => this.disconnect(cid),
         releaseSession: (cid) => this.releaseSession(cid),
         getClient: () => this.client,
-        onClientCreated: (client) => { this.client = client; this.isInitialized = true; },
+        onClientCreated: (client) => { this.client = client; this.isInitialized = true; pageTypesHash.set(client.typesHash()); },
         onClientReset: () => { this.client = null; this.isInitialized = false; this.initializationPromise = null; },
       }
     );
@@ -123,10 +124,6 @@ export class WebSocketServiceCore {
   async disconnectP2P(localCid: bigint, peerCid: bigint): Promise<void> { return this.modules.p2pOps.disconnectP2P(localCid, peerCid) }
 
   // ============== Messenger ==============
-
-  async openMessengerFor(cid: bigint): Promise<void> { return this.modules.messengerOps.openMessengerFor(cid) }
-
-  async ensureMessengerOpen(cid: bigint): Promise<boolean> { return this.modules.messengerOps.ensureMessengerOpen(cid) }
 
   async sendP2PMessageReliable(
     localCid: bigint, peerCid: bigint, message: Uint8Array,

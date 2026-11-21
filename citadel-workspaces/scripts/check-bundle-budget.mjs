@@ -317,12 +317,6 @@ const DEFERRED_MODULES = [
   'src/components/create-workspace/CouponField.tsx',
   'src/lib/onboarding/coupon-quote.ts',
   'src/lib/onboarding/coupon-recheck.ts',
-  // The chat-document migration: the walker, the runner and the engine's importer load by dynamic
-  // import after sign-in (hooks/use-live-doc-migration-sweep.ts), never on the landing page.
-  'src/lib/live-doc-migration/boot.ts',
-  'src/lib/live-doc-migration/runner.ts',
-  'src/lib/live-doc-migration/yjs-walker.ts',
-  'src/lib/live-doc-migration/cdoc-mapper.ts',
   // Chat documents kept in step peer to peer: what records a closed one's incoming edits loads
   // with the first CdocChatSync command (lib/p2p/chat-document-inbox.ts, in the messenger's
   // chunk); the message handler only recognises the envelope (types/cdoc-chat-sync.ts).
@@ -334,8 +328,6 @@ const DEFERRED_MODULES = [
   'src/components/documents/chat-replica.ts',
   'src/lib/cdoc/chat/chat-replica-keeper.ts',
   'src/lib/cdoc/chat/chat-sync.ts',
-  'src/lib/cdoc/chat/chat-migration-gate.ts',
-  'src/lib/live-doc-migration/held-apart.ts',
 ];
 
 /**

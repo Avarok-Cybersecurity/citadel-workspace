@@ -5,12 +5,7 @@
  * and permission management.
  */
 
-import type {
-  WorkspaceProtocolRequestTS,
-  PermissionTS,
-  UpdateOperationTS,
-} from '@/types/workspace-protocol';
-import type { MemberRole } from 'citadel-workspace-client-ts';
+import type { Permission, UpdateOperation, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { workspaceResponseHandler } from '@/lib/workspace-response-handler';
 import type { ProtocolSender } from './workspace-operations';
 import { aboutMember } from './response-matchers';
@@ -43,16 +38,17 @@ async function afterMemberWrite<T>(write: Promise<T>): Promise<T> {
 export async function addMember(
   sender: ProtocolSender,
   userId: string,
-  role: MemberRole,
+  /** The id of a role in the workspace's table. */
+  role: string,
   domainId?: string,
   metadata?: Uint8Array
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     AddMember: {
       user_id: userId,
-      domain_id: domainId,
+      domain_id: domainId ?? null,
       role,
-      metadata: metadata ? Array.from(metadata) : undefined
+      metadata: metadata ? Array.from(metadata) : null
     }
   };
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
@@ -67,7 +63,7 @@ export async function addMember(
  * Get a member by ID
  */
 export async function getMember(sender: ProtocolSender, userId: string): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     GetMember: { user_id: userId }
   };
   return sender.sendProtocolRequest(requestPart);
@@ -79,7 +75,8 @@ export async function getMember(sender: ProtocolSender, userId: string): Promise
 export async function updateMemberRole(
   sender: ProtocolSender,
   userId: string,
-  role: MemberRole,
+  /** The id of a role in the workspace's table. */
+  role: string,
   /**
    * Accepted, transmitted, and DISCARDED by the server.
    *
@@ -94,11 +91,11 @@ export async function updateMemberRole(
    */
   metadata?: Uint8Array
 ): Promise<unknown> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     UpdateMemberRole: {
       user_id: userId,
       role,
-      metadata: metadata ? Array.from(metadata) : undefined
+      metadata: metadata ? Array.from(metadata) : null
     }
   };
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
@@ -120,13 +117,13 @@ export async function updateMemberPermissions(
   sender: ProtocolSender,
   userId: string,
   domainId: string,
-  permissions: PermissionTS[],
-  operation: UpdateOperationTS
+  permissions: Permission[],
+  operation: UpdateOperation
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     UpdateMemberPermissions: {
       user_id: userId,
-      domain_id: domainId,
+      domain_id: domainId ?? null,
       permissions,
       operation
     }
@@ -138,6 +135,17 @@ export async function updateMemberPermissions(
 }
 
 /**
+ * Ban a member from the workspace, or lift their ban. Both are announced to the
+ * workspace, so the answer is matched to the member it names.
+ */
+export async function setBanned(sender: ProtocolSender, userId: string, banned: boolean): Promise<unknown> {
+  const requestPart: WorkspaceProtocolRequest = banned ? { Ban: { user_id: userId } } : { Unban: { user_id: userId } };
+  return afterMemberWrite(
+    awaitWriteResponse(banned ? 'Ban' : 'Unban', () => sender.sendProtocolRequest(requestPart), aboutMember(userId)),
+  );
+}
+
+/**
  * Remove a member from a domain node
  */
 export async function removeMember(
@@ -145,10 +153,10 @@ export async function removeMember(
   userId: string,
   domainId?: string
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     RemoveMember: {
       user_id: userId,
-      domain_id: domainId
+      domain_id: domainId ?? null
     }
   };
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
@@ -167,9 +175,15 @@ export async function listMembers(sender: ProtocolSender, domainId?: string): Pr
   // so every member list rendered its empty state as a statement of fact while
   // the request was still on the wire.
   workspaceResponseHandler.emitLoadingEvent('members:loading', { domainId });
-  const requestPart: WorkspaceProtocolRequestTS = {
-    ListMembers: { domain_id: domainId }
+  const requestPart: WorkspaceProtocolRequest = {
+    ListMembers: { domain_id: domainId ?? null }
   };
+  return sender.sendProtocolRequest(requestPart);
+}
+
+/** Ask for every banned account; the answer arrives as `members:banned-loaded`. */
+export async function listBanned(sender: ProtocolSender): Promise<void> {
+  const requestPart: WorkspaceProtocolRequest = 'ListBanned';
   return sender.sendProtocolRequest(requestPart);
 }
 
@@ -181,11 +195,11 @@ export async function getUserPermissions(
   userId: string,
   domainId: string
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     GetUserPermissions: {
       user_id: userId,
       domain_id: domainId
     }
-  } as WorkspaceProtocolRequestTS;
+  };
   return sender.sendProtocolRequest(requestPart);
 }

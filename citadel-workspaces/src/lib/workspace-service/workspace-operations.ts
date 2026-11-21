@@ -5,14 +5,14 @@
  */
 
 import { workspaceWithId, workspaceChangedTo } from './response-matchers';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { workspaceResponseHandler } from '@/lib/workspace-response-handler';
 import { debugLog } from '@/lib/debug-config';
 import { awaitWriteResponse } from './await-write-response';
 
 /** Interface matching WorkspaceService's protocol-send method */
 export interface ProtocolSender {
-  sendProtocolRequest(request: WorkspaceProtocolRequestTS): Promise<void>;
+  sendProtocolRequest(request: WorkspaceProtocolRequest): Promise<void>;
   readonly currentCid: bigint | null;
 }
 
@@ -23,7 +23,7 @@ export interface ProtocolSender {
 export async function loadWorkspace(sender: ProtocolSender): Promise<void> {
   debugLog('WorkspaceService', '[WorkspaceService] loadWorkspace called with CID:', sender.currentCid?.toString());
   workspaceResponseHandler.emitLoadingEvent('workspace:loading');
-  const requestPart: WorkspaceProtocolRequestTS = { GetWorkspace: null };
+  const requestPart: WorkspaceProtocolRequest = { GetWorkspace: { workspace_id: null } };
   debugLog('WorkspaceService', '[WorkspaceService] Sending GetWorkspace request');
   return sender.sendProtocolRequest(requestPart);
 }
@@ -32,7 +32,7 @@ export async function loadWorkspace(sender: ProtocolSender): Promise<void> {
  * Get a workspace by ID (defaults to sentinel root workspace)
  */
 export async function getWorkspace(sender: ProtocolSender, workspaceId?: string): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     GetWorkspace: { workspace_id: workspaceId ?? null }
   };
   return sender.sendProtocolRequest(requestPart);
@@ -42,7 +42,7 @@ export async function getWorkspace(sender: ProtocolSender, workspaceId?: string)
  * List all workspaces the current user has access to
  */
 export async function listWorkspaces(sender: ProtocolSender): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = { ListWorkspaces: null };
+  const requestPart: WorkspaceProtocolRequest = 'ListWorkspaces';
   return sender.sendProtocolRequest(requestPart);
 }
 
@@ -56,12 +56,12 @@ export async function createWorkspace(
   masterPassword: string,
   metadata?: Uint8Array
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     CreateWorkspace: {
       name,
       description,
       workspace_master_password: masterPassword,
-      metadata: metadata ? Array.from(metadata) : undefined
+      metadata: metadata ? Array.from(metadata) : null
     }
   };
   // Same reasoning as updateWorkspace: a refusal arrives as a response and
@@ -92,12 +92,12 @@ export async function updateWorkspaceTheme(
   theme: Uint8Array,
   workspaceId?: string,
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     UpdateWorkspaceTheme: {
-      workspace_id: workspaceId,
+      workspace_id: workspaceId ?? null,
       theme: Array.from(theme),
     },
-  } as WorkspaceProtocolRequestTS;
+  };
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
   // which cannot reject a send-only promise — so this used to report success
   // for writes the server was about to refuse.
@@ -113,19 +113,20 @@ export async function updateWorkspaceTheme(
 
 export async function updateWorkspace(
   sender: ProtocolSender,
-  name?: string,
-  description?: string,
-  masterPassword?: string,
+  name: string | undefined,
+  description: string | undefined,
+  masterPassword: string,
   metadata?: Uint8Array
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     UpdateWorkspace: {
-      name,
-      description,
+      workspace_id: null,
+      name: name ?? null,
+      description: description ?? null,
       workspace_master_password: masterPassword,
-      metadata: metadata ? Array.from(metadata) : undefined
+      metadata: metadata ? Array.from(metadata) : null
     }
-  } as WorkspaceProtocolRequestTS;
+  };
   // A refusal (no permission, wrong master password) arrives as a response,
   // which cannot reject a send-only promise — so GeneralTab toasted "updated
   // successfully" and cleared its dirty flag for a rename the server rejected.

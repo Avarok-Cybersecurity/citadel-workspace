@@ -148,6 +148,17 @@ jobs:
       - run: cargo clippy --locked --all-targets --manifest-path tools/release-sign/Cargo.toml -- -D warnings
       - run: cargo test --locked --manifest-path tools/release-sign/Cargo.toml
       - run: cargo run --locked --manifest-path tools/release-sign/Cargo.toml -- check-key --public-key citadel-internal-service/citadel-internal-service/src/updater/release_public_key.txt
+      # The menu-bar app's updater (apps/macos-agent), which verifies these releases before it
+      # installs one: its sequence, swap and rollback against scripted steps. release-agent.yml's
+      # macos-app job runs it again on the notarised app, but only when an agent is released; here
+      # a PR that breaks it fails before merge. It needs swiftc and AppKit, so it runs when this job
+      # lands on the Mac pool (every same-repo run while CITADEL_MAC_RUNNER is on) and says so when not.
+      - name: The macOS app's updater passes its tests
+        if: runner.os == 'macOS'
+        run: scripts/test-macos-agent-updater.sh
+      - name: The macOS app's updater was not tested on this runner
+        if: runner.os != 'macOS'
+        run: echo "::warning::scripts/test-macos-agent-updater.sh needs macOS; this run landed on $RUNNER_OS, so the updater is tested only at release (release-agent.yml macos-app)."
 
   # tools/telemetry-read (Avarok support's signed telemetry reads) is its own workspace too. It
   # depends on citadel-workspace-types, whose agent-side types load the agent's workspace, nested
@@ -376,6 +387,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0 # the tracking-identifier check reads every commit since the merge base
       - uses: ./.github/actions/no-nested-ui-repo
       - uses: actions/setup-node@v4
         with:
@@ -387,6 +399,15 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Check crate coverage
         run: node scripts/check-crate-coverage.mjs
+      - name: No internal tracking identifier enters public history
+        # A push to master adds no commit to judge, and its checkout records no remote default.
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/check-no-tracking-ids.mjs
+      - name: The tracking-identifier check's own tests
+        run: node --test scripts/lib/tracking-ids.test.mjs
       - name: No fork's pull request can reach the self-hosted Mac
         run: node scripts/check-mac-runner-is-fork-safe.mjs
       - name: Every hosted Linux runner names its release
@@ -396,9 +417,13 @@ jobs:
       - name: Publish skips re-validation only on proof that this tree passed
         run: node --test scripts/lib/publish-validation-decision.test.mjs
       - name: Preflight derives CI's gates, tiers a change, and plans merge previews correctly
-        run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/merge-preview-planning.test.mjs
+        run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/changed-paths.test.mjs scripts/lib/merge-preview-planning.test.mjs
       - name: The flaky-spec report counts only attempts that failed
         run: node --test scripts/lib/retry-passes.test.mjs
+      - name: No shipped artefact carries a build machine's home directory
+        run: node --test scripts/lib/home-paths.test.mjs && node scripts/check-no-home-paths-shipped.mjs
+      - name: Every wasm-bindgen init call passes the single object the glue expects
+        run: node --test scripts/lib/wasm-init-shape.test.mjs && node scripts/check-wasm-init-object-form.mjs
       - name: The stack's loopback STUN answers as RFC 5389 says
         run: node --test docker/stun/stun-wire.test.mjs
       - name: Check the docs' commands resolve
@@ -503,6 +528,10 @@ jobs:
         # identical code, and four other gates had the same shape without having
         # failed yet -- green about the wrong screen.
         run: node scripts/check-gates-pin-their-world.mjs
+        working-directory: citadel-workspaces
+      - name: Every browser gate serves on a port chosen per run
+        # Fixed ports with --strictPort made concurrent runs collide (4198, 4203 were seen).
+        run: node --test scripts/lib/fixed-ports.test.mjs && node scripts/check-preview-ports-are-chosen-per-run.mjs
         working-directory: citadel-workspaces
       - name: Service logs survive a failing test
         # `if: failure()` on a step reads as "run if anything failed" and is not:
@@ -792,6 +821,8 @@ jobs:
         run: node scripts/check-agent-binds-loopback.mjs
       - name: The agent's TLS mode matches every proxy that fronts it
         run: node scripts/check-agent-tls-matches-its-proxies.mjs
+      - name: The shipped agent verifies every server's certificate
+        run: node scripts/check-shipped-agent-verifies-server-certificates.mjs
       - name: The loopback agent origin is wired end to end
         run: node scripts/check-the-loopback-agent-origin-is-wired.mjs
       - name: Every variable envsubst can substitute is validated first
@@ -1297,6 +1328,14 @@ jobs:
         # bindings make it decidable.
         run: node scripts/check-wire-fields-exist.mjs
         working-directory: citadel-workspaces
+      - name: No hand-written copy of a generated type
+        # A copy drifts silently when the Rust changes; the generated type makes the same drift a
+        # compile error. The sweep that added this found copies already shipped wrong: a rename
+        # without the master password UpdateWorkspace requires (it never deserialized), 'add' for
+        # serde's "Add", a u64 sent as a number, a `full_name` the agent never sends rendered.
+        run: |
+          node --test scripts/lib/hand-copy-scan.test.mjs
+          node scripts/check-no-hand-copies-of-generated-types.mjs
       - name: Connect awaiters handle every answer
         # connect.rs settles a Connect with exactly ConnectSuccess,
         # ConnectFailure and SessionAlreadyActive. An awaiter matching only some
@@ -1611,6 +1650,10 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: bash scripts/ci/install-chromium.test.sh
         working-directory: citadel-workspaces
+      - name: The browser install's deadline kills apt-get, so no lock outlives an attempt
+        if: matrix.project == 'citadel-workspaces'
+        run: bash scripts/ci/install-chromium-deadline.test.sh
+        working-directory: citadel-workspaces
 
   # Browser geometry and pixel gates over the shipped components, moved from the UI repo's own
   # validate.yml when the UI was folded into citadel-workspaces/. jsdom has no layout, so a hover
@@ -1630,6 +1673,8 @@ jobs:
           - { name: Chat files geometry, run: 'npm run check:chat-files' }
           # The switcher's signed-out account row and the sign-in it opens, at 375px too, under Full and Lite motion.
           - { name: Account switch geometry, run: 'npm run check:account-switch' }
+          # A peer's identity mark, safety number and changed-key screen at 390px and 375px: fit, 44px answers, axe clean.
+          - { name: Peer identity geometry, run: 'npm run check:peer-identity' }
           - { name: UI sweep geometry, run: 'npm run check:ui-sweep' }
           - { name: Docs text crispness, run: 'npm run check:docs-crispness' }
           - { name: Docs pane states, run: 'npm run check:docs-pane-states' }
@@ -3025,6 +3070,10 @@ jobs:
         # button on every dialog in the app, with every a11y gate green.
         run: npm run check:mobile
         working-directory: citadel-workspaces
+  # The committed WASM pkg is what its source builds to (TYPES-SYNC D3).
+  wasm-rebuild-diff:
+    uses: ./.github/workflows/wasm-rebuild-diff.yml
+
   all-green:
     name: Validation passed
     if: always()
@@ -3051,6 +3100,7 @@ jobs:
       - production-build
       - production-bundle-browser
       - integration-stack
+      - wasm-rebuild-diff
     # It only reads a JSON blob; the timeout is the house rule, not a need.
     timeout-minutes: 5
     runs-on: >-

@@ -9,16 +9,17 @@
  * Stood in: the agent's session list (the connection manager's query). Real:
  * the hook, the event bus, the ended-elsewhere rule, the forgotten-sessions list.
  */
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor, type RenderHookResult } from '@testing-library/react';
 import type { UseOrphanSessionsResult } from '../useOrphanSessions-types';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
-type Row = { cid: bigint; username: string; server_address: string };
+type Row = Pick<SessionInformation, 'cid' | 'username' | 'server_address'>;
 const live: { rows: Row[] } = vi.hoisted(() => ({ rows: [] }));
 
-vi.mock('../sync-selected-session-to-wasm', () => ({ syncSelectedSessionToWasm: async (): Promise<void> => undefined }));
+vi.mock('../sync-selected-session-peers', () => ({ syncSelectedSessionPeers: async (): Promise<void> => undefined }));
 
 import { useOrphanSessions } from '../useOrphanSessions';
 import { ConfirmDialogProvider } from '@/components/shared/confirm-dialog';

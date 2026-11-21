@@ -14,7 +14,6 @@
  * shown. Treating a timeout as absence is how a greeting turns into a nag.
  */
 import { isGenuinelyAbsent } from '@/lib/storage/absence';
-import type { LocalDbGet } from '@/lib/live-document-store/stored-reads';
 
 export const WELCOME_TITLE: string = 'Welcome to Citadel Workspaces';
 export const WELCOME_BODY: string = 'Your secure workspace is ready. Explore the features and connect with your team.';
@@ -22,7 +21,8 @@ export const WELCOME_BODY: string = 'Your secure workspace is ready. Explore the
 /** Not under `app:` or `agent:`, which the agent reserves (requests/local_db/mod.rs). */
 export const WELCOMED_KEY: string = 'welcome_shown';
 
-export interface WelcomeLedger extends LocalDbGet {
+export interface WelcomeLedger {
+  sendLocalDBGet(cid: bigint, key: string): Promise<{ value: number[] } | null>;
   sendLocalDBSet(cid: bigint, key: string, value: number[]): Promise<void>;
 }
 

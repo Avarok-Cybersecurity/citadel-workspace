@@ -34,9 +34,10 @@
 // - No data corruption occurs during error conditions
 
 use citadel_workspace_types::{
-    structs::{NodeEntityType, Permission, UserRole},
+    structs::{NodeEntityType, Permission},
     UpdateOperation, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
+use common::roles_fixture::{roles_for, BANNED, GUEST_ROLE_ID, MEMBER_ROLE_ID};
 
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
@@ -56,13 +57,13 @@ use common::workspace_test_utils::*;
 ///
 /// # Returns
 /// A properly structured `User` instance ready for testing
-fn create_test_user(id: &str, role: UserRole) -> citadel_workspace_types::structs::User {
+fn create_test_user(id: &str, role: &str) -> citadel_workspace_types::structs::User {
     use citadel_workspace_types::structs::User;
     User {
         id: id.to_string(),
         name: format!("Test {}", id),
-        role,
-        workspace_roles: Default::default(),
+        banned: role == BANNED,
+        workspace_roles: roles_for(role),
         permissions: std::collections::HashMap::new(),
         metadata: Default::default(),
     }
@@ -93,7 +94,7 @@ async fn test_command_invalid_access() {
 
     // Create an unprivileged user with guest-level access
     let user_id = "unprivileged_user";
-    let user = create_test_user(user_id, UserRole::Guest);
+    let user = create_test_user(user_id, GUEST_ROLE_ID);
 
     kernel
         .domain_operations
@@ -259,7 +260,7 @@ async fn test_member_operations_errors() {
         &kernel,
         WorkspaceProtocolRequest::UpdateMemberRole {
             user_id: "non_existent_user".to_string(),
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         },
     )
@@ -297,7 +298,7 @@ async fn test_member_operations_errors() {
 
     // Setup: Create a valid user for domain validation testing
     let user_id = "test_user";
-    let user = create_test_user(user_id, UserRole::Member);
+    let user = create_test_user(user_id, MEMBER_ROLE_ID);
     kernel
         .domain_operations
         .backend_tx_manager

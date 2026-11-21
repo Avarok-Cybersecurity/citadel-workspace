@@ -15,18 +15,12 @@
  * is the same reasoning UNRELIABLE_FORWARDS applies to the inbound direction.
  */
 
+import type { WireFrame } from '@/lib/call/frame-codec';
+
 export const MEDIA_FRAME_OUT: 'media-frame-out' = 'media-frame-out';
 
-export interface RelayedFrame {
-  /** The session sending: the follower's own, never the leader's. */
-  cid: bigint;
-  peerCid: bigint;
-  track: number;
-  kind: number;
-  timestamp: number;
-  flags: number;
-  payload: Uint8Array;
-}
+/** A frame and who sends it: `cid` is the follower's own session, never the leader's. */
+export type RelayedFrame = WireFrame & { cid: bigint; peerCid: bigint };
 
 /** The leader's socket, as far as a relayed frame needs it. */
 export interface MediaFrameSink {

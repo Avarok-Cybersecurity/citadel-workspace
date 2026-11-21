@@ -1,20 +1,9 @@
 /**
  * A step every path needs must run before the path is chosen.
  *
- * Two defects in the workspace kernel, found in one sweep, with one shape.
- *
- * **The migration.** `store_group_message` calls `migrate_group_to_pages` right
- * after taking the group lock. `update_group_message` and `delete_group_message`
- * take the same lock and read straight through. `migrate_group_to_pages` is the
- * only place the legacy pre-paging key is deleted, and `save_group_pages` cannot
- * clean up after itself on an unmigrated room -- it computes `previous` from an
- * index that does not exist yet, so its orphan sweep runs over an empty range.
- *
- * The result: delete a message in a room whose history is still in the legacy
- * blob, and an index gets written, every later read goes through the pages, the
- * message LOOKS deleted -- and its plaintext stays in the backend until the
- * whole room is deleted. An edit retains the pre-edit content the same way.
- * A delete that does not delete.
+ * A defect in the workspace kernel with this shape. (A second rule, that every
+ * writer of a room's history migrated the pre-paging blob first, went with that
+ * format: an earlier server's store is now refused at startup.)
  *
  * **The authorization.** `remove_user_from_domain` called `ensure_may_act_on`
  * inside its `if domain_id == WORKSPACE_ROOT_ID` branch, so every office and
@@ -24,7 +13,7 @@
  * "cannot remove ..., who is above them". `add_user_to_domain` had it right,
  * above the branch, with a comment explaining exactly that reasoning.
  *
- * THE RULE, in both cases: name the function, name the call that must appear in
+ * THE RULE: name the function, name the call that must appear in
  * it, and require it before the first branch or read that would otherwise skip
  * it.
  *
@@ -49,15 +38,6 @@ if (!existsSync(KERNEL)) {
  * `before`.
  */
 const RULES = [
-  {
-    file: join('kernel', 'transaction', 'mod.rs'),
-    fns: ['store_group_message', 'update_group_message', 'delete_group_message'],
-    required: 'migrate_group_to_pages',
-    before: 'get_group_messages',
-    why:
-      'the legacy pre-paging key is deleted nowhere else, so a room that has not migrated ' +
-      'keeps the original message bodies after an edit or a delete',
-  },
   {
     file: join('handlers', 'domain', 'server_ops', 'async_domain_server_ops.rs'),
     fns: ['add_user_to_domain', 'remove_user_from_domain'],

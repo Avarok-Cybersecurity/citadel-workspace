@@ -20,12 +20,12 @@ import { CONNECTION_PATH_COPY } from '@/lib/ice-servers/path-copy';
 import { broadcastChannelService } from '@/lib/broadcast-channel-service';
 import { instanceManager } from '@/lib/multi-instance';
 import { websocketService } from '@/lib/websocket-service';
-import type { PeerConnectPath } from '@/types/ice-servers';
+import type { P2pPathReport } from 'citadel-workspace-client-ts';
 
 const OURS: bigint = 9001n;
 const PEER: bigint = 9002n;
 
-function renderRow(isConnected: boolean | null, connectionPath: PeerConnectPath | null): HTMLElement {
+function renderRow(isConnected: boolean | null, connectionPath: P2pPathReport | null): HTMLElement {
   render(
     <SidebarProvider>
       <PeerListRow cid="9002" username="ada" displayName="ada" isOnline isConnected={isConnected} connectionPath={connectionPath} onClick={vi.fn()} />
@@ -92,7 +92,7 @@ describe('the reported connection path', () => {
     ['turn', CONNECTION_PATH_COPY.turn],
     ['direct', CONNECTION_PATH_COPY.direct],
     ['server_relay', CONNECTION_PATH_COPY.server_relay],
-  ] as const)('names %s on a connected row', (path: PeerConnectPath, copy: string) => {
+  ] as const)('names %s on a connected row', (path: P2pPathReport, copy: string) => {
     const row: HTMLElement = renderRow(true, path);
     expect(row.textContent ?? '').toContain(`Connected, ${copy}`);
     expect(row.querySelector(`[data-connection-path="${path}"]`)?.getAttribute('title')).toBe(`Connected · ${copy}`);

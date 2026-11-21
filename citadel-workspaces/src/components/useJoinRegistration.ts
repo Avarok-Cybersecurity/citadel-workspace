@@ -25,6 +25,7 @@ import type { AdmissionGate } from './admission/useAdmissionGate';
 import { RegisteredAwaitingSignIn } from '@/lib/admission/refusal';
 import { connectAfterRegistration } from './sign-in/connect-after-registration';
 import type { HostedTerms } from './use-hosted-terms';
+import type { RecoveryPhrase } from '@/lib/recovery/secret';
 
 /** The required credentials plus the optional profile fields sent after registration. */
 export interface JoinFormData extends SignupProfileFields, SignupConsentFields {
@@ -64,7 +65,7 @@ export function useJoinRegistration(
   const [connectStatus, setConnectStatus] = useState<ConnectStatus>("connecting");
   const [registeredCid, setRegisteredCid] = useState<string | null>(null);
   /** Shown once by the caller, then gone: never stored, never logged. */
-  const [recoveryCodes, setRecoveryCodes] = useState<readonly string[]>([]);
+  const [recoveryPhrase, setRecoveryPhrase] = useState<RecoveryPhrase | null>(null);
   /** Registered on a workspace that checks, and the follow-up connect still needs a fresh check. */
   const [awaitingSignIn, setAwaitingSignIn] = useState<bigint | null>(null);
 
@@ -94,7 +95,7 @@ export function useJoinRegistration(
   // the defaults instead, permanently, with nothing said. Landing already
   // lifted the server address out of the cache for exactly this reason and did
   // not carry the fix here.
-  const securitySettings: SecuritySettingsValues | { readonly securityLevel: "Standard"; readonly secrecyMode: "BestEffort"; readonly encryptionAlgorithm: "AES_GCM_256"; readonly kemAlgorithm: "MlKem"; readonly sigAlgorithm: "None"; readonly headerObfuscatorSettings: {}; readonly enrolPasskey: false; } = providedSecuritySettings ?? DEFAULT_SECURITY_SETTINGS;
+  const securitySettings: SecuritySettingsValues | { readonly securityLevel: "Standard"; readonly secrecyMode: "BestEffort"; readonly encryptionAlgorithm: "AES_GCM_256"; readonly kemAlgorithm: "MlKem1024Fips203"; readonly sigAlgorithm: "None"; readonly headerObfuscatorSettings: {}; readonly enrolPasskey: false; } = providedSecuritySettings ?? DEFAULT_SECURITY_SETTINGS;
 
   const setField = <K extends keyof JoinFormData>(name: K, value: JoinFormData[K]): void => {
     setFormData(prev => {
@@ -166,7 +167,7 @@ export function useJoinRegistration(
         };
 
         handler = createRegistrationResponseHandler(requestId, resolve, reject, cleanup, {
-          handleConnectSuccess, setShowNotInitializedModal, onRecoveryCodes: setRecoveryCodes, username: formData.username,
+          handleConnectSuccess, setShowNotInitializedModal, onRecoveryPhrase: setRecoveryPhrase, username: formData.username,
         });
         eventEmitter.on('websocket-message', handler);
       });
@@ -229,7 +230,7 @@ export function useJoinRegistration(
     handleSubmit,
     handleConnectModalComplete,
     handleReturnToLogin,
-    recoveryCodes,
+    recoveryPhrase,
     awaitingSignIn,
     finishSignIn: async (admissionToken: string): Promise<bigint> => {
       const cid: bigint = await connectAfterRegistration(formData.username, serverAddress, formData.password, admissionToken, mapSecuritySettings(securitySettings));

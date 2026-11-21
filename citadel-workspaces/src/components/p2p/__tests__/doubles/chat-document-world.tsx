@@ -28,8 +28,6 @@ import { ConfirmDialogProvider } from '@/components/shared/confirm-dialog';
 import { Toaster } from '@/components/ui/sonner';
 import { FakeAgentLocalDb } from '@/lib/cdoc/chat/__tests__/doubles/fake-agent-local-db';
 import type { LocalDbPort } from '@/lib/cdoc/chat/chat-local-db';
-import * as Y from 'yjs';
-import type { StoredDocument } from '@/lib/live-document-store/types';
 import { P2PChat } from '../../P2PChat';
 
 export const ALICE: bigint = 10_000_000_000_000_000_101n;
@@ -54,19 +52,15 @@ export class ChatDocumentWorld {
   /** What each person's conversation holds when it opens, by the account it belongs to. */
   private readonly inbox: Map<bigint, P2PMessage[]> = new Map<bigint, P2PMessage[]>();
   delivery: Delivery = 'in-flight';
-  /** A LocalDB read this answers an error for fails with it, as a timed-out agent request does. */
-  failRead: (cid: bigint, key: string) => Error | null = (): null => null;
   private readonly connection: LocalDbPort = this.db.connection([0n, ALICE, BOB]);
 
   install(): void {
     // The leader's answer to "what does the agent host": nothing, so this browser runs its own messaging.
     registerCapabilityRoute({
       isLeader: (): boolean => false,
-      askLeader: async () => ({ agentIlm: false, supervisesP2p: false, stagesUploads: false, takesConsole: false, noticesHeard: false, servesApps: false }),
+      askLeader: async () => ({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, noticesHeard: false, servesApps: false }),
     });
     vi.spyOn(websocketService, 'sendLocalDBGet').mockImplementation(async (cid: bigint, key: string): Promise<{ value: number[] } | null> => {
-      const failure: Error | null = this.failRead(cid, key);
-      if (failure !== null) throw failure;
       const found: { readonly value: readonly number[] } | null = await this.connection.get(cid, key);
       return found === null ? null : { value: [...found.value] };
     });
@@ -74,7 +68,7 @@ export class ChatDocumentWorld {
     vi.spyOn(websocketService, 'sendP2PMessageBytes').mockImplementation(async (from: bigint, to: bigint, bytes: Uint8Array): Promise<void> => {
       const command: P2PCommand = deserializeP2PCommand(bytes.slice());
       if (command.type !== P2PCommandType.CdocChatSync || !isCdocChatSyncPayload(command.payload)) return;
-      const event: CdocChatCommandEvent = { peerCid: from, recipientCid: to, payload: command.payload };
+      const event: CdocChatCommandEvent = { peerCid: from, recipient_cid: to, payload: command.payload };
       this.carried.push(command.payload.sync.kind);
       // Asynchronous, as the network is: the sender's step finishes before the peer hears it.
       setTimeout((): void => { eventEmitter.emit(CDOC_CHAT_COMMAND_EVENT, event); }, 0);
@@ -88,38 +82,6 @@ export class ChatDocumentWorld {
     vi.spyOn(messenger, 'sendMessage').mockImplementation(this.send);
   }
 
-  /**
-   * A document made in the earlier chat editor, stored on this device as that editor stored it
-   * (live_doc_<id> under the device-wide cid 0: its metadata, and its Yjs state as y-prosemirror
-   * wrote StarterKit paragraphs), recorded by `holder` in the chat with `peer`.
-   */
-  async storeEarlierDocument(docId: string, holder: bigint, peer: bigint, title: string, paragraphs: readonly string[]): Promise<void> {
-    const doc: Y.Doc = new Y.Doc();
-    const fragment: Y.XmlFragment = doc.getXmlFragment('default');
-    fragment.insert(0, paragraphs.map((text: string): Y.XmlElement => {
-      const paragraph: Y.XmlElement = new Y.XmlElement('paragraph');
-      paragraph.insert(0, [new Y.XmlText(text)]);
-      return paragraph;
-    }));
-    doc.getMap('cdoc').set('title', title);
-    const now: number = 1_700_000_000_000;
-    const stored: StoredDocument = {
-      metadata: { id: docId, title, peerCid: peer.toString(), creatorCid: holder.toString(), createdAt: now, updatedAt: now },
-      state: Array.from(Y.encodeStateAsUpdate(doc)),
-    };
-    await this.connection.set(0n, `live_doc_${docId}`, Array.from(new TextEncoder().encode(JSON.stringify(stored))));
-  }
-
-  /** The bytes stored under `key` for `cid`, or null. */
-  async stored(cid: bigint, key: string): Promise<readonly number[] | null> {
-    try {
-      return (await this.connection.get(cid, key))?.value ?? null;
-    } catch {
-      // The fake answers an absent key as the agent does, with "Key not found".
-      return null;
-    }
-  }
-
   /** The conversation `holder` has with `from` holds `message` when it opens (keyed by the peer, as the store is). */
   received(from: bigint, message: P2PMessage): void {
     this.inbox.set(from, [...(this.inbox.get(from) ?? []), message]);
@@ -128,7 +90,7 @@ export class ChatDocumentWorld {
   /** An invitation `from` sent before this release: a bare UUID, the earlier editor's document. */
   earlierInvitation(from: bigint, to: bigint, docId: string, title: string): P2PMessage {
     return {
-      id: `earlier-${docId}`, content: `Created live document: ${title}`, senderCid: from, recipientCid: to, timestamp: 1_600_000_000_000, index: 0,
+      id: `earlier-${docId}`, content: `Created live document: ${title}`, sender_cid: from, recipient_cid: to, timestamp: 1_600_000_000_000, index: 0,
       status: 'delivered', message_type: 'live_document', document_id: docId, document_title: title,
     };
   }
@@ -137,7 +99,7 @@ export class ChatDocumentWorld {
   invitationAsReceived(index: number): P2PMessage {
     const sent: Invitation = this.invitations[index];
     return {
-      id: `invitation-${index}`, content: sent.content, senderCid: sent.from, recipientCid: sent.to, timestamp: 1_700_000_000_000 + index, index,
+      id: `invitation-${index}`, content: sent.content, sender_cid: sent.from, recipient_cid: sent.to, timestamp: 1_700_000_000_000 + index, index,
       status: 'delivered', message_type: 'live_document', document_id: sent.options.documentId, document_title: sent.options.documentTitle,
     };
   }

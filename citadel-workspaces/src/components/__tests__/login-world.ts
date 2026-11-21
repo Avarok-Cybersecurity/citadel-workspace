@@ -13,7 +13,7 @@ import type { World } from '@/lib/sign-in/__tests__/helpers';
 import type { FakeAccount } from '@/lib/sign-in/__tests__/fake-agent';
 import type { SignInFactors } from '@/lib/sign-in/types';
 import type { Admission } from '@/lib/admission';
-import type { SignedOutAccount } from '@/types/session-types';
+import type { SignedOutSession } from 'citadel-workspace-client-ts';
 
 export const loginWorld: {
   w: World; postAuth: ReturnType<typeof vi.fn>; messaging: ReturnType<typeof vi.fn>;
@@ -26,7 +26,7 @@ export const loginWorld: {
   /** The workspace the agent says each account is on (GetAccountInformation's server_host). */
   accountServers: Map<string, string>;
   /** Accounts the agent says the server signed out (GetSessions' signed_out). */
-  signedOut: SignedOutAccount[];
+  signedOut: SignedOutSession[];
 } = {
   w: undefined as unknown as World, postAuth: vi.fn(), messaging: vi.fn(), discovered: null, discoveredByServer: new Map<string, Admission>(), pageWorkspace: undefined, accountServers: new Map<string, string>(), signedOut: [],
 };
@@ -72,7 +72,7 @@ export const connectionDouble = async (orig: () => Promise<Record<string, unknow
       loginWorld.w.agent.accounts.map((a: FakeAccount) => ({ cid: a.cid, username: a.username, server_address: 'bench.work.avarok.net' }))) as never,
     handleAuthSuccess: (async (): Promise<void> => undefined) as never,
     waitForReady: (async (): Promise<void> => undefined) as never,
-    getActiveSessionsResult: (async (): Promise<{ ok: true; sessions: never[]; signedOut: SignedOutAccount[] }> =>
+    getActiveSessionsResult: (async (): Promise<{ ok: true; sessions: never[]; signedOut: SignedOutSession[] }> =>
       ({ ok: true, sessions: [], signedOut: loginWorld.signedOut })) as never,
   }),
   };
@@ -90,7 +90,6 @@ export const tabContextDouble = async (orig: () => Promise<Record<string, unknow
 
 export const passkeyDouble = async (orig: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> => ({
   ...(await orig()), passkeysAvailableHere: (): boolean => true,
-  browserPasskeyDeps: (): unknown => ({ ...loginWorld.w.deps, now: (): number => 1 }),
 });
 
 export const signInDouble = async (orig: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> => ({

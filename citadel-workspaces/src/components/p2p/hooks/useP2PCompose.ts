@@ -119,7 +119,7 @@ export function useP2PCompose({ transport, messages, editMessage, createDocument
       await send.text({
         content: inputMessage,
         messageType: textKind(messageType),
-        replyTo: replyingTo?.id ?? null,
+        reply_to: replyingTo?.id ?? null,
         // Clears the composer the moment the bubble exists, rather than when
         // the network round trip finishes. Failures BEFORE that point leave
         // no bubble to retry from, so the text has to survive them.

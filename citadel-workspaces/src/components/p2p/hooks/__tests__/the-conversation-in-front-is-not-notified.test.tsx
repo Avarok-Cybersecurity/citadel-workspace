@@ -79,7 +79,7 @@ async function arrives(from: bigint): Promise<string> {
     eventEmitter.emit('websocket-message', { ConversationEvent: {
       cid: OWN, peer_cid: from, seq, kind: 'Appended', message_id: null, metadata: null,
       account_username: 'me', peer_username: 'alice', preview: '', request_id: null,
-      message: { id, content: 'hello', senderCid: from, recipientCid: OWN, timestamp: counter, index: counter, status: 'delivered', message_type: 'text' },
+      message: { id, content: 'hello', sender_cid: from, recipient_cid: OWN, timestamp: counter, index: counter, status: 'delivered', message_type: 'text' },
     } });
   });
   await settle();

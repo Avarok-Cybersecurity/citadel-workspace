@@ -1,8 +1,8 @@
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 export interface SessionChoice {
   /** The session to claim, or undefined when there is nothing to claim. */
-  session: ActiveSession | undefined;
+  session: SessionInformation | undefined;
   /**
    * Whether the tab's stored selection names a session that is no longer live,
    * and should therefore be cleared.
@@ -24,13 +24,13 @@ export interface SessionChoice {
  * the first live one -- can be read in one place and tested without a connection manager.
  */
 export function pickSessionToClaim(
-  activeSessions: ActiveSession[],
+  activeSessions: SessionInformation[],
   selectedCid: bigint | null | undefined,
 ): SessionChoice {
   if (activeSessions.length === 0) return { session: undefined, staleSelection: false };
 
   if (selectedCid) {
-    const remembered: ActiveSession | undefined = activeSessions.find((s) => s.cid === selectedCid);
+    const remembered: SessionInformation | undefined = activeSessions.find((s) => s.cid === selectedCid);
     if (remembered) return { session: remembered, staleSelection: false };
     // The tab's own account is gone. Another live session is somebody else's account,
     // not a substitute: claiming it offered to take over the wrong person's session.

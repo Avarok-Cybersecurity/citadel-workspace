@@ -4,6 +4,7 @@
 #![allow(dead_code)] // each test file uses a different subset
 
 use citadel_internal_service::kernel::CitadelWorkspaceService;
+use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_internal_service_test_common::{
     get_free_port, spawn_services, InternalServicesFutures,
 };
@@ -11,10 +12,10 @@ use citadel_internal_service_types::{
     InternalServiceRequest, InternalServiceResponse, MessageNotification, SecurityLevel,
 };
 use citadel_sdk::prelude::*;
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
+use common::roles_fixture::Standing;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -32,13 +33,15 @@ pub async fn spawn_agent(insecure: bool) -> Result<SocketAddr, Box<dyn Error>> {
         bind,
         citadel_internal_service::SERVER_RECONNECT,
         citadel_internal_service_test_common::test_transfers(),
+        citadel_internal_service_test_common::TEST_SERVER_CERTIFICATE,
     )
     .await?;
     let mut builder = NodeBuilder::default();
     let builder = builder
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
-        .with_node_type(NodeType::Peer);
+        .with_node_type(NodeType::Peer)
+        .as_test_agent(&kernel);
     if insecure {
         let _ = builder.with_insecure_skip_cert_verification();
     }
@@ -106,7 +109,7 @@ pub async fn role_of(
     from: &mut FromAgent,
     cid: u64,
     user: &str,
-) -> Result<UserRole, Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     // The kernel enrols an account from its ConnectSuccess event, which can land after the
     // agent reported the connection; retry "not found" only.
     for _ in 0..20 {
@@ -126,7 +129,7 @@ pub async fn role_of(
         )
         .await?;
         match response {
-            WorkspaceProtocolResponse::Member(member) => return Ok(member.role),
+            WorkspaceProtocolResponse::Member(member) => return Ok(member.standing()),
             WorkspaceProtocolResponse::Error(e) if e.contains("not found") => {
                 tokio::time::sleep(Duration::from_millis(250)).await
             }

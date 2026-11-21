@@ -9,6 +9,7 @@
  * leave-the-editor guard and its dialog, the router and the workspace store. Nothing stood in.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { MemoryRouter, useLocation, type Location } from 'react-router-dom';
@@ -30,7 +31,7 @@ const config = (type: string, label: string): TreeSchema['entity_type_configs'][
 function node(id: string, parent: string | null, type: string, name: string): DomainNode {
   return {
     id, parent_id: parent, entity_type: { Child: type }, depth: 0, name, description: '', owner_id: '',
-    members: [], children: [], mdx_content: '', mdx_content_hash: null, rules: null, chat_enabled: false,
+    members: [], children: [], mdx_content: '', mdx_content_hash: EMPTY_DOCUMENT_HASH, rules: null, chat_enabled: false,
     chat_channel_id: null, default_permissions: {} as DomainNode['default_permissions'], metadata: [],
     allowed_child_types: [], is_default: false, created_at: 0n, updated_at: 0n,
   };

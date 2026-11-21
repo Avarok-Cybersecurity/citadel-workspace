@@ -6,12 +6,12 @@
  * what these tests pin, so the hoisted set cannot quietly change what is accepted.
  */
 import { describe, it, expect } from 'vitest';
-import { Permission } from '../types';
+import { ALL_PERMISSIONS, type Permission } from '../types';
 import { parsePermissionSet } from '../cache';
 
 describe('parsePermissionSet', () => {
   it('keeps every permission the server can name', () => {
-    const all: string[] = Object.values(Permission) as string[];
+    const all: string[] = [...ALL_PERMISSIONS];
     const parsed: Set<Permission> = parsePermissionSet(all);
     expect(parsed.size).toBe(all.length);
     for (const p of all) expect(parsed.has(p as Permission)).toBe(true);
@@ -23,7 +23,7 @@ describe('parsePermissionSet', () => {
   });
 
   it('is unaffected by duplicates and order', () => {
-    const one: string = Object.values(Permission)[0] as string;
+    const one: string = ALL_PERMISSIONS[0];
     expect(parsePermissionSet([one, one, one]).size).toBe(1);
   });
 });

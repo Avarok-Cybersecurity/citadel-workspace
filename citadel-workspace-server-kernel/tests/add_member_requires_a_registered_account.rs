@@ -8,14 +8,15 @@
 //! in the SDK's account store, not in the kernel's records -- a kernel with an
 //! injected user could not show which of the two is asked.
 
+use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_sdk::prefabs::client::single_connection::SingleClientServerConnectionKernel;
 use citadel_sdk::prefabs::client::ServerConnectionSettingsBuilder;
 use citadel_sdk::prelude::*;
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 use common::production_server::start_production_server_with;
+use common::roles_fixture::MEMBER_ROLE_ID;
 use futures::StreamExt;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -70,10 +71,16 @@ async fn wait_for_record<R: Ratchet>(
 }
 
 fn registration(addr: SocketAddr, username: &str) -> ServerConnectionSettings<StackedRatchet> {
-    ServerConnectionSettingsBuilder::credentialed_registration(addr, username, username, PASSWORD)
-        .with_udp_mode(UdpMode::Disabled)
-        .build()
-        .expect("settings")
+    ServerConnectionSettingsBuilder::credentialed_registration(
+        addr,
+        username,
+        username,
+        PASSWORD,
+        common::sign_in_client::TEST_SERVER_CERTIFICATE,
+    )
+    .with_udp_mode(UdpMode::Disabled)
+    .build()
+    .expect("settings")
 }
 
 /// Runs a client node with `settings` until `on_connect` finishes, and returns
@@ -102,6 +109,7 @@ where
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()
+        .as_test_node()
         .build(kernel)
         .expect("client node");
     let client = tokio::spawn(client);
@@ -135,7 +143,7 @@ async fn only_a_registered_account_can_be_added() {
         let add = |user_id: &str| WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: None,
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         };
         let registered = ask(&mut tx, &mut rx, add(REGISTERED)).await?;

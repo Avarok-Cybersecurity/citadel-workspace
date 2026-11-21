@@ -15,17 +15,23 @@
  * To be clear about what this is and is not: it does NOT explain that failure.
  * The username and full name match there, so the old locator did match. It
  * removes a coincidence that the conclusion was resting on.
+ *
+ * The chip once titled itself with `full_name`, a field the agent's generated
+ * `SessionInformation` does not carry: the fixture cast one in, and the title it
+ * asserted never rendered against a real agent. The title is the username now.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { OrphanSessionIcon } from '../OrphanSessionIcon';
 
-const SESSION: Parameters<typeof OrphanSessionIcon>[0]['session'] = {
+const SESSION: SessionInformation = {
   cid: 42n,
   username: 'ada_1787',
-  full_name: 'Ada Lovelace',
   server_address: '127.0.0.1:12349',
-} as unknown as Parameters<typeof OrphanSessionIcon>[0]['session'];
+  server_host: null,
+  peer_connections: {},
+};
 
 describe('a session chip', () => {
   it('is addressable by username even when the person has a full name', () => {
@@ -40,10 +46,7 @@ describe('a session chip', () => {
 
     expect(screen.getByTestId('session-button-ada_1787')).toBeInTheDocument();
 
-    // And the reason the old locator could not find it, stated as a fact rather
-    // than left as a guess: the title is about the PERSON, not the account.
     const chip: HTMLElement = screen.getByTestId('session-button-ada_1787');
-    expect(chip.getAttribute('title')).toBe('Ada Lovelace - Design');
-    expect(chip.getAttribute('title')).not.toContain('ada_1787');
+    expect(chip.getAttribute('title')).toBe('ada_1787 - Design');
   });
 });

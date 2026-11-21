@@ -1,5 +1,5 @@
 import { sessionIsOnServer } from './same-server';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 /**
  * The CID the agent holds for this account right now, if it holds one.
@@ -17,11 +17,11 @@ import type { ActiveSession } from '@/types/session-types';
  * wrote (see session-label): measured live as an unreachable held account.
  */
 export function liveSessionCid(
-  live: readonly ActiveSession[],
+  live: readonly SessionInformation[],
   account: { username: string; serverAddress: string },
 ): bigint | undefined {
-  const named: ActiveSession[] = live.filter((s: ActiveSession) => s.username === account.username);
-  const onServer: ActiveSession | undefined = named.find((s: ActiveSession) => sessionIsOnServer(s, account.serverAddress));
+  const named: SessionInformation[] = live.filter((s: SessionInformation) => s.username === account.username);
+  const onServer: SessionInformation | undefined = named.find((s: SessionInformation) => sessionIsOnServer(s, account.serverAddress));
   if (onServer) return onServer.cid;
   const unknowable: boolean = account.serverAddress.trim() === '' || (named.length === 1 && addressIsOpaque(named[0]));
   return named.length === 1 && unknowable ? named[0].cid : undefined;
@@ -29,6 +29,6 @@ export function liveSessionCid(
 
 const IP_LITERAL: RegExp = /^(\d{1,3}(\.\d{1,3}){3}|\[[0-9a-f:]+\])(:\d+)?$/i;
 
-function addressIsOpaque(session: ActiveSession): boolean {
+function addressIsOpaque(session: SessionInformation): boolean {
   return !session.server_host && IP_LITERAL.test(session.server_address.trim());
 }

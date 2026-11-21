@@ -30,7 +30,7 @@ afterEach((): void => { cleanup(); world.toasts = []; });
 
 describe('the sender\'s delivery ticks', () => {
   it.each(['pending', 'sent', 'delivered'])('%s takes the bubble\'s foreground', (status: string) => {
-    const message: P2PMessage = { id: 'm', content: 'hi', senderCid: 7n, recipientCid: 42n, timestamp: 1, status } as P2PMessage;
+    const message: P2PMessage = { id: 'm', content: 'hi', sender_cid: 7n, recipient_cid: 42n, timestamp: 1, status } as P2PMessage;
     render(<BubbleFooter message={message} isOwn />);
     expect(screen.getByTestId(`message-status-${status}`).getAttribute('class')).toContain('text-primary-foreground');
   });

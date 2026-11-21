@@ -34,7 +34,7 @@ export function peerRegistrationNotification(params: {
   onAccept: () => void;
   onDecline: () => void;
   onCardClick: () => void;
-  recipientCid?: string;
+  recipient_cid?: string;
 }): Omit<Notification, 'id' | 'timestamp' | 'read'> {
   // The roster's name where it knows one, as every other surface shows them.
   const name: string = memberDisplayName(params.peerUsername) ?? params.peerUsername;
@@ -47,7 +47,7 @@ export function peerRegistrationNotification(params: {
     senderId: params.peerCid,
     senderName: name,
     sourceId: params.requestId,
-    recipientCid: params.recipientCid,
+    recipient_cid: params.recipient_cid,
     priority: NotificationPriority.HIGH,
     actionButtons: [
       { id: 'accept', label: 'Accept', variant: 'default', onClick: params.onAccept },

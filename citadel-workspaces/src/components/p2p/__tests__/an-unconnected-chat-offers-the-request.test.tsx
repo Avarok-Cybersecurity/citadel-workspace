@@ -2,7 +2,7 @@
  * A chat with someone you are not registered with opens anyway (owner, 2026-10-15) and says
  * what to do: under the workspace's messaging trust the request goes out on open, otherwise the
  * banner offers it. A message written before they accept is not refused (owner, 2026-10-16): it
- * is held, shown pending, and says it sends when they accept (lib/p2p/held-until-registered.ts).
+ * is shown pending, and says it sends when they accept.
  *
  * The hook runs with its three effects injected (the trust check, the send, the outgoing record);
  * the composer and the bubble footer are the production components.
@@ -97,7 +97,7 @@ describe('the composer while they have not accepted', () => {
 });
 
 describe('a message held for someone who has not accepted', () => {
-  const pending: P2PMessage = { id: 'm1', content: 'hi', senderCid: 1n, recipientCid: 2n, timestamp: 1, index: 0, status: 'pending', message_type: 'text' };
+  const pending: P2PMessage = { id: 'm1', content: 'hi', sender_cid: 1n, recipient_cid: 2n, timestamp: 1, index: 0, status: 'pending', message_type: 'text' };
 
   it('shows the clock and says when it sends', () => {
     render(<AwaitingAcceptContext.Provider value="Bob"><BubbleFooter message={pending} isOwn /></AwaitingAcceptContext.Provider>);

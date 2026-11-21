@@ -8,7 +8,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { AppListing } from 'citadel-workspace-client-ts';
+import type { AppListing, Permission } from 'citadel-workspace-client-ts';
 import type { TabTarget } from '@/lib/citadel-apps/apps-modal-store';
 import { CONSENT_VISIBLE_MS } from '@/lib/citadel-apps/consent-gate';
 import { cap, installOf, listingOf } from '@/test/app-manifests';
@@ -20,7 +20,7 @@ const CALENDAR: AppListing = listingOf({ id: 'net.avarok.calendar', name: 'Calen
 const CALENDAR_HERE: AppListing = listingOf({ id: 'net.avarok.calendar', name: 'Calendar', categories: ['planning'], surfaces: ['node_tab'], capabilities: [cap('canvas')] }, 'workspace');
 const KANBAN: AppListing = listingOf({ id: 'com.acme.kanban', name: 'Kanban', categories: ['productivity'], surfaces: ['md_zone', 'node_tab'] });
 const ZONE_ONLY: AppListing = listingOf({ id: 'com.acme.chart', name: 'Chart', surfaces: ['md_zone'] });
-const MAY: ReadonlySet<string> = new Set(['AppInstall', 'AppInstallScoped', 'UpdateNodeSettings']);
+const MAY: ReadonlySet<string> = new Set<Permission>(['AppInstall', 'AppInstallScoped', 'UpdateNodeSettings']);
 
 interface Recorded { target: TabTarget; added: string[]; closed: boolean[] }
 

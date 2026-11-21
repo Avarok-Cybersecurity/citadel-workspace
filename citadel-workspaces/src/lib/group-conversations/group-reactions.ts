@@ -57,10 +57,10 @@ export async function reactInGroup(groupId: string, messageId: string, emoji: st
 
   // Lazily, as announce-group-state does: group-requests reaches the socket stack.
   const { sendPeerGroupBody } = await import('./group-requests');
-  await sendPeerGroupBody(groupId, (senderCid: bigint, envelopeId: string): Uint8Array => encodeGroupReaction({
+  await sendPeerGroupBody(groupId, (sender_cid: bigint, envelopeId: string): Uint8Array => encodeGroupReaction({
     group_id: groupId,
     message_id: envelopeId,
-    sender_cid: senderCid,
+    sender_cid: sender_cid,
     timestamp: Date.now(),
     reaction: { target_id: messageId, emoji: change.emoji, active: change.active, at: change.at },
   }));

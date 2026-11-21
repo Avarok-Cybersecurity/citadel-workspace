@@ -8,7 +8,7 @@
 use citadel_sdk::prelude::MonoRatchet;
 use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::UserRole;
+use common::roles_fixture::{with_role, MEMBER_ROLE_ID};
 
 const MASTER_PASSWORD: &str = "admin_password";
 
@@ -73,10 +73,9 @@ async fn test_user_auto_registration_to_workspace() {
 
     // Create the user
     use citadel_workspace_types::structs::User;
-    let user = User::new(
-        test_user_id.to_string(),
-        test_user_id.to_string(),
-        UserRole::Member,
+    let user = with_role(
+        User::new(test_user_id.to_string(), test_user_id.to_string()),
+        MEMBER_ROLE_ID,
     );
     kernel
         .domain_operations
@@ -133,10 +132,9 @@ async fn test_first_user_with_master_password_becomes_owner() {
     // Create a test user
     let test_user_id = "first-admin-user";
     use citadel_workspace_types::structs::User;
-    let user = User::new(
-        test_user_id.to_string(),
-        "First Admin".to_string(),
-        UserRole::Member,
+    let user = with_role(
+        User::new(test_user_id.to_string(), "First Admin".to_string()),
+        MEMBER_ROLE_ID,
     );
     kernel
         .domain_operations
@@ -185,11 +183,6 @@ async fn test_first_user_with_master_password_becomes_owner() {
         Some(citadel_workspace_types::roles::OWNER_ROLE_ID),
         "User should hold the Owner role after providing master password"
     );
-    assert_eq!(
-        user_record.role,
-        UserRole::Owner,
-        "and the enum an older client reads says so too"
-    );
 }
 
 #[tokio::test]
@@ -199,10 +192,9 @@ async fn test_existing_user_not_re_added() {
     // Add a test user manually
     let test_user_id = "existing-user";
     use citadel_workspace_types::structs::User;
-    let user = User::new(
-        test_user_id.to_string(),
-        "Existing User".to_string(),
-        UserRole::Member,
+    let user = with_role(
+        User::new(test_user_id.to_string(), "Existing User".to_string()),
+        MEMBER_ROLE_ID,
     );
     kernel
         .domain_operations

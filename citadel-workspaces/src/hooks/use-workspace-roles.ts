@@ -8,7 +8,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import type { WorkspaceRoles } from 'citadel-workspace-client-ts';
 import { getRolesState, requestRoles, subscribeRoles, type RolesState } from '@/lib/workspace-roles/roles-store';
 import { rolesApi } from '@/lib/workspace-roles/roles-api';
-import { displayRole, type RoleDisplay } from '@/lib/workspace-roles/role-display';
+import { displayRole, type RoleDisplay, type RoleHolder } from '@/lib/workspace-roles/role-display';
 
 export function useWorkspaceRoles(): RolesState {
   const state: RolesState = useSyncExternalStore(subscribeRoles, getRolesState);
@@ -29,7 +29,7 @@ export function retryRoles(): void {
   requestRoles(rolesApi.list);
 }
 
-/** How to show the role `roleId` names, falling back to the legacy mirror; see role-display. */
-export function useRoleDisplay(roleId: string | null | undefined, legacy: unknown): RoleDisplay | null {
-  return displayRole(useRoleTable(), roleId, legacy);
+/** How to show `holder`'s role or ban; see role-display. */
+export function useRoleDisplay(holder: RoleHolder): RoleDisplay | null {
+  return displayRole(useRoleTable(), holder);
 }

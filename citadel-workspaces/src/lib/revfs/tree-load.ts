@@ -31,8 +31,6 @@ export interface TreeLoadRequest {
   key: TreeKey;
   /** The account reading, for peer trees; null for server trees. */
   viewer: bigint | null;
-  /** A shared pre-directional key to adopt from, or null when there is none. */
-  legacyKey: TreeKey | null;
 }
 
 /**
@@ -41,7 +39,8 @@ export interface TreeLoadRequest {
  * The rule `placeFile` applies: the uploader's copy is Remote (the peer holds
  * the bytes for me), everyone else's is Hosted. A tree adopted from the shared
  * key, or written there by the other account, carries the other side's view —
- * which read as "0 B used" for a file the viewer uploaded.
+ * which read as "0 B used" for a file the viewer uploaded. A tree under the
+ * sorted-pair key an earlier build shared between both accounts is never read.
  */
 export function asSeenBy(node: RevfsNode, viewer: bigint): RevfsNode {
   const seen: RevfsNode = { ...node };
@@ -65,14 +64,13 @@ export async function loadTree(state: RevfsState, io: RevfsIO, req: TreeLoadRequ
   if (cached) return cached;
 
   const own: RevfsNode | null = await read(io, req.key);
-  const adopted: RevfsNode | null = own === null && req.legacyKey !== null ? await read(io, req.legacyKey) : null;
 
   // An op that landed while the read was in flight has already written through
   // `setTree`; anything below would be written straight over it.
   const appliedDuringLoad: RevfsNode | undefined = state.getTree(req.key);
   if (appliedDuringLoad) return appliedDuringLoad;
 
-  const found: RevfsNode | null = own ?? adopted;
+  const found: RevfsNode | null = own;
   const tree: RevfsNode = found === null
     ? createDefaultTree()
     : req.viewer === null ? found : asSeenBy(found, req.viewer);

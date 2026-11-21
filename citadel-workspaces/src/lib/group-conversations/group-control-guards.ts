@@ -20,10 +20,10 @@ export interface SenderStanding {
   role: GroupRole | undefined;
 }
 
-export function senderStanding(group: GroupConversation, senderCid: bigint, ownerCid: bigint): SenderStanding {
-  const roleId: string | undefined = group.members.find((m) => m.cid === senderCid)?.roleId;
+export function senderStanding(group: GroupConversation, sender_cid: bigint, ownerCid: bigint): SenderStanding {
+  const roleId: string | undefined = group.members.find((m) => m.cid === sender_cid)?.roleId;
   return {
-    isOwner: senderCid === ownerCid,
+    isOwner: sender_cid === ownerCid,
     role: roleId === undefined ? undefined : group.settings.roles.find((r) => r.id === roleId),
   };
 }

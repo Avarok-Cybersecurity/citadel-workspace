@@ -57,30 +57,30 @@ export const NODE_FEATURES: StatedFeatures = {
 /** `pending` holds the reader's unconfirmed copies; null sends and lets the server's copy appear. */
 function nodeSend(params: NodeTransportParams, history: GroupHistory, pending: PendingSends | null): SendPort {
   const { io, self } = params;
-  const deliver = (message: ChatMessage, kind: 'text' | 'markdown', replyTo: string | null): void => {
-    io.send(message.content, kind, replyTo).catch((error: unknown): void => {
+  const deliver = (message: ChatMessage, kind: 'text' | 'markdown', reply_to: string | null): void => {
+    io.send(message.content, kind, reply_to).catch((error: unknown): void => {
       // The bubble is the report: it says the send failed, why, and offers Retry.
       const failed: ChatMessage | null = pending?.update(message.id, { status: 'failed', error: describeFailure(error, 'The server did not take it.') }) ?? null;
       if (failed !== null) history.emit({ kind: 'updated', message: { id: failed.id, status: 'failed', error: failed.error } });
     });
   };
   return {
-    text: async ({ content, messageType, replyTo, onRecorded }: TextSend): Promise<void> => {
+    text: async ({ content, messageType, reply_to, onRecorded }: TextSend): Promise<void> => {
       if (pending === null) {
-        await io.send(content, messageType, replyTo);
+        await io.send(content, messageType, reply_to);
         onRecorded();
         return;
       }
       if (self === null) throw new Error('This tab has not finished signing in, so the message was not sent.');
       const message: ChatMessage = {
         id: params.mintLocalId(), content, timestamp: params.now(), index: 0, status: 'pending', message_type: messageType,
-        ...(replyTo !== null ? { replyTo } : {}),
+        ...(reply_to !== null ? { reply_to } : {}),
         author: { own: true, name: self.displayName, username: null }, share: null,
       };
-      pending.add(message, { content, reply_to: replyTo, message_type: messageType === 'markdown' ? 'Markdown' : 'Text' });
+      pending.add(message, { content, reply_to: reply_to, message_type: messageType === 'markdown' ? 'Markdown' : 'Text' });
       history.emit({ kind: 'arrived', message, incoming: false });
       onRecorded();
-      deliver(message, messageType, replyTo);
+      deliver(message, messageType, reply_to);
     },
     revise: { edit: io.edit, remove: io.remove },
     react: nodeReact(io, self),
@@ -89,7 +89,7 @@ function nodeSend(params: NodeTransportParams, history: GroupHistory, pending: P
       if (failed === null || failed.status !== 'failed') return;
       pending?.update(messageId, { status: 'pending', error: undefined });
       history.emit({ kind: 'status', messageId, status: 'pending' });
-      deliver(failed, failed.message_type === 'markdown' ? 'markdown' : 'text', failed.replyTo ?? null);
+      deliver(failed, failed.message_type === 'markdown' ? 'markdown' : 'text', failed.reply_to ?? null);
     },
   };
 }

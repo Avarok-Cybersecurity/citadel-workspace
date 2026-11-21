@@ -4,11 +4,11 @@
  */
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { Placement } from '@/lib/calendar/placement';
+import type { GridPlacement } from '@/lib/calendar/placement';
 import type { EntrySource, LoadState } from '@/lib/calendar/store';
 import { CalendarNotices } from '../CalendarNotices';
 
-const NOTHING_UNPLACED: Placement = { fromMs: 0n, days: new Map(), unplaced: [], truncated: false };
+const NOTHING_UNPLACED: GridPlacement = { fromMs: 0n, days: new Map(), unplaced: [], truncated: false };
 
 const notices = (loads: [EntrySource, LoadState][]): string[] => {
   render(<CalendarNotices loads={new Map(loads)} placement={NOTHING_UNPLACED} />);

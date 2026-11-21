@@ -1,7 +1,7 @@
 /**
  * Which editor a chat document's id names. A document made in a chat from this release on is a
  * Citadel Docs document and its id says so (`cdoc-` and a UUID); every earlier one is a bare
- * UUID made by the old chat editor, moved to Citadel Docs once per device when it is opened.
+ * UUID made by the old chat editor, which this version does not open.
  *
  * The id, not a field beside it: it is the one part of the invitation every path carries. The
  * agent that keeps a conversation for its accounts stores and sends the fields it knows (the

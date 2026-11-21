@@ -17,7 +17,7 @@ const ONE_MB: number = 1024 * 1024;
 function offered(fileSize: number): FileTransfer {
   return {
     id: 't1',
-    senderCid: PEER,
+    sender_cid: PEER,
     fileSize,
     fileName: 'big.bin',
     state: 'pending',

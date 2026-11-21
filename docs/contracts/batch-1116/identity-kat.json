@@ -35,7 +35,19 @@
       "error": "BadPath"
     },
     {
-      "dialled": "[::1]:8443",
+      "canonical": "[::1]:8443",
+      "dialled": "[::1]:8443"
+    },
+    {
+      "canonical": "[2001:db8::1]",
+      "dialled": "wss://[2001:DB8:0:0::1]:443/"
+    },
+    {
+      "dialled": "2001:db8::1",
+      "error": "BadHost"
+    },
+    {
+      "dialled": "[2001:db8::1",
       "error": "BadHost"
     },
     {

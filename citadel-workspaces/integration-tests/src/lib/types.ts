@@ -27,6 +27,8 @@ export interface CreateAccountOptions {
   isFirstUser?: boolean;
   password?: string;
   uxTracker?: import('./ux-tracker.js').UxIssueTracker | null;
+  /** Told the recovery phrase's words, as the registration showed them, once they are confirmed. */
+  onRecoveryPhrase?: (words: string[]) => void;
 }
 
 export interface BrowserOptions {

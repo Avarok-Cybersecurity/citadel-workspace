@@ -2,6 +2,7 @@ import { isVariant } from 'citadel-workspace-client-ts';
 import { getEntityTypeString } from '@/lib/entity-type-registry';
 import type { DomainNode, TreeNode } from './tree-node-types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
+import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 
 /**
  * Builds a tree structure from a flat list of DomainNodes.
@@ -92,9 +93,8 @@ export function syntheticWorkspaceRoot(roots: DomainNode[], rootName: string): D
     members: [],
     children: roots.map(r => r.id),
     mdx_content: '',
-    // A synthetic root the client invents to hold the real roots; it has no
-    // stored document and therefore no server hash.
-    mdx_content_hash: null,
+    // A synthetic root the client invents to hold the real roots: no document.
+    mdx_content_hash: EMPTY_DOCUMENT_HASH,
     rules: null,
     chat_enabled: false,
     chat_channel_id: null,

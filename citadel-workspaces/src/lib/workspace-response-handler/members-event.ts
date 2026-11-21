@@ -9,6 +9,16 @@ import { mapWasmMember, type MappedMember } from './member-mapping';
 import { recordMemberNames } from '@/lib/member-names';
 import { recordPresenceChoices } from '@/lib/published-presence';
 
+/** Handles a `BannedMembers` response; false for any other. */
+export function emitBannedMembers(response: WorkspaceProtocolResponse, connectionInfo: ConnectionInfo): boolean {
+  if (!isVariant(response, 'BannedMembers')) return false;
+  const rawMembers: Record<string, unknown>[] = response.BannedMembers.members as unknown as Record<string, unknown>[];
+  const members: MappedMember[] = rawMembers.map((m: Record<string, unknown>): MappedMember => mapWasmMember(m));
+  recordMemberNames(members);
+  eventEmitter.emit('members:banned-loaded', { members, connection: connectionInfo });
+  return true;
+}
+
 /** Handles a `Members` response; false for any other. */
 export function emitMembers(response: WorkspaceProtocolResponse, connectionInfo: ConnectionInfo): boolean {
   if (!isVariant(response, 'Members')) return false;
@@ -18,17 +28,11 @@ export function emitMembers(response: WorkspaceProtocolResponse, connectionInfo:
   // user-search corpus and the group-call roster -- so a list fetched for one
   // domain rendered inside another, and the admin tab then sent role changes
   // naming ITS entity with users taken from somebody else's list.
-  //
-  // Tolerates the old shape (a bare array) so a client running against a
-  // server that predates the field still works, with the domain unknown.
-  type MembersWire = { domain_id?: string | null; members: Record<string, unknown>[]; inherited_from?: Record<string, string>; guests?: string[] };
-  const payload: MembersWire | Record<string, unknown>[] = response.Members as MembersWire | Record<string, unknown>[];
-  const rawMembers: Record<string, unknown>[] = Array.isArray(payload) ? payload : payload.members;
-  const domainId: string | undefined = Array.isArray(payload) ? undefined : payload.domain_id ?? undefined;
-  // Absent from a server that predates it, which lists direct members only.
-  const inheritedFrom: Readonly<Record<string, string>> = Array.isArray(payload) ? {} : payload.inherited_from ?? {};
-  // Absent from a server that predates booking guests, which has none.
-  const guests: readonly string[] = Array.isArray(payload) ? [] : payload.guests ?? [];
+  type Members = Extract<WorkspaceProtocolResponse, { Members: unknown }>['Members'];
+  // The members are mapped one by one from their wire records.
+  type MembersWire = Omit<Members, 'members'> & { members: Record<string, unknown>[] };
+  const { members: rawMembers, domain_id: domainId, inherited_from: inheritedFrom, guests }: MembersWire =
+    response.Members as MembersWire;
 
   const mappedMembers: MappedMember[] = rawMembers.map((m: Record<string, unknown>): MappedMember => mapWasmMember(m));
   recordMemberNames(mappedMembers);

@@ -9,7 +9,8 @@
  * for now (rate limited, log full) and the server's own compaction.
  */
 import type { RequestPacer } from '../../request-pacer';
-import type { DocumentsRequest, DocumentsResponse } from 'citadel-workspace-client-ts';
+import type { DocumentRefusal, DocumentsRequest, DocumentsResponse } from 'citadel-workspace-client-ts';
+import type { VariantName } from '@/types/variant-name';
 import type { DocumentsTransport, LinkState } from '../../ports';
 import { KernelLog, type KernelLogConfig } from './kernel-log';
 import type { ManualClock } from './manual-clock';
@@ -22,7 +23,7 @@ export interface ScriptedKernelConfig extends KernelLogConfig {
 }
 
 /** Refusals of a request the kernel would take later (requests/documents.rs). */
-export type HeldBack = 'LogFull' | 'AppendRateLimited' | 'PullRateLimited';
+export type HeldBack = Extract<VariantName<DocumentRefusal>, 'LogFull' | 'AppendRateLimited' | 'PullRateLimited'>;
 
 type Delivery = { readonly kind: 'response'; readonly response: DocumentsResponse } | { readonly kind: 'error'; readonly message: string };
 

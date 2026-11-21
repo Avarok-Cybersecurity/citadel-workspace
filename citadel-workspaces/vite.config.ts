@@ -38,9 +38,12 @@ import { readFileSync } from "node:fs";
  * `connect-src 'self'` is the load-bearing part: the agent socket is same-origin (`/ws`),
  * so 'self' covers it and no `ws:`/`wss:` wildcard is needed. A bare scheme source would
  * match ANY host, which would let an XSS payload exfiltrate to an attacker's socket.
+ *
+ * `form-action` names the "Sign in with Citadel" returns: the Worker derives them from the
+ * allowlist (deploy/tenant-worker/control/ui.mjs FORM_ACTIONS), and this literal is held to it.
  */
 const PRODUCTION_CSP =
-  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://work.avarok.net https://synchronized.work";
 
 /**
  * Identical to production except for the two script-src sources Vite's dev transform
@@ -50,7 +53,7 @@ const PRODUCTION_CSP =
  * so a violation fails in dev, where someone will notice.
  */
 const DEV_CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://work.avarok.net https://synchronized.work";
 
 /**
  * Proxy the agent's WebSocket so a locally-served app reaches it at the same same-origin `/ws`

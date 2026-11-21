@@ -15,13 +15,17 @@ describe('mapWasmMember', () => {
       id: 'user-1',
       username: 'alice',
       displayName: 'Alice Anderson',
-      role: 'admin',
+      banned: true,
       name: 'should-not-shadow-username',
     });
     expect(out.id).toBe('user-1');
     expect(out.username).toBe('alice');
     expect(out.displayName).toBe('Alice Anderson');
-    expect(out.role).toBe('admin');
+    expect(out.banned).toBe(true);
+  });
+
+  it('reads a member in good standing as not banned', () => {
+    expect(mapWasmMember({ id: 'ada', banned: false }).banned).toBe(false);
   });
 
   it('takes the username from `id` and the display name from `name`', () => {
@@ -48,7 +52,7 @@ describe('mapWasmMember', () => {
     expect(out.id).toBeUndefined();
     expect(out.username).toBe('');
     expect(out.displayName).toBe('');
-    expect(out.role).toBeUndefined();
+    expect(out.banned).toBe(false);
   });
 
   it('coerces a numeric id to string instead of dropping it', () => {

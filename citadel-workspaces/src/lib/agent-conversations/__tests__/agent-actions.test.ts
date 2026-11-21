@@ -20,7 +20,7 @@ let answer: Answer = () => {};
 const watchers: Set<(e: ConversationEvent) => void> = new Set();
 
 function stored(id: string, extra: Partial<P2PMessage> = {}): P2PMessage {
-  return { id, content: 'hi', senderCid: ME, recipientCid: BOB, timestamp: 1, index: 1, status: 'sent', message_type: 'text', ...extra };
+  return { id, content: 'hi', sender_cid: ME, recipient_cid: BOB, timestamp: 1, index: 1, status: 'sent', message_type: 'text', ...extra };
 }
 
 function appended(requestId: string): ConversationEvent {

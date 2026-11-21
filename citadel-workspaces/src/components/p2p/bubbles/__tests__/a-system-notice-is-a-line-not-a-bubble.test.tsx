@@ -11,7 +11,7 @@ import type { P2PMessage } from '@/lib/p2p';
 afterEach(() => cleanup());
 
 const notice: P2PMessage = {
-  id: 'shot-1', content: 'Bob may have taken a screenshot', senderCid: 42n, recipientCid: 7n,
+  id: 'shot-1', content: 'Bob may have taken a screenshot', sender_cid: 42n, recipient_cid: 7n,
   timestamp: 1_700_000_000_000, index: 3, status: 'delivered', message_type: 'system_notice',
 };
 

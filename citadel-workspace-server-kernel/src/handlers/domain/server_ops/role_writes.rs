@@ -1,30 +1,23 @@
-//! Writing a member's role, and the guard that keeps someone able to manage roles.
+//! Writing a member's role or ban, and the guard that keeps someone able to manage roles.
 
 use super::async_domain_server_ops::AsyncDomainServerOperations;
-use super::role_authority::Assignment;
 use crate::WORKSPACE_ROOT_ID;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::roles_legacy::legacy_mirror;
-use citadel_workspace_types::structs::{Permission, User, UserRole};
+use citadel_workspace_types::roles::RoleDefinition;
+use citadel_workspace_types::structs::{Permission, User};
 
-/// Make `assignment` the account's role in the root workspace.
-///
-/// The enum is written alongside the id for clients that read only `User::role`; nothing reads
-/// it for authority but `Banned`. Banning clears every grant, everywhere: a per-node grant is
-/// honoured before the role, so one left behind would outlive the ban.
-pub fn assign_workspace_role(user: &mut User, assignment: &Assignment) {
-    match assignment {
-        Assignment::Role(role) => {
-            user.workspace_roles
-                .insert(WORKSPACE_ROOT_ID.to_string(), role.id.clone());
-            user.role = legacy_mirror(&role.id, &role.name);
-        }
-        Assignment::Banned => {
-            user.workspace_roles.remove(WORKSPACE_ROOT_ID);
-            user.role = UserRole::Banned;
-            user.permissions.clear();
-        }
-    }
+/// Make `role` the account's role in the root workspace.
+pub fn assign_workspace_role(user: &mut User, role: &RoleDefinition) {
+    user.workspace_roles
+        .insert(WORKSPACE_ROOT_ID.to_string(), role.id.clone());
+}
+
+/// Ban the account: its role in every workspace and every grant go, and the record stays so the
+/// ban does. A per-node grant is honoured before the role, so one left behind would outlive it.
+pub fn ban_record(user: &mut User) {
+    user.banned = true;
+    user.workspace_roles.clear();
+    user.permissions.clear();
 }
 
 fn grants_manage_roles_directly(user: &User) -> bool {
@@ -38,7 +31,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     ///
     /// Unrecoverable otherwise: assigning a role takes `ManageRoles`, so a workspace with nobody
     /// holding it can never give it to anyone. `after` is what the target will hold, `None` when
-    /// they are being removed. A no-op when the target cannot manage roles now, so ordinary
+    /// they are being removed or banned. A no-op when the target cannot manage roles now, so ordinary
     /// member management is unaffected.
     ///
     /// Not needed for edits to the table itself. The actor of one holds `ManageRoles` and a
@@ -47,7 +40,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     pub(crate) async fn ensure_managers_remain(
         &self,
         target_user_id: &str,
-        after: Option<&Assignment>,
+        after: Option<&RoleDefinition>,
         action: &str,
     ) -> Result<(), NetworkError> {
         if !self
@@ -57,7 +50,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             return Ok(());
         }
         let keeps = match after {
-            Some(Assignment::Role(role)) => {
+            Some(role) => {
                 role.grants(Permission::ManageRoles)
                     || self
                         .backend_tx_manager
@@ -66,7 +59,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
                         .as_ref()
                         .is_some_and(grants_manage_roles_directly)
             }
-            Some(Assignment::Banned) | None => false,
+            None => false,
         };
         if keeps {
             return Ok(());
@@ -99,12 +92,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     pub(crate) async fn write_user_role(
         &self,
         user_id: &str,
-        assignment: &Assignment,
+        role: &RoleDefinition,
         domain_id: &str,
         create_if_missing: bool,
     ) -> Result<(), NetworkError> {
         let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
-        self.write_user_role_locked(user_id, assignment, domain_id, create_if_missing)
+        self.write_user_role_locked(user_id, role, domain_id, create_if_missing)
             .await
     }
 
@@ -118,31 +111,31 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     pub(crate) async fn write_user_role_locked(
         &self,
         user_id: &str,
-        assignment: &Assignment,
+        role: &RoleDefinition,
         domain_id: &str,
         create_if_missing: bool,
     ) -> Result<(), NetworkError> {
         let scopes_workspace_role = domain_id == WORKSPACE_ROOT_ID;
         if scopes_workspace_role {
-            self.ensure_managers_remain(user_id, Some(assignment), "demote")
+            self.ensure_managers_remain(user_id, Some(role), "demote")
                 .await?;
         }
 
+        self.ensure_not_banned(user_id).await?;
         let (mut user, is_new) = match self.backend_tx_manager.get_user(user_id).await? {
             Some(user) => (user, false),
-            None if create_if_missing => (
-                User::new(user_id.to_string(), user_id.to_string(), UserRole::Member),
-                true,
-            ),
+            None if create_if_missing => {
+                (User::new(user_id.to_string(), user_id.to_string()), true)
+            }
             None => return Err(NetworkError::msg("User not found")),
         };
 
         if scopes_workspace_role || is_new {
-            assign_workspace_role(&mut user, assignment);
+            assign_workspace_role(&mut user, role);
         }
-        if !scopes_workspace_role && !user.is_banned() {
+        if !scopes_workspace_role {
             user.permissions
-                .insert(domain_id.to_string(), assignment.permissions());
+                .insert(domain_id.to_string(), role.permissions.clone());
         }
 
         self.backend_tx_manager

@@ -174,7 +174,7 @@ describe("the kernel.toml's [identity]", () => {
     });
     expect(refusals[0]).toMatch(/identity\.canonical_domain/);
     expect(refusals[1]).toMatch(/identity\.former_domains/);
-    expect(refusals[2]).toMatch(/provisioned before server identities/);
+    expect(refusals[2]).toMatch(/provisioned by an earlier release/);
   });
 
   it("is refused, rather than defaulted, when REGISTRATION_NAMES is unset or unknown", async () => {

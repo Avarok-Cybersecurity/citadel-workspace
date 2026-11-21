@@ -12,7 +12,7 @@ import { debugLog } from '@/lib/debug-config';
 import { INTERVAL } from '@/lib/timeout-constants';
 
 import { Permission, PERMISSION_LABELS } from './types';
-import type { UserRole, DomainPermissions } from './types';
+import type { DomainPermissionEntry } from './types';
 import {
   updateCacheEntry,
   hasPermission as cacheHasPermission,
@@ -25,8 +25,8 @@ import {
  */
 export class PermissionsService extends EventListenerManager {
   private static instance: PermissionsService;
-  private cache: Map<string, DomainPermissions> = new Map();
-  private pendingRequests: Map<string, Promise<DomainPermissions>> = new Map();
+  private cache: Map<string, DomainPermissionEntry> = new Map();
+  private pendingRequests: Map<string, Promise<DomainPermissionEntry>> = new Map();
   /**
    * Why the last fetch for a domain did not produce permissions.
    *
@@ -55,7 +55,6 @@ export class PermissionsService extends EventListenerManager {
   protected setupEventListeners(): void {
     this.listen<{
       userId: string;
-      role: UserRole;
       permissions: string[];
       domainId: string;
     }>('user:permissions:loaded', (payload) => {
@@ -68,7 +67,7 @@ export class PermissionsService extends EventListenerManager {
       // user who logged IN rather than registering, which made this equality
       // check fail for every response and left the cache permanently empty.
       if (payload.userId === this.getCurrentUserId()) {
-        updateCacheEntry(this.cache, payload.domainId, payload.role, payload.permissions);
+        updateCacheEntry(this.cache, payload.domainId, payload.permissions);
         // Emitted on BOTH paths. It used to be async-only, on the reasoning
         // that the synchronous path had already filled the cache "before any
         // listener could observe it missing" -- true of listeners that run
@@ -82,7 +81,7 @@ export class PermissionsService extends EventListenerManager {
 
       void this.isCurrentUser(payload.userId).then((mine) => {
         if (mine) {
-          updateCacheEntry(this.cache, payload.domainId, payload.role, payload.permissions);
+          updateCacheEntry(this.cache, payload.domainId, payload.permissions);
           this.emit('permissions:updated', { domainId: payload.domainId });
         }
       });
@@ -109,11 +108,11 @@ export class PermissionsService extends EventListenerManager {
     // to: it read as THE permissions-refresh path, so the obvious repair was to
     // start emitting it, which would have refreshed twice for one change.
     // Deleted, and the reason recorded here where the surviving path is.
-    this.listen<{ userId: string; role: UserRole }>('member:role-updated', (payload) => {
+    this.listen<{ userId: string; roleId: string | null }>('member:role-updated', (payload) => {
       void this.isCurrentUser(payload.userId).then((mine) => {
         if (mine) {
           this.clearCache();
-          this.emit('permissions:role-changed', { role: payload.role });
+          this.emit('permissions:role-changed', { roleId: payload.roleId });
         }
       });
     });
@@ -129,15 +128,15 @@ export class PermissionsService extends EventListenerManager {
   /**
    * Fetch permissions for a specific domain.
    */
-  public async fetchPermissions(domainId: string, forceRefresh: boolean = false): Promise<DomainPermissions | null> {
+  public async fetchPermissions(domainId: string, forceRefresh: boolean = false): Promise<DomainPermissionEntry | null> {
     if (!forceRefresh) {
-      const cached: DomainPermissions | undefined = this.cache.get(domainId);
+      const cached: DomainPermissionEntry | undefined = this.cache.get(domainId);
       if (cached && Date.now() - cached.lastUpdated < INTERVAL.PERMISSION_CACHE_MS) {
         return cached;
       }
     }
 
-    const pending: Promise<DomainPermissions> | undefined = this.pendingRequests.get(domainId);
+    const pending: Promise<DomainPermissionEntry> | undefined = this.pendingRequests.get(domainId);
     if (pending) return pending;
 
     const userId: string | null = await this.resolveCurrentUserId();
@@ -147,7 +146,7 @@ export class PermissionsService extends EventListenerManager {
       return null;
     }
 
-    const requestPromise: Promise<DomainPermissions> = requestPermissions(
+    const requestPromise: Promise<DomainPermissionEntry> = requestPermissions(
       domainId, userId, this.cache, this.lastFailure, this.pendingRequests,
     );
 
@@ -179,11 +178,11 @@ export class PermissionsService extends EventListenerManager {
     return permissions.every((p) => this.hasPermission(domainId, p));
   }
 
-  public getPermissions(domainId: string): DomainPermissions | null {
+  public getPermissions(domainId: string): DomainPermissionEntry | null {
     return this.cache.get(domainId) || null;
   }
 
-  public getAllCachedPermissions(): Map<string, DomainPermissions> {
+  public getAllCachedPermissions(): Map<string, DomainPermissionEntry> {
     return new Map(this.cache);
   }
 

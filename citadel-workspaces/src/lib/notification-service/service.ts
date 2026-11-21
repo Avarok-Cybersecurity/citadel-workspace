@@ -57,22 +57,22 @@ export class NotificationService {
 
   public addMessageNotification(
     title: string, content: string, senderId: string,
-    messageId: string, recipientCid?: string, data?: Record<string, unknown>
+    messageId: string, recipient_cid?: string, data?: Record<string, unknown>
   ): Notification {
     return this.addNotification({
       type: NotificationType.MESSAGE, title, content, senderId,
-      sourceId: messageId, recipientCid, priority: NotificationPriority.NORMAL, data
+      sourceId: messageId, recipient_cid, priority: NotificationPriority.NORMAL, data
     });
   }
 
   public addPeerRegistrationNotification(
     peerUsername: string, peerCid: string, requestId: string,
     onAccept: () => void, onDecline: () => void, onCardClick: () => void,
-    recipientCid?: string
+    recipient_cid?: string
   ): Notification {
     return this.addNotification(
       peerRegistrationNotification({
-        peerUsername, peerCid, requestId, onAccept, onDecline, onCardClick, recipientCid,
+        peerUsername, peerCid, requestId, onAccept, onDecline, onCardClick, recipient_cid,
       }),
     );
   }
@@ -87,10 +87,10 @@ export class NotificationService {
   public addSystemNotification(
     title: string, content: string,
     priority: NotificationPriority = NotificationPriority.NORMAL,
-    recipientCid?: string
+    recipient_cid?: string
   ): Notification {
     return this.addNotification({
-      type: NotificationType.SYSTEM, title, content, priority, recipientCid
+      type: NotificationType.SYSTEM, title, content, priority, recipient_cid
     });
   }
 
@@ -187,7 +187,7 @@ export class NotificationService {
   /**
    * The notifications that belong to `cid`, plus those belonging to no session.
    *
-   * `recipientCid` was recorded on every notification and plumbed through to
+   * `recipient_cid` was recorded on every notification and plumbed through to
    * `getUnreadCountByCid` — and the panel that actually renders them ignored it
    * entirely, filtering only by type. Message notifications carry a
    * 100-character plaintext preview and the sender's name, so a tab that
@@ -195,7 +195,7 @@ export class NotificationService {
    * is built around) showed the previous account's messages to the new one.
    * `cleanup()` has no callers, so nothing clears them on logout either.
    *
-   * Undefined `recipientCid` means "not session-scoped" and is always shown.
+   * Undefined `recipient_cid` means "not session-scoped" and is always shown.
    */
   public getNotificationsForCid(cid: string | null): Notification[] {
     return this.getNotifications().filter((n) => notificationBelongsTo(n, cid));

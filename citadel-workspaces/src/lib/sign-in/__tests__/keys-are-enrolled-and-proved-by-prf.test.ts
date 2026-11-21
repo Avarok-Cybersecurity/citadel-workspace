@@ -93,7 +93,7 @@ describe('answering a challenge', () => {
     await enrolled(alice);
     alice.policy = 'PasswordAndKey';
     w.authenticator.prfMode = 'none';
-    await expect(manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryCodes', PASSWORD_STEP_UP))
+    await expect(manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryPhrase', PASSWORD_STEP_UP))
       .rejects.toEqual(new SignInManagementError(NO_PRF_REASON, null));
     expect(variants(w).slice(-2)).toEqual(['SignInManagement', 'SecurityKeyDecline']);
   });
@@ -104,7 +104,7 @@ describe('answering a challenge', () => {
     await enrolled(alice);
     alice.policy = 'PasswordAndKey';
     w.authenticator.cancelNext = true;
-    await expect(manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryCodes', PASSWORD_STEP_UP))
+    await expect(manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryPhrase', PASSWORD_STEP_UP))
       .rejects.toEqual(new SignInManagementError(CANCELLED_REASON, null));
   });
 
@@ -114,7 +114,7 @@ describe('answering a challenge', () => {
     await enrolled(alice);
     alice.policy = 'PasswordAndKey';
     alice.keys[0].prf = 'not-this-keys-prf';
-    await expect(manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryCodes', PASSWORD_STEP_UP))
+    await expect(manageSignIn(w.deps.send, alice.cid, 'RegenerateRecoveryPhrase', PASSWORD_STEP_UP))
       .rejects.toEqual(new SignInManagementError('authentication failed', null));
   });
 });

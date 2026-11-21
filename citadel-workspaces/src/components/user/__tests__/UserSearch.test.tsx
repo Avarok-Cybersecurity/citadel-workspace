@@ -17,9 +17,9 @@ import { WorkspaceContext } from '@/contexts/WorkspaceContext';
  * module: the provider does live work this test has no use for, and passing a
  * value into the context that ships is the same wiring the app uses.
  */
-const members: { 'user-1': { id: string; username: string; displayName: string; role: string; }; 'user-2': { id: string; username: string; displayName: string; role: string; }; } = {
-  'user-1': { id: 'user-1', username: 'ada', displayName: 'Ada Lovelace', role: 'Member' },
-  'user-2': { id: 'user-2', username: 'grace', displayName: 'Grace Hopper', role: 'Member' },
+const members: { 'user-1': { id: string; username: string; displayName: string; banned: boolean; }; 'user-2': { id: string; username: string; displayName: string; banned: boolean; }; } = {
+  'user-1': { id: 'user-1', username: 'ada', displayName: 'Ada Lovelace', banned: false },
+  'user-2': { id: 'user-2', username: 'grace', displayName: 'Grace Hopper', banned: false },
 };
 
 function renderSearch(): HTMLElement {

@@ -37,14 +37,10 @@ export interface KVPendingEntry {
   reject: (error: Error) => void;
 }
 
-/**
- * Notification data for incoming peer registration
- */
-export interface PeerRegisterNotification {
-  cid: bigint;
-  peer_cid: bigint;
-  peer_username?: string;
-}
+import type { PeerRegisterNotification as WirePeerRegisterNotification } from 'citadel-workspace-client-ts';
+
+/** What the store reads off an incoming registration: the generated notification's addressing and name. */
+export type PeerRegisterNotification = Pick<WirePeerRegisterNotification, 'cid' | 'peer_cid' | 'peer_username'>;
 
 // One implementation, in lib/wasm-request: this cast is where the app crosses
 // into the WASM nominal types, and a grep for it should find every crossing.

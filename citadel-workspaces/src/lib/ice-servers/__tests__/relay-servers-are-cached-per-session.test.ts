@@ -11,7 +11,8 @@ import { IceServersCache, REFUSAL_CACHE_MS, type IceServersPort } from '../cache
 import { parseIceServersAnswer } from '../parse';
 import { lazyTurnSource } from '../lazy-turn-source';
 import type { TurnSource } from '../peer-connect-turn';
-import type { IceServersAnswer, IceServersGrant, TurnConfig } from '@/types/ice-servers';
+import type { IceServersAnswer, IceServersGrant } from '@/types/ice-servers';
+import type { PeerTurnConfig } from 'citadel-workspace-client-ts';
 
 const ALICE: bigint = 1001n;
 const BOB: bigint = 2002n;
@@ -120,12 +121,12 @@ describe('the relay cache', () => {
 
 describe('the lazily-loaded relay source', () => {
   it('loads once, and a failed load connects without a relay and is retried', async () => {
-    const turn: TurnConfig = { policy: 'fallback', ice_servers: [], expires_at: 1n };
+    const turn: PeerTurnConfig = { policy: 'fallback', ice_servers: [], expires_at: 1n };
     let loads: number = 0;
     const source: TurnSource = lazyTurnSource(async (): Promise<TurnSource> => {
       loads += 1;
       if (loads === 1) throw new Error('chunk failed to load');
-      return async (): Promise<TurnConfig> => turn;
+      return async (): Promise<PeerTurnConfig> => turn;
     });
 
     expect(await source(ALICE)).toBeNull();

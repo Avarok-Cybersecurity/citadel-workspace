@@ -29,6 +29,8 @@ struct Channel {
 struct Inner {
     remote: NodeRemote<StackedRatchet>,
     server_addr: SocketAddr,
+    /// The tenant's canonical domain, which an account's recovery phrase is bound to.
+    recovery_domain: String,
     channel: RefCell<Option<Channel>>,
     stop_tx: RefCell<Option<oneshot::Sender<()>>>,
 }
@@ -46,11 +48,14 @@ fn credentials(username: &str, password: &str) -> AuthenticationRequest {
     AuthenticationRequest::credentialed(username, password)
 }
 
-/// Start a client node dialling `endpoint`. `server_addr` is what the connection settings carry.
+/// Start a client node dialling `endpoint`. `server_addr` is what the connection settings carry;
+/// `recovery_domain` is the tenant's canonical domain, as the agent derives it for a recovery
+/// phrase.
 #[wasm_bindgen]
 pub async fn start_client(
     server_addr: String,
     endpoint: String,
+    recovery_domain: String,
     log_filter: String,
 ) -> Result<ProofClient, JsError> {
     tenant_console_log::init(&log_filter);
@@ -68,6 +73,10 @@ pub async fn start_client(
         // Required by the SDK for every node, and only ever handed to a peer connection's ICE
         // agent: a proof client dials its server and never a peer, so these are never contacted.
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
+        // The tenant server's maximum (the SDK's test one is the same Custom(10)), and the links
+        // this release runs: both required, with no default.
+        .with_max_security_level(citadel_sdk::test_common::localhost_max_security_level())
+        .with_link_manager(citadel_sdk::prelude::LinkManagerMode::Legacy)
         .with_backend(BackendType::InMemory)
         .with_client_config(WasmClientConfig {
             use_tls: false,
@@ -88,6 +97,7 @@ pub async fn start_client(
         inner: Rc::new(Inner {
             remote,
             server_addr,
+            recovery_domain,
             channel: RefCell::new(None),
             stop_tx: RefCell::new(Some(stop_tx)),
         }),
@@ -97,8 +107,8 @@ pub async fn start_client(
 #[wasm_bindgen]
 impl ProofClient {
     /// Register an account on the server, with `admission` (a Turnstile token) when the server
-    /// asks for one. Resolves, once the server accepted it, with the account's recovery codes as
-    /// a JSON array (empty for a legacy registration).
+    /// asks for one. Resolves, once the server accepted it, with the account's recovery phrase
+    /// as a JSON array of its 24 words.
     pub fn register(
         &self,
         username: String,
@@ -114,14 +124,19 @@ impl ProofClient {
                     "Proof User",
                     username.as_str(),
                     password.as_str(),
-                    SessionSecuritySettings::default(),
+                    default_session_security_settings(),
                     None,
                     admission,
+                    Some(inner.recovery_domain.clone()),
+                    crate::SERVER_CERTIFICATE,
                 )
                 .await
                 .map_err(js_err)?;
-            let codes = serde_json::to_string(&registered.recovery_codes).map_err(js_err)?;
-            Ok(JsValue::from_str(&codes))
+            let phrase = registered
+                .recovery_phrase
+                .ok_or_else(|| js_err("the server issued no recovery phrase"))?;
+            let words = serde_json::to_string(&phrase).map_err(js_err)?;
+            Ok(JsValue::from_str(&words))
         })
     }
 
@@ -143,11 +158,26 @@ impl ProofClient {
         self.open(request)
     }
 
-    /// Sign in with one of the account's recovery codes (a restricted recovery session).
+    /// Sign in with the account's recovery phrase (a restricted recovery session), with
+    /// `admission` when the server asks for one: a recovery is asked like a fresh sign-in.
     /// Resolves with the session CID.
-    pub fn connect_recovery(&self, username: String, code: String) -> js_sys::Promise {
-        match SignInFactors::recovery_code(&code) {
-            Ok(factors) => self.open(AuthenticationRequest::sign_in(username, factors)),
+    pub fn connect_recovery(
+        &self,
+        username: String,
+        phrase: String,
+        admission: Option<String>,
+    ) -> js_sys::Promise {
+        let phrase = RecoverySeed::parse(&phrase)
+            .and_then(|seed| RecoveryPhrase::new(seed, self.inner.recovery_domain.clone()));
+        match phrase {
+            Ok(phrase) => {
+                let factors = SignInFactors::recovery_phrase(phrase);
+                let factors = match admission {
+                    Some(token) => factors.with_admission(token),
+                    None => factors,
+                };
+                self.open(AuthenticationRequest::sign_in(username, factors))
+            }
             Err(e) => js_sys::Promise::reject(&js_err(e)),
         }
     }
@@ -162,8 +192,9 @@ impl ProofClient {
                     ConnectMode::Standard { force_login: false },
                     UdpMode::Disabled,
                     None,
-                    SessionSecuritySettings::default(),
+                    default_session_security_settings(),
                     None,
+                    crate::SERVER_CERTIFICATE,
                 )
                 .await
                 .map_err(js_err)?;

@@ -21,7 +21,6 @@ vi.mock('@/lib/websocket-service', async (orig: () => Promise<Record<string, unk
 vi.mock('@/lib/connection', async (orig: () => Promise<Record<string, unknown>>) => (await import('./login-world')).connectionDouble(orig));
 vi.mock('@/lib/tab-context', async (orig: () => Promise<Record<string, unknown>>) => (await import('./login-world')).tabContextDouble(orig));
 vi.mock('@/lib/post-auth-setup', async () => ({ postAuthSetup: (await import('./login-world')).loginWorld.postAuth }));
-vi.mock('@/lib/start-messaging', async () => ({ startMessagingForSession: (await import('./login-world')).loginWorld.messaging }));
 vi.mock('@/lib/session-startup-service', () => ({}));
 vi.mock('@/lib/passkey', async (orig: () => Promise<Record<string, unknown>>) => (await import('./login-world')).passkeyDouble(orig));
 vi.mock('@/lib/sign-in', async (orig: () => Promise<Record<string, unknown>>) => (await import('./login-world')).signInDouble(orig));
@@ -30,7 +29,6 @@ vi.mock('@/lib/admission', async (orig: () => Promise<Record<string, unknown>>) 
 import { Login } from '../Login';
 import { enrolKey, world } from '@/lib/sign-in/__tests__/helpers';
 import { saveHint } from '@/lib/sign-in/hints';
-import { enrolCredential } from '@/lib/passkey/__tests__/legacy-enrol';
 import { ADMISSION_COPY } from '@/lib/admission/copy';
 import { PASSWORD_THEN_KEY } from '../passkey/passkey-offer';
 import { ALWAYS_PASS, installFakeTurnstile, type FakeTurnstile } from '../admission/__tests__/fake-turnstile';
@@ -102,16 +100,6 @@ describe('a passkey sign-in on a workspace that asks for a human check', () => {
     renderLogin();
     await signInWithThePasskeyButton();
     await waitFor(() => expect(onNext).toHaveBeenCalledWith('7'));
-  });
-
-  it('an option-A passkey signs in, its token bound to its workspace', async () => {
-    const alice: FakeAccount = h.w.agent.account('alice');
-    await enrolCredential({ ...h.w.deps, now: (): number => 1 }, { username: 'alice', cid: alice.cid, label: 'Mac', password: alice.password });
-    renderLogin();
-    await signInWithThePasskeyButton();
-    // Signed in: the form then offers to move the passkey to the server.
-    expect(await screen.findByTestId('add-security-key')).toBeInTheDocument();
-    expect(connects().at(-1)?.admission_token).toMatch(/@bench$/);
   });
 });
 

@@ -13,12 +13,10 @@
  * redirect) build their notices here, so they cannot come apart again.
  */
 import type { ToastOptions } from '@/hooks/use-toast';
-import { SESSION_OWNED_ELSEWHERE } from './claim-session';
 
 export interface SessionSwitchToasts {
   progress: ToastOptions;
   connected: ToastOptions;
-  ownedElsewhere: ToastOptions;
   /** The agent no longer holds it: the progress notice must not stay saying "Reconnecting". */
   signedOut: ToastOptions;
   failed: (description: string) => ToastOptions;
@@ -30,7 +28,6 @@ export function sessionSwitchToasts(cid: bigint, label: string): SessionSwitchTo
   return {
     progress: { id, title: 'Reconnecting...', description: `Loading ${label}`, variant: 'default' },
     connected: { id, title: 'Connected!', description: `Now viewing ${label}`, variant: 'success' },
-    ownedElsewhere: { id, ...SESSION_OWNED_ELSEWHERE },
     signedOut: { id, title: 'Sign in to continue', description: `Your session for ${label} has ended.`, variant: 'default' },
     failed: (description: string): ToastOptions => ({ id, title: 'Connection Failed', description, variant: 'destructive' }),
   };

@@ -25,11 +25,12 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, extname, normalize } from 'node:path';
 import { chromium } from 'playwright';
+import { freePort } from './lib/free-port.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(__dirname, '..');
 const DIST = resolve(APP_ROOT, 'dist');
-const PORT = Number(process.env.PWA_UPDATE_PORT ?? 4176);
+const PORT = await freePort(); // chosen per run: concurrent runs cannot collide (lib/free-port.mjs)
 const ORIGIN = `http://localhost:${PORT}`;
 const DEPLOY_MARKER = 'PWA-DEPLOYED-BUILD';
 

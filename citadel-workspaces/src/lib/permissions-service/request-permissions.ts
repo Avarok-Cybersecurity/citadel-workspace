@@ -8,21 +8,21 @@
 
 import { awaitPermissionsLoaded } from './await-permissions-loaded';
 import WorkspaceService from '@/lib/workspace-service';
-import type { DomainPermissions } from './types';
+import type { DomainPermissionEntry } from './types';
 
 export function requestPermissions(
   domainId: string,
   userId: string,
-  cache: Map<string, DomainPermissions>,
+  cache: Map<string, DomainPermissionEntry>,
   lastFailure: Map<string, string>,
-  pendingRequests: Map<string, Promise<DomainPermissions>>,
-): Promise<DomainPermissions> {
-  return (async (): Promise<DomainPermissions> => {
+  pendingRequests: Map<string, Promise<DomainPermissionEntry>>,
+): Promise<DomainPermissionEntry> {
+  return (async (): Promise<DomainPermissionEntry> => {
     try {
       const askedAt: number = Date.now();
       await WorkspaceService.getUserPermissions(userId, domainId);
 
-      const loaded: DomainPermissions = await awaitPermissionsLoaded(domainId, () =>
+      const loaded: DomainPermissionEntry = await awaitPermissionsLoaded(domainId, () =>
         cache.get(domainId),
       askedAt);
       lastFailure.delete(domainId);

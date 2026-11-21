@@ -52,11 +52,11 @@ describe('a SignInManagement that asks for a touch', () => {
     let requestId: string = '';
     const outcome: Promise<unknown> = manageSignIn(async (r: Record<string, unknown>): Promise<void> => {
       requestId = (r.SignInManagement as { request_id: string }).request_id;
-    }, 7n, 'RegenerateRecoveryCodes', { password: null, security_key: true });
+    }, 7n, 'RegenerateRecoveryPhrase', { password: null, security_key: true });
     await vi.advanceTimersByTimeAsync(MANAGEMENT_TIMEOUT_MS - 1000);
     eventEmitter.emit('websocket-message', challengeFor(requestId));
     await vi.advanceTimersByTimeAsync(60000);
-    eventEmitter.emit('websocket-message', { SignInManagementSuccess: { cid: 7n, request_id: requestId, outcome: { RecoveryCodes: ['C'] } } });
-    await expect(outcome).resolves.toEqual({ RecoveryCodes: ['C'] });
+    eventEmitter.emit('websocket-message', { SignInManagementSuccess: { cid: 7n, request_id: requestId, outcome: { RecoveryPhrase: ['abandon'] } } });
+    await expect(outcome).resolves.toEqual({ RecoveryPhrase: ['abandon'] });
   });
 });

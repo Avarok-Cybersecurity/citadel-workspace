@@ -40,15 +40,10 @@ export type Send = (request: Record<string, unknown>) => Promise<void>;
 
 export interface KeyAnswerDeps {
   authenticator: AuthenticatorPort;
-  /** This page's own relying party: used only when a 0.12.2 server names none, as every page did then. */
-  rpId: string;
   rpName: string;
   send: Send;
 }
 
-/** The relying party a ceremony runs under: the server's, or this page's for a server that names none. */
-const relyingParty = (deps: KeyAnswerDeps, challenge: SecurityKeyChallengeNotification): string =>
-  challenge.rp_id ?? deps.rpId;
 
 export type KeyAnswerResult =
   | { kind: 'answered' }
@@ -72,7 +67,7 @@ async function allowedKeys(deps: KeyAnswerDeps, challenge: SecurityKeyChallengeN
   if ('Authenticate' in ceremony) return asBytes(ceremony.Authenticate.credential_ids);
   const { user_id, user_name, exclude_credential_ids } = ceremony.Register;
   return [await registerSecurityKey(deps, {
-    rpId: relyingParty(deps, challenge), userId: user_id, userName: user_name, excludeCredentialIds: exclude_credential_ids,
+    rpId: challenge.rp_id, userId: user_id, userName: user_name, excludeCredentialIds: exclude_credential_ids,
   })];
 }
 
@@ -83,7 +78,7 @@ async function touch(deps: KeyAnswerDeps, challenge: SecurityKeyChallengeNotific
     const allowed: Bytes[] = await allowedKeys(deps, challenge);
     if (allowed.length === 0) return noPrf;
     const assertion: Assertion = await deps.authenticator.get({
-      rpId: relyingParty(deps, challenge),
+      rpId: challenge.rp_id,
       // Not verified by anyone: the classical assertion is not part of the proof.
       challenge: randomBytes(32),
       allow: allowed.map((id: Bytes) => ({ id, transports: [], prfSalt: salt })),

@@ -8,6 +8,7 @@ import type { IhttpFrame } from '../sdk/generated/IhttpFrame';
 import type { RequestHead } from '../sdk/generated/RequestHead';
 import type { Transport } from '../sdk/generated/Transport';
 import type { IhttpLimits } from './limits';
+import { HTTP_METHODS } from '../sdk/generated/AbiConstants';
 import { appReason, type HostCancelReason } from './ihttp-reasons';
 import type { Refused } from './ports';
 
@@ -33,7 +34,7 @@ export type Verdict =
 export const allow = (actions: readonly RouterAction[]): Verdict => ({ ok: true, actions });
 export const deny = (refused: Refused, actions: readonly RouterAction[]): Verdict => ({ ok: false, refused, actions });
 
-export const IHTTP_METHODS: ReadonlySet<string> = new Set<string>(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH']);
+export const IHTTP_METHODS: ReadonlySet<string> = new Set<string>(HTTP_METHODS);
 
 /** A caller as the session knows it: its CID and install, never anything the app asserted. */
 export const peerKey = (peer: Caller): string => `${peer.cid.toString()}/${peer.install_id}`;

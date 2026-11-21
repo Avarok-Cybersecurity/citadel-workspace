@@ -11,12 +11,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import { planSwitch, switcherWorkspaces, type StoredWorkspace } from '../stored-workspace-list';
-import type { ActiveSession, StoredSession } from '@/types/session-types';
+import type { StoredSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 const saved = (username: string, cid: bigint, serverAddress: string): StoredSession =>
   ({ username, serverAddress, cid }) as StoredSession;
-const live = (username: string, cid: bigint, host: string): ActiveSession =>
-  ({ username, cid, server_address: '104.21.0.1:443', server_host: host }) as ActiveSession;
+const live = (username: string, cid: bigint, host: string): SessionInformation =>
+  ({ username, cid, server_address: '104.21.0.1:443', server_host: host }) as SessionInformation;
 
 const BENCH: string = 'bench.work.avarok.net';
 const STALE: bigint = 14197768845630597388n;

@@ -3,8 +3,7 @@
  *
  * - compatible, newer seq: this tab is stale (tab-staleness.ts), and a leader here hands over.
  * - their protocol too new for us: this tab is inert, and their traffic is not ours to read.
- * - their protocol too old for us: not read. Protocol 1 is the exception, handled as
- *   `legacy` by the election (legacy-v1-put-down.ts), because those tabs are still open.
+ * - their protocol too old for us (protocol 1, with no envelope, included): not read.
  */
 import type { ChannelMessage } from './channel-types';
 import { compatibilityOf, readEnvelope, type ChannelEnvelope, type Compatibility } from './channel-envelope';
@@ -52,15 +51,6 @@ export interface LeaderRank {
 export function outranks(a: LeaderRank, b: LeaderRank): boolean {
   if (a.seq !== b.seq) return a.seq > b.seq;
   return a.id < b.id;
-}
-
-/** The sender's instance id as the election compares it; null when it is not a number. */
-export function instanceIdOf(senderInstanceId: string): bigint | null {
-  try {
-    return BigInt(senderInstanceId);
-  } catch {
-    return null;
-  }
 }
 
 export function ownRank(id: bigint): LeaderRank {

@@ -1,10 +1,7 @@
 /**
  * Every sentence the passkey UI says, in one place (docs/plans/passkey-login.md
- * section 3.6). A failure maps to copy by its category only: which step of a
- * ceremony or decrypt failed is not something the UI reveals.
+ * section 3.6).
  */
-import type { PasskeyFailure } from './authenticator';
-
 export const PASSKEY_COPY: {
   readonly signInButton: 'Use passkey or security key';
   readonly orPassword: 'or use your password';
@@ -30,21 +27,3 @@ export const PASSKEY_COPY: {
 export const removeCopy = (label: string): string =>
   `Remove ${label}? It will no longer sign you in. ` +
   'It may still appear in your passkey list; you can delete it there too.';
-
-export function failureCopy(failure: PasskeyFailure): string {
-  switch (failure) {
-    case 'unsupported':
-      return "This passkey can't unlock sign-in here (your browser or password manager doesn't support " +
-        'the feature we need). Your password still works. Try iCloud Keychain, Google Password Manager, ' +
-        'or a YubiKey in Chrome or Firefox.';
-    case 'not-set-up-here':
-      return "Your passkey works here, but this device doesn't have your sign-in saved yet. " +
-        'Enter your password once to set it up.';
-    case 'already-enrolled':
-      return 'That key is already set up for this account.';
-    case 'cancelled':
-      return 'The passkey request was cancelled. You can use your password instead.';
-    case 'failed':
-      return "That didn't work. You can use your password instead.";
-  }
-}

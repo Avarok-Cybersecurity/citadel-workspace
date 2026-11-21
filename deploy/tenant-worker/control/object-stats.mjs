@@ -5,7 +5,7 @@
 import { storedRows } from "./stored-rows.mjs";
 import { wasmStats } from "./tenant-node.mjs";
 
-/** `object` is the WorkspaceServer Durable Object. */
+/** `object` is the WorkspaceServerV2 Durable Object. */
 export function objectStats(object) {
   return {
     accepted: object.accepted,

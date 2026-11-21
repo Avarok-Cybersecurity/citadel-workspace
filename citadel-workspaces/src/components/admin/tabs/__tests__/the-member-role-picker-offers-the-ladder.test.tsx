@@ -18,12 +18,12 @@ const LEAD: RoleDefinition = role('role-lead', 250, ['ManageRoles', 'ViewContent
 const ROLES: RoleDefinition[] = [OWNER, ADMIN, LEAD, MEMBER, GUEST];
 
 function rules(over: Partial<MemberRowRules>): MemberRowRules {
-  return { roles: ROLES, assignable: new Set(['role-lead', 'member', 'guest']), isOnlyManager: false, actOnBlocked: null, ...over };
+  return { roles: ROLES, assignable: new Set(['role-lead', 'member', 'guest']), isOnlyManager: false, actOnBlocked: null, banBlocked: null, ...over };
 }
 
 function row(roleId: string, given: MemberRowRules, onRoleChange: Mock = vi.fn()): void {
   render(
-    <MemberRow member={{ userId: 'sam', username: 'sam', roleId, isGuest: false }} showAdvanced={false} isUpdatingRole={false}
+    <MemberRow member={{ userId: 'sam', username: 'sam', roleId, banned: false, isGuest: false }} showAdvanced={false} isUpdatingRole={false}
       rules={given} onRoleChange={onRoleChange} onAdvancedPermissions={() => undefined} onRemove={() => undefined} />,
   );
 }

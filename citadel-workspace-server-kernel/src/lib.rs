@@ -3,9 +3,11 @@ use citadel_logging::info;
 #[cfg(not(target_family = "wasm"))]
 use citadel_logging::{setup_log, warn};
 use citadel_sdk::prelude::{
-    ArgonDefaultServerSettings, BackendType, NetworkError, NodeBuilder, NodeType, PlatformOps,
-    ServerMiscSettings, StackedRatchet,
+    ArgonDefaultServerSettings, BackendType, LinkManagerMode, NetworkError, NodeBuilder, NodeType,
+    PlatformOps, ServerMiscSettings, StackedRatchet,
 };
+#[cfg(not(target_family = "wasm"))]
+use citadel_sdk::prelude::{MaxSecurityLevel, SecurityLevel};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use std::net::SocketAddr;
 #[cfg(not(target_family = "wasm"))]
@@ -23,6 +25,7 @@ pub mod path_policy;
 #[cfg(test)]
 mod path_policy_tests;
 mod platform;
+pub mod server_limits;
 
 pub use citadel_workspace_types::WORKSPACE_ROOT_ID;
 pub const WORKSPACE_MASTER_PASSWORD_KEY: &str = "workspace_master_password";
@@ -47,9 +50,9 @@ pub mod config {
     // every boot, so the secret would land in `docker compose logs`
     // and any log aggregator the operator wires up.
     #[derive(Deserialize, Clone)]
+    #[serde(deny_unknown_fields)]
     pub struct ServerConfig {
         pub bind_addr: String,
-        pub dangerous_skip_cert_verification: Option<bool>,
         pub backend: Option<String>,
         /// Data directory for filesystem backend (defaults to "./data")
         pub data_dir: Option<String>,
@@ -57,9 +60,6 @@ pub mod config {
         /// Server refuses to start if neither config nor env var provides a non-empty password.
         #[serde(default)]
         pub workspace_master_password: String,
-        /// Path to the workspace structure JSON file (relative to kernel.toml)
-        /// DEPRECATED: Use content_base_dir instead
-        pub workspace_structure: Option<String>,
         /// Path to directory containing workspace.json and office/room CONTENT.md files
         /// The directory structure defines offices (subdirs) and rooms (nested subdirs)
         pub content_base_dir: Option<String>,
@@ -147,14 +147,9 @@ pub mod config {
             };
             f.debug_struct("ServerConfig")
                 .field("bind_addr", &self.bind_addr)
-                .field(
-                    "dangerous_skip_cert_verification",
-                    &self.dangerous_skip_cert_verification,
-                )
                 .field("backend", &self.backend)
                 .field("data_dir", &self.data_dir)
                 .field("workspace_master_password", &password_state)
-                .field("workspace_structure", &self.workspace_structure)
                 .field("content_base_dir", &self.content_base_dir)
                 .field("file_transfer", &self.file_transfer)
                 .field("allow_first_connect_admin", &self.allow_first_connect_admin)
@@ -272,14 +267,6 @@ pub mod config {
     }
 
     impl WorkspaceStructureConfig {
-        /// Load workspace structure from a JSON file
-        pub fn from_file(path: &std::path::Path) -> Result<Self, String> {
-            let content = std::fs::read_to_string(path)
-                .map_err(|e| format!("Failed to read workspace structure file: {}", e))?;
-            serde_json::from_str(&content)
-                .map_err(|e| format!("Failed to parse workspace structure JSON: {}", e))
-        }
-
         /// Load workspace structure from a directory hierarchy
         ///
         /// The directory must contain:
@@ -482,9 +469,7 @@ pub mod config {
 /// Resolve the configured workspace structure, or `None` when none is configured.
 ///
 /// Extracted from the boot sequence so the decision is testable: a configured
-/// structure that cannot be read must STOP the boot, and that was true of the
-/// `content_base_dir` branch and not of the deprecated `workspace_structure`
-/// one, which logged at info and carried on.
+/// structure that cannot be read must STOP the boot.
 ///
 /// Carrying on is not harmless. The seed-pending marker is armed only when a
 /// structure actually loaded — deliberately, so that a later deploy adding a
@@ -519,46 +504,8 @@ pub fn resolve_workspace_structure(
                 "Failed to load workspace structure from directory: {e}"
             ))),
         }
-    } else if let Some(structure_path) = &config.workspace_structure {
-        // Legacy JSON file configuration
-        let full_path = if let Some(base) = config_base_path {
-            base.join(structure_path)
-        } else {
-            std::path::PathBuf::from(structure_path)
-        };
-
-        info!(target: "citadel", "Loading workspace structure from file: {:?} (deprecated, use content_base_dir)", full_path);
-        match WorkspaceStructureConfig::from_file(&full_path) {
-            Ok(structure) => {
-                info!(target: "citadel", "Loaded workspace structure: {} with {} offices",
-                    structure.name, structure.offices.len());
-                Ok(Some((
-                    structure,
-                    full_path.parent().map(|p| p.to_path_buf()),
-                )))
-            }
-            Err(e) => {
-                // Fatal, exactly as the `content_base_dir` branch above is.
-                //
-                // Continuing without a structure looks harmless and is not: the
-                // seed-pending marker is armed only when a structure loaded, so
-                // a first boot that swallowed this error records NEITHER marker.
-                // The next boot then sees no marker at all, takes the
-                // "predates the markers" back-fill branch, and stamps the
-                // workspace seeded — permanently. The result is a workspace with
-                // no offices, forever, reachable only by wiping the backend, and
-                // announced by a single info-level line saying "Warning".
-                //
-                // A configured structure that cannot be read is a configuration
-                // error. Refusing to boot is the only outcome an operator can
-                // act on.
-                Err(NetworkError::msg(format!(
-                    "Failed to load workspace structure from {full_path:?}: {e}"
-                )))
-            }
-        }
     } else {
-        info!(target: "citadel", "No workspace structure configured. Use content_base_dir or workspace_structure in kernel.toml");
+        info!(target: "citadel", "No workspace structure configured. Use content_base_dir in kernel.toml");
         Ok(None)
     }
 }
@@ -773,8 +720,8 @@ pub fn first_member_outcome(
 pub enum ConnectEnrolment {
     /// Never joined. Enrol them, subject to `first_member_outcome`.
     Enrol,
-    /// An administrator removed them. Leave them out; only `AddMember` can
-    /// bring them back.
+    /// An administrator removed or banned them. Leave them out; only `Unban`
+    /// can bring them back.
     RefuseRemoved,
 }
 
@@ -792,15 +739,13 @@ pub enum ConnectEnrolment {
 /// as a Member, with nothing logged. Removal was undone by the person it was
 /// applied to.
 ///
-/// `remove_user_from_domain` records the removal by leaving the account at
-/// `UserRole::Banned`: no permissions, rank 0, and a role the code defined but
-/// never assigned. Re-admission is `AddMember`, which writes an explicit role
-/// and so clears it.
+/// `remove_user_from_domain` records the removal by banning the account, as
+/// `Ban` does. Re-admission is `Unban`.
 pub fn connect_enrolment(
-    existing_role: Option<citadel_workspace_types::structs::UserRole>,
+    existing: Option<&citadel_workspace_types::structs::User>,
 ) -> ConnectEnrolment {
-    match existing_role {
-        Some(citadel_workspace_types::structs::UserRole::Banned) => ConnectEnrolment::RefuseRemoved,
+    match existing {
+        Some(user) if user.is_banned() => ConnectEnrolment::RefuseRemoved,
         _ => ConnectEnrolment::Enrol,
     }
 }
@@ -969,6 +914,9 @@ pub async fn run_server_on<T: PlatformOps>(
         .with_node_type(node_type)
         .with_stun_servers(network::builder_list(&network.stun_servers))
         .with_path_policy(network.path_policy)
+        .with_max_security_level(network.max_security_level)
+        // Managed links are not switched on in this release.
+        .with_link_manager(LinkManagerMode::Legacy)
         .with_backend(backend)
         .with_server_argon_settings(server_argon_settings)
         // The same refusal of password-less transient accounts as the native server: a
@@ -978,6 +926,7 @@ pub async fn run_server_on<T: PlatformOps>(
             admission: Some(admission),
             ..production_server_misc_settings()
         })
+        .with_server_limits(server_limits::production_server_limits())
         .with_injected_listener(listener)
         .build(kernel)
         .map_err(|e| NetworkError::generic(e.to_string()))?
@@ -1109,28 +1058,26 @@ pub async fn run_server_with_site_verify(
 
     let stun_servers = network::native_stun_servers(config.stun_servers.as_deref())?;
     let path_policy = path_policy::native_path_policy(config.path_policy.as_ref())?;
-    let mut builder = NodeBuilder::default();
+    let mut builder = NodeBuilder::<StackedRatchet>::default();
     builder
         .with_node_type(node_type)
         .with_stun_servers(network::builder_list(&stun_servers))
         .with_path_policy(path_policy)
+        // The owner's production maximum for the workspace server (2026-11-18), the agent's
+        // too; the SDK has no default.
+        .with_max_security_level(
+            MaxSecurityLevel::new(SecurityLevel::Custom(10))
+                .map_err(|e| NetworkError::msg(e.to_string()))?,
+        )
+        // Managed links are not switched on in this release.
+        .with_link_manager(LinkManagerMode::Legacy)
         .with_backend(backend_type_for_node_builder)
         .with_server_misc_settings(ServerMiscSettings {
             pq_sign_in: sign_in.pq_sign_in,
             admission: Some(admission),
             ..production_server_misc_settings()
-        });
-
-    if config.dangerous_skip_cert_verification.unwrap_or(false) {
-        citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED. This should ONLY be used for local development with self-signed certificates. Never use in production!");
-        // `with_insecure_skip_cert_verification` is `&mut self -> &mut Self`
-        // (see citadel_sdk::builder::node_builder), so the call mutates
-        // `builder` in place — discarding the returned `&mut Self` is
-        // intentional and correct, not a bug. The static analysers that
-        // flag this expect a `self -> Self` consuming-builder pattern;
-        // the SDK builder uses the in-place variant.
-        builder.with_insecure_skip_cert_verification();
-    }
+        })
+        .with_server_limits(server_limits::production_server_limits());
 
     // A planned restart must reach the clients, not just the process.
     //
@@ -1548,11 +1495,9 @@ mod server_config_debug_tests {
     fn cfg(password: &str) -> ServerConfig {
         ServerConfig {
             bind_addr: "0.0.0.0:12349".to_string(),
-            dangerous_skip_cert_verification: Some(true),
             backend: Some("filesystem".to_string()),
             data_dir: Some("/srv/data".to_string()),
             workspace_master_password: password.to_string(),
-            workspace_structure: None,
             content_base_dir: Some("/srv/content".to_string()),
             file_transfer: Some(FileTransferConfig::default()),
             allow_first_connect_admin: None,

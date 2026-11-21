@@ -924,42 +924,6 @@ export async function reconnectViaClaimSession(
  * waitForP2PConnection) do their own waiting anyway — this is a head start, not a
  * correctness barrier.
  */
-/**
- * Wait for the server reconnect cycle to go quiet.
- *
- * ServerAutoConnect polls roughly every 30s, and a reconnect landing mid-test
- * can produce "Session Already Connected" and block ILM delivery. Two specs
- * handled that by sleeping 35s — one full cycle — which is 70s of a suite run
- * spent waiting on a clock rather than on the thing itself.
- *
- * getPendingReconnectCount() reaching zero is that thing. Returns as soon as it
- * does, and tolerates a build that does not expose the service (production, or a
- * preview server) by not stalling: there is nothing to observe there, and a
- * missing diagnostic should not fail a test.
- */
-export async function settleServerAutoConnect(page: Page, timeout = 40_000): Promise<void> {
-  const settled = await page
-    .waitForFunction(
-      () => {
-        const svc = (window as unknown as {
-          __serverAutoConnectService?: { getPendingReconnectCount(): number };
-        }).__serverAutoConnectService;
-        if (!svc) return true;
-        return svc.getPendingReconnectCount() === 0;
-      },
-      undefined,
-      { timeout, polling: 250 }
-    )
-    .then(() => true)
-    .catch(() => false);
-
-  console.log(
-    settled
-      ? '  Server reconnect cycle is quiet'
-      : `  Server reconnect cycle still busy after ${timeout}ms — continuing anyway`
-  );
-}
-
 export async function settleAutoConnect(page: Page, timeout = 10000): Promise<void> {
   const connected = await page
     .waitForFunction(

@@ -188,7 +188,7 @@ Retry attempt 2/3 for Session Already Connected error
 
 Every Playwright spec runs against the Vite **dev server** on 5291. That is not
 an accident and cannot easily change: the specs reach for `window.__websocketService`,
-`window.__serverAutoConnectService` and friends, which `main.tsx` attaches only
+`window.__connectionManager` and friends, which `main.tsx` attaches only
 under `import.meta.env.DEV`. Rollup drops that branch from a production build,
 so the handles the suite depends on do not exist there.
 

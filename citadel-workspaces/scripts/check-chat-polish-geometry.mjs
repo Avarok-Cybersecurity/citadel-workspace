@@ -9,4 +9,4 @@
 import { runChecks } from './lib/polish-harness/run-checks.mjs';
 import { CHECKS } from './lib/polish-harness/checks.mjs';
 
-process.exit(await runChecks(CHECKS, Number(process.env.POLISH_PORT ?? 4197)));
+process.exit(await runChecks(CHECKS));

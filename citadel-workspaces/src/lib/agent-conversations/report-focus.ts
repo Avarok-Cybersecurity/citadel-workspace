@@ -4,10 +4,9 @@
  * kernel/notices): the account, and the conversation if one is open.
  *
  * Sent when it changes -- the window gains or loses focus, is hidden, or opens
- * another conversation -- and only to an agent that hosts the account.
+ * another conversation.
  */
 export interface FocusDeps {
-  hosts: () => Promise<boolean>;
   ownCid: () => Promise<bigint | null>;
   activePeer: () => bigint | null;
   /** The window is visible and has the keyboard. */
@@ -33,7 +32,6 @@ export interface FocusReporter {
 export function createFocusReporter(deps: FocusDeps): FocusReporter {
   let last: string | null = null;
   const changed = async (): Promise<void> => {
-    if (!(await deps.hosts())) return;
     const cid: bigint | null = await deps.ownCid();
     if (cid === null) return;
     const focused: boolean = deps.inFront();

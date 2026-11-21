@@ -55,7 +55,6 @@ vi.mock('@/components/layout/sidebar/AdminSettingsSection', () => ({ AdminSettin
 vi.mock('@/components/terms/TermsGate', () => ({ TermsGate: (): null => null }));
 vi.mock('@/components/calendar/background/CalendarInBackground', () => ({ CalendarInBackground: (): null => null }));
 vi.mock('@/components/layout/use-remember-location', () => ({ useRememberLocation: (): void => {} }));
-vi.mock('@/hooks/use-live-doc-migration-sweep', () => ({ useLiveDocMigrationSweep: (): void => {} }));
 
 import { AppRoutes, ROUTER_FUTURE } from '@/app-routes';
 

@@ -34,9 +34,6 @@ function io(overrides: Partial<SignOutIO> = {}): SignOutIO & { forgotten: bigint
   const forgotten: bigint[] = [];
   const order: string[] = [];
   return {
-    markUserDisconnected: vi.fn(async (): Promise<void> => {}),
-    currentWasmCid: (): string | null => null,
-    stopWasm: vi.fn(),
     deregister: vi.fn(async (): Promise<void> => {}),
     disconnect: vi.fn(async (): Promise<void> => {}),
     invalidateSessionCache: vi.fn(),

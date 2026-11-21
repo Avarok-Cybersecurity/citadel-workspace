@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { p2pRegistrationService } from '@/lib/p2p-registration-service';
-import type { PeerInfoResponse } from '@/lib/p2p-registration-service/types';
+import type { PeerInformation } from 'citadel-workspace-client-ts';
 import { getCurrentCid } from '@/lib/p2p/current-cid';
 import { callableMembers, type RoomCallRoster } from '@/lib/call/callable-members';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 
 /**
@@ -16,7 +16,7 @@ import { runAsyncSetup } from '@/lib/utils/async-utils';
  */
 const EMPTY: RoomCallRoster = { callable: [], notConnected: [] };
 
-export function useDomainCallMembers(roster: readonly User[] | null): RoomCallRoster {
+export function useDomainCallMembers(roster: readonly WorkspaceMember[] | null): RoomCallRoster {
   const [members, setMembers] = useState<RoomCallRoster>(EMPTY);
 
   useEffect(() => {
@@ -32,10 +32,10 @@ export function useDomainCallMembers(roster: readonly User[] | null): RoomCallRo
       ]);
       if (cancelled) return;
       setMembers(callableMembers(
-        roster.map((user: User) => ({ id: user.id, username: user.username, displayName: user.displayName })),
-        directory.map((peer: PeerInfoResponse) => ({ cid: peer.cid, username: peer.username ?? peer.peer_username })),
+        roster.map((user: WorkspaceMember) => ({ id: user.id, username: user.username, displayName: user.displayName })),
+        directory.map((peer: PeerInformation) => ({ cid: peer.cid, username: peer.username ?? undefined })),
         selfCid ?? undefined,
-        new Set(registered.flatMap((peer: PeerInfoResponse): bigint[] => (peer.cid === undefined ? [] : [peer.cid]))),
+        new Set(registered.flatMap((peer: PeerInformation): bigint[] => (peer.cid === undefined ? [] : [peer.cid]))),
       ));
     });
     return (): void => { cancelled = true; };

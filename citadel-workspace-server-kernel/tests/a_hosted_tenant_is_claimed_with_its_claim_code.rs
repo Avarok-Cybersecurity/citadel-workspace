@@ -29,8 +29,8 @@ use citadel_internal_service_test_common::{
 };
 use citadel_sdk::prelude::*;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::WorkspaceProtocolResponse;
+use common::roles_fixture::{ADMIN_ROLE_ID, OWNER_ROLE_ID};
 use hosted_tenant::*;
 use std::collections::HashMap;
 use std::error::Error;
@@ -88,7 +88,7 @@ async fn the_claim_code_makes_the_creator_admin_and_the_tenant_carries_p2p(
     let before = role_of(&to_a, &mut from_a, cid_a, &creator).await?;
     println!("ROLE before claim: {before:?}");
     assert!(
-        !matches!(before, UserRole::Admin | UserRole::Owner),
+        ![ADMIN_ROLE_ID, OWNER_ROLE_ID].contains(&before.as_str()),
         "the creator was an admin before claiming: {before:?}"
     );
 
@@ -141,8 +141,7 @@ async fn the_claim_code_makes_the_creator_admin_and_the_tenant_carries_p2p(
     let after = role_of(&to_a, &mut from_a, cid_a, &creator).await?;
     println!("ROLE after claim: {after:?}");
     assert_eq!(
-        after,
-        UserRole::Owner,
+        after, OWNER_ROLE_ID,
         "the claim did not make the creator the Owner"
     );
 
@@ -162,7 +161,7 @@ async fn the_claim_code_makes_the_creator_admin_and_the_tenant_carries_p2p(
     let teammate_role = role_of(&to_b, &mut from_b, cid_b, &teammate).await?;
     println!("ROLE teammate: {teammate_role:?}");
     assert!(
-        !matches!(teammate_role, UserRole::Admin | UserRole::Owner),
+        ![ADMIN_ROLE_ID, OWNER_ROLE_ID].contains(&teammate_role.as_str()),
         "the teammate is {teammate_role:?} without claiming"
     );
     // The code is spent: the teammate presenting it is refused.
@@ -186,7 +185,7 @@ async fn the_claim_code_makes_the_creator_admin_and_the_tenant_carries_p2p(
     );
     assert_eq!(
         role_of(&to_a, &mut from_a, cid_a, &creator).await?,
-        UserRole::Owner
+        OWNER_ROLE_ID
     );
 
     drain(&mut from_a, "creator").await;

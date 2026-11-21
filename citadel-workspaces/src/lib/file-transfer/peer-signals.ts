@@ -32,7 +32,7 @@ type RequestLayer = { type: MessagingLayerType.FileTransferRequest } & FileTrans
 
 export async function handlePeerSignal(deps: PeerSignalDeps, message: IncomingFileTransferMessage): Promise<void> {
   const layer: MessagingLayer = message.layer as MessagingLayer;
-  const { senderCid } = message;
+  const { sender_cid } = message;
 
   if (isFileTransferRequest(layer)) {
     // Join the two halves BEFORE handleTransferRequest, because auto-accept
@@ -46,21 +46,21 @@ export async function handlePeerSignal(deps: PeerSignalDeps, message: IncomingFi
     deps.noteOfferArriving(layer.transfer_id);
     // Whether it joined is not needed here: an unjoined half is held until its
     // protocol half arrives, and an Accept before then waits for it (awaitObjectId).
-    deps.correlator.noteMessageOffer(layer.transfer_id, senderCid, layer.file_name, layer.file_size);
+    deps.correlator.noteMessageOffer(layer.transfer_id, sender_cid, layer.file_name, layer.file_size);
     if (known !== undefined) {
       await handleRepeatedOffer(deps, known);
       return;
     }
     await handleTransferRequest(
-      deps, layer as RequestLayer, senderCid,
+      deps, layer as RequestLayer, sender_cid,
       (cid: string): boolean => deps.getAutoAccept(cid, layer.transfer_id),
       deps.acceptTransfer,
     );
     await keepJoin(deps, layer.transfer_id);
   } else if (isFileTransferResponse(layer)) {
-    await handleTransferResponse(deps, layer, senderCid);
+    await handleTransferResponse(deps, layer, sender_cid);
   } else if (isFileTransferCancel(layer)) {
-    await handleTransferCancel(deps, layer, senderCid);
+    await handleTransferCancel(deps, layer, sender_cid);
   } else if (layer.type === MessagingLayerType.FileTransferComplete) {
     await handlePeerComplete(deps, layer);
   }
@@ -78,7 +78,7 @@ export async function handlePeerSignal(deps: PeerSignalDeps, message: IncomingFi
 async function handleRepeatedOffer(deps: PeerSignalDeps, transfer: FileTransfer): Promise<void> {
   if (!transfer.isIncoming || transfer.state !== 'transferring') return;
   const tickRequestId: unknown = await deps.io.executeIntent({
-    type: 'send-response', transferId: transfer.id, targetCid: transfer.senderCid, accepted: true,
+    type: 'send-response', transferId: transfer.id, targetCid: transfer.sender_cid, accepted: true,
   });
   if (typeof tickRequestId !== 'string' || isTerminalTransferState(transfer.state)) return;
   transfer.tickRequestId = tickRequestId;

@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Palette } from 'lucide-react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { Permission } from '@/contexts/PermissionsContext';
 import { usePermission } from '@/hooks/use-permission';
 import { permits } from '@/hooks/use-permission-result';
 import { useWorkspaceTheme } from '@/lib/theme/workspace-theme-context';
@@ -59,8 +58,8 @@ export function WorkspaceAppearanceSection(): JSX.Element {
   // workspace's own owner that an admin had set their theme. Every one of
   // those problems already had a fix in `usePermission`; this was the second
   // gate, and it had inherited none of them.
-  const root: ReturnType<typeof usePermission> = usePermission(WORKSPACE_ROOT_ID, Permission.Themes);
-  const own: ReturnType<typeof usePermission> = usePermission(workspaceId, Permission.Themes);
+  const root: ReturnType<typeof usePermission> = usePermission(WORKSPACE_ROOT_ID, 'Themes');
+  const own: ReturnType<typeof usePermission> = usePermission(workspaceId, 'Themes');
 
   // `permits`, not `allowed`: this had two of the four not-a-denial states
   // and missed `answered`, so a cache miss showed the workspace's own owner a

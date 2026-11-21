@@ -49,26 +49,6 @@ export interface GroupConversation {
 }
 
 // ============================================================================
-// Group Message
-// ============================================================================
-
-export type GroupMessageType = 'Text' | 'Markdown' | 'System';
-
-export interface GroupMessage {
-  id: string;
-  groupId: string;
-  senderId: bigint;
-  senderName: string;
-  messageType: GroupMessageType;
-  content: string;
-  timestamp: number;
-  replyTo?: string;
-  replyCount: number;
-  mentions: string[];
-  editedAt?: number;
-}
-
-// ============================================================================
 // UI State Types
 // ============================================================================
 

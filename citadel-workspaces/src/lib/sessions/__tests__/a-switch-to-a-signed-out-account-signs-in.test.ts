@@ -19,7 +19,6 @@ vi.mock('@/lib/websocket-service', () => ({
 }));
 vi.mock('@/lib/tab-context', () => ({ setSelectedUser: vi.fn(async (): Promise<void> => {}) }));
 vi.mock('@/lib/post-auth-setup', () => ({ postAuthSetup: vi.fn(async (): Promise<void> => {}) }));
-vi.mock('@/lib/start-messaging', () => ({ startMessagingForSession: vi.fn(async (): Promise<void> => {}) }));
 
 import { switchToSession, type SwitchCallbacks, type SwitchTarget } from '../switch-to-session';
 import type { SignedOutSignIn } from '../sign-in-request';

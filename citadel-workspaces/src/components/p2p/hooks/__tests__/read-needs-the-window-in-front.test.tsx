@@ -85,7 +85,7 @@ describe('marking a conversation read', () => {
       await settle();
       agent.clear();
       return async (): Promise<void> => {
-        act(() => { deliver?.({ id: 'm1', senderCid: PEER, recipientCid: OWN, timestamp: 1 } as unknown as P2PMessage); });
+        act(() => { deliver?.({ id: 'm1', sender_cid: PEER, recipient_cid: OWN, timestamp: 1 } as unknown as P2PMessage); });
         await settle();
       };
     }

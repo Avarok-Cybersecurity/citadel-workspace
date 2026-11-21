@@ -13,7 +13,7 @@ import { summariseDeliveries, MISSING_RECORD_REASON, type DeliverySummary } from
 function record(id: string, state: FileTransferState, errorMessage?: string): FileTransfer {
   return {
     id, fileName: 'a.txt', fileSize: 1, fileType: 'text/plain', state, progress: 0,
-    senderCid: '1', recipientCid: '2', createdAt: 0, updatedAt: 0, isIncoming: false, errorMessage,
+    sender_cid: '1', recipient_cid: '2', createdAt: 0, updatedAt: 0, isIncoming: false, errorMessage,
   };
 }
 

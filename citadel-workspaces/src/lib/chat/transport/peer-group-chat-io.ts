@@ -18,7 +18,7 @@ import type { GroupLog } from './group-history';
 export interface PeerGroupChatIO {
   readonly log: GroupLog;
   restore(): Promise<void>;
-  send(content: string, replyTo: string | null): Promise<void>;
+  send(content: string, reply_to: string | null): Promise<void>;
   react(messageId: string, emoji: string): Promise<void>;
   share(file: File): Promise<void>;
   markRead(): void;
@@ -32,7 +32,7 @@ export function peerGroupChatIO(groupId: string): PeerGroupChatIO {
   return {
     log: groupLog(groupId),
     restore: (): Promise<void> => restoreGroupTranscript(groupId),
-    send: (content: string, replyTo: string | null): Promise<void> => sendGroupMessageAnywhere(groupId, content, replyTo ?? undefined),
+    send: (content: string, reply_to: string | null): Promise<void> => sendGroupMessageAnywhere(groupId, content, reply_to ?? undefined),
     react: (messageId: string, emoji: string): Promise<void> => reactInGroup(groupId, messageId, emoji),
     share: async (file: File): Promise<void> => { await sendGroupFile(groupId, file); },
     markRead: (): void => updateGroups((prev: GroupConversation[]): GroupConversation[] => markGroupRead(prev, groupId)),

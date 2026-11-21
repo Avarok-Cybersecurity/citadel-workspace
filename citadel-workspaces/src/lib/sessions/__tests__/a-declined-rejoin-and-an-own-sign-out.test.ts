@@ -12,7 +12,7 @@ import { greetAs } from '@/lib/agent-conversations/__tests__/agent-greeting';
 
 describe('offering a session back', () => {
   it('signs in on yes, and calls declined on no', async () => {
-    await greetAs(true);
+    await greetAs();
     const signInAs = vi.fn<(u: string) => void>();
     const declined = vi.fn<() => void>();
     await offerTakeover('alice', { confirm: async (): Promise<boolean> => true, signInAs, declined });

@@ -22,14 +22,10 @@
   "src/lib/file-transfer/protocol-offer-correlation.ts": 2,
   "src/lib/file-transfer/types.ts": 7,
   "src/lib/group-conversations/group-requests.ts": 1,
-  "src/lib/live-document-store/types.ts": 2,
   "src/lib/notification-service/peer-registration-notification.ts": 2,
   "src/lib/notification-service/types.ts": 2,
   "src/lib/p2p/message-handler-types.ts": 1,
-  "src/lib/p2p/message-page-operations.ts": 3,
   "src/lib/server-utils.ts": 1,
   "src/lib/session-startup-service.ts": 1,
-  "src/lib/wasm-connection-manager/types.ts": 1,
-  "src/lib/websocket/messenger-operations.ts": 3,
   "src/lib/websocket/workspace-operations.ts": 1
 }

@@ -76,7 +76,7 @@ export function canKeepBytes(transfers: readonly FileTransfer[], size: number): 
 /** The sends held for `peerCid` by the account `ownCid`, oldest first. */
 export function queuedFor(transfers: readonly FileTransfer[], ownCid: string, peerCid: string): FileTransfer[] {
   return transfers
-    .filter((t) => t.state === 'queued' && !t.isIncoming && t.senderCid === ownCid && t.recipientCid === peerCid)
+    .filter((t) => t.state === 'queued' && !t.isIncoming && t.sender_cid === ownCid && t.recipient_cid === peerCid)
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 
@@ -84,7 +84,7 @@ export function queuedFor(transfers: readonly FileTransfer[], ownCid: string, pe
 export function peersWithQueued(transfers: readonly FileTransfer[], ownCid: string): string[] {
   const peers: Set<string> = new Set<string>();
   for (const t of transfers) {
-    if (t.state === 'queued' && !t.isIncoming && t.senderCid === ownCid) peers.add(t.recipientCid);
+    if (t.state === 'queued' && !t.isIncoming && t.sender_cid === ownCid) peers.add(t.recipient_cid);
   }
   return [...peers];
 }

@@ -625,12 +625,6 @@ async function runTest(): Promise<boolean> {
     console.log(`  Reconnect success: ${results.reconnectAfterDisconnect}`);
     console.log(`  ${disconnectUser} back in navbar: ${userBackInNavbar}`);
 
-    // Accept reconnect via either explicit login or ServerAutoConnect
-    if (!results.reconnectAfterDisconnect && userBackInNavbar) {
-      console.log('  ServerAutoConnect reconnected the session');
-      results.reconnectAfterDisconnect = true;
-    }
-
     await takeScreenshot(page, `${String(reconnectStep).padStart(2, '0')}_after_reconnect`);
     disconnectStep = reconnectStep;
 

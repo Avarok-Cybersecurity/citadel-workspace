@@ -30,7 +30,9 @@ vi.mock('@/lib/group-messaging-manager', () => ({
 const RESPONSES: Record<string, unknown> = {
   Success: { Success: 'ok' },
   Workspace: { Workspace: { id: 'workspace-root', name: 'W', description: '', metadata: [] } },
-  MemberRoleUpdated: { MemberRoleUpdated: { user_id: 'u1', new_role: 'Admin' } },
+  MemberRoleUpdated: { MemberRoleUpdated: { user_id: 'u1', role_id: 'admin' } },
+  MemberBanned: { MemberBanned: { user_id: 'u1' } },
+  MemberUnbanned: { MemberUnbanned: { user_id: 'u1', role_id: 'member' } },
   GroupMessageEdited: {
     GroupMessageEdited: { group_id: 'g1', message_id: 'm1', new_content: 'x', edited_at: 1 },
   },

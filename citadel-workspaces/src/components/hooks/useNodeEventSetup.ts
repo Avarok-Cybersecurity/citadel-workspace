@@ -92,7 +92,7 @@ export function useNodeEventSetup({ setState }: UseNodeEventSetupProps): void {
       // member except the editor, so without this the rest of the workspace kept
       // rendering the copy they loaded — a document could be edited and nobody
       // watching it would see the change until they navigated away and back.
-      keep(workspaceEvents.onNodeEvent('node:content-updated', (payload: { nodeId: string; mdxContent: string; mdxContentHash?: string; updatedBy: string; timestamp: number; connection: ConnectionInfo }) => {
+      keep(workspaceEvents.onNodeEvent('node:content-updated', (payload: { nodeId: string; mdxContent: string; mdxContentHash: string; updatedBy: string; timestamp: number; connection: ConnectionInfo }) => {
         setState(prev => {
           const node: DomainNode = prev.nodes[payload.nodeId];
           // Not a node this client knows about; nothing to refresh.
@@ -110,7 +110,7 @@ export function useNodeEventSetup({ setState }: UseNodeEventSetupProps): void {
               [payload.nodeId]: {
                 ...node,
                 mdx_content: payload.mdxContent,
-                mdx_content_hash: payload.mdxContentHash ?? null,
+                mdx_content_hash: payload.mdxContentHash,
               },
             },
           };

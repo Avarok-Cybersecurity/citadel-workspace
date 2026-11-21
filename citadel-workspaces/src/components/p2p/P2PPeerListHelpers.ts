@@ -4,7 +4,7 @@
 import { peerDisplayName } from '@/lib/peer-display';
 import type { Peer } from '@/lib/p2p-registration-service';
 
-export interface PeerInfo {
+export interface ConversationPeerRow {
   cid: string;
   name: string;
   /** The roster key, and so what finds the peer's picture; `name` is a display name. */

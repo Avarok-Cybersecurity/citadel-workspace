@@ -50,13 +50,12 @@ export interface MessageHandlerConfig {
   getOrCreateConversation: (peerCid: bigint) => P2PConversation;
   addMessageToConversation: (peerCid: bigint, message: P2PMessage) => Promise<boolean>;
   updateMessageInPages: (peerCid: bigint, messageId: string, updates: Partial<P2PMessage>) => Promise<boolean>;
-  removeMessageFromPages: (peerCid: bigint, messageId: string) => Promise<boolean>;
   getConversations: () => Map<bigint, P2PConversation>;
   notifyMessageListeners: (message: P2PMessage) => void;
   notifyMessageStatusListeners: (messageId: string, status: P2PMessage['status']) => void;
   notifyTypingListeners: (peerCid: bigint, isTyping: boolean) => void;
   notifyPresenceListeners: (peerCid: bigint, presence: PeerPresence) => void;
-  sendMessageAck: (messageId: string, ackType: 'delivered' | 'read' | 'failed', peerCid: bigint, recipientCid?: bigint) => Promise<void>;
+  sendMessageAck: (messageId: string, ackType: 'delivered' | 'read' | 'failed', peerCid: bigint, recipient_cid?: bigint) => Promise<void>;
   handleCheckState: (peerCid: bigint) => Promise<void>;
   handleCheckStateResponse: (peerCid: bigint) => void;
   markPeerReady: (peerCid: bigint) => void;
@@ -66,7 +65,7 @@ export interface MessageHandlerConfig {
     body: string,
     senderId: string,
     messageId: string,
-    recipientCid: string | undefined,
+    recipient_cid: string | undefined,
     options: { peerCid: string; onCardClick: () => void }
   ) => void;
 }

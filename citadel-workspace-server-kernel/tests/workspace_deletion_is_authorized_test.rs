@@ -10,8 +10,9 @@
 //! The password remains as a second factor. It is no longer the only one.
 
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::structs::User;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{roles_for, MEMBER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_PASSWORD, TEST_ADMIN_USER_ID};
 use std::collections::HashMap;
 
@@ -30,8 +31,8 @@ async fn add_member(kernel: &Kernel, id: &str) {
             User {
                 id: id.to_string(),
                 name: id.to_string(),
-                role: UserRole::Member,
-                workspace_roles: Default::default(),
+                banned: false,
+                workspace_roles: roles_for(MEMBER_ROLE_ID),
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },

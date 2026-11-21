@@ -19,7 +19,7 @@ import {
 import { keyFailureCopy } from '@/lib/sign-in/copy';
 import type { AddedKey } from '@/lib/sign-in/enrol-key';
 import {
-  type Listing, listingOf, withKeyAdded, withKeyRemoved, withKeyRenamed, withNewCodes, withPolicy,
+  type Listing, listingOf, withKeyAdded, withKeyRemoved, withKeyRenamed, withNewPhrase, withPolicy,
 } from '@/lib/sign-in/listing';
 import type { AccountRef, SignInManagementOp, SignInManagementOutcome, SignInPolicy, StepUp } from '@/lib/sign-in/types';
 
@@ -30,15 +30,15 @@ export interface SignInKeys {
   listing: Listing | null;
   busy: boolean;
   message: string | null;
-  /** New recovery codes, to show once and then forget. */
-  freshCodes: readonly string[] | null;
-  forgetCodes: () => void;
+  /** A new recovery phrase, to show once and then forget. */
+  freshPhrase: readonly string[] | null;
+  forgetPhrase: () => void;
   show: () => Promise<void>;
   add: (label: string) => Promise<boolean>;
   rename: (id: number, label: string) => Promise<boolean>;
   remove: (id: number) => Promise<void>;
   setPolicy: (policy: SignInPolicy) => Promise<void>;
-  regenerateCodes: () => Promise<void>;
+  regeneratePhrase: () => Promise<void>;
 }
 
 /** Collects the step-up for one request: the typed password, null to use a key, or cancelled. */
@@ -54,7 +54,7 @@ export function useSignInKeys(requestStepUp: StepUpRequest): SignInKeys {
   const [listing, setListing] = useState<Listing | null>(null);
   const [busy, setBusy] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [freshCodes, setFreshCodes] = useState<readonly string[] | null>(null);
+  const [freshPhrase, setFreshPhrase] = useState<readonly string[] | null>(null);
 
   /** One request: step up, ask the server. Resolves with its result, or null if it did not happen. */
   const request = async <T>(run: Run<T>, done: string): Promise<T | null> => {
@@ -80,8 +80,8 @@ export function useSignInKeys(requestStepUp: StepUpRequest): SignInKeys {
   const apply = (next: (l: Listing) => Listing): void => setListing((l: Listing | null) => (l ? next(l) : l));
 
   return {
-    available, account, listing, busy, message, freshCodes,
-    forgetCodes: (): void => setFreshCodes(null),
+    available, account, listing, busy, message, freshPhrase,
+    forgetPhrase: (): void => setFreshPhrase(null),
     show: async (): Promise<void> => {
       const outcome: SignInManagementOutcome | null = await request(op('ListCredentials'), '');
       if (outcome !== null) setListing(listingOf(outcome));
@@ -108,11 +108,11 @@ export function useSignInKeys(requestStepUp: StepUpRequest): SignInKeys {
       await saveHint(browserSignInDeps().store, { ...account, keyFirst: next === 'KeyOnly' })
         .catch((error: unknown): void => setMessage(`Saved, but this device could not remember it: ${keyFailureCopy(error)}`));
     },
-    regenerateCodes: async (): Promise<void> => {
-      const outcome: SignInManagementOutcome | null = await request(op('RegenerateRecoveryCodes'), '');
-      if (outcome !== null && typeof outcome === 'object' && 'RecoveryCodes' in outcome) {
-        setFreshCodes(outcome.RecoveryCodes);
-        apply((l: Listing) => withNewCodes(l, outcome.RecoveryCodes));
+    regeneratePhrase: async (): Promise<void> => {
+      const outcome: SignInManagementOutcome | null = await request(op('RegenerateRecoveryPhrase'), '');
+      if (outcome !== null && typeof outcome === 'object' && 'RecoveryPhrase' in outcome) {
+        setFreshPhrase(outcome.RecoveryPhrase);
+        apply(withNewPhrase);
       }
     },
   };

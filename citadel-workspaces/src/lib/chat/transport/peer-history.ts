@@ -9,14 +9,13 @@
 import type { P2PMessengerManager } from '@/lib/p2p/p2p-messenger-manager';
 import type { ConversationMetadata, MessagePage, P2PMessage } from '@/lib/p2p/p2p-types';
 import type { ChatPeer } from '@/lib/cdoc/chat/chat-app-ports';
-import { applyRetentionOnOpen } from '@/lib/p2p/retention-sweep';
 import { MESSAGES_EXPIRED_EVENT, type MessagesExpired } from '@/lib/p2p/retention';
 import { eventEmitter } from '@/lib/event-emitter';
 import { notificationService } from '@/lib/notification-service';
 import type { ChatAuthor, ChatMessage, ChatSelf, HistoryCursor, HistoryEvent, HistoryPage, HistoryPort } from './chat-transport';
 
-export function peerAuthor(message: Pick<P2PMessage, 'senderCid'>, self: ChatSelf | null, peer: ChatPeer): ChatAuthor {
-  if (self !== null && message.senderCid === self.cid) return { own: true, name: self.displayName, username: null };
+export function peerAuthor(message: Pick<P2PMessage, 'sender_cid'>, self: ChatSelf | null, peer: ChatPeer): ChatAuthor {
+  if (self !== null && message.sender_cid === self.cid) return { own: true, name: self.displayName, username: null };
   return { own: false, name: peer.name, username: peer.username };
 }
 
@@ -24,8 +23,8 @@ export function authored(message: P2PMessage, self: ChatSelf | null, peer: ChatP
   return { ...message, author: peerAuthor(message, self, peer), share: null };
 }
 
-const withPeer = (message: Pick<P2PMessage, 'senderCid' | 'recipientCid'>, peerCid: bigint): boolean =>
-  message.senderCid === peerCid || message.recipientCid === peerCid;
+const withPeer = (message: Pick<P2PMessage, 'sender_cid' | 'recipient_cid'>, peerCid: bigint): boolean =>
+  message.sender_cid === peerCid || message.recipient_cid === peerCid;
 
 const olderThan = (page: number): HistoryCursor | null => (page > 0 ? { kind: 'page', page: page - 1 } : null);
 
@@ -36,7 +35,6 @@ export function peerHistory(messenger: P2PMessengerManager, peer: ChatPeer, self
   return {
     loadLatest: async (): Promise<HistoryPage> => {
       await messenger.waitForReady();
-      await applyRetentionOnOpen(peer.cid);
       await messenger.syncConnectionsFromBackend();
       const metadata: ConversationMetadata | null = await messenger.getConversationMetadata(peer.cid);
       if (metadata === null) return { messages: cached(), older: null };
@@ -56,7 +54,7 @@ export function peerHistory(messenger: P2PMessengerManager, peer: ChatPeer, self
       const stops: (() => void)[] = [
         messenger.onMessage((message: P2PMessage): void => {
           if (!withPeer(message, peer.cid)) return;
-          listener({ kind: 'arrived', message: authored(message, self, peer), incoming: message.senderCid === peer.cid });
+          listener({ kind: 'arrived', message: authored(message, self, peer), incoming: message.sender_cid === peer.cid });
         }),
         messenger.onMessageStatusChange((messageId: string, status: P2PMessage['status']): void => listener({ kind: 'status', messageId, status })),
         eventEmitter.on('p2p:message-updated', (updated: P2PMessage): void => {
@@ -81,8 +79,8 @@ export function peerHistory(messenger: P2PMessengerManager, peer: ChatPeer, self
       return (): void => { for (const stop of stops) stop(); };
     },
 
-    markRead: (messageIds: readonly string[] | null): Promise<void> =>
-      messenger.markMessagesAsRead(peer.cid, messageIds === null ? undefined : [...messageIds]),
+    // The agent marks what this peer sent as read, all of it: it holds the conversation.
+    markRead: (): Promise<void> => messenger.markMessagesAsRead(peer.cid),
 
     focus: (): (() => void) => {
       messenger.setActiveConversation(peer.cid);

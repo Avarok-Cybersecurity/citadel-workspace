@@ -7,18 +7,18 @@
 import { describe, it, expect } from 'vitest';
 import { claimOnStart, type StartClaim, type StartClaimIO, type StartRetry } from '../claim-on-start';
 import type { ClaimOutcome } from '@/lib/sessions/claim-session';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
-const ALICE: ActiveSession = { cid: 7n, username: 'alice0924', server_address: 'work.example.net:12349' } as ActiveSession;
+const ALICE: SessionInformation = { cid: 7n, username: 'alice0924', server_address: 'work.example.net:12349' } as SessionInformation;
 // Test policy: four attempts, so a double that fails the first three still reaches an answer.
 const RETRY: StartRetry = { maxAttempts: 4, baseDelayMs: 1000, maxDelayMs: 8000 };
 
-interface Recorded { io: StartClaimIO; sleeps: number[]; selected: ActiveSession[]; forgotten: () => number }
+interface Recorded { io: StartClaimIO; sleeps: number[]; selected: SessionInformation[]; forgotten: () => number }
 
 function agent(answers: {
   readyAfter?: number;
   answeredAfter?: number;
-  sessions?: ActiveSession[];
+  sessions?: SessionInformation[];
   claim?: ClaimOutcome;
   /** The claim is refused with this error instead of answered. */
   refuse?: Error;
@@ -26,17 +26,17 @@ function agent(answers: {
   let readyCalls: number = 0;
   let queryCalls: number = 0;
   const sleeps: number[] = [];
-  const selected: ActiveSession[] = [];
+  const selected: SessionInformation[] = [];
   let forgotten: number = 0;
   const io: StartClaimIO = {
     ready: async (): Promise<boolean> => ++readyCalls > (answers.readyAfter ?? 0),
-    activeSessions: async (): Promise<{ ok: boolean; sessions: ActiveSession[] }> =>
+    activeSessions: async (): Promise<{ ok: boolean; sessions: SessionInformation[] }> =>
       ++queryCalls > (answers.answeredAfter ?? 0)
         ? { ok: true, sessions: answers.sessions ?? [ALICE] }
         : { ok: false, sessions: [] },
     selection: async (): Promise<null> => null,
     clearSelection: async (): Promise<void> => {},
-    select: async (s: ActiveSession): Promise<void> => { selected.push(s); },
+    select: async (s: SessionInformation): Promise<void> => { selected.push(s); },
     claim: async (): Promise<ClaimOutcome> => {
       if (answers.refuse) throw answers.refuse;
       return answers.claim ?? { status: 'claimed' };

@@ -5,11 +5,10 @@
 //! code would outlive the role it named.
 
 use super::async_domain_server_ops::AsyncDomainServerOperations;
-use super::role_authority::Assignment;
 use super::role_writes::assign_workspace_role;
 use crate::WORKSPACE_ROOT_ID;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::structs::User;
 
 impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     /// Give `user_id`, joining on connect, the workspace's default role.
@@ -28,7 +27,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
                 return Ok(())
             }
             Some(user) => user,
-            None => User::new(user_id.to_string(), display_name, UserRole::Member),
+            None => User::new(user_id.to_string(), display_name),
         };
         let roles = self.backend_tx_manager.get_roles(WORKSPACE_ROOT_ID).await?;
         // The gate on this write: only the table's default, which `RoleChange::MakeDefault`
@@ -42,7 +41,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
                 )))
             }
         };
-        assign_workspace_role(&mut user, &Assignment::Role(default));
+        assign_workspace_role(&mut user, &default);
         self.backend_tx_manager
             .insert_user(user_id.to_string(), user)
             .await

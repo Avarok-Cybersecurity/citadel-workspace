@@ -10,8 +10,7 @@ use async_trait::async_trait;
 use citadel_logging::info;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, Ratchet};
 use citadel_workspace_types::roles::{owner_role, OWNER_ROLE_ID};
-use citadel_workspace_types::roles_protocol::MemberRole;
-use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
+use citadel_workspace_types::structs::{Domain, Permission, User, Workspace};
 use citadel_workspace_types::UpdateOperation;
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -245,7 +244,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         admin_id: &str,
         user_id_to_add: &str,
         domain_id: &str,
-        role: MemberRole,
+        role: String,
     ) -> Result<(), NetworkError> {
         // Asked as the permission, not as the role, so the gate is what
         // `GetUserPermissions` reports: any role holding AddUsers, within the
@@ -275,13 +274,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
 
         // AddUsers says they may add somebody; it says nothing about the role
         // they may hand out, and `user_id_to_add` may be the caller.
-        let assignment = self.resolve_assignment(&role).await?;
+        let assignment = self.resolve_role(&role).await?;
         self.ensure_may_grant_role(admin_id, &assignment).await?;
 
         // `AddMember` is also a role WRITE at the workspace root, so it is the
-        // third door to the same demotion: `role: Banned` on a standing Admin
-        // passes the granting check (Banned grants nothing) and would otherwise
-        // strip them.
+        // third door to the same demotion: a lesser role on a standing Admin.
         self.ensure_may_act_on(admin_id, user_id_to_add, "change the role of")
             .await?;
 
@@ -299,35 +296,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         // same atomicity — it writes a role too.
         let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
 
+        // Before the membership write, so a refusal leaves nothing behind. Under
+        // the lock, so a ban cannot land between this and the role write.
+        self.ensure_not_banned(user_id_to_add).await?;
+
         if domain_id == crate::WORKSPACE_ROOT_ID {
-            let mut workspace = match self.backend_tx_manager.get_workspace(domain_id).await? {
-                Some(ws) => ws,
-                None => return Err(NetworkError::msg("Workspace not found")),
-            };
-
-            if !workspace.members.contains(&user_id_to_add.to_string()) {
-                workspace.members.push(user_id_to_add.to_string());
-            }
-
-            self.backend_tx_manager
-                .insert_workspace(domain_id.to_string(), workspace.clone())
-                .await?;
-
-            // The denormalized Domain::Workspace copy, which UpdateWorkspaceTheme
-            // documents as the invariant every workspace mutator maintains — and
-            // which the two membership mutators did not. ListMembers reads the
-            // Domain copy FIRST, so an added member never appeared in the roster
-            // and a removed one never left it, while enforcement read the fresh
-            // workspace record. The displayed roster and the enforced roster
-            // disagreed permanently, in both directions, with no race required.
-            self.backend_tx_manager
-                .insert_domain(
-                    domain_id.to_string(),
-                    Domain::Workspace {
-                        workspace: workspace.clone(),
-                    },
-                )
-                .await?;
+            // The denormalized Domain::Workspace copy is written too: ListMembers
+            // reads it FIRST, so a member added only to the workspace record never
+            // appeared in the roster while enforcement saw them.
+            self.list_root_member(user_id_to_add).await?;
         } else {
             // For all other entities, use DomainNode tree storage.
             // lock_nodes across the whole get_all_nodes ... save_nodes cycle:
@@ -458,21 +435,18 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             // anyone missing from `workspace.members`, and could not tell
             // "never joined" from "removed", so a removed account reconnected
             // -- which it does by itself -- and added itself straight back.
-            // Re-admission is `AddMember`, which assigns an explicit role.
+            // Re-admission is `Unban`, which gives back the default role.
             //
-            // `assign_workspace_role` with Banned also drops the role and clears
-            // every grant, not only the root one: a direct grant is honoured
-            // before the role, so a member added to room R and then removed
-            // would otherwise go on reading and posting in R.
+            // `ban_record` also clears every grant, not only the root one: a
+            // direct grant is honoured before the role, so a member added to
+            // room R and then removed would otherwise go on reading and posting
+            // in R.
             //
             // Not through `write_user_role_locked`: that re-runs the managers
             // guard, and the membership write above has already removed this
             // account, so the count differs and the removal would be refused.
             if let Some(mut removed) = self.backend_tx_manager.get_user(user_id_to_remove).await? {
-                super::role_writes::assign_workspace_role(
-                    &mut removed,
-                    &super::role_authority::Assignment::Banned,
-                );
+                super::role_writes::ban_record(&mut removed);
                 self.backend_tx_manager
                     .insert_user(user_id_to_remove.to_string(), removed)
                     .await?;
@@ -535,7 +509,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         &self,
         actor_user_id: &str,
         target_user_id: &str,
-        role: MemberRole,
+        role: String,
         metadata: Option<Vec<u8>>,
     ) -> Result<(), NetworkError> {
         // Assigning roles is role management: ManageRoles, which the Owner and
@@ -550,7 +524,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         }
 
         // The gate says they may assign roles; this says which.
-        let assignment = self.resolve_assignment(&role).await?;
+        let assignment = self.resolve_role(&role).await?;
         self.ensure_may_grant_role(actor_user_id, &assignment)
             .await?;
 
@@ -792,17 +766,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             ));
         }
 
-        // Membership is not enough on its own: banning changes a ROLE and leaves
-        // the member list untouched, so a banned account went on reading the
-        // workspace name, description, metadata and office list. Setting a role
-        // to Banned is an available operation — `update_workspace_member_role`
-        // takes any UserRole, and containment permits it because Banned's
-        // permission set is empty — so this is reachable, not theoretical.
+        // Membership is not enough on its own: a ban leaves the member list
+        // untouched, so a banned account would go on reading the workspace name,
+        // description, metadata and office list.
         //
-        // Asked as the permission rather than as `role != Banned`, for the reason
+        // Asked as the permission rather than as `banned`, for the reason
         // `remove_user_from_domain` records: what `GetUserPermissions` reports
-        // must be what enforcement allows. `for_role` gives Banned nothing and
-        // gives Guest `ViewContent`, so this refuses exactly the accounts the
+        // must be what enforcement allows. A banned account holds nothing and
+        // Guest holds `ViewContent`, so this refuses exactly the accounts the
         // permission editor already shows as unable to view.
         if !self
             .check_entity_permission(user_id, workspace_id, Permission::ViewContent)
@@ -957,11 +928,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             // account cannot reach the other one, because
             // `check_entity_permission` returns false for a user that does not
             // exist.
-            None => User::new(
-                String::from(user_id),
-                String::from(user_id),
-                UserRole::Member,
-            ),
+            None => User::new(String::from(user_id), String::from(user_id)),
         };
 
         if root_exists {
@@ -979,10 +946,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             // the Owner, by definition. Owner rather than Admin because nobody
             // assigns a role at or above their own: an Admin alone could never
             // appoint another, while the Owner is above the ladder.
-            super::role_writes::assign_workspace_role(
-                &mut user,
-                &super::role_authority::Assignment::Role(owner_role()),
-            );
+            super::role_writes::assign_workspace_role(&mut user, &owner_role());
         }
 
         self.backend_tx_manager
@@ -1288,13 +1252,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
 
         let mut user = match self.backend_tx_manager.get_user(user_id).await? {
             Some(u) => u,
-            None => User::new(user_id.to_string(), user_id.to_string(), UserRole::Member),
+            None => User::new(user_id.to_string(), user_id.to_string()),
         };
         if workspace_id == crate::WORKSPACE_ROOT_ID {
-            super::role_writes::assign_workspace_role(
-                &mut user,
-                &super::role_authority::Assignment::Role(owner_role()),
-            );
+            super::role_writes::assign_workspace_role(&mut user, &owner_role());
         } else {
             user.workspace_roles
                 .insert(workspace_id.to_string(), OWNER_ROLE_ID.to_string());
@@ -1444,7 +1405,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         user_id: &str,
         workspace_id: &str,
         member_id: &str,
-        role: MemberRole,
+        role: String,
     ) -> Result<(), NetworkError> {
         // Delegate to add_user_to_domain
         self.add_user_to_domain(user_id, member_id, workspace_id, role)

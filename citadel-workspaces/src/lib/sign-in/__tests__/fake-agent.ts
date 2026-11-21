@@ -6,15 +6,17 @@
  * local process talking post-quantum Citadel to a Durable Object, none of which
  * exists under vitest. It keeps the server's rules that the UI depends on --
  * the policy decides which factors a sign-in needs, a key is proved by the PRF
- * output it gave at enrolment, a recovery code works once, a recovery session
- * may only add a key or set the policy, removing a factor the policy needs is
- * refused -- so a UI that skips a step fails here as it would live.
+ * output it gave at enrolment, the phrase opens a
+ * recovery console that may only manage how the account signs in, removing a
+ * factor the policy needs is refused -- so a UI that skips a step fails here as
+ * it would live.
  */
 import { eventEmitter } from '@/lib/event-emitter';
 import { toBase64Url } from '@/lib/passkey/bytes';
 import { FakeAdmission } from './fake-admission';
 import { accepts, type Ceremony, FAKE_RP_ID } from './fake-ceremony';
-import type { SignInCredential, SignInPolicy } from '../types';
+import type { SignInPolicy } from '../types';
+import { CONSOLE_OPS, fakePhrase, isPhraseOf, listCredentials, RECOVERY_ONLY, recoverAccount } from './fake-agent-recovery';
 
 type Req = Record<string, unknown>;
 const PRF_SALT: number[] = Array.from({ length: 32 }, (_v: unknown, i: number) => i + 1);
@@ -29,8 +31,10 @@ export interface FakeAccount {
   password: string;
   policy: SignInPolicy;
   keys: Array<{ id: number; credentialId: number[]; label: string; prf: string }>;
-  recoveryCodes: string[];
-  consumed: string[];
+  /** The 24-word recovery phrase. */
+  phrase: string[];
+  /** Whether this device holds the account's bundle: a RecoverAccount for one it does not recovers it here first. */
+  heldHere: boolean;
 }
 
 interface Pending { requestId: string; resolve: (prf: { credentialId: number[]; prf: number[] } | string) => void; ceremony: Ceremony }
@@ -38,19 +42,20 @@ interface Pending { requestId: string; resolve: (prf: { credentialId: number[]; 
 export class FakeAgent {
   readonly sent: Array<[string, Req]> = [];
   readonly accounts: FakeAccount[] = [];
-  /** Sessions that a recovery code opened. */
+  /** Recovery console sessions: opened by the phrase. */
   readonly recoverySessions: Set<bigint> = new Set<bigint>();
   /** The workspace's human-check requirement, enforced on Connect and Register. */
   readonly admission: FakeAdmission = new FakeAdmission();
-  /** A 0.12.2 server: it names no relying party, and the SDK will not ask it to enrol a key. */
-  serverAt0122: boolean = false;
+  /** A server that has not enabled security keys: the SDK will not ask it to enrol one. */
+  keysDisabled: boolean = false;
   private readonly pending: Map<string, Pending> = new Map<string, Pending>();
   private nextFactor: number = 10;
-  private nextCode: number = 0;
+  private nextPhrase: number = 0;
 
   account(username: string, policy: SignInPolicy = 'Password', cid: bigint = 7n): FakeAccount {
     const account: FakeAccount = {
-      username, cid, server: FAKE_SERVER, password: 'correct horse battery', policy, keys: [], recoveryCodes: this.codes(), consumed: [],
+      username, cid, server: FAKE_SERVER, password: 'correct horse battery', policy, keys: [],
+      phrase: fakePhrase(this.accounts.length + 1), heldHere: true,
     };
     this.accounts.push(account);
     return account;
@@ -62,15 +67,11 @@ export class FakeAgent {
     queueMicrotask(() => { void this.handle(variant, body); });
   };
 
-  private codes(): string[] {
-    return Array.from({ length: 10 }, () => `CODE-${(this.nextCode++).toString().padStart(4, '0')}`);
-  }
-
-  private emit(variant: string, body: Req): void {
+  emit(variant: string, body: Req): void {
     eventEmitter.emit('websocket-message', { [variant]: body });
   }
 
-  private text(bytes: unknown): string | null {
+  text(bytes: unknown): string | null {
     return Array.isArray(bytes) ? new TextDecoder().decode(Uint8Array.from(bytes as number[])) : null;
   }
 
@@ -80,7 +81,7 @@ export class FakeAgent {
     return new Promise((resolve) => {
       this.pending.set(challengeId, { requestId, resolve, ceremony });
       this.emit('SecurityKeyChallengeNotification', {
-        cid, request_id: requestId, challenge_id: challengeId, purpose, ceremony, ...(this.serverAt0122 ? {} : { rp_id: FAKE_RP_ID }),
+        cid, request_id: requestId, challenge_id: challengeId, purpose, ceremony, rp_id: FAKE_RP_ID,
         // A u64, which the WASM client hands to JavaScript as a BigInt (serialize_large_number_types_as_bigints).
         prf_salt: PRF_SALT, expires_in_ms: BigInt(TOUCH_WINDOW_MS),
       });
@@ -104,6 +105,7 @@ export class FakeAgent {
     if (variant === 'GetAccountInformation') return this.emit('GetAccountInformationResponse', { request_id: requestId, accounts: Object.fromEntries(
       this.accounts.map((a) => [a.cid.toString(), { username: a.username, full_name: a.username, peers: {}, server_host: a.server }])) });
     if (variant === 'SignInManagement') return this.manage(body);
+    if (variant === 'RecoverAccount') return recoverAccount(this, body);
     if (variant === 'Disconnect') { this.recoverySessions.delete(body.cid as bigint); this.emit('DisconnectSuccess', { cid: body.cid, request_id: requestId }); }
   }
 
@@ -129,7 +131,7 @@ export class FakeAgent {
     const account: FakeAccount = this.account(body.username as string, 'Password', 100n + BigInt(this.accounts.length));
     account.server = body.server_addr as string;
     account.password = this.text(body.proposed_password) ?? '';
-    this.emit('RegisterSuccess', { cid: account.cid, request_id: body.request_id, recovery_codes: [...account.recoveryCodes] });
+    this.emit('RegisterSuccess', { cid: account.cid, request_id: body.request_id, recovery_phrase: [...account.phrase] });
     // connect_after_register has no token left: the Register spent it (agent #112, Register.admission_token).
     if (this.admission.required) { this.emit('ConnectFailure', { cid: 0n, request_id: body.request_id, message: 'A human check is required', reason_code: 'admission_required', ...this.admission.published('admission_required') }); return; }
     this.emit('ConnectSuccess', { cid: account.cid, request_id: body.request_id });
@@ -144,10 +146,9 @@ export class FakeAgent {
     const refuse = (reason: string): void => this.emit('ConnectFailure', { cid: 0n, request_id: requestId, message: reason, reason_code: reason });
     if (!account) { refuse('no_such_account'); return; }
     if (account.server !== body.server_address) { refuse('account_on_another_server'); return; }
-    const code: string | null = this.text(body.recovery_code);
-    if (code !== null) {
-      if (!account.recoveryCodes.includes(code) || account.consumed.includes(code)) { fail(); return; }
-      account.consumed.push(code);
+    const phrase: string | null = this.text(body.recovery_phrase);
+    if (phrase !== null) {
+      if (!isPhraseOf(account, phrase)) { fail(); return; }
       this.recoverySessions.add(account.cid);
       this.emit('ConnectSuccess', { cid: account.cid, request_id: requestId });
       return;
@@ -162,27 +163,6 @@ export class FakeAgent {
     this.emit('ConnectSuccess', { cid: account.cid, request_id: requestId });
   }
 
-  /** A Rust `None` reaches JS as an absent field (wasm-none-is-undefined), never as `null`. */
-  private credentials(account: FakeAccount): SignInCredential[] {
-    return this.nullableCredentials(account).map((c: SignInCredential): SignInCredential => {
-      const wire: Partial<SignInCredential> = { ...c };
-      if (c.credential_id === null) delete wire.credential_id;
-      if (c.last_used_ms === null) delete wire.last_used_ms;
-      return wire as SignInCredential;
-    });
-  }
-
-  private nullableCredentials(account: FakeAccount): SignInCredential[] {
-    const password: SignInCredential[] = account.policy === 'KeyOnly' ? [] : [{
-      id: 1, kind: 'Password', label: 'Password', credential_id: null, created_ms: 1n, last_used_ms: null, consumed: false,
-    }];
-    return [...password, ...account.keys.map((k): SignInCredential => ({
-      id: k.id, kind: 'SecurityKey', label: k.label, credential_id: k.credentialId, created_ms: 2n, last_used_ms: null, consumed: false,
-    })), ...account.recoveryCodes.map((c: string, i: number): SignInCredential => ({
-      id: 100 + i, kind: 'RecoveryCode', label: `Recovery code ${i + 1}`, credential_id: null, created_ms: 1n, last_used_ms: null, consumed: account.consumed.includes(c),
-    }))];
-  }
-
   private async manage(body: Req): Promise<void> {
     const requestId: string = body.request_id as string;
     const cid: bigint = body.cid as bigint;
@@ -194,11 +174,7 @@ export class FakeAgent {
     if (!account) { fail(`Session ${cid} not found`); return; }
     const opName: string = typeof op === 'string' ? op : Object.keys(op as Req)[0];
     const recovery: boolean = this.recoverySessions.has(cid);
-    if (recovery && opName !== 'AddSecurityKey' && opName !== 'SetSignInPolicy') {
-      // ListCredentials included: a recovery session cannot list.
-      fail('This session signed in with a recovery code: it can only add a security key, set the sign-in policy, or sign out');
-      return;
-    }
+    if (recovery && !CONSOLE_OPS.has(opName)) { fail(RECOVERY_ONLY); return; }
     // Every request, listing included, needs a fresh proof (agent #112 eafca8da).
     if (!recovery) {
       const viaPassword: boolean = this.text(stepUp.password) === account.password && account.policy !== 'KeyOnly';
@@ -208,10 +184,10 @@ export class FakeAgent {
         if (refused !== null) { fail(refused); return; }
       }
     }
-    if (opName === 'ListCredentials') { ok({ Credentials: { policy: account.policy, credentials: this.credentials(account) } }); return; }
+    if (opName === 'ListCredentials') { ok({ Credentials: { policy: account.policy, credentials: listCredentials(account, true) } }); return; }
     const args: Req = typeof op === 'string' ? {} : (op as Req)[opName] as Req;
-    if (opName === 'AddSecurityKey' && this.serverAt0122) {
-      fail('the server predates enrolling a security key this client creates', 'server_cannot_enrol_security_keys');
+    if (opName === 'AddSecurityKey' && this.keysDisabled) {
+      fail('this server has not enabled security keys', 'server_cannot_enrol_security_keys');
     } else if (opName === 'AddSecurityKey') {
       // The SDK's Register ceremony: a random user handle, the account's name, and its keys excluded.
       const register: Ceremony = { Register: {
@@ -240,10 +216,12 @@ export class FakeAgent {
       if (policy !== 'Password' && account.keys.length === 0) { fail('That policy needs a security key enrolled first'); return; }
       account.policy = policy;
       ok('PolicySet');
-    } else if (opName === 'RegenerateRecoveryCodes') {
-      account.recoveryCodes = this.codes();
-      account.consumed = [];
-      ok({ RecoveryCodes: [...account.recoveryCodes] });
+    } else if (opName === 'SetPassword') {
+      account.password = this.text(args.new_password) ?? '';
+      ok('PasswordSet');
+    } else if (opName === 'RegenerateRecoveryPhrase') {
+      account.phrase = fakePhrase(1000 + this.nextPhrase++);
+      ok({ RecoveryPhrase: [...account.phrase] });
     }
   }
 }

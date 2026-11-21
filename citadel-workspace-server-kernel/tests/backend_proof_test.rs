@@ -3,8 +3,9 @@
 //! This test demonstrates that the new backend is being used for all persistence operations.
 //! All operations go through the protocol command layer (WorkspaceProtocolRequest/Response).
 
-use citadel_workspace_types::structs::{NodeEntityType, UserRole};
+use citadel_workspace_types::structs::NodeEntityType;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{with_role, MEMBER_ROLE_ID};
 
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
@@ -101,10 +102,9 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
 
     // First insert the user into the backend so AddMember can find them
     use citadel_workspace_types::structs::User;
-    let test_user = User::new(
-        "test_user".to_string(),
-        "Test User".to_string(),
-        UserRole::Member,
+    let test_user = with_role(
+        User::new("test_user".to_string(), "Test User".to_string()),
+        MEMBER_ROLE_ID,
     );
     kernel
         .domain_operations
@@ -118,7 +118,7 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
             domain_id: None,
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         },
     )
@@ -141,10 +141,12 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
     .await?;
 
     match &permissions_response {
-        WorkspaceProtocolResponse::UserPermissions { user_id, role, .. } => {
+        WorkspaceProtocolResponse::UserPermissions {
+            user_id, role_id, ..
+        } => {
             println!(
                 "   ✓ Permission check completed: user={}, role={:?}",
-                user_id, role
+                user_id, role_id
             );
         }
         other => panic!("Expected UserPermissions response, got: {:?}", other),

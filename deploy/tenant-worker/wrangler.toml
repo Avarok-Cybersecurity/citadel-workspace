@@ -45,12 +45,19 @@ run_worker_first = true
 
 [[durable_objects.bindings]]
 name = "WORKSPACE"
-class_name = "WorkspaceServer"
+class_name = "WorkspaceServerV2"
 
 # Append-only: a deployed tag is never edited or removed.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["WorkspaceServer"]
+
+# The reset (RESET-PLAN-1120): every tenant object of the old class is deleted with its storage,
+# and tenants start again on a new, empty class.
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["WorkspaceServerV2"]
+deleted_classes = ["WorkspaceServer"]
 
 # Argon2 cost of the server's password hashing (see server-wasm `ArgonCost`). The release default
 # is 64 MiB x 10 passes x 8 lanes, sized for a server box; a Worker isolate has 128 MB in all and

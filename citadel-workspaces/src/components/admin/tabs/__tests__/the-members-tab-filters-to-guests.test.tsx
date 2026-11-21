@@ -26,10 +26,10 @@ const STATE: WorkspaceState = {
   loading: { workspace: false, members: false, nodes: false }, messages: { byPeer: {} }, typing: { peerIds: [], lastUpdated: 0 },
 } as WorkspaceState;
 
-const user = (id: string): Record<string, unknown> => ({ id, name: id, role: 'Member', permissions: {}, metadata: [] });
+const user = (id: string): Record<string, unknown> => ({ id, name: id, banned: false, permissions: {}, metadata: [] });
 
 function reply(guests: string[] | undefined): void {
-  const members: { guests?: string[] | undefined; domain_id: "workspace-root"; members: Record<string, unknown>[]; inherited_from: {}; } = { domain_id: WORKSPACE_ROOT_ID, members: [user('ada'), user('gus')], inherited_from: {}, ...(guests ? { guests } : {}) };
+  const members: Omit<Extract<WorkspaceProtocolResponse, { Members: unknown }>['Members'], 'members' | 'guests'> & { members: Record<string, unknown>[]; guests?: string[] } = { domain_id: WORKSPACE_ROOT_ID, members: [user('ada'), user('gus')], inherited_from: {}, ...(guests ? { guests } : {}) };
   act(() => { handleGeneratedVariants({ Members: members } as unknown as WorkspaceProtocolResponse, { cid: 0, request_id: 'r' }); });
 }
 

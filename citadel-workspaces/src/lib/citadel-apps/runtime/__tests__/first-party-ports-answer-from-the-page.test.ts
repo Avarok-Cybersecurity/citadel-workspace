@@ -7,10 +7,10 @@
 import { describe, expect, it } from 'vitest';
 import type { InstallScope } from 'citadel-workspace-client-ts';
 import { badgedNotifyPort, rosterMembersPort, type AppNotice } from '../first-party-ports';
-import { treeNodesPort, type TreeNode } from '../nodes-port';
+import { treeNodesPort, type PageNode } from '../nodes-port';
 import type { MembersPort, NodesPort, NotifyPort } from '@/lib/citadel-apps/host/ports';
 
-const TREE: Record<string, TreeNode> = {
+const TREE: Record<string, PageNode> = {
   root: { id: 'root', name: 'Company', parent_id: null, children: ['eng', 'sales'] },
   eng: { id: 'eng', name: 'Engineering', parent_id: 'root', children: ['platform'] },
   platform: { id: 'platform', name: 'Platform', parent_id: 'eng', children: [] },

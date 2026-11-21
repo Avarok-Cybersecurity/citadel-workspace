@@ -68,7 +68,7 @@ describe('a screenshot notice from the peer', () => {
 
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({
-      id: 'shot-1', message_type: 'system_notice', senderCid: 42n, recipientCid: 7n,
+      id: 'shot-1', message_type: 'system_notice', sender_cid: 42n, recipient_cid: 7n,
       content: 'Bob may have taken a screenshot',
     });
     expect(notified).toEqual(stored);

@@ -17,10 +17,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-/// Current schema version for the workspace backend storage.
-/// Increment this when making breaking changes to the storage format.
-/// The `on_start` method checks this version and runs migrations if needed.
-pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+pub use super::schema_version::CURRENT_SCHEMA_VERSION;
 
 /// Reject a path segment supplied by an authenticated client before it
 /// is joined onto the content base directory. Without this check, a
@@ -118,8 +115,8 @@ pub enum BroadcastAudience {
     ///
     /// Where one server holds several workspaces, renaming one pushed its
     /// record to every session on the box, including users whose `GetWorkspace`
-    /// for it is refused and whose `ListWorkspaces` omits it. A member set to
-    /// `Banned` keeps receiving it too, because nothing closes their socket.
+    /// for it is refused and whose `ListWorkspaces` omits it. A banned member
+    /// keeps receiving it too, because nothing closes their socket.
     ///
     /// The pull path checks membership AND `ViewContent`
     /// (`async_domain_server_ops.rs`); this makes the push path check the same.
@@ -753,12 +750,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         kernel.workspace_password = Some(admin_password.to_string());
         kernel.workspace_structure = workspace_structure;
 
-        // NOTE: Backend initialization (init() / migrate_if_needed()) is deliberately
-        // deferred to on_start(). At this point in the constructor, NodeRemote is not
-        // yet set, so the BackendTransactionManager would run against its in-memory
-        // test_storage rather than the real backend - meaning the migration sentinel
-        // would be written to the wrong place and real migration logic would silently
-        // no-op on every restart. See on_start() below for the real init call.
+        // NOTE: Backend initialization (init()) is deliberately deferred to on_start().
+        // At this point in the constructor, NodeRemote is not yet set, so the
+        // BackendTransactionManager would check its in-memory test_storage rather than
+        // the real backend. See on_start() below for the real init call.
         info!(target: "citadel", "Deferring backend init and admin injection until NodeRemote is available");
 
         Ok(kernel)
@@ -1306,9 +1301,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         // and the server is one container owning one TCP listener - a second instance against
         // the same backend cannot even bind. There is deliberately no compare-and-set here:
         // the backend surface is a plain get/put over the SDK's `BackendHandler` (no CAS
-        // primitive exists to build on), and every other persisted sentinel in this kernel -
-        // `KEY_MIGRATION_DONE` in `migrate_if_needed`, and the schema-version get/set later in
-        // this same `on_start` - has exactly the same shape.
+        // primitive exists to build on), and the schema-version get/set later in this same
+        // `on_start` has exactly the same shape.
         //
         // If multi-process servers over one backend are ever introduced, this marker is NOT the
         // thing to fix first: every node mutation is a load-mutate-save of the single
@@ -1493,9 +1487,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 // Seeded content is hashed like any other, so a document that
                 // shipped with the workspace is verified on the same terms as
                 // one a member wrote.
-                mdx_content_hash: Some(citadel_workspace_types::structs::mdx_content_hash(
-                    &mdx_content,
-                )),
+                mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(&mdx_content),
                 mdx_content,
                 rules: office_config.rules.clone(),
                 chat_enabled: office_config.chat_enabled,
@@ -1572,9 +1564,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     owner_id: UNASSIGNED_OWNER.to_string(),
                     members: vec![],
                     children: Vec::new(),
-                    mdx_content_hash: Some(citadel_workspace_types::structs::mdx_content_hash(
+                    mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(
                         &room_mdx_content,
-                    )),
+                    ),
                     mdx_content: room_mdx_content,
                     rules: room_config.rules.clone(),
                     chat_enabled: room_config.chat_enabled,
@@ -1654,12 +1646,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
         if self.domain_operations.backend_tx_manager.is_test_mode() {
             error!(target: "citadel", "NodeRemote not set after node start!");
         } else {
-            // Initialize backend (runs legacy-key migration once against the real
-            // backend). Runs unconditionally in production so migrations fire
-            // even in configurations that didn't set `workspace_password`.
-            // Safe to call every startup: `migrate_if_needed` checks the
-            // persistent KEY_MIGRATION_DONE sentinel and is a no-op once
-            // migration has run.
+            // Initialize the backend: refuses a store an earlier server wrote, in
+            // every configuration.
             info!(target: "citadel", "NodeRemote is available, running backend init");
             self.domain_operations.backend_tx_manager.init().await?;
 
@@ -1683,7 +1671,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
             let backend = &self.domain_operations.backend_tx_manager;
             match backend.get_schema_version().await? {
                 None => {
-                    // Fresh database or pre-versioning installation: stamp with current version
+                    // A fresh database: stamp the current version.
                     info!(
                         target: "citadel",
                         "No schema version found, initializing to v{}",
@@ -1692,22 +1680,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     backend.set_schema_version(CURRENT_SCHEMA_VERSION).await?;
                 }
                 Some(version) if version < CURRENT_SCHEMA_VERSION => {
-                    info!(
-                        target: "citadel",
-                        "Schema migration required: v{} -> v{}",
-                        version,
-                        CURRENT_SCHEMA_VERSION
-                    );
-                    // Future migrations go here, applied sequentially:
-                    // if version < 2 { migrate_v1_to_v2().await?; }
-                    // if version < 3 { migrate_v2_to_v3().await?; }
-                    // ...
-                    backend.set_schema_version(CURRENT_SCHEMA_VERSION).await?;
-                    info!(
-                        target: "citadel",
-                        "Schema migration complete, now at v{}",
-                        CURRENT_SCHEMA_VERSION
-                    );
+                    super::schema_version::refuse_earlier(version).map_err(NetworkError::msg)?;
                 }
                 Some(version) if version > CURRENT_SCHEMA_VERSION => {
                     // Refuse to start: a newer-than-expected schema means
@@ -1748,7 +1721,6 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     );
                 }
             }
-            self.migrate_default_tree_schema().await?;
         }
 
         // Full-tree integrity check, after seeding and migrations have run.
@@ -1907,18 +1879,16 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         // undone by the person it was applied to, with nothing
                         // logged.
                         //
-                        // `remove_user_from_domain` now leaves the account at
-                        // `UserRole::Banned`, which grants no permissions and
-                        // ranks 0. Re-admission is `AddMember`, which writes an
-                        // explicit role and so clears it -- an administrator's
-                        // decision either way.
-                        if crate::connect_enrolment(existing.as_ref().map(|u| u.role.clone()))
+                        // `remove_user_from_domain` now bans the account, as
+                        // `Ban` does. Re-admission is `Unban` -- an
+                        // administrator's decision either way.
+                        if crate::connect_enrolment(existing.as_ref())
                             == crate::ConnectEnrolment::RefuseRemoved
                         {
                             info!(
                                 target: "citadel",
-                                "[ASYNC_KERNEL] {} was removed from the workspace; not \
-                                 re-enrolling on connect. An administrator must add them back.",
+                                "[ASYNC_KERNEL] {} is banned from the workspace; not \
+                                 re-enrolling on connect. An administrator must unban them.",
                                 user_id
                             );
                             return Ok(());
@@ -2043,9 +2013,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             if let Some(mut user) = this.get_user(&user_id).await? {
                                 crate::handlers::domain::server_ops::role_writes::assign_workspace_role(
                                     &mut user,
-                                    &crate::handlers::domain::server_ops::role_authority::Assignment::Role(
-                                        citadel_workspace_types::roles::owner_role(),
-                                    ),
+                                    &citadel_workspace_types::roles::owner_role(),
                                 );
                                 this.domain_operations
                                     .backend_tx_manager
@@ -2610,7 +2578,7 @@ mod structure_seed_idempotency_tests {
             members: vec![],
             children: Vec::new(),
             mdx_content: String::new(),
-            mdx_content_hash: None,
+            mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(""),
             rules: None,
             chat_enabled: true,
             chat_channel_id: None,

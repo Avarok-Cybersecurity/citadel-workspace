@@ -38,7 +38,7 @@ export function applyEdit(
 ): RevisionOutcome {
   const message: P2PMessage | undefined = conversation.messages.find((m) => m.id === messageId);
   if (!message) return { applied: false, reason: 'unknown-message' };
-  if (message.senderCid !== editorCid) return { applied: false, reason: 'not-sender' };
+  if (message.sender_cid !== editorCid) return { applied: false, reason: 'not-sender' };
 
   message.content = contents;
   message.edited_at = editedAt;
@@ -60,7 +60,7 @@ export function applyDelete(
   if (index === -1) return { applied: false, reason: 'unknown-message' };
 
   const message: P2PMessage = conversation.messages[index];
-  if (message.senderCid !== deleterCid) return { applied: false, reason: 'not-sender' };
+  if (message.sender_cid !== deleterCid) return { applied: false, reason: 'not-sender' };
 
   conversation.messages.splice(index, 1);
   return { applied: true, message };

@@ -10,18 +10,10 @@ use ts_rs::TS;
 pub struct User {
     pub id: String,
     pub name: String,
-    /// The account's standing, and the role a record written before the role table named.
-    ///
-    /// Authoritative only for `Banned`, which is a standing rather than a role: a banned
-    /// account holds nothing anywhere. Otherwise the role is `workspace_roles`, and this is
-    /// written alongside it (`roles_legacy::legacy_mirror`) for clients that read only this
-    /// field. Never read for authority.
-    pub role: UserRole,
+    /// Whether the account is banned: a standing, not a role. A banned account holds no role in
+    /// any workspace and is refused on join and on admission until it is unbanned.
+    pub banned: bool,
     /// Workspace id -> the id of the role this member holds in that workspace's table.
-    ///
-    /// `serde(default)`: records written before the table have no such key, and
-    /// `read_legacy_role` maps their enum role into it when they are read.
-    #[serde(default)]
     pub workspace_roles: HashMap<String, String>,
     // Permissions are a map of domain IDs to sets of permissions
     pub permissions: HashMap<String, HashSet<Permission>>,
@@ -29,12 +21,12 @@ pub struct User {
 }
 
 impl User {
-    /// Create a new user with the given role
-    pub fn new(id: String, name: String, role: UserRole) -> Self {
+    /// A new account in good standing, holding no role anywhere yet.
+    pub fn new(id: String, name: String) -> Self {
         Self {
             id,
             name,
-            role,
+            banned: false,
             workspace_roles: HashMap::new(),
             permissions: HashMap::new(),
             metadata: HashMap::new(),
@@ -42,7 +34,7 @@ impl User {
     }
 
     pub fn is_banned(&self) -> bool {
-        self.role == UserRole::Banned
+        self.banned
     }
 
     /// The id of the role this account holds in `workspace_id`, or `None` when it holds none
@@ -119,34 +111,6 @@ impl User {
     /// Clear all permissions for a specific domain
     pub fn clear_permissions<T: AsRef<str>>(&mut self, domain_id: T) {
         self.permissions.remove(domain_id.as_ref());
-    }
-}
-
-/// The role vocabulary from before roles were editable, kept so stored records and older
-/// clients still decode. A role is now an entry in the workspace's table (`roles`), named by id;
-/// `roles_legacy` maps these onto it. `Banned` is the one value still read for itself: it is a
-/// standing, not a role.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
-#[ts(export)]
-pub enum UserRole {
-    Admin,
-    Owner,
-    Member,
-    Guest,
-    Banned,
-    Custom(String, u8),
-}
-
-impl fmt::Display for UserRole {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            UserRole::Admin => write!(f, "Admin"),
-            UserRole::Owner => write!(f, "Owner"),
-            UserRole::Member => write!(f, "Member"),
-            UserRole::Guest => write!(f, "Guest"),
-            UserRole::Banned => write!(f, "Banned"),
-            UserRole::Custom(name, _) => write!(f, "{}", name),
-        }
     }
 }
 
@@ -802,9 +766,8 @@ pub struct DomainNode {
     /// script execution in the page, who could patch the check itself; and it
     /// says nothing about whether the document was hostile when it was written.
     ///
-    /// `Option` because documents stored before this existed have no hash, and
-    /// a client must be able to tell "not hashed" from "hash does not match".
-    pub mdx_content_hash: Option<String>,
+    /// Always the hash of `mdx_content` (`mdx_content_hash`), empty content included.
+    pub mdx_content_hash: String,
     /// Rules displayed to users
     pub rules: Option<String>,
     /// Whether group chat is enabled for this node
@@ -1153,10 +1116,7 @@ pub struct Workspace {
     pub metadata: Vec<u8>,
     /// The server's domains, canonical first then its former ones: a member named
     /// `handle@<one of these>` is shown as the bare handle. Filled from the server's `[identity]`
-    /// on every `GetWorkspace` answer, never stored: a stored record carries none, and a reply
-    /// from a server that predates the field decodes as an empty list.
-    #[serde(default)]
-    #[ts(as = "Option<Vec<String>>", optional)]
+    /// on every `GetWorkspace` answer; a stored record carries none.
     pub accepted_domains: Vec<String>,
 }
 

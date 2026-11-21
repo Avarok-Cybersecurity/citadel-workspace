@@ -14,9 +14,10 @@ import { PeerAuthority } from '../peer-authority';
 import { encodeTopicMessage } from '../topic-model';
 import { topicPort, type OwnedTopicPort } from '../topic-port';
 import { InstallPlaneRegistry } from '../install-plane-registry';
+import type { RequestType, ResponseType } from 'citadel-workspace-client-ts';
 
 const ME: bigint = 100n;
-const SUCCESS: Readonly<Record<string, string>> = {
+const SUCCESS: Readonly<Partial<Record<RequestType, ResponseType>>> = {
   GroupCreateAppTopic: 'GroupCreateSuccess', GroupRequestJoin: 'GroupRequestJoinSuccess', GroupLeave: 'GroupLeaveSuccess',
   GroupMessage: 'GroupMessageSuccess', GroupRespondRequest: 'GroupRespondRequestSuccess',
 };
@@ -54,7 +55,7 @@ function world(claimed: string | null, admit: boolean = true, raced: string | nu
         ? { GroupMessageRefusedNotification: { cid: ME, group_key: body.group_key, refusal, request_id: null } }
         : null;
       // The send is accepted, then the server refuses it on its own, naming no request (as the agent does).
-      const answerIt = (): void => handlers.forEach((h) => h({ [SUCCESS[variant]]: answer }));
+      const answerIt = (): void => handlers.forEach((h) => h({ [SUCCESS[variant as RequestType] as string]: answer }));
       if (holdLeaves && variant === 'GroupLeave') heldLeaves.push(answerIt); else queueMicrotask(answerIt);
       if (reply !== null) queueMicrotask(() => handlers.forEach((h) => h(reply)));
     },

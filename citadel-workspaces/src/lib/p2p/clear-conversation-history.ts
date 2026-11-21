@@ -1,5 +1,4 @@
 import { messagePaginationStore } from './message-pagination-store';
-import { resolveCurrentCid } from './messenger-cid-resolver';
 import { eventEmitter } from '@/lib/event-emitter';
 import type { ConversationManager } from './conversation-manager';
 
@@ -17,13 +16,7 @@ import type { ConversationManager } from './conversation-manager';
  * reload; clearMessages clears what is on screen now.
  */
 export async function clearConversationHistory(conversationManager: ConversationManager, peerCid: bigint): Promise<void> {
-  // includeUnattributed: the user has this conversation open and pressed
-  // clear. Refusing on an unstamped legacy record would make their own
-  // button do nothing.
-  await messagePaginationStore.deleteConversationPages(peerCid, {
-    ownerCid: await resolveCurrentCid(),
-    includeUnattributed: true,
-  });
+  await messagePaginationStore.deleteConversationPages(peerCid);
   conversationManager.clearMessages(peerCid);
   eventEmitter.emit('p2p:conversation-cleared', { peerCid });
 }

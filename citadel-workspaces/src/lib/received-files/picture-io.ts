@@ -16,14 +16,14 @@ import { browserSentPictureStore } from './sent-picture-store';
 export const pictureCache: PictureCache = new PictureCache({
   received: browserReceivedFileIO,
   sent: (transfer: FileTransfer): Promise<Blob | undefined> =>
-    sentPicture(browserSentPictureStore, { own: transfer.senderCid, peer: transfer.recipientCid, transferId: transfer.id }),
+    sentPicture(browserSentPictureStore, { own: transfer.sender_cid, peer: transfer.recipient_cid, transferId: transfer.id }),
   objectUrl: (blob: Blob): string => URL.createObjectURL(blob),
   release: (url: string): void => URL.revokeObjectURL(url),
 });
 
 eventEmitter.on<FileSent>(FILE_TRANSFER_EVENTS.FILE_SENT, ({ transfer, file }: FileSent): void => {
   if (!looksLikePicture(file.name, file.type, file.size)) return;
-  const of: SentPictureOf = { own: transfer.senderCid.toString(), peer: transfer.recipientCid.toString(), transferId: transfer.id };
+  const of: SentPictureOf = { own: transfer.sender_cid.toString(), peer: transfer.recipient_cid.toString(), transferId: transfer.id };
   rememberSentPicture(browserSentPictureStore, of, file, Date.now())
     .then((refused: string | null): void => { if (refused !== null) debugLog('SentPictures', `${file.name}: ${refused}`); })
     .catch((error: unknown): void => { console.warn(`[SentPictures] ${file.name} is shown as its thumbnail after a reload: storage refused it`, error); });

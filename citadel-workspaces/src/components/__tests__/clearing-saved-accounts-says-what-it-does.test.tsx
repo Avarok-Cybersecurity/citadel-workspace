@@ -4,7 +4,7 @@
  * Measured live: the confirmation said "This signs you out and clears the stored
  * credentials". It signs nobody out -- every live session stayed active, the current
  * one included -- and no credentials have been stored since plaintext "remember me"
- * was retired (scrub-legacy-credentials). It empties the saved-account list.
+ * was retired. It empties the saved-account list.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';

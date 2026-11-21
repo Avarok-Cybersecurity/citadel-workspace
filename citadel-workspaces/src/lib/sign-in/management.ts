@@ -12,7 +12,7 @@ import { onSocketLost } from '../websocket/socket-loss';
 import { eventEmitter } from '@/lib/event-emitter';
 import { extensionFor, watchKeyChallenges } from './challenge-watch';
 import type { Send } from './key-answer';
-import type { FailureReason } from 'citadel-workspace-client-ts';
+import type { FailureReason, SignInManagementFailure, SignInManagementSuccess } from 'citadel-workspace-client-ts';
 import type { SignInManagementOp, SignInManagementOutcome, StepUp } from './types';
 
 /** The server's own round trip, before any touch extends it. */
@@ -28,7 +28,8 @@ export class SignInManagementError extends Error {
   }
 }
 
-interface Answer { request_id?: unknown; outcome?: unknown; message?: unknown; reason?: unknown }
+/** Either answer, as it arrives and before it is read: every field of both, each unknown. */
+type Answer = Partial<Record<keyof SignInManagementSuccess | keyof SignInManagementFailure, unknown>>;
 
 /** A Rust `None` arrives as an absent field (wasm-none-is-undefined); either reads as no reason. */
 const reasonOf = (failure: Answer): FailureReason | null =>

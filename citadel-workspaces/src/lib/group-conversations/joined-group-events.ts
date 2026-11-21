@@ -13,8 +13,7 @@ import { variant, toCid } from './group-wire-variants';
 import { inviteReceived } from './invite-event';
 
 /**
- * Invitations the agent kept for this session while no tab was open to show them -- absent from
- * an older agent, which does not keep them. They come after the joined list, so a group this
+ * Invitations the agent kept for this session while no tab was open to show them. They come after the joined list, so a group this
  * answer also lists as joined is already a membership when its invitation is weighed.
  */
 function listedInvites(listed: Record<string, unknown>, peerName: PeerNameResolver): GroupEvent[] {

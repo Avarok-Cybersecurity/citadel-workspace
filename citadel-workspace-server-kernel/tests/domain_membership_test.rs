@@ -1,8 +1,9 @@
 use citadel_logging::info;
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{NodeEntityType, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, User};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{with_role, MEMBER_ROLE_ID};
 
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
@@ -31,10 +32,9 @@ async fn test_is_member_of_domain_behavior() {
 
     // Create test users
     let user_id = "test_user";
-    let user = User::new(
-        user_id.to_string(),
-        "Test User".to_string(),
-        UserRole::Member,
+    let user = with_role(
+        User::new(user_id.to_string(), "Test User".to_string()),
+        MEMBER_ROLE_ID,
     );
 
     // Insert the user
@@ -137,7 +137,7 @@ async fn test_is_member_of_domain_behavior() {
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: Some(office_id.clone()),
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         },
     )

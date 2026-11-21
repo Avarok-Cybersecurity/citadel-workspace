@@ -54,7 +54,7 @@ const STOPPED: Readonly<Partial<Record<FileTransferState, string>>> = {
 export function transferRow(
   t: FileTransfer, bytesPerSecond: number | null, nameOf: (cid: string) => string, locale: string | undefined,
 ): TransferRow {
-  const other: string = nameOf(t.isIncoming ? t.senderCid : t.recipientCid);
+  const other: string = nameOf(t.isIncoming ? t.sender_cid : t.recipient_cid);
   const base: Pick<TransferRow, 'id' | 'name'> = { id: t.id, name: t.fileName };
   if (t.state === 'complete') {
     const at: string = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(t.updatedAt);

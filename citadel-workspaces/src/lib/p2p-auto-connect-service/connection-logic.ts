@@ -175,7 +175,7 @@ export async function connectToAllRegisteredPeers(state: AutoConnectState): Prom
 
   refreshOnlineStatus(state).catch(err => debugLog('P2PAutoConnectService', 'refreshOnlineStatus failed:', err));
 
-  let registeredPeers: Array<{ cid?: bigint; username?: string }> = [];
+  let registeredPeers: Array<{ cid?: bigint; username?: string | null }> = [];
 
   try {
     registeredPeers = await p2pRegistrationService.listRegisteredPeers();

@@ -27,14 +27,18 @@ vi.mock('@/lib/multi-instance/instance-manager', async (importOriginal: () => Pr
   const real: typeof import('@/lib/multi-instance/instance-manager') = await importOriginal();
   return { ...real, instanceManager: instanceManagerWith(real.instanceManager, { get cid(): bigint | null { return currentCid; } }) };
 });
-vi.mock('../../websocket-service', () => ({
-  websocketService: {
-    sendLocalDBListKeys: async (): Promise<string[]> => { loads.push(currentCid); return []; },
-    sendLocalDBGet: async (): Promise<{ value: string }> => { throw new Error('none'); },
-    sendLocalDBSet: async (): Promise<undefined> => undefined,
-    sendLocalDBDelete: async (): Promise<undefined> => undefined,
-  },
-}));
+// Not started: its socket would register its own sender over the agent's below.
+vi.mock('../../websocket-service', () => ({ websocketService: {} }));
+
+// The agent, which keeps the conversations: it records which account listed them and has none.
+const { registerConversationSender } = await import('@/lib/agent-conversations/requests');
+const { eventEmitter } = await import('@/lib/event-emitter');
+registerConversationSender(async (request: Record<string, unknown>): Promise<void> => {
+  const list: { request_id: string; cid: bigint } | undefined = request.ConversationList as { request_id: string; cid: bigint } | undefined;
+  if (!list) return;
+  loads.push(list.cid);
+  queueMicrotask((): void => { eventEmitter.emit('websocket-message', { ConversationListResponse: { request_id: list.request_id, conversations: [] } }); });
+});
 
 const { ConversationManager } = await import('../conversation-manager');
 const { resetConversationsForSession } = await import('../reset-conversations');

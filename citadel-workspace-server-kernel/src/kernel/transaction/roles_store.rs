@@ -2,8 +2,8 @@
 //!
 //! Read lazily: a workspace whose table was never written has the seeds, so no stored workspace
 //! needs migrating, and a read never writes. Only the editable roles are stored; the Owner is
-//! put back by `WorkspaceRoles::normalized` on every read. A table stored before it named new
-//! members' role is read with the legacy-load rule (`roles_stored`).
+//! put back by `WorkspaceRoles::normalized` on every read. A table from an earlier server is
+//! refused (`roles_stored`).
 
 use super::BackendTransactionManager;
 use citadel_logging::warn;
@@ -22,7 +22,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         let Some(stored) = stored else {
             return Ok(WorkspaceRoles::seeded());
         };
-        let (table, read) = stored.into_table();
+        let (table, read) = stored
+            .into_table()
+            .map_err(|why| NetworkError::msg(format!("{workspace_id}'s role table: {why}")))?;
         if let DefaultRoleRead::Dangling { named } = read {
             warn!(target: "citadel", "{workspace_id}'s role table gives new members '{named}', which it does not have as a role below the Owner; reading '{}' instead", table.default_role_id);
         }

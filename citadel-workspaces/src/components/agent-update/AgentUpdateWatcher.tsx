@@ -24,7 +24,9 @@ import { bannerFor, type AgentBanner } from '@/lib/agent-update/banner-model';
 import { fetchSiteManifest, loadReleasedAgent, releasedAgent } from '@/lib/agent-update/released-agent';
 import { restartPhase } from '@/lib/agent-update/restart-controller';
 import type { RestartPhase } from '@/lib/agent-update/restart-flow';
+import type { TypesStep } from '@/lib/agent-update/types-step';
 import { AgentUpdateBanner } from './AgentUpdateBanner';
+import { TypesStepBanner, useTypesStep } from './TypesStepBanner';
 
 /** The releases this window has already asked a stale agent to check for. */
 const askedToCatchUp: Set<string> = new Set<string>();
@@ -52,11 +54,16 @@ export function AgentUpdateWatcher(): JSX.Element | null {
     askedToCatchUp.add(catchUp);
     askUpdater('UpdateCheckNow').catch((e: unknown): void => debugLog('AgentUpdate', `the agent did not check for ${catchUp}`, e));
   }, [catchUp]);
-  // The /agent page shows the same update in full; a strip above it would say it twice.
-  if (onAgentPage || (banner === null && phase.kind === 'idle')) return null;
+  const types: TypesStep | null = useTypesStep();
+  const typesWrong: boolean = types !== null && types.kind !== 'in-step';
+  // The /agent page shows the same update in full; a strip above it would say it twice. Being
+  // out of step is said on every page, /agent too: it explains failures anywhere.
+  const showUpdate: boolean = !onAgentPage && (banner !== null || phase.kind !== 'idle');
+  if (!showUpdate && !typesWrong) return null;
   return (
     <div className="fixed inset-x-0 top-[calc(var(--app-header-height,0px)+var(--offline-banner-height,0px))] z-[105]">
-      <AgentUpdateBanner banner={banner} offer={update} family={family} />
+      <TypesStepBanner step={types} />
+      {showUpdate ? <AgentUpdateBanner banner={banner} offer={update} family={family} /> : null}
     </div>
   );
 }

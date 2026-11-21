@@ -6,18 +6,13 @@ import type { ConnectFactorFields, SignInFactors } from './types';
 
 /** A password sign-in from a window that cannot touch a key (an unattended reconnect). */
 export const passwordOnly = (password: string): SignInFactors =>
-  ({ password, securityKey: false, recoveryCode: null, admissionToken: null });
+  ({ password, securityKey: false, admissionToken: null });
 
 export function connectFactorFields(factors: SignInFactors): ConnectFactorFields {
-  const code: string | null = factors.recoveryCode === null ? null : factors.recoveryCode.trim();
-  if (code !== null && code.length === 0) throw new Error('A recovery code is required');
-  if (factors.password === null && code === null && !factors.securityKey) {
-    throw new Error('A sign-in needs a password, a security key or a recovery code');
-  }
+  if (factors.password === null && !factors.securityKey) throw new Error('A sign-in needs a password or a security key');
   return {
     password: factors.password === null ? null : stringToBytes(factors.password),
     security_key: factors.securityKey,
-    recovery_code: code === null ? null : stringToBytes(code),
     admission_token: factors.admissionToken,
   };
 }

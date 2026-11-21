@@ -24,9 +24,3 @@ export interface MessageReactionLayer {
   reacted_at: number;
 }
 
-/** The fields of a reaction layer, or null when any is missing or mistyped. */
-export function readReactionLayer(layer: Record<string, unknown>): Omit<MessageReactionLayer, 'type'> | null {
-  if (typeof layer.message_id !== 'string' || typeof layer.emoji !== 'string') return null;
-  if (typeof layer.active !== 'boolean' || typeof layer.reacted_at !== 'number') return null;
-  return { message_id: layer.message_id, emoji: layer.emoji, active: layer.active, reacted_at: layer.reacted_at };
-}

@@ -20,6 +20,7 @@ export async function createAccount(page: Page, username: string, options: Creat
     isFirstUser = false,
     password = config.DEFAULT_PASSWORD,
     uxTracker = null,
+    onRecoveryPhrase,
   } = options;
 
   console.log(`\n=== Creating account: ${username} ===`);
@@ -197,7 +198,7 @@ export async function createAccount(page: Page, username: string, options: Creat
   // here: closeAnyModals presses Escape, which dismisses Sonner toasts, and the
   // 30s post-submit race outlives the toast entirely.
 
-  await waitForRegistrationToSettle(page);
+  await waitForRegistrationToSettle(page, onRecoveryPhrase);
 
   await closeAnyModals(page);
 

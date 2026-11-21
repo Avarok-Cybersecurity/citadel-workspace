@@ -61,10 +61,9 @@ pub async fn repair_placeholder_name<R: Ratchet + Send + Sync + 'static>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use citadel_workspace_types::structs::UserRole;
 
     fn user(id: &str, name: &str) -> User {
-        User::new(id.into(), name.into(), UserRole::Member)
+        User::new(id.into(), name.into())
     }
 
     #[test]

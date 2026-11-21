@@ -7,17 +7,20 @@
  * instead. jsdom has no layout, so this pins the classes that make the chain
  * shrinkable; the geometric check is in the round's browser verification.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { MemberListItems } from '../MemberListItems';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
+import { resetRoles } from '@/lib/workspace-roles/roles-store';
+import { loadRoleTable } from '@/test-utils/loaded-role-table';
+import { SEED } from '@/test-utils/role-table';
 
 const LONG: string = 'Maximilian Alexander Featherstonehaugh-Wolfeschlegel';
 
 function renderRow(): HTMLElement {
-  const member: WorkspaceMember = { id: 'max0924', username: 'max0924', displayName: LONG, role: 'member', isOnline: true } as WorkspaceMember;
+  const member: WorkspaceMember = { id: 'max0924', username: 'max0924', displayName: LONG, banned: false, roleId: 'member', isOnline: true } as WorkspaceMember;
   render(
     <SidebarProvider>
       <TooltipProvider>
@@ -27,6 +30,9 @@ function renderRow(): HTMLElement {
   );
   return screen.getByRole('img', { name: 'Member' });
 }
+
+beforeEach(async (): Promise<void> => { await loadRoleTable(SEED); });
+afterEach(resetRoles);
 
 describe('a sidebar member row', () => {
   it('never lets the role icon shrink', () => {

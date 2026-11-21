@@ -7,7 +7,6 @@ export type Workspace = { id: string, name: string, description: string, owner_i
 /**
  * The server's domains, canonical first then its former ones: a member named
  * `handle@<one of these>` is shown as the bare handle. Filled from the server's `[identity]`
- * on every `GetWorkspace` answer, never stored: a stored record carries none, and a reply
- * from a server that predates the field decodes as an empty list.
+ * on every `GetWorkspace` answer; a stored record carries none.
  */
-accepted_domains?: Array<string>, };
+accepted_domains: Array<string>, };

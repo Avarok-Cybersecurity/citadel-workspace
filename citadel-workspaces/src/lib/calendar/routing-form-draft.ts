@@ -12,9 +12,11 @@ import type { Question } from './generated/Question';
 import type { RoutingForm } from './generated/RoutingForm';
 import type { RoutingRule } from './generated/RoutingRule';
 import type { RoutingTarget } from './generated/RoutingTarget';
+import { everyMember } from '@/types/every-member';
+import type { VariantName } from '@/types/variant-name';
 
-export type TargetKind = 'member' | 'team_type' | 'node';
-export const TARGET_KINDS: readonly TargetKind[] = ['member', 'team_type', 'node'];
+export type TargetKind = VariantName<RoutingTarget>;
+export const TARGET_KINDS: readonly TargetKind[] = everyMember<TargetKind>()(['member', 'team_type', 'node']);
 
 export const targetKind = (t: RoutingTarget): TargetKind => ('member' in t ? 'member' : 'team_type' in t ? 'team_type' : 'node');
 

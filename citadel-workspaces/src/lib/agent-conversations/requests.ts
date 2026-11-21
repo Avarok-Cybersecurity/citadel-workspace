@@ -6,32 +6,21 @@
  * never parses the agent's LocalDB records itself. The payload types are the
  * agent's own, generated from its Rust definitions.
  */
+import type { AgentRequestBody } from '@/types/agent-request';
 import type {
   AccountPreferences,
-  Attachment,
   ConversationMessage,
   ConversationMetadata,
   ConversationPage,
   MessagePatch,
-  MessageType,
 } from 'citadel-internal-service-wasm-client';
 import { requestResponse } from '../websocket/request-response';
 import { TIMEOUT } from '../timeout-constants';
 
-import { conversationSender, type RequestSender } from './sender';
+import { answerTo as answer, conversationSender, type RequestSender } from './sender';
 
 export { registerConversationSender, sendToAgent, type RequestSender } from './sender';
 
-function unwrap(message: Record<string, unknown>): Record<string, unknown> {
-  return ((message.Response as Record<string, unknown> | undefined) ?? message);
-}
-
-function answer(message: Record<string, unknown>, variant: string, requestId: string): Record<string, unknown> | undefined {
-  const value: unknown = unwrap(message)[variant];
-  if (typeof value !== 'object' || value === null) return undefined;
-  const v: Record<string, unknown> = value as Record<string, unknown>;
-  return v.request_id === requestId ? v : undefined;
-}
 
 /** Send `body` as request variant `variant`; resolve with what `success` reads from the answer. */
 async function ask<T>(
@@ -69,17 +58,8 @@ const touched = (a: Record<string, unknown>): ConversationMessage | null =>
 const matched = (): true => true;
 const done = (): void => undefined;
 
-export interface Outgoing {
-  content: string;
-  message_type: MessageType;
-  reply_to: string | null;
-  mentions: string[] | null;
-  attachments: Attachment[] | null;
-  document_id: string | null;
-  document_title: string | null;
-  /** The chat's security level (chat-advanced-settings), as the agent's `SecurityLevel` names it. */
-  security_level: string;
-}
+/** A send's own fields: the generated `ConversationSend` body, less the addressing `send` adds. */
+export type Outgoing = Omit<AgentRequestBody<'ConversationSend'>, 'request_id' | 'cid' | 'peer_cid'>;
 
 export const agentConversations: {
   /** `requestId` comes back on the send's Appended event, before this answers. */
@@ -91,7 +71,7 @@ export const agentConversations: {
   markRead(cid: bigint, peer: bigint): Promise<void>;
   record(cid: bigint, peer: bigint, message: ConversationMessage): Promise<void>;
   patch(cid: bigint, peer: bigint, messageId: string, patch: MessagePatch): Promise<ConversationMessage | null>;
-  clear(cid: bigint, peer: bigint, includeUnattributed: boolean): Promise<void>;
+  clear(cid: bigint, peer: bigint): Promise<void>;
   list(cid: bigint): Promise<ConversationMetadata[]>;
   page(cid: bigint, peer: bigint, page: number | null): Promise<{ metadata: ConversationMetadata | null; page: ConversationPage | null }>;
   setPreferences(cid: bigint, preferences: AccountPreferences): Promise<void>;
@@ -115,8 +95,8 @@ export const agentConversations: {
     ask('ConversationRecord', { cid, peer_cid: peer, message }, 'ConversationUpdated', matched).then(done),
   patch: (cid, peer, messageId, patch) =>
     ask('ConversationPatch', { cid, peer_cid: peer, message_id: messageId, patch }, 'ConversationUpdated', touched),
-  clear: (cid, peer, includeUnattributed) =>
-    ask('ConversationClear', { cid, peer_cid: peer, include_unattributed: includeUnattributed }, 'ConversationUpdated', matched).then(done),
+  clear: (cid, peer) =>
+    ask('ConversationClear', { cid, peer_cid: peer }, 'ConversationUpdated', matched).then(done),
   list: (cid) =>
     ask('ConversationList', { cid }, 'ConversationListResponse', (a) => (a.conversations as ConversationMetadata[] | undefined) ?? []),
   page: (cid, peer, page) =>

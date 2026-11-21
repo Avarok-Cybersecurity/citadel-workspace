@@ -1,8 +1,9 @@
 use common::async_test_helpers::*;
+use common::roles_fixture::{MEMBER_ROLE_ID, OWNER_ROLE_ID};
 use common::workspace_test_utils::*;
 
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{NodeEntityType, UserRole};
+use citadel_workspace_types::structs::NodeEntityType;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 #[tokio::test]
@@ -16,10 +17,10 @@ async fn test_admin_can_add_multiple_users_to_office() {
     println!("[Test MultiAdd] Using existing workspace.");
 
     // Inject the necessary users for the test
-    inject_user_for_test(&kernel, user1_id, UserRole::Member)
+    inject_user_for_test(&kernel, user1_id, MEMBER_ROLE_ID)
         .await
         .expect("Failed to inject user1_id for test");
-    inject_user_for_test(&kernel, user2_id, UserRole::Member)
+    inject_user_for_test(&kernel, user2_id, MEMBER_ROLE_ID)
         .await
         .expect("Failed to inject user2_id for test");
 
@@ -49,7 +50,7 @@ async fn test_admin_can_add_multiple_users_to_office() {
     let add_user1_req = WorkspaceProtocolRequest::AddMember {
         user_id: user1_id.to_string(),
         domain_id: Some(node.id.clone()),
-        role: UserRole::Member.into(),
+        role: MEMBER_ROLE_ID.to_string(),
         metadata: None,
     };
 
@@ -70,7 +71,7 @@ async fn test_admin_can_add_multiple_users_to_office() {
     let add_user2_req = WorkspaceProtocolRequest::AddMember {
         user_id: user2_id.to_string(),
         domain_id: Some(node.id.clone()),
-        role: UserRole::Member.into(),
+        role: MEMBER_ROLE_ID.to_string(),
         metadata: None,
     };
 
@@ -123,13 +124,13 @@ async fn test_non_admin_cannot_add_user_to_office() {
     println!("[Test NonAdmin] Using existing workspace.");
 
     // Inject the necessary users for the test
-    inject_user_for_test(&kernel, owner_id, UserRole::Member)
+    inject_user_for_test(&kernel, owner_id, MEMBER_ROLE_ID)
         .await
         .expect("Failed to inject owner_id for test");
-    inject_user_for_test(&kernel, non_admin_id, UserRole::Member)
+    inject_user_for_test(&kernel, non_admin_id, MEMBER_ROLE_ID)
         .await
         .expect("Failed to inject non_admin_id for test");
-    inject_user_for_test(&kernel, target_user_id, UserRole::Member)
+    inject_user_for_test(&kernel, target_user_id, MEMBER_ROLE_ID)
         .await
         .expect("Failed to inject target_user_id for test");
 
@@ -159,7 +160,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
     let add_owner_req = WorkspaceProtocolRequest::AddMember {
         user_id: owner_id.to_string(),
         domain_id: Some(node.id.clone()),
-        role: UserRole::Owner.into(),
+        role: OWNER_ROLE_ID.to_string(),
         metadata: None,
     };
 
@@ -180,7 +181,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
     let add_non_admin_req = WorkspaceProtocolRequest::AddMember {
         user_id: non_admin_id.to_string(),
         domain_id: Some(node.id.clone()),
-        role: UserRole::Member.into(),
+        role: MEMBER_ROLE_ID.to_string(),
         metadata: None,
     };
 
@@ -218,11 +219,9 @@ async fn inject_user_for_test<R: citadel_sdk::prelude::Ratchet + Send + Sync + '
         citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel<R>,
     >,
     user_id: &str,
-    role: UserRole,
+    role: &str,
 ) -> Result<(), citadel_sdk::prelude::NetworkError> {
-    use citadel_workspace_types::structs::User;
-
-    let user = User::new(user_id.to_string(), user_id.to_string(), role);
+    let user = common::roles_fixture::user_holding(user_id, user_id, role);
 
     kernel
         .domain_operations

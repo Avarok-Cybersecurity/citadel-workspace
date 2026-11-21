@@ -8,9 +8,9 @@
 //! permission at all, as a workspace whose default role gives joiners nothing would make them.
 
 use citadel_workspace_types::secure_links::{SecureLinksRequest, SecureLinksResponse};
-use citadel_workspace_types::structs::UserRole;
 use common::booking_guest_test_utils::{booking, node, outsiders, target, views};
 use common::member_test_utils::insert_user_with_role;
+use common::roles_fixture::BANNED;
 use common::secure_links_test_utils::{
     create, expires, links, links_kernel, one_time, opened, resolve, try_create, HOUR_MS,
 };
@@ -119,7 +119,7 @@ async fn the_guest_is_refused_the_moment_the_link_expires_with_no_purge() {
 async fn a_banned_or_unknown_account_is_never_a_guest() {
     let kernel = links_kernel(50, 0).await;
     let sales = node(&kernel, "Sales").await;
-    insert_user_with_role(&kernel, "barred", UserRole::Banned).await;
+    insert_user_with_role(&kernel, "barred", BANNED).await;
     let (_, token) = create(
         &kernel,
         TEST_ADMIN_USER_ID,

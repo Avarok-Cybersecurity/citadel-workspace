@@ -12,7 +12,7 @@ import { formatDayLong, formatDayShort, zoneAbbreviation } from '@/lib/calendar/
 import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
 import type { CivilDateTime } from '@/lib/calendar/generated/CivilDateTime';
 import { layoutLanes, type Laned } from '@/lib/calendar/lanes';
-import type { Chip, Placement } from '@/lib/calendar/placement';
+import type { Chip, GridPlacement } from '@/lib/calendar/placement';
 import { EventChip } from './EventChip';
 import { HOURS, TimeRuler } from './TimeRuler';
 import { useRovingGrid, type GridHandlers } from './use-roving-grid';
@@ -31,7 +31,7 @@ interface WeekViewProps extends GridHandlers {
   cursor: CivilDate;
   today: CivilDate;
   now: CivilDateTime;
-  placement: Placement;
+  placement: GridPlacement;
   displayZone: string;
   /** The node's zone and the instant each display hour of the first day starts at, when the zones differ. */
   nodeRuler: { zone: string; hourStarts: bigint[] } | null;

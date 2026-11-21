@@ -41,12 +41,11 @@ vi.mock('@/lib/permissions-service', () => ({
 }));
 
 const { usePermission } = await import('../use-permission');
-const { Permission } = await import('@/lib/permissions-service/types');
 
 describe('asking about a node', () => {
   it('fetches the workspace root as well, so a refusal can ever be complete', async () => {
     fetched.length = 0;
-    renderHook(() => usePermission('node-1', Permission.SendMessages));
+    renderHook(() => usePermission('node-1', 'SendMessages'));
 
     await waitFor((): void => {
       expect(fetched).toContain(WORKSPACE_ROOT_ID);
@@ -58,7 +57,7 @@ describe('asking about a node', () => {
     // The positive control: fetching unconditionally would double every
     // workspace-level query, and the retry budget is spent per attempt.
     fetched.length = 0;
-    renderHook(() => usePermission(WORKSPACE_ROOT_ID, Permission.SendMessages));
+    renderHook(() => usePermission(WORKSPACE_ROOT_ID, 'SendMessages'));
 
     await waitFor((): void => {
       expect(fetched.length).toBeGreaterThan(0);

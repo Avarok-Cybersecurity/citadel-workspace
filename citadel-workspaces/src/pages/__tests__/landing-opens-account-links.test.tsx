@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 /**
  * The landing page's wiring of an account link: read once, routed to the shared
@@ -14,11 +14,11 @@ import type { ActiveSession } from '@/types/session-types';
  * socket, and is recorded rather than run. The parser, the matching and the
  * hook are the real code.
  */
-const agent: { sessions: ActiveSession[] } = { sessions: [] };
+const agent: { sessions: SessionInformation[] } = { sessions: [] };
 vi.mock('@/lib/connection', () => ({
   connectionManager: {
     waitForReady: async (): Promise<void> => {},
-    getActiveSessionsResult: async (): Promise<{ ok: boolean; sessions: ActiveSession[]; signedOut: [] }> => ({ ok: true, sessions: agent.sessions, signedOut: [] }),
+    getActiveSessionsResult: async (): Promise<{ ok: boolean; sessions: SessionInformation[]; signedOut: [] }> => ({ ok: true, sessions: agent.sessions, signedOut: [] }),
     getStoredSessions: (): { sessions: never[] } => ({ sessions: [] }),
   },
 }));
@@ -46,7 +46,7 @@ function run(url: string): Run {
   return { login, location: () => search, setSignInOpen: (open: boolean): void => { rerender({ open }); } };
 }
 
-const alice: ActiveSession = { cid: 7n, username: 'alice', server_address: 'citadel.example.com:12400' };
+const alice: SessionInformation = { cid: 7n, username: 'alice', server_address: 'citadel.example.com:12400', server_host: null, peer_connections: {} };
 
 describe('the landing page and an account link', () => {
   beforeEach(() => {

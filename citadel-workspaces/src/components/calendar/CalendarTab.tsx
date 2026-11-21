@@ -8,7 +8,7 @@ import type { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
 import { formatDayLong, formatDayShort, formatMonth, zoneAbbreviation } from '@/lib/calendar/format';
 import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
 import type { CivilDateTime } from '@/lib/calendar/generated/CivilDateTime';
-import { place, type Chip, type Placement } from '@/lib/calendar/placement';
+import { place, type Chip, type GridPlacement } from '@/lib/calendar/placement';
 import type { CalendarAction, CalendarState, CalendarView } from '@/lib/calendar/store';
 import { AgendaView } from './AgendaView';
 import { CalendarNotices } from './CalendarNotices';
@@ -53,7 +53,7 @@ export function CalendarTab({ state, dispatch, engine, viewer, displayZone, node
   const today: CivilDate = now.date;
   const [focusAgenda, setFocusAgenda] = useState<boolean>(false);
   const days: CivilDate[] = useMemo(() => daysFor(view, cursor, engine), [view, cursor, engine]);
-  const placement: Placement = useMemo(() => place(state.entries.values(), days, displayZone, viewer, engine), [state.entries, days, displayZone, viewer, engine]);
+  const placement: GridPlacement = useMemo(() => place(state.entries.values(), days, displayZone, viewer, engine), [state.entries, days, displayZone, viewer, engine]);
   const nodeRuler: { zone: string; hourStarts: bigint[]; } | null = useMemo(() => {
     if (node.zone === null || node.zone === displayZone || (view !== 'week' && view !== 'day')) return null;
     const first: CivilDate = days[0] as CivilDate;
@@ -75,7 +75,7 @@ export function CalendarTab({ state, dispatch, engine, viewer, displayZone, node
     dispatch({ type: 'focus', date });
   };
 
-  const shared: { cursor: CivilDate; today: CivilDate; placement: Placement; displayZone: string; nodeName: (id: string) => string; nav: CalendarEngine; onOpenChip: (chip: Chip) => void; onFocus: (date: CivilDate) => void; onOpenDay: (date: CivilDate) => void; onCreate: ((date: CivilDate) => void) | null; onMore: (date: CivilDate) => void; } = { cursor, today, placement, displayZone, nodeName, nav: engine, onOpenChip, onFocus, onOpenDay: openDay, onCreate, onMore: openDay };
+  const shared: { cursor: CivilDate; today: CivilDate; placement: GridPlacement; displayZone: string; nodeName: (id: string) => string; nav: CalendarEngine; onOpenChip: (chip: Chip) => void; onFocus: (date: CivilDate) => void; onOpenDay: (date: CivilDate) => void; onCreate: ((date: CivilDate) => void) | null; onMore: (date: CivilDate) => void; } = { cursor, today, placement, displayZone, nodeName, nav: engine, onOpenChip, onFocus, onOpenDay: openDay, onCreate, onMore: openDay };
   return (
     <div className="flex min-w-0 flex-col gap-3" data-testid="calendar-tab">
       <CalendarToolbar

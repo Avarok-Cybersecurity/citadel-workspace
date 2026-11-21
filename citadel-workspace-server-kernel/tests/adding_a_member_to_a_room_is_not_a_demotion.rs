@@ -12,13 +12,16 @@
 //! admin exists. Two admins, and either can silently strip the other.
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
-use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
+use citadel_workspace_types::structs::NodeEntityType;
 use common::member_test_utils::{an_owner, insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::{
+    seed_permissions, Standing, ADMIN_ROLE_ID, GUEST_ROLE_ID, MEMBER_ROLE_ID,
+};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 
-async fn role_of(kernel: &Kernel, user: &str) -> UserRole {
+async fn role_of(kernel: &Kernel, user: &str) -> String {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -26,7 +29,7 @@ async fn role_of(kernel: &Kernel, user: &str) -> UserRole {
         .await
         .expect("read user")
         .expect("the user exists")
-        .role
+        .standing()
 }
 
 /// A room, created where the tree allows one: under an office, not the root.
@@ -63,20 +66,20 @@ async fn adding_an_admin_to_a_room_does_not_change_their_workspace_role() {
     let kernel = create_test_kernel().await;
     // A second admin, so the last-admin guard is not what is being tested, added by the
     // Owner: an Admin is not below another Admin, so an Admin may not act on one.
-    insert_user_with_role(&kernel, "second_admin", UserRole::Admin).await;
+    insert_user_with_role(&kernel, "second_admin", ADMIN_ROLE_ID).await;
     join_root(&kernel, "second_admin").await;
     an_owner(&kernel, "owner").await;
     let room = a_room(&kernel).await;
 
     kernel
         .domain_operations
-        .add_user_to_domain("owner", "second_admin", &room, UserRole::Guest.into())
+        .add_user_to_domain("owner", "second_admin", &room, GUEST_ROLE_ID.to_string())
         .await
         .expect("the Owner may add an admin to a room");
 
     assert_eq!(
         role_of(&kernel, "second_admin").await,
-        UserRole::Admin,
+        ADMIN_ROLE_ID,
         "adding an admin to one room must not demote them workspace-wide",
     );
 }
@@ -86,17 +89,22 @@ async fn the_role_given_still_scopes_what_they_may_do_in_that_room() {
     // The fix must not turn the role argument into decoration: a guest added to
     // a room gets a guest's permissions THERE.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "visitor", UserRole::Member).await;
+    insert_user_with_role(&kernel, "visitor", MEMBER_ROLE_ID).await;
     join_root(&kernel, "visitor").await;
     let room = a_room(&kernel).await;
 
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "visitor", &room, UserRole::Guest.into())
+        .add_user_to_domain(
+            TEST_ADMIN_USER_ID,
+            "visitor",
+            &room,
+            GUEST_ROLE_ID.to_string(),
+        )
         .await
         .expect("an admin may add a member to a room");
 
-    let guest_may = Permission::for_legacy_role(&UserRole::Guest);
+    let guest_may = seed_permissions(GUEST_ROLE_ID);
     let granted = kernel
         .domain_operations
         .backend_tx_manager
@@ -114,7 +122,7 @@ async fn the_role_given_still_scopes_what_they_may_do_in_that_room() {
     );
     assert_eq!(
         role_of(&kernel, "visitor").await,
-        UserRole::Member,
+        MEMBER_ROLE_ID,
         "and the workspace role must be untouched",
     );
 }
@@ -124,15 +132,15 @@ async fn a_role_change_at_the_root_still_changes_the_workspace_role() {
     // The counterpart: at the root, the role IS the workspace role, and this
     // must keep working — otherwise the fix would break promotion entirely.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "promotable", UserRole::Member).await;
+    insert_user_with_role(&kernel, "promotable", MEMBER_ROLE_ID).await;
     join_root(&kernel, "promotable").await;
 
     an_owner(&kernel, "owner").await;
     kernel
         .domain_operations
-        .add_user_to_domain("owner", "promotable", ROOT, UserRole::Admin.into())
+        .add_user_to_domain("owner", "promotable", ROOT, ADMIN_ROLE_ID.to_string())
         .await
         .expect("the Owner may set a member's workspace role at the root");
 
-    assert_eq!(role_of(&kernel, "promotable").await, UserRole::Admin);
+    assert_eq!(role_of(&kernel, "promotable").await, ADMIN_ROLE_ID);
 }

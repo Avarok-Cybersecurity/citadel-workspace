@@ -87,6 +87,16 @@ describe("the admission check", () => {
     expect(await verdictIn(t, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
   });
 
+  it("checks a recovery under its own action: a recover token recovers, a sign-in token does not", async () => {
+    const t = await freeTenant("ad");
+    outbound({ turnstile: pass(t.slug, ACTION.SignIn) });
+    expect(await verdictIn(t, true, request("Recover", "tok"))).toBe(REFUSAL.failed);
+    vi.restoreAllMocks();
+    outbound({ turnstile: pass(t.slug, ACTION.Recover) });
+    expect(await verdictIn(t, true, request("Recover", "tok"))).toBeNull();
+    expect(await verdictIn(t, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
+  });
+
   it("binds the token to the tenant: another workspace's token, or one with no workspace, is refused", async () => {
     const t = await freeTenant("ad");
     outbound({ turnstile: pass("someone-else", ACTION.SignIn) });

@@ -37,7 +37,7 @@ export function transferDetails(
   transfer: FileTransfer,
   usernameForCid: (cid: string) => string | undefined,
 ): DatedFileDetails {
-  const name: string = peerDisplayName({ cid: transfer.senderCid, username: usernameForCid(transfer.senderCid) });
+  const name: string = peerDisplayName({ cid: transfer.sender_cid, username: usernameForCid(transfer.sender_cid) });
   return {
     at: transfer.updatedAt,
     details: {
@@ -45,7 +45,7 @@ export function transferDetails(
       name: transfer.fileName,
       type: transfer.fileType || 'Unknown',
       size: transfer.fileSize,
-      sender: { name, username: usernameForCid(transfer.senderCid) },
+      sender: { name, username: usernameForCid(transfer.sender_cid) },
       provenance: `Sent by ${name}`,
       createdAt: formatDateTime(transfer.updatedAt),
       savedTo: transfer.downloadPath ?? '',

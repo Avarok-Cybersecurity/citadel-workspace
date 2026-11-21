@@ -1,204 +1,109 @@
 #!/usr/bin/env bash
-# Tests for install-chromium.sh and wait-for-apt-locks.sh, with no root and no network.
+# Tests for install-chromium.sh's lock wait and apt-archive cache, with no root and no network.
+# The deadline -- that a hung apt-get dies with its attempt -- is install-chromium-deadline.test.sh.
+# The stand-ins are install-chromium.fakes.sh; read its header first.
 #
-# The scripts run under `env -i PATH=<fakes>`: fuser, sudo, pgrep, npx, timeout and sleep are
-# stand-ins sharing a fake clock (sleep advances it). The fake dpkg lock is held until a set
-# time; npx run while it is held fails with apt's exit 100, as the real one did on 2026-10-22,
-# and a fake npx that "times out" can leave its apt-get holding the lock, as that one did.
+# Lock cases: a foreign apt holds the lock until a set fake-clock time. Each is run again against
+# a copy with the wait removed, and must FAIL there: a case that passes either way is not
+# testing the wait.
 #
-# Each lock case is then run again against a copy with the wait removed, and must FAIL there:
-# a case that passes either way is not testing the wait.
-#
-# The apt-archive cases run against a copy whose apt.conf path points into the scratch dir
-# (the real one is /etc/apt/apt.conf.d), with a fake npx that "downloads" each package into
-# whatever Dir::Cache::Archives says. A cold run must leave the packages in the cached dir and
-# a warm one must download none; both are run again with the redirect removed and must FAIL.
+# Archive cases: a cold run must leave the packages in the cached dir; a warm one must install
+# them from it with no `apt-get update` and no download (run 44530131940 had a warm cache and
+# still went to a dead mirror); the dir saved must hold exactly the installed versions. Each is
+# run again with its mechanism removed and must FAIL.
 #
 # Usage: bash scripts/ci/install-chromium.test.sh
 set -euo pipefail
+# shellcheck source-path=SCRIPTDIR source=install-chromium.fakes.sh
+. "$(dirname "${BASH_SOURCE[0]}")/install-chromium.fakes.sh"
 
-HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-WORK=$(mktemp -d)
-trap 'rm -rf "$WORK"' EXIT
-BASH_BIN=$(command -v bash)
-
-make_fakes() { # <dir> <with-fuser:yes|no> <with-pgrep:yes|no>
-  local bin=$1
-  mkdir -p "$bin"
-  cat >"$bin/sudo" <<'EOF'
-#!/bin/bash
-exec "$@"
-EOF
-  cat >"$bin/sleep" <<'EOF'
-#!/bin/bash
-read -r clock <"$STATE/clock"; echo $((clock + $1)) >"$STATE/clock"; echo "sleep $1" >>"$STATE/log"
-EOF
-  cat >"$bin/timeout" <<'EOF'
-#!/bin/bash
-while [ "${1#--}" != "$1" ]; do shift; done
-echo "timeout $1" >>"$STATE/log"; shift
-exec "$@"
-EOF
-  local held='read -r clock <"$STATE/clock"; read -r rel <"$STATE/release_at"
-locked() { [ "$rel" -lt 0 ] || [ "$clock" -lt "$rel" ]; }'
-  if [ "$2" = yes ]; then
-    printf '#!/bin/bash\n%s\necho "fuser $*" >>"$STATE/probes"\nif locked; then echo " 2787"; exit 0; fi\nexit 1\n' "$held" >"$bin/fuser"
-  fi
-  if [ "$3" = yes ]; then
-    printf '#!/bin/bash\n%s\necho "pgrep $*" >>"$STATE/probes"\nif locked; then echo 2787; exit 0; fi\nexit 1\n' "$held" >"$bin/pgrep"
-  fi
-  printf '#!/bin/bash\n%s\n' "$held" >"$bin/npx"
-  cat >>"$bin/npx" <<'EOF'
-read -r n <"$STATE/npx_calls"; n=$((n + 1)); echo "$n" >"$STATE/npx_calls"
-if locked; then
-  echo "npx LOCKED at ${clock}s" >>"$STATE/log"
-  echo "E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 2787 (apt-get)" >&2
-  exit 100
-fi
-codes=($FAKE_NPX_CODES); code=${codes[$((n - 1))]:-0}
-echo "npx free at ${clock}s -> $code ($*)" >>"$STATE/log"
-if [ "$code" = 0 ] && [ -n "${FAKE_APT_CONF:-}" ]; then
-  dir=$STATE/system-archives  # where apt would download without the redirect
-  [ -f "$FAKE_APT_CONF" ] && dir=$(sed -n 's/^Dir::Cache::Archives "\(.*\)\/";$/\1/p' "$FAKE_APT_CONF")
-  mkdir -p "$dir/partial"; : >"$dir/lock"; : >"$dir/partial/inflight"
-  for pkg in $FAKE_PKGS; do
-    [ -f "$dir/$pkg.deb" ] || { : >"$dir/$pkg.deb"; echo "fetched $pkg into $dir" >>"$STATE/log"; }
-  done
-fi
-if [ "$code" = 124 ] && [ -n "${FAKE_ORPHAN_SECONDS:-}" ]; then
-  echo $((clock + FAKE_ORPHAN_SECONDS)) >"$STATE/release_at"
-fi
-exit "$code"
-EOF
-  chmod +x "$bin"/*
-}
-
-# run <scripts-dir> <bin> <release_at> <npx codes> [orphan seconds] -> sets OUT, CODE, STATE
-run() {
-  STATE=$(mktemp -d "$WORK/state.XXXX")
-  echo 0 >"$STATE/clock"; echo "$3" >"$STATE/release_at"; echo 0 >"$STATE/npx_calls"
-  : >"$STATE/log"; : >"$STATE/probes"
-  CODE=0
-  OUT=$(env -i PATH="$2" STATE="$STATE" FAKE_NPX_CODES="$4" FAKE_ORPHAN_SECONDS="${5:-}" \
-    FAKE_APT_CONF="${FAKE_APT_CONF:-}" FAKE_PKGS="${FAKE_PKGS:-}" \
-    "$BASH_BIN" "$1/install-chromium.sh" "${ARGS[@]}" 2>&1) || CODE=$?
-}
-
-ARGS=("$WORK/archives-unused")
-FAILS=()
-expect() { # <description> <test command...>
-  local what=$1; shift
-  if ! "$@"; then FAILS+=("$what"); fi
-}
-has() { grep -qF -- "$1" <<<"$OUT"; }
-logged() { grep -qF -- "$1" "$STATE/log"; }
-npx_calls() { read -r n <"$STATE/npx_calls"; [ "$n" -eq "$1" ]; }
-never_locked() { ! logged "npx LOCKED"; }
-
-case_lock_released() { # held for 20s, then free: waits, then installs once
-  run "$1" "$2" 20 "0"
-  [ "$CODE" -eq 0 ] && npx_calls 1 && never_locked && has "apt's locks are free after 20s"
-}
-case_lock_never_released() { # the cap passes: it says so, then proceeds into apt
-  run "$1" "$2" -1 "0"
-  has "apt lock still held after 600s" && logged "npx LOCKED at 600s" && [ "$CODE" -eq 1 ]
-}
-case_orphan_then_three_failures() { # attempt 1 times out, its apt-get holds the lock 50s more
-  run "$1" "$2" 0 "124 1 1" 50
-  [ "$CODE" -eq 1 ] && npx_calls 3 && never_locked && has "failed 3 times" \
-    && has "timed out after 600s"
-}
-case_orphan_then_success() { # today's run, recovered: timed out, waited for its lock, installed
-  run "$1" "$2" 0 "124 0" 50
-  [ "$CODE" -eq 0 ] && npx_calls 2 && never_locked
-}
-LOCK_CASES=(case_lock_released case_lock_never_released case_orphan_then_three_failures case_orphan_then_success)
-
+SUBJECT="$WORK/subject"; subject_copy "$SUBJECT"
 FUSER_BIN="$WORK/bin-fuser"; make_fakes "$FUSER_BIN" yes yes
 PGREP_BIN="$WORK/bin-pgrep"; make_fakes "$PGREP_BIN" no yes
 BARE_BIN="$WORK/bin-bare"; make_fakes "$BARE_BIN" no no
+fresh_dir() { mktemp -d "$WORK/archives.XXXX"; }
 
+# --- the lock wait
+case_lock_released() { # held for 20s, then free: waits, then installs once
+  run "$1" "$2" 20 "$(fresh_dir)"
+  [ "$CODE" -eq 0 ] && never_locked && installed && count_in browsers 1 \
+    && has "apt's locks are free after 20s"
+}
+case_lock_never_released() { # the cap passes: it says so, then proceeds into apt, which names it
+  run "$1" "$2" -1 "$(fresh_dir)"
+  has "apt lock still held after 600s" && logged "apt-get LOCKED at 600s" && [ "$CODE" -eq 1 ] \
+    && count_in browsers 0
+}
+LOCK_CASES=(case_lock_released case_lock_never_released)
 for c in "${LOCK_CASES[@]}"; do
-  expect "$c (fuser)" "$c" "$HERE" "$FUSER_BIN"
+  expect "$c (fuser)" "$c" "$SUBJECT" "$FUSER_BIN"
   expect "$c probes with fuser" grep -q "^fuser /var/lib/dpkg/lock-frontend" "$STATE/probes"
 done
-expect "case_lock_released (pgrep fallback)" case_lock_released "$HERE" "$PGREP_BIN"
+expect "case_lock_released (pgrep fallback)" case_lock_released "$SUBJECT" "$PGREP_BIN"
 expect "pgrep fallback probes apt by name" grep -q "^pgrep -x" "$STATE/probes"
 
-run "$HERE" "$BARE_BIN" 0 "0"
+run "$SUBJECT" "$BARE_BIN" 0 "$(fresh_dir)"
 expect "no probe at all: refuses, exit 2, before any install" \
-  eval '[ "$CODE" -eq 2 ] && has "neither fuser nor pgrep" && npx_calls 0'
+  eval '[ "$CODE" -eq 2 ] && has "neither fuser nor pgrep" && count_in browsers 0'
+run "$SUBJECT" "$FUSER_BIN" 0 "$(fresh_dir)"
+expect "lock free: installs at once, without waiting" eval 'installed && ! has "waiting for"'
+expect "never --with-deps, whose apt-get update cannot be skipped" eval '! logged "npx refused"'
 
-run "$HERE" "$FUSER_BIN" 0 "0"
-expect "lock free: installs at once, without waiting" eval 'npx_calls 1 && ! has "waiting for"'
+NO_WAIT="$WORK/no-wait"; subject_copy "$NO_WAIT"
+mutate "$NO_WAIT/install-chromium.sh" 's/^  wait_for_apt_locks$/  : wait removed/'
+for c in "${LOCK_CASES[@]}"; do control "$c passed with the wait removed" "$c" "$NO_WAIT" "$FUSER_BIN"; done
 
-# The control: the same lock cases against a copy whose wait is gone.
-MUTANT="$WORK/mutant"; mkdir "$MUTANT"; cp "$HERE"/*.sh "$MUTANT/"
-sed -i.orig 's/^  wait_for_apt_locks$/  : wait removed/' "$MUTANT/install-chromium.sh"
-if cmp -s "$MUTANT/install-chromium.sh" "$MUTANT/install-chromium.sh.orig"; then
-  FAILS+=("control did not apply: no '  wait_for_apt_locks' line in install-chromium.sh")
-fi
-for c in "${LOCK_CASES[@]}"; do
-  if "$c" "$MUTANT" "$FUSER_BIN"; then FAILS+=("control: $c passed with the wait removed"); fi
-done
-
-# --- apt archives: <apt-archive-dir> is where apt downloads, and it is left for the cache to save.
-ARGS=()
-run "$HERE" "$FUSER_BIN" 0 "0"
-expect "no archive dir: usage, exit 64, before any install" eval '[ "$CODE" -eq 64 ] && npx_calls 0'
-
-APT_BIN="$WORK/bin-apt"; make_fakes "$APT_BIN" yes yes
-for tool in mkdir rm chown id tee sed cat; do ln -s "$(command -v "$tool")" "$APT_BIN/$tool"; done
-printf '#!/bin/bash\necho "apt-get must not be run directly" >&2; exit 99\n' >"$APT_BIN/apt-get"
-chmod +x "$APT_BIN/apt-get"
-export FAKE_APT_CONF="$WORK/apt.conf.d/99citadel-chromium-archives" FAKE_PKGS="fonts-unifont xfonts-utils"
-mkdir -p "$WORK/apt.conf.d"
-apt_copy() { # <dir> : the scripts, with the apt.conf path moved into the scratch dir
-  mkdir -p "$1"; cp "$HERE"/*.sh "$1/"
-  sed -i.orig "s|^readonly APT_ARCHIVE_CONF=/etc/apt/apt.conf.d/|readonly APT_ARCHIVE_CONF=$WORK/apt.conf.d/|" \
-    "$1/apt-archive-cache.sh"
-  if cmp -s "$1/apt-archive-cache.sh" "$1/apt-archive-cache.sh.orig"; then
-    FAILS+=("apt copy did not apply: no APT_ARCHIVE_CONF=/etc/apt/apt.conf.d/ line in apt-archive-cache.sh")
-  fi
-}
-debs_in() { local d=("$1"/*.deb); [ -e "${d[0]}" ] && [ "${#d[@]}" -eq "$2" ]; }
-case_cold_cache() { # <scripts> : a fresh, empty dir ends holding both packages, owned and tidy
-  local dir
-  dir=$(mktemp -d "$WORK/archives.XXXX")
-  ARGS=("$dir")
-  run "$1" "$APT_BIN" 0 "0"
-  [ "$CODE" -eq 0 ] && debs_in "$dir" 2 && has "0 cached package(s) restored" \
-    && has "2 package(s) in $dir for the next run" && [ ! -e "$dir/partial" ] \
-    && [ ! -e "$dir/lock" ] && [ ! -e "$FAKE_APT_CONF" ]
-}
-case_warm_cache() { # <scripts> : the same dir again downloads nothing
-  case_cold_cache "$1" || return 1
-  run "$1" "$APT_BIN" 0 "0"
-  [ "$CODE" -eq 0 ] && ! logged "fetched" && has "2 cached package(s) restored"
-}
-APT_CASES=(case_cold_cache case_warm_cache)
-apt_copy "$WORK/apt"
-for c in "${APT_CASES[@]}"; do expect "$c" "$c" "$WORK/apt"; done
-ARGS=(relative/dir)
-run "$WORK/apt" "$APT_BIN" 0 "0"
+# --- arguments
+run "$SUBJECT" "$FUSER_BIN" 0 ""
+expect "no archive dir: usage, exit 64, before any install" eval '[ "$CODE" -eq 64 ] && count_in browsers 0'
+run "$SUBJECT" "$FUSER_BIN" 0 relative/dir
 expect "relative archive dir: refused, exit 2, before any install" \
-  eval '[ "$CODE" -eq 2 ] && has "must be absolute" && npx_calls 0'
+  eval '[ "$CODE" -eq 2 ] && has "must be absolute" && count_in browsers 0'
 
-# The control: the same apt cases against a copy that never redirects apt.
-apt_copy "$WORK/apt-mutant"
-sed -i.orig2 's/^  use_apt_archive_dir "\$APT_ARCHIVE_DIR"$/  : redirect removed/' "$WORK/apt-mutant/install-chromium.sh"
-if cmp -s "$WORK/apt-mutant/install-chromium.sh" "$WORK/apt-mutant/install-chromium.sh.orig2"; then
-  FAILS+=("control did not apply: no '  use_apt_archive_dir \"\$APT_ARCHIVE_DIR\"' line in install-chromium.sh")
-fi
-for c in "${APT_CASES[@]}"; do
-  if "$c" "$WORK/apt-mutant"; then FAILS+=("control: $c passed with the redirect removed"); fi
+# --- the archive cache
+debs_in() { local d=("$1"/*.deb); [ -e "${d[0]}" ] && [ "${#d[@]}" -eq "$2" ]; }
+case_cold_cache() { # <scripts> <dir> : an empty dir ends holding both packages, owned and tidy
+  run "$1" "$FUSER_BIN" 0 "$2"
+  [ "$CODE" -eq 0 ] && installed && debs_in "$2" 2 && has "0 cached package(s) restored" \
+    && has "2 package(s) in $2 for the next run" && [ ! -e "$2/partial" ] && [ ! -e "$FAKE_APT_CONF" ]
+}
+case_warm_cache() { # <scripts> : the same dir again, with a dead mirror: no update, no download
+  local dir; dir=$(fresh_dir)
+  case_cold_cache "$1" "$dir" || return 1
+  FAKE_UPDATE=hang run "$1" "$FUSER_BIN" 0 "$dir"
+  [ "$CODE" -eq 0 ] && installed && ! logged "apt-get update" && ! logged "fetched" \
+    && has "installed from the cache; the mirror was not contacted"
+}
+case_partial_cache() { # <scripts> : the cache covers one package; only the other is fetched
+  local dir; dir=$(fresh_dir); : >"$dir/fonts-unifont_1.0_all.deb"
+  run "$1" "$FUSER_BIN" 0 "$dir"
+  [ "$CODE" -eq 0 ] && installed && ! logged "fetched fonts-unifont" \
+    && logged "apt-get install -y --download-only --no-install-recommends xfonts-utils ["
+}
+case_pruned_to_installed() { # <scripts> : a superseded version is dropped before the save
+  local dir; dir=$(fresh_dir)
+  : >"$dir/fonts-unifont_0.9_all.deb"; : >"$dir/fonts-unifont_1.0_all.deb"
+  : >"$dir/xfonts-utils_1%3a1.0_all.deb"
+  run "$1" "$FUSER_BIN" 0 "$dir"
+  [ "$CODE" -eq 0 ] && [ ! -e "$dir/fonts-unifont_0.9_all.deb" ] && debs_in "$dir" 2 \
+    && [ -e "$dir/xfonts-utils_1%3a1.0_all.deb" ] && has "dropped fonts-unifont_0.9_all.deb"
+}
+expect "case_cold_cache" case_cold_cache "$SUBJECT" "$(fresh_dir)"
+for c in case_warm_cache case_partial_cache case_pruned_to_installed; do expect "$c" "$c" "$SUBJECT"; done
+PREINSTALLED=$'fonts-unifont 1.0\nxfonts-utils 1.0\n' run "$SUBJECT" "$FUSER_BIN" 0 "$(fresh_dir)"
+expect "all present: no apt-get at all" eval '[ "$CODE" -eq 0 ] && ! logged "apt-get" && count_in browsers 1'
+
+NO_REDIRECT="$WORK/no-redirect"; subject_copy "$NO_REDIRECT"
+mutate "$NO_REDIRECT/install-chromium.sh" 's/^  use_apt_archive_dir "\$APT_ARCHIVE_DIR"$/  : redirect removed/'
+control "cold cache passed with the redirect removed" case_cold_cache "$NO_REDIRECT" "$(fresh_dir)"
+NO_CACHE_FIRST="$WORK/no-cache-first"; subject_copy "$NO_CACHE_FIRST"
+mutate "$NO_CACHE_FIRST/chromium-system-packages.sh" 's/^  if \[ "\${#debs\[@\]}" -gt 0 \]; then$/  if false; then/'
+for c in case_warm_cache case_partial_cache; do
+  control "$c passed with the cache-first install removed" "$c" "$NO_CACHE_FIRST"
 done
+NO_PRUNE="$WORK/no-prune"; subject_copy "$NO_PRUNE"
+mutate "$NO_PRUNE/apt-archive-cache.sh" 's/^  prune_to_installed "\$apt_archive_dir"$/  : prune removed/'
+control "pruning passed with the prune removed" case_pruned_to_installed "$NO_PRUNE"
 
-total=$(( ${#LOCK_CASES[@]} * 2 + 4 + ${#LOCK_CASES[@]} + 1 + ${#APT_CASES[@]} + 1 + ${#APT_CASES[@]} ))
-if [ "${#FAILS[@]}" -gt 0 ]; then
-  printf 'FAIL: %s\n' "${FAILS[@]}" >&2
-  echo "install-chromium.test.sh: ${#FAILS[@]} of $total check(s) failed" >&2
-  exit 1
-fi
-echo "install-chromium.test.sh: $total checks passed, including ${#LOCK_CASES[@]} lock cases" \
-  "that fail with the wait removed and ${#APT_CASES[@]} apt-archive cases that fail without the redirect"
+report install-chromium.test.sh \
+  "including controls on the wait, the archive redirect, the cache-first install and the prune"

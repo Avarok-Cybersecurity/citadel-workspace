@@ -63,6 +63,8 @@ export const SUCCESS_RESPONSES: Record<string, readonly string[]> = {
   AddMember: ['Success'],
   RemoveMember: ['Success'],
   UpdateMemberRole: ['MemberRoleUpdated'],
+  Ban: ['MemberBanned'],
+  Unban: ['MemberUnbanned'],
   UpdateMemberPermissions: ['Success'],
 
   // The theme write, whose UI promises "Every member will see this theme".

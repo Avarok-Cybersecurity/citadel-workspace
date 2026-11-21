@@ -9,6 +9,12 @@
 //! have always used (`citadel-workspaces/src/lib/passkey/rp-id.ts`).
 
 use super::{KsfParams, OprfSeed, PqAuthServerSettings};
+use citadel_user::auth::pq::throttle::ThrottlePolicy;
+
+/// How often a key may fail or start a sign-in or a recovery before it is locked out, on both
+/// hosts: the SDK's recommendation (five failures or twenty starts per fifteen minutes, a lockout
+/// of one minute doubling to an hour). The SDK has no default; this is the one place it is chosen.
+pub const SIGN_IN_THROTTLE: ThrottlePolicy = ThrottlePolicy::RECOMMENDED;
 
 /// An OPRF seed's length: 32 bytes from the platform CSPRNG (control/oprf-seed.mjs
 /// `OPRF_SEED_BYTES`, `--init-sign-in-seed`).
@@ -33,7 +39,7 @@ pub fn pq_sign_in_settings(
     let seed: [u8; OPRF_SEED_BYTES] = seed
         .try_into()
         .map_err(|_| format!("the OPRF seed is not {OPRF_SEED_BYTES} bytes"))?;
-    PqAuthServerSettings::new(OprfSeed::from_bytes(seed), ksf)
+    PqAuthServerSettings::new(OprfSeed::from_bytes(seed), ksf, SIGN_IN_THROTTLE)
         .and_then(|settings| settings.with_security_key_rp_id(security_key_rp_id))
         .map_err(|e| format!("post-quantum sign-in settings: {e}"))
 }

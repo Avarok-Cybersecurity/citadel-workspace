@@ -27,7 +27,7 @@ import { MemberPermissionsDialog } from "@/components/permissions/MemberPermissi
 import { PeerDiscoveryModal } from "@/components/p2p/PeerDiscoveryModal";
 import { PendingRequestsModal } from "@/components/p2p/PendingRequestsModal";
 import { CreateGroupDialog } from "@/components/chat/CreateGroupDialog";
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import type { RegisteredPeer } from '@/hooks/use-registered-peers';
 import { useGuardedNavigate, type GuardedNavigate } from '@/hooks/use-guarded-navigate';
 import { AllMembersRow } from './AllMembersRow';

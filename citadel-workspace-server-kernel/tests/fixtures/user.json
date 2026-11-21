@@ -1,7 +1,10 @@
 {
   "id": "alice",
   "name": "Alice",
-  "role": "Member",
+  "banned": false,
+  "workspace_roles": {
+    "workspace-root": "member"
+  },
   "permissions": {},
   "metadata": {}
 }

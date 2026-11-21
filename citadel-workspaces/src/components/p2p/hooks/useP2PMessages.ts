@@ -168,9 +168,6 @@ export function useP2PMessages({
     send.react?.(messageId, emoji).catch(report('Could not update reaction'));
   }, [send]);
 
-  // Covers what the global listener could not hear: registration that completed before this tab loaded.
-  useEffect((): void => { if (isRegistered) status?.acceptance?.flushHeld(); }, [isRegistered, status]);
-
   return {
     messages, typing, peerPresence, isConnected, isRegistered, isLoadingMore, isLoadingHistory, hasMorePages,
     olderPagesError, loadOlderMessages, handleScroll, handleRetryMessage, handleEditMessage, handleDeleteMessage, handleReactMessage,

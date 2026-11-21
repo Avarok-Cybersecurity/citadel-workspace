@@ -29,7 +29,7 @@ import { eventEmitter } from '@/lib/event-emitter';
 function record(id: string, state: FileTransfer['state'], errorMessage?: string): FileTransfer {
   return {
     id, fileName: 'plan.pdf', fileSize: 2048, fileType: 'application/pdf', state, progress: 0,
-    senderCid: '1', recipientCid: '2', createdAt: 0, updatedAt: 0, isIncoming: false, errorMessage,
+    sender_cid: '1', recipient_cid: '2', createdAt: 0, updatedAt: 0, isIncoming: false, errorMessage,
   };
 }
 
@@ -46,7 +46,7 @@ function renderShare(share: GroupFileShare): void {
 }
 
 const senderShare: GroupFileShare = {
-  name: 'plan.pdf', size: 2048, mimeType: 'application/pdf', senderCid: 1n,
+  name: 'plan.pdf', size: 2048, mimeType: 'application/pdf', sender_cid: 1n,
   deliveries: [
     { kind: 'offered', cid: 2n, username: 'bob', transferId: 't-bob' },
     { kind: 'skipped', cid: 3n, username: 'cy', reason: 'offline' },
@@ -85,7 +85,7 @@ describe('a file shared into a group', () => {
   });
 
   it('tells a member where to accept it, and shows no ledger', () => {
-    renderShare({ name: 'plan.pdf', size: 2048, mimeType: 'application/pdf', senderCid: 1n });
+    renderShare({ name: 'plan.pdf', size: 2048, mimeType: 'application/pdf', sender_cid: 1n });
     expect(screen.getByText(/Accept or decline it in your chat with ada/)).toBeTruthy();
     expect(screen.queryByTestId('group-file-deliveries')).toBeNull();
   });

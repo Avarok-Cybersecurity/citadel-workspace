@@ -22,7 +22,10 @@ import { renderSwitcher, joinFromTheSwitcher } from './switcher-join-flow';
 // Hoisted: the static imports below load the websocket service before this line would run.
 const { register } = vi.hoisted((): { register: ReturnType<typeof vi.fn> } => ({
   register: vi.fn(async (requestId: string): Promise<void> => {
+    // As the agent answers: RegisterSuccess with the phrase, then the connect.
     queueMicrotask((): void => {
+      const phrase: string[] = Array.from({ length: 24 }, (_: unknown, i: number): string => `word${i}`);
+      eventEmitter.emit('websocket-message', { RegisterSuccess: { request_id: requestId, cid: 42n, recovery_phrase: phrase } });
       eventEmitter.emit('websocket-message', { ConnectSuccess: { request_id: requestId, cid: 42n } });
     });
   }),

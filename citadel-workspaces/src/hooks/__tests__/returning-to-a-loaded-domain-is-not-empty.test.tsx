@@ -34,7 +34,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, type RenderResult } from '@testing-library/react';
 import type { MembersPayload } from '@/lib/workspace-events';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 vi.mock('@/lib/workspace-service', (): { default: { listMembers: () => Promise<void> } } => ({
   // Resolves: `listMembers` only SENDS. The members arrive on the event below,

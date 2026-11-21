@@ -1,7 +1,7 @@
 /**
  * A session with no CID must not reach the strip.
  *
- * `ActiveSession.cid` is declared `bigint` and the wire does not always carry
+ * `SessionInformation.cid` is declared `bigint` and the wire does not always carry
  * one. Such a session cannot be navigated to, claimed, or signed out of —
  * every one of those is keyed by CID — so a chip for it is a control that does
  * nothing.
@@ -19,10 +19,10 @@
  */
 import { describe, it, expect } from 'vitest';
 import { withWorkspaceNames } from '../with-workspace';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
-function session(username: string, cid: bigint | undefined): ActiveSession {
-  return { username, cid, server_address: '127.0.0.1:12349' } as unknown as ActiveSession;
+function session(username: string, cid: bigint | undefined): SessionInformation {
+  return { username, cid, server_address: '127.0.0.1:12349' } as unknown as SessionInformation;
 }
 
 const stored: { username: string; serverAddress: string }[] = [];

@@ -117,7 +117,7 @@ describe('the welcome notification', () => {
     welcomes = new Map<string, number>();
     stopCounting = NotificationService.getInstance().registerNotificationHandler((n: Notification): void => {
       if (n.title !== WELCOME || n.read) return;
-      const who: string = n.recipientCid ?? 'nobody';
+      const who: string = n.recipient_cid ?? 'nobody';
       welcomes.set(who, (welcomes.get(who) ?? 0) + 1);
     });
   });

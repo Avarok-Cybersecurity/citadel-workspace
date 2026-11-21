@@ -16,9 +16,10 @@ import { INTRO, WORKING_HOURS } from './booking-fixture';
 import { choice, engine, member, NOW, SLOT, type Member } from './booking-rig';
 import { IhttpRelay } from './ihttp-relay';
 import type { BookOutcome } from '@/lib/calendar/booking-form';
+import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
 
 const GROUP: EventType = { ...INTRO, id: 'workshop', name: 'Workshop', kind: { group: { seats: 2 } }, questions: [] };
-const DAY: { y: number; m: number; d: number; } = { y: 2024, m: 7, d: 16 };
+const DAY: CivilDate = { y: 2024, m: 7, d: 16 };
 const deps = (m: Member): BookerDeps => ({ ports: m.ports, engine, client: m.endpoint.client, node: 'n1', me: m.name, title: 'Workshop', nowMs: NOW });
 const at = (s: Interval): string => `${new Date(Number(s.start_ms)).toISOString()}/${Number(s.end_ms - s.start_ms) / 60_000}`;
 

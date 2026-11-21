@@ -17,11 +17,11 @@ import { event, realEngine } from './engine-rig';
 import { member, TopicGroup, treeOf, type Member } from './tree-rig';
 import type { SaveOutcome } from '@/lib/calendar/event-save';
 import type { PropagatedRead } from '@/lib/calendar/read-propagated';
-import type { TreeNode } from '@/lib/citadel-apps/runtime/nodes-port';
+import type { PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
 
 const engine: CalendarEngine = realEngine();
 /** a > e > d, and a > b > c. */
-const TREE: Record<string, TreeNode> = treeOf({ a: null, e: 'a', d: 'e', b: 'a', c: 'b' });
+const TREE: Record<string, PageNode> = treeOf({ a: null, e: 'a', d: 'e', b: 'a', c: 'b' });
 const NONE = (): void => {};
 
 function world(): { values: Map<string, Uint8Array>; group: TopicGroup; join: (me: string) => Member } {

@@ -54,7 +54,7 @@ export async function executeSendTransferRequest(
   let stagedUploadId: string | undefined;
   if (browserSendRoute(stagesUploads) === 'staged') {
     const port: ReturnType<typeof agentStagePort> = agentStagePort(
-      BigInt(transfer.senderCid), (r: Record<string, unknown>) => websocketService.sendMessage(r),
+      BigInt(transfer.sender_cid), (r: Record<string, unknown>) => websocketService.sendMessage(r),
     );
     stagedUploadId = await stageFile(file, port, intent.staging.onProgress, intent.staging.signal);
   }
@@ -67,8 +67,8 @@ export async function executeSendTransferRequest(
   const sent: SendFileResult = await router.sendFile({
     source: file,
     stagedUploadId,
-    cid: BigInt(transfer.senderCid),
-    peerCid: BigInt(transfer.recipientCid),
+    cid: BigInt(transfer.sender_cid),
+    peerCid: BigInt(transfer.recipient_cid),
     transferId: transfer.id,
     metadata: {
       fileName: transfer.fileName,
@@ -93,7 +93,7 @@ export async function executeSendTransferRequest(
  * here and not in one of them.
  */
 export async function announceTransfer(transfer: FileTransfer, offerAlreadyShown: boolean): Promise<void> {
-  debugLog('FileTransferIO', `announceTransfer: ${transfer.fileName} -> ${transfer.recipientCid}`, {
+  debugLog('FileTransferIO', `announceTransfer: ${transfer.fileName} -> ${transfer.recipient_cid}`, {
     transferId: transfer.id,
   });
   const announcement: P2PMessagingLayerPayload = buildTransferAnnouncement(transfer);

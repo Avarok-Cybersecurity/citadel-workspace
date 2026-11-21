@@ -21,7 +21,7 @@ import { toastError, toastSuccess } from '@/lib/toast-helpers';
 import { describeFailure } from '@/lib/failure-message';
 import { MemberRoleBadge } from '@/components/shared/MemberRoleBadge';
 import type { RoleHolder } from '@/components/shared/RoleIcon';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { changeCount } from './permission-changes';
 import { levelPhrase } from './member-permission-path';
 import { useMemberPermissionEditor, type MemberPermissionEditor } from './use-member-permission-editor';
@@ -58,7 +58,7 @@ export function MemberPermissionsDialog({ open, onClose, member, domainId }: Mem
   const name: string = member.displayName || member.username;
   // The role the server reports at this level, once it has; the roster's until then.
   const role: RoleHolder = editor.targetLoad.status === 'loaded'
-    ? { roleId: editor.targetLoad.roleId ?? undefined, role: editor.targetLoad.role }
+    ? { roleId: editor.targetLoad.roleId ?? undefined, banned: member.banned }
     : member;
   const where: string = levelPhrase(editor.target);
   const count: number = changeCount(editor.changes);

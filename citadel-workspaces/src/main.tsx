@@ -24,16 +24,11 @@ if (import.meta.env.DEV) {
     import('./lib/p2p-auto-connect-service'),
     import('./lib/websocket-service'),
     import('./lib/connection/service'),
-    import('./lib/server-auto-connect-service'),
-  ]).then(([reg, auto, ws, conn, serverAuto]) => {
+  ]).then(([reg, auto, ws, conn]) => {
     window.__p2pRegistrationService = reg.p2pRegistrationService;
     window.__p2pAutoConnectService = auto.p2pAutoConnectService;
     window.__websocketService = ws.websocketService;
     window.__connectionManager = conn.connectionManager;
-    // Exposed so a test can wait for the reconnect cycle to go quiet
-    // (getPendingReconnectCount() === 0) instead of sleeping out its ~30s poll
-    // interval. Two specs were spending 35s each doing exactly that.
-    window.__serverAutoConnectService = serverAuto.serverAutoConnectService;
   });
 }
 
@@ -84,9 +79,8 @@ provideAtRestRootStore(async (): Promise<AtRestRootStore> => (await import('./li
 // critical path, which has ~11KB of headroom against its budget. This keeps
 // the eager construction without paying for it before first paint.
 void import('./lib/p2p').then((m) => {
-  // Message Retention for chats nobody opens: swept once the messenger is up,
-  // then hourly. See lib/p2p/retention-sweep.
-  void m.p2pMessengerManager.waitForReady().then((): void => m.startRetentionSweeper());
+  // Touching the singleton constructs it; the agent sweeps retention itself.
+  void m.p2pMessengerManager.waitForReady();
 });
 
 // Global error handlers; their lines reach opt-in diagnostic logs (lib/telemetry/console-capture).

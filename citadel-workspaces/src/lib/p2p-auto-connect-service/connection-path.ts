@@ -3,7 +3,8 @@
  * Separate from the service index so it loads with the sidebar, not the landing page.
  */
 import { p2pAutoConnectService } from './index';
-import type { PeerConnectPath, PeerPathReport } from '@/types/ice-servers';
+import type { PeerPathReport } from '@/types/ice-servers';
+import type { P2pPathReport } from 'citadel-workspace-client-ts';
 
 /** The agent's latest report for this session's connection to `peerCid`; null when unknown. */
 export function connectionRouteFor(sessionCid: bigint | null, peerCid: bigint): PeerPathReport | null {
@@ -12,6 +13,6 @@ export function connectionRouteFor(sessionCid: bigint | null, peerCid: bigint): 
 }
 
 /** How this session's connection to `peerCid` travels now; null when unknown. */
-export function connectionPathFor(sessionCid: bigint | null, peerCid: bigint): PeerConnectPath | null {
+export function connectionPathFor(sessionCid: bigint | null, peerCid: bigint): P2pPathReport | null {
   return connectionRouteFor(sessionCid, peerCid)?.path ?? null;
 }

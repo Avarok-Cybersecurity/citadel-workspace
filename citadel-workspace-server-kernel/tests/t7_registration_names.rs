@@ -25,7 +25,7 @@ use common::production_server::{
     start_native_server_with_identity, test_path_policy_toml, test_stun_servers_toml,
     TEST_CANONICAL_DOMAIN,
 };
-use common::sign_in_client::{drive, username, PASSWORD};
+use common::sign_in_client::{drive, username, PASSWORD, TEST_SERVER_CERTIFICATE};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -218,11 +218,23 @@ async fn an_allow_legacy_production_server_registers_a_bare_name_and_reserves_it
     let bare = username("carol").replace(&format!("@{TEST_CANONICAL_DOMAIN}"), "");
     drive(move |remote| async move {
         remote
-            .register_with_defaults(addr, "Carol Clark", bare.as_str(), PASSWORD)
+            .register_with_defaults(
+                addr,
+                "Carol Clark",
+                bare.as_str(),
+                PASSWORD,
+                TEST_SERVER_CERTIFICATE,
+            )
             .await?;
         let named = format!("{bare}@{TEST_CANONICAL_DOMAIN}");
         let refused = remote
-            .register_with_defaults(addr, "Carol Clark", named.as_str(), PASSWORD)
+            .register_with_defaults(
+                addr,
+                "Carol Clark",
+                named.as_str(),
+                PASSWORD,
+                TEST_SERVER_CERTIFICATE,
+            )
             .await
             .map(|_| ())
             .expect_err("a handle registered beside its bare name");

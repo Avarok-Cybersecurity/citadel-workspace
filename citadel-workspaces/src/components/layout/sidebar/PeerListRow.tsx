@@ -12,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { rowClass } from "./selected-row";
 import { connectionPathLabel } from "@/lib/ice-servers/path-copy";
-import type { PeerConnectPath } from "@/types/ice-servers";
+import type { P2pPathReport } from 'citadel-workspace-client-ts';
 import { PAUSE_COPY } from "@/lib/p2p-pause/pause-copy";
 import { PeerRowPauseMenu, type PeerRowPause } from "./PeerRowPauseMenu";
 import { MemberAvatar } from '@/components/shared/MemberAvatar';
@@ -33,7 +33,7 @@ interface PeerListRowProps {
   /** True, false, or null when the check did not answer in time. */
   isConnected: boolean | null;
   /** How the connection travels, as the agent reported it; null when it has not. */
-  connectionPath: PeerConnectPath | null;
+  connectionPath: P2pPathReport | null;
   unreadCount?: number;
   /** Whether this is the conversation currently on screen. See active-conversation. */
   isActive?: boolean;

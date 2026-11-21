@@ -11,12 +11,12 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { MemberListItems } from '../MemberListItems';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 afterEach(cleanup);
 
 const member = (username: string): WorkspaceMember =>
-  ({ id: username, username, displayName: username, isOnline: null, role: 'member' }) as WorkspaceMember;
+  ({ id: username, username, displayName: username, isOnline: null, banned: false, roleId: 'member' }) as WorkspaceMember;
 
 describe('a member row', () => {
   it('runs the opener it is given, and is inert where it is given none', () => {

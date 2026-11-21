@@ -3,8 +3,10 @@
  * It lives beside them rather than in `lib/` because it asserts, as call-helpers.ts does.
  */
 import { expect, type Page } from '@playwright/test';
+import type { MessagingTrustPolicy } from 'citadel-workspace-client-ts';
 
-export type WorkspaceTrust = 'Strict' | 'AllTrusted';
+/** The workspace-wide policies; NodeLevelTrusted names a node, so it is set per node. */
+export type WorkspaceTrust = Extract<MessagingTrustPolicy, string>;
 
 /**
  * Click `peerUsername` in the sidebar's member list until their chat opens.

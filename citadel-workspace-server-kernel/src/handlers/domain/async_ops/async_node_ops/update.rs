@@ -116,9 +116,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             // mismatch, so a document altered between this write and that
             // execution does not run. Computed from the value just assigned
             // rather than from `new_mdx`, so the two can never disagree.
-            node.mdx_content_hash = Some(citadel_workspace_types::structs::mdx_content_hash(
-                &node.mdx_content,
-            ));
+            node.mdx_content_hash =
+                citadel_workspace_types::structs::mdx_content_hash(&node.mdx_content);
         }
         if let Some(new_rules) = rules {
             node.rules = Some(String::from(new_rules));

@@ -46,28 +46,21 @@ import { claimSessionForThisTab } from '../claim-session';
 import { rememberJoin, browserJoinTokens } from '../join-token';
 import { greetAs } from '@/lib/agent-conversations/__tests__/agent-greeting';
 
-
 beforeEach(() => { h.attaches = []; h.honoursToken = true; });
 
 describe('a session held by another window', () => {
   it('is joined again with the remembered token, and adopted', async () => {
-    await greetAs(true);
+    await greetAs();
     await rememberJoin(browserJoinTokens, 7n, Uint8Array.from(TOKEN));
     expect(await claimSessionForThisTab(7n)).toEqual({ status: 'already-active' });
     expect(h.attaches).toEqual([{ Token: TOKEN }]);
   });
 
   it('is offered, not adopted, when the agent no longer honours the token', async () => {
-    await greetAs(true);
+    await greetAs();
     await rememberJoin(browserJoinTokens, 7n, Uint8Array.from(TOKEN));
     h.honoursToken = false;
     expect(await claimSessionForThisTab(7n)).toEqual({ status: 'held-by-another-connection' });
   });
 
-  it('is offered, and no token is sent, to an agent that does not host it', async () => {
-    await greetAs('older');
-    await rememberJoin(browserJoinTokens, 7n, Uint8Array.from(TOKEN));
-    expect(await claimSessionForThisTab(7n)).toEqual({ status: 'held-by-another-connection' });
-    expect(h.attaches).toEqual([]);
-  });
 });
