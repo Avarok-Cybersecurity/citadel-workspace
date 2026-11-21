@@ -4,6 +4,7 @@
  * copy is the local account's alone: kept under its cid (never the device-wide 0), so another
  * account on the same agent cannot read it. A stored copy in another format is not opened.
  */
+import { encode as cborEncode } from 'cbor-x';
 import { describe, expect, it } from 'vitest';
 import { typeInto } from '../../collab/__tests__/doubles/real-replicas';
 import { hyphenated } from '../../__tests__/wasm-rig';
@@ -99,6 +100,30 @@ describe('a chat document reopened from this device', () => {
     await expect(opened).rejects.toBeInstanceOf(ChatSyncError);
     await expect(opened).rejects.toMatchObject({ problem: { kind: 'docVersionMismatch', where: 'the stored copy', received: CHAT_SYNC.docVersion + 1 } });
     expect((await store.loadBase(DOC))?.docVersion).toBe(CHAT_SYNC.docVersion + 1);
+  });
+
+  it('refuses a copy or an index written in the earlier, unversioned layout, and leaves both as they are', async () => {
+    const db: FakeAgentLocalDb = new FakeAgentLocalDb();
+    const port = db.connection([ALICE]);
+    const base = `cdoc-chat:${ALICE.toString()}:${DOC}#base`;
+    const index = `cdoc-chat:${ALICE.toString()}:#index`;
+    const earlierBase: number[] = Array.from(cborEncode({ doc_version: CHAT_SYNC.docVersion, snapshot: new Uint8Array([1]), migration_origin: null }));
+    const earlierIndex: number[] = Array.from(cborEncode({ entries: [{ doc_id: DOC, peer_cid: BOB, title: null, held_apart: true }] }));
+    await port.set(ALICE, base, earlierBase);
+    await port.set(ALICE, index, earlierIndex);
+    const store: ChatStoreBackend = localDbChatStore(ALICE, port);
+    await expect(store.loadBase(DOC)).rejects.toThrow(/another layout \(store version 1; this client reads 2\)/);
+    await expect(store.loadEntry(DOC)).rejects.toThrow(/another layout \(store version 1; this client reads 2\)/);
+    expect((await port.get(ALICE, base))?.value).toEqual(earlierBase);
+    expect((await port.get(ALICE, index))?.value).toEqual(earlierIndex);
+  });
+
+  it('reads back the layout it writes', async () => {
+    const store: ChatStoreBackend = localDbChatStore(ALICE, new FakeAgentLocalDb().connection([ALICE]));
+    await store.saveBase(DOC, { docVersion: CHAT_SYNC.docVersion, snapshot: new Uint8Array([4, 5]) });
+    await store.saveEntry(DOC, { peerCid: BOB, title: null });
+    expect(await store.loadBase(DOC)).toEqual({ docVersion: CHAT_SYNC.docVersion, snapshot: new Uint8Array([4, 5]) });
+    expect(await store.loadEntry(DOC)).toEqual({ peerCid: BOB, title: null });
   });
 });
 
