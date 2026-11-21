@@ -6,6 +6,7 @@
  * CIDs are stored as bigint - no string conversion needed.
  */
 
+import type { Attachment } from 'citadel-workspace-client-ts';
 import { encode as cborEncode, decode as cborDecode } from 'cbor-x';
 import type { MessageType } from './message-protocol';
 import type { MessagingLayer } from './messaging-layer';
@@ -114,13 +115,8 @@ export interface P2PYjsSyncPayload {
   [key: string]: unknown;
 }
 
-export interface P2PAttachment {
-  file_id: string;
-  file_name: string;
-  file_size: number;
-  file_type: string;
-  thumbnail?: string;
-}
+/** An attachment is the agent's generated `Attachment`. */
+export type P2PAttachment = Attachment;
 
 // Call-signalling types live in call-signals.ts; re-exported so existing
 // import sites keep working.
@@ -182,12 +178,12 @@ export function isYjsSyncPayload(payload: unknown): payload is P2PYjsSyncPayload
 
 export function createMessagingLayerCommand(
   layer: MessagingLayer,
-  senderCid: bigint,
-  recipientCid: bigint,
+  sender_cid: bigint,
+  recipient_cid: bigint,
   index: number,
   options?: {
     messageId?: string;
-    replyTo?: string;
+    reply_to?: string;
     mentions?: string[];
     attachments?: P2PAttachment[];
     messageType?: MessageType;
@@ -199,11 +195,11 @@ export function createMessagingLayerCommand(
     type: P2PCommandType.MessagingLayerCommand,
     payload: {
       layer,
-      sender_cid: senderCid,
-      recipient_cid: recipientCid,
+      sender_cid: sender_cid,
+      recipient_cid: recipient_cid,
       message_id: options?.messageId ?? crypto.randomUUID(),
       index,
-      reply_to: options?.replyTo,
+      reply_to: options?.reply_to,
       mentions: options?.mentions,
       attachments: options?.attachments,
       message_type: options?.messageType || 'text',

@@ -9,7 +9,6 @@
  * the way is in the next diff. An update that left operations waiting for something this
  * replica lacks asks for it with a hello. A payload in another CRDT format is refused and
  * reported, never applied. The title is last-writer-wins, carried by `rename` and every hello.
- * A copy moved from another original than the peer's is held apart (chat-migration-gate.ts).
  */
 import type { CdocChatSync, CdocChatSyncPayload, CdocChatTitleStamp } from '@/types/cdoc-chat-sync';
 import { validateDocTitle, type TitleCheck } from '@/lib/live-document-store/doc-title';
@@ -23,7 +22,6 @@ import { ChatOutbox } from './chat-outbox';
 import type { ChatTransport, WallClock } from './chat-ports';
 import type { ChatSyncProblem } from './chat-problems';
 import { encodeChatSync, laterTitle, readChatSync } from './chat-wire';
-import { MigrationGate } from './chat-migration-gate';
 
 export interface ChatSyncPorts {
   readonly transport: ChatTransport;
@@ -40,16 +38,11 @@ export interface ChatSyncHost {
   titled(stamp: CdocChatTitleStamp): void;
   /** The peers drawn on the pages now. */
   peers(peers: readonly PeerPresence[]): void;
-  /** The peer's copy was moved from another original (`theirs`): the two are held apart from now on. */
-  heldApart(theirs: string | null): void;
 }
 
 export interface ChatDocumentState {
   readonly docId: string;
-  readonly migrationOrigin: string | null;
   readonly title: CdocChatTitleStamp | null;
-  /** Held apart from the peer's copy when it was last open: nothing is exchanged. */
-  readonly heldApart: boolean;
 }
 
 class TooLarge extends Error {}
@@ -58,7 +51,6 @@ export class ChatDocumentSync {
   private readonly queue: SerialQueue;
   private readonly presence: DocumentPresence;
   private readonly outbox: ChatOutbox;
-  private readonly gate: MigrationGate;
   private readonly unbind: (() => void)[] = [];
   private title: CdocChatTitleStamp | null;
   private cancelAsk: (() => void) | null = null;
@@ -72,7 +64,6 @@ export class ChatDocumentSync {
     private readonly host: ChatSyncHost,
   ) {
     this.title = state.title;
-    this.gate = new MigrationGate(state.migrationOrigin, state.heldApart);
     this.queue = new SerialQueue((cause: unknown): void => host.report({ kind: 'editorFailed', operation: 'run a sync step', cause }));
     this.presence = new DocumentPresence(config.presence, {
       clock: ports.clock,
@@ -154,7 +145,6 @@ export class ChatDocumentSync {
       this.host.report({ kind: 'unreadable', what: `A ${payload.sync.kind} message from the other person`, cause });
       return;
     }
-    if (this.gate.apart && sync.kind !== 'hello') return;
     switch (sync.kind) {
       case 'hello': return this.answer(sync);
       case 'diff': return this.apply([sync.chunk], 'apply the other person\'s copy');
@@ -168,16 +158,6 @@ export class ChatDocumentSync {
   }
 
   private async answer(hello: Extract<CdocChatSync, { kind: 'hello' }>): Promise<void> {
-    const wasApart: boolean = this.gate.apart;
-    if (wasApart || this.gate.holdsApart(hello.migration_origin)) {
-      if (!wasApart) {
-        this.host.report({ kind: 'migrationMismatch', ours: this.state.migrationOrigin, theirs: hello.migration_origin });
-        this.host.heldApart(hello.migration_origin);
-      }
-      // A hello and nothing else, so the peer learns it too.
-      if (!hello.answer) await this.sendHello(true);
-      return;
-    }
     if (hello.title !== null && laterTitle(this.title, hello.title)) this.adoptTitle(hello.title);
     let chunks: Uint8Array[];
     try {
@@ -216,7 +196,7 @@ export class ChatDocumentSync {
   private async sendHello(answer: boolean): Promise<void> {
     if (this.stopped) return;
     const stateVector: Uint8Array = await this.editor.stateVector();
-    await this.sendAwaited('hello', { kind: 'hello', state_vector: stateVector, answer, migration_origin: this.state.migrationOrigin, title: this.title });
+    await this.sendAwaited('hello', { kind: 'hello', state_vector: stateVector, answer, title: this.title });
   }
 
   private adoptTitle(stamp: CdocChatTitleStamp): void {
@@ -235,8 +215,7 @@ export class ChatDocumentSync {
 
   /** Encodes and sends `sync`, refusing (and reporting) one over the wire bound. */
   private send(sync: CdocChatSync): Promise<void> {
-    // Held apart, only a hello leaves: it carries what the copy was moved from, never its content.
-    if (this.stopped || (this.gate.apart && sync.kind !== 'hello')) return Promise.resolve();
+    if (this.stopped) return Promise.resolve();
     const bytes: Uint8Array = encodeChatSync({ doc_id: this.state.docId, doc_version: this.config.docVersion, sync });
     if (bytes.byteLength > this.config.maxMessageBytes) {
       this.host.report({ kind: 'tooLarge', what: sync.kind === 'awareness' ? 'awareness' : 'update', sizeBytes: bytes.byteLength, maxBytes: this.config.maxMessageBytes });

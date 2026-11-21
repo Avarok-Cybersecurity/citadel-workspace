@@ -12,16 +12,13 @@
  * The response now names its domain. This is the check, in one place, because
  * four copies of a filter is how three of them come to differ.
  *
- * `undefined` on either side means "cannot tell": an older server that does not
- * send the field, or a subscriber with no particular domain. Accepting in that
- * case keeps the previous behaviour rather than emptying every list against a
- * server that predates the fix — a filter that silently discards everything is
- * worse than the ambiguity it replaces.
+ * `undefined` as the wanted domain is a subscriber with no particular domain,
+ * which takes every list.
  */
 export function isForDomain(
-  payloadDomainId: string | undefined,
+  payloadDomainId: string,
   wantedDomainId: string | undefined,
 ): boolean {
-  if (payloadDomainId === undefined || wantedDomainId === undefined) return true;
+  if (wantedDomainId === undefined) return true;
   return payloadDomainId === wantedDomainId;
 }

@@ -51,10 +51,11 @@ export function readEnvelope(message: { v?: unknown }): ChannelEnvelope | null {
 }
 
 /** Where a sender's envelope leaves this tab. */
-export type Compatibility = 'legacy' | 'too-old-for-us' | 'too-new-for-us' | 'compatible';
+export type Compatibility = 'too-old-for-us' | 'too-new-for-us' | 'compatible';
 
 export function compatibilityOf(theirs: ChannelEnvelope | null): Compatibility {
-  if (theirs === null) return 'legacy';
+  // No envelope: a protocol-1 build, which this one does not read.
+  if (theirs === null) return 'too-old-for-us';
   if (theirs.proto < CHANNEL_MIN_PROTO) return 'too-old-for-us';
   if (CHANNEL_PROTO < theirs.minProto) return 'too-new-for-us';
   return 'compatible';

@@ -8,6 +8,7 @@
  * themselves, because vi.mock is hoisted per file.
  */
 import { render, screen } from '@testing-library/react';
+import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 import type { ReactNode } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
@@ -22,7 +23,7 @@ import { HierarchySidebar } from '../HierarchySidebar';
 export function domainNode(id: string, parent: string | null, type: string, allowed: string[] = [], name: string = id): DomainNode {
   return {
     id, parent_id: parent, entity_type: { Child: type }, depth: 0, name, description: '', owner_id: '',
-    members: [], children: [], mdx_content: '', mdx_content_hash: null, rules: null, chat_enabled: false,
+    members: [], children: [], mdx_content: '', mdx_content_hash: EMPTY_DOCUMENT_HASH, rules: null, chat_enabled: false,
     chat_channel_id: null, default_permissions: {} as DomainNode['default_permissions'], metadata: [],
     allowed_child_types: allowed, is_default: false, created_at: 0n, updated_at: 0n,
   };

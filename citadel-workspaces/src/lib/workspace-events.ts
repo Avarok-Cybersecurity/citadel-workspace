@@ -1,7 +1,7 @@
 // Workspace events for WebSocket integration
-import { User } from '../types/workspace-entities';
+import { WorkspaceMember } from '../types/workspace-entities';
 import { notifyEach } from '@/lib/notify-listeners';
-import type { WorkspaceMetadataTS } from '../types/workspace-protocol';
+import type { WorkspaceMetadata } from 'citadel-workspace-client-ts';
 import type { DomainNode, TreeNode, TreeSchema } from '@/components/layout/sidebar/TreeNodesSection';
 import { eventEmitter } from './event-emitter';
 
@@ -27,34 +27,29 @@ export interface WorkspacePayload {
 }
 
 export interface MemberPayload {
-  member: User;
+  member: WorkspaceMember;
   connection: ConnectionInfo;
 }
 
 export interface MembersPayload {
-  members: User[];
+  members: WorkspaceMember[];
   connection: ConnectionInfo;
-  /**
-   * Which domain this list is for, when the server said. Undefined against a
-   * server that predates the field -- a subscriber that cannot tell should keep
-   * its old behaviour rather than discard the list.
-   */
-  domainId?: string;
+  /** Which domain this list is for. */
+  domainId: string;
   /**
    * Member id -> the level above that gives them access to `domainId`. Empty
-   * when everyone is listed on the domain itself, and against a server that
-   * predates the field, which lists direct members only.
+   * when everyone is listed on the domain itself.
    */
   inheritedFrom: Readonly<Record<string, string>>;
   /**
    * Listed members a live booking link names as guests. The server sends them only to callers
-   * who can manage roles; empty for everyone else, and from a server that predates the field.
+   * who can manage roles; empty for everyone else.
    */
   guests: readonly string[];
 }
 
 export interface WorkspacesPayload {
-  workspaces: WorkspaceMetadataTS[];
+  workspaces: WorkspaceMetadata[];
   connection: ConnectionInfo;
 }
 
@@ -93,7 +88,7 @@ export interface WorkspaceEventMap {
   'workspaces:listed': WorkspacesPayload;
   // Member events
   'member:adding': { user_id: string; domain_id?: string; connection: ConnectionInfo };
-  'member:added': { member: User; connection: ConnectionInfo };
+  'member:added': { member: WorkspaceMember; connection: ConnectionInfo };
   'member:loading': { user_id: string; connection: ConnectionInfo };
   'member:updating_role': { user_id: string; connection: ConnectionInfo };
   'member:updating_permissions': { userId: string; domainId: string; connection: ConnectionInfo };
@@ -105,8 +100,10 @@ export interface WorkspaceEventMap {
   /** An admin has hidden `domainId`'s roster from this user: not an empty list. */
   'members:hidden': { domainId: string; connection: ConnectionInfo };
   'members:reload': ConnectionInfo;
-  'member:role-updated': { userId: string; role: string; roleId: string | null; connection: ConnectionInfo };
-  'user:permissions:loaded': { userId: string; role: string; roleId: string | null; permissions: unknown[]; domainId: string; connection: ConnectionInfo };
+  /** Every banned account, on the roster or removed from it (`ListBanned`). */
+  'members:banned-loaded': { members: WorkspaceMember[]; connection: ConnectionInfo };
+  'member:role-updated': { userId: string; roleId: string | null; connection: ConnectionInfo };
+  'user:permissions:loaded': { userId: string; roleId: string | null; permissions: unknown[]; domainId: string; connection: ConnectionInfo };
   // Message events
   'message:received': MessagePayload;
   'typing:started': TypingPayload;
@@ -118,14 +115,8 @@ export interface WorkspaceEventMap {
   'node:content-updated': {
     nodeId: string;
     mdxContent: string;
-    /**
-     * The new content's hash, so a watcher verifies what it just received.
-     *
-     * Absent when the server predates the field, which reads as "unhashed"
-     * rather than "mismatch" — refusing content because the server is older
-     * would be the same defect the hash exists to prevent.
-     */
-    mdxContentHash?: string;
+    /** The new content's hash, so a watcher verifies what it just received. */
+    mdxContentHash: string;
     updatedBy: string;
     timestamp: number;
     connection: ConnectionInfo;
@@ -149,7 +140,7 @@ export type WorkspaceEventType = keyof WorkspaceEventMap;
 // Subset types for each method category
 type WorkspaceEventKeys = 'workspace:loading' | 'workspace:loaded' | 'workspace:created' | 'workspace:not-initialized' | 'workspaces:listed' | 'members:reload';
 type NodeEventKeys = 'node:loaded' | 'node:deleted' | 'node:moved' | 'node:content-updated' | 'nodes:loading' | 'nodes:loaded' | 'tree:structure:loaded' | 'tree:schema:loaded' | 'node:types:loaded';
-type MemberEventKeys = 'member:adding' | 'member:added' | 'member:loading' | 'member:updating_role' | 'member:updating_permissions' | 'member:removing' | 'member:removed' | 'member:loaded' | 'members:loading' | 'members:loaded' | 'members:hidden' | 'members:reload' | 'member:role-updated' | 'user:permissions:loaded';
+type MemberEventKeys = 'member:adding' | 'member:added' | 'member:loading' | 'member:updating_role' | 'member:updating_permissions' | 'member:removing' | 'member:removed' | 'member:loaded' | 'members:loading' | 'members:loaded' | 'members:hidden' | 'members:reload' | 'members:banned-loaded' | 'member:role-updated' | 'user:permissions:loaded';
 type MessageEventKeys = 'message:received' | 'typing:started' | 'typing:stopped';
 type OperationEventKeys = 'operation:success' | 'operation:error' | 'operation:deleted';
 type ProtocolEventKeys = 'protocol:warning';

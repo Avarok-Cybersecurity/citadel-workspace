@@ -1,3 +1,4 @@
+import type { RecoveryPhrase } from '@/lib/recovery/secret';
 /**
  * What the join form renders and submits with.
  *
@@ -32,8 +33,8 @@ export interface JoinRegistration {
   handleSubmit: (e: React.FormEvent) => Promise<void>;
   handleConnectModalComplete: () => void;
   handleReturnToLogin: () => void;
-  /** The account's recovery codes from RegisterSuccess; empty from a server without post-quantum sign-in. */
-  recoveryCodes: readonly string[];
+  /** The recovery phrase from RegisterSuccess; null from a server without post-quantum sign-in. */
+  recoveryPhrase: RecoveryPhrase | null;
   /** Registered, but its sign-in needs a fresh human check (the register token was spent). */
   awaitingSignIn: bigint | null;
   /** Sign in with a fresh `sign-in` token, store the session and send the optional profile. Resolves with the CID. */

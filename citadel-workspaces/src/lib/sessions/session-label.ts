@@ -1,5 +1,6 @@
 import { sessionHost } from './same-server';
-import type { ActiveSession, StoredSession } from '@/types/session-types';
+import type { StoredSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 export interface SessionLabel {
   serverAddress: string;
@@ -20,10 +21,10 @@ export interface SessionLabel {
 export function sessionLabel(
   cid: bigint,
   username: string,
-  live: readonly ActiveSession[],
+  live: readonly SessionInformation[],
   stored: StoredSession | undefined,
 ): SessionLabel {
-  const session: ActiveSession | undefined = live.find((s: ActiveSession) => s.cid === cid);
+  const session: SessionInformation | undefined = live.find((s: SessionInformation) => s.cid === cid);
   const serverAddress: string = (session ? sessionHost(session) : '') || stored?.serverAddress || '';
   const fullName: string = stored?.fullName?.trim() || username;
   return { serverAddress, fullName };

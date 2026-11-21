@@ -9,6 +9,13 @@ import {
   SigAlgorithm
 } from "@/types";
 import { PskDialog } from "./PskDialog";
+import { allKemAlgorithmValues } from "@avarok/citadel-protocol-types";
+import { DEFAULT_SECURITY_SETTINGS } from "../security-settings-defaults";
+
+const KEM_LABELS: Record<KemAlgorithm, string> = {
+  MlKem768Fips203: "ML-KEM-768",
+  MlKem1024Fips203: "ML-KEM-1024",
+};
 
 interface AdvancedSettingsProps {
   values: SecuritySettingsValues;
@@ -103,15 +110,17 @@ export const AdvancedSettings = ({ values, onChange }: AdvancedSettingsProps): J
         </div>
         <div className="relative">
           <Select
-            value={values.kemAlgorithm || 'MlKem'}
+            value={values.kemAlgorithm || DEFAULT_SECURITY_SETTINGS.kemAlgorithm}
             onValueChange={(value: KemAlgorithm) => handleValueChange('kemAlgorithm', value)}
-            defaultValue={'MlKem'}
+            defaultValue={DEFAULT_SECURITY_SETTINGS.kemAlgorithm}
           >
             <SelectTrigger id="kem-algorithm" className="w-full bg-surface text-foreground">
               <SelectValue placeholder="Select KEM algorithm" />
             </SelectTrigger>
             <SelectContent className="bg-card border border-primary-accent/30 text-foreground shadow-xl p-2">
-              <SelectItem value={'MlKem'} className="hover:bg-primary-accent/20 focus:bg-primary-accent/20 rounded-sm p-2">ML-KEM</SelectItem>
+              {allKemAlgorithmValues().map((kem) => (
+                <SelectItem key={kem} value={kem} className="hover:bg-primary-accent/20 focus:bg-primary-accent/20 rounded-sm p-2">{KEM_LABELS[kem]}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

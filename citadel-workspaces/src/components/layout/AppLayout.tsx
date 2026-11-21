@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useRememberLocation } from './use-remember-location';
-import { useLiveDocMigrationSweep } from '@/hooks/use-live-doc-migration-sweep';
 import {
   Sidebar,
   SidebarContent,
@@ -25,8 +24,6 @@ export const AppLayout = ({ children }: AppLayoutProps): JSX.Element => {
   // than to the default office. Inside AppLayout because that is exactly the
   // set of routes worth returning to -- the pre-auth screens do not mount it.
   useRememberLocation();
-  // Moves this account's chat documents to Citadel Docs once, in the background, after sign-in.
-  useLiveDocMigrationSweep();
 
   return (
     <SidebarProvider>

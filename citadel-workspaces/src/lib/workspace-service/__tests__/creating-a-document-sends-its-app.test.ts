@@ -10,19 +10,21 @@
 import { describe, it, expect, vi } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
 import { decodeNodeApp } from '@/lib/citadel-apps/node-app-metadata';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
+import { viewOf } from '@/test-utils/request-view';
+import type { RequestBody } from '@/types/workspace-protocol';
 import { createDocument } from '../document-operations';
 import type { ProtocolSender } from '../workspace-operations';
 
-type CreateNodeRequest = NonNullable<WorkspaceProtocolRequestTS['CreateNode']>;
+type CreateNodeRequest = RequestBody<'CreateNode'>;
 
 /** A sender that records the request and answers it as the server would. */
-function answeringSender(): { sender: ProtocolSender; sent: WorkspaceProtocolRequestTS[] } {
-  const sent: WorkspaceProtocolRequestTS[] = [];
+function answeringSender(): { sender: ProtocolSender; sent: WorkspaceProtocolRequest[] } {
+  const sent: WorkspaceProtocolRequest[] = [];
   const sender: ProtocolSender = {
-    sendProtocolRequest: vi.fn(async (request: WorkspaceProtocolRequestTS): Promise<void> => {
+    sendProtocolRequest: vi.fn(async (request: WorkspaceProtocolRequest): Promise<void> => {
       sent.push(request);
-      const create: CreateNodeRequest | undefined = request.CreateNode;
+      const create: CreateNodeRequest | undefined = viewOf(request).CreateNode;
       if (create) setTimeout(() => eventEmitter.emit('workspace:raw-response', { Node: { id: 'new', parent_id: create.parent_id, name: create.name } }), 0);
     }),
   } as unknown as ProtocolSender;
@@ -35,7 +37,8 @@ describe('creating a document', () => {
     await createDocument(sender, { parentId: 'alex', childType: 'Floor', name: ' Plan ', app: 'docs' });
 
     expect(sent).toHaveLength(1);
-    const create: CreateNodeRequest = sent[0].CreateNode as CreateNodeRequest;
+    const create: CreateNodeRequest | undefined = viewOf(sent[0]).CreateNode;
+    if (create === undefined) throw new Error('the first request sent was not CreateNode');
     expect(create.parent_id).toBe('alex');
     expect(create.entity_type).toEqual({ Child: 'Floor' });
     expect(create.name).toBe('Plan');

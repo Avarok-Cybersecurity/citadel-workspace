@@ -14,13 +14,9 @@ import type { Permission as WirePermission, RoleChange, RoleDefinition } from 'c
 import { ALL_PERMISSIONS, Permission } from '@/lib/permissions-service/types';
 
 /** The editable fields of one role, as the editor holds them before Save. */
-export interface RoleDraft {
-  name: string;
-  color: string | null;
-  permissions: ReadonlySet<WirePermission>;
-}
+export type RoleDraft = Pick<RoleDefinition, 'name' | 'color'> & { permissions: ReadonlySet<WirePermission> };
 
-const EVERY_BUT_ALL: readonly WirePermission[] = ALL_PERMISSIONS.filter((p: Permission): boolean => p !== Permission.All);
+const EVERY_BUT_ALL: readonly WirePermission[] = ALL_PERMISSIONS.filter((p: Permission): boolean => p !== 'All');
 
 export function draftOf(role: RoleDefinition): RoleDraft {
   return { name: role.name, color: role.color, permissions: new Set(role.permissions) };
@@ -28,7 +24,7 @@ export function draftOf(role: RoleDefinition): RoleDraft {
 
 /** Whether a draft's set confers `permission`, as a role holding it would. */
 export function draftGrants(permissions: ReadonlySet<WirePermission>, permission: WirePermission): boolean {
-  return permissions.has(Permission.All) || permissions.has(permission);
+  return permissions.has('All') || permissions.has(permission);
 }
 
 /**
@@ -44,10 +40,10 @@ export function togglePermission(
 ): Set<WirePermission> {
   const next: Set<WirePermission> = new Set(permissions);
   if (on) {
-    if (!permissions.has(Permission.All)) next.add(permission);
+    if (!permissions.has('All')) next.add(permission);
     return next;
   }
-  if (permission !== Permission.All && permissions.has(Permission.All)) {
+  if (permission !== 'All' && permissions.has('All')) {
     return new Set(EVERY_BUT_ALL.filter((p: WirePermission): boolean => p !== permission));
   }
   next.delete(permission);
@@ -55,15 +51,15 @@ export function togglePermission(
 }
 
 function permissionChanges(before: ReadonlySet<WirePermission>, after: ReadonlySet<WirePermission>): RoleChange[] {
-  if (before.has(Permission.All)) {
-    if (after.has(Permission.All)) {
+  if (before.has('All')) {
+    if (after.has('All')) {
       const grant: WirePermission[] = [...after].filter((p: WirePermission): boolean => !before.has(p));
       return grant.length > 0 ? [{ Grant: grant }] : [];
     }
     // The server keeps every permission but the revoked ones once the wildcard is spelled out.
     const revoke: WirePermission[] = EVERY_BUT_ALL.filter((p: WirePermission): boolean => !after.has(p));
-    if (after.size === 0) return [{ Revoke: [Permission.All] }];
-    return revoke.length > 0 ? [{ Revoke: revoke }] : [{ Revoke: [Permission.All] }, { Grant: [...after] }];
+    if (after.size === 0) return [{ Revoke: ['All'] }];
+    return revoke.length > 0 ? [{ Revoke: revoke }] : [{ Revoke: ['All'] }, { Grant: [...after] }];
   }
   const revoke: WirePermission[] = [...before].filter((p: WirePermission): boolean => !after.has(p));
   const grant: WirePermission[] = [...after].filter((p: WirePermission): boolean => !before.has(p));

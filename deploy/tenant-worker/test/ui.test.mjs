@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { dispatch } from "../control/dispatch.mjs";
 import { contentSecurityPolicy, webAnalyticsBeacon } from "../control/ui.mjs";
+import { SIGN_IN_CLIENTS } from "../control/sign-in-clients.mjs";
 import { productionEnv } from "./helpers.mjs";
 
 const AGENT = "wss://local.avarok.net:12345";
@@ -32,6 +33,13 @@ describe("the CSP", () => {
     expect(csp).toContain(`connect-src 'self' ${AGENT} https://cloudflareinsights.com;`);
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).not.toMatch(/\bwss?:(?!\/\/local\.avarok\.net)/);
+  });
+
+  it("lets /sign-in POST its code to every allowlisted return, and to nowhere else", () => {
+    const formAction = contentSecurityPolicy(AGENT).split("; ").find((d) => d.startsWith("form-action "));
+    const returns = Object.values(SIGN_IN_CLIENTS.clients).flatMap((c) => c.returns.map((r) => new URL(r).origin));
+    expect(formAction.split(" ").slice(1).sort()).toEqual([...new Set(["'self'", ...returns])].sort());
+    expect(formAction).toContain("https://synchronized.work");
   });
 });
 

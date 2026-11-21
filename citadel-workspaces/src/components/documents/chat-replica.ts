@@ -30,10 +30,8 @@ export interface ChatDocumentRequest {
   readonly selfCid: bigint;
   /** The title the chat message gave it, shown until a rename (either person's) is heard. */
   readonly title: string;
-  /** What it opens from when this device keeps no copy yet: blank, the creator's typed text, or a migration's snapshot. */
+  /** What it opens from when this device keeps no copy yet: blank, or the creator's typed text. */
   readonly origin: ChatDocumentOrigin;
-  /** The peer's copy was moved from another original (`theirs`): the two are held apart, and this is said. */
-  readonly heldApart: (theirs: string | null) => void;
 }
 
 export interface ChatDocument {
@@ -64,7 +62,6 @@ export function openChatDocument(peer: ChatPeer, request: ChatDocumentRequest): 
           report,
           titled: (stamp: CdocChatTitleStamp): void => title.set(stamp.title),
           bound: (sync: ChatDocumentSync | null): void => { bound = sync; },
-          heldApart: request.heldApart,
         })(open, show, fail);
       },
       (error: unknown): void => {

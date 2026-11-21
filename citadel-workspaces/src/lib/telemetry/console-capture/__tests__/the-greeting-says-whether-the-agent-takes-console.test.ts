@@ -4,9 +4,9 @@
  * cannot parse. Real: watchGreeting.
  */
 import { describe, expect, it } from 'vitest';
-import { watchGreeting, type AgentCapabilities } from '@/lib/agent-conversations/capabilities';
+import { watchGreeting, type AgentOffers } from '@/lib/agent-conversations/capabilities';
 
-async function offers(greeting: Record<string, unknown>): Promise<AgentCapabilities> {
+async function offers(greeting: Record<string, unknown>): Promise<AgentOffers> {
   const watch: ReturnType<typeof watchGreeting> = watchGreeting();
   watch.observe({ ServiceConnectionAccepted: greeting });
   return watch.offers;
@@ -14,8 +14,8 @@ async function offers(greeting: Record<string, unknown>): Promise<AgentCapabilit
 
 describe('the greeting', () => {
   it('reads browser_console, and its absence as no', async () => {
-    expect((await offers({ agent_ilm: true, browser_console: true })).takesConsole).toBe(true);
-    expect((await offers({ agent_ilm: true, stages_uploads: true })).takesConsole).toBe(false);
-    expect((await offers({ agent_ilm: true, browser_console: 'true' })).takesConsole).toBe(false);
+    expect((await offers({ browser_console: true })).takesConsole).toBe(true);
+    expect((await offers({ stages_uploads: true })).takesConsole).toBe(false);
+    expect((await offers({ browser_console: 'true' })).takesConsole).toBe(false);
   });
 });

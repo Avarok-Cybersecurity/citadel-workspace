@@ -20,7 +20,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { PermissionMatrixTable } from '../PermissionMatrixTable';
-import { Permission } from '@/lib/permissions-service/types';
 import { PERMISSION_CATEGORIES, type PermissionDefinition } from '../permission-constants';
 
 describe('the permission matrix', () => {
@@ -40,7 +39,7 @@ describe('the permission matrix', () => {
     );
 
     // The one the phone spec reaches for.
-    expect(screen.getByTestId(`permission-row-${Permission.EditMdx}`)).toBeInTheDocument();
+    expect(screen.getByTestId(`permission-row-${'EditMdx'}`)).toBeInTheDocument();
 
     // And every other one, so a row cannot be added without a handle.
     const missing: string[] = [];

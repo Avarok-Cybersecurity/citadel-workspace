@@ -20,7 +20,7 @@ interface MemberRoleBadgeProps {
 }
 
 export function MemberRoleBadge({ holder, className, 'data-testid': testId }: MemberRoleBadgeProps): JSX.Element | null {
-  const display: RoleDisplay | null = useRoleDisplay(holder.roleId, holder.role);
+  const display: RoleDisplay | null = useRoleDisplay(holder);
   if (display === null) return null;
   return (
     <Badge className={cn('shrink-0 gap-1', roleBadgeClass(display.id), className)} data-role={display.id} data-testid={testId}>

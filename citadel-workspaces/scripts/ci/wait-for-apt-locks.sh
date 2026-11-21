@@ -10,10 +10,10 @@
 # -- so retrying into it fails identically (UI run 39831695758, "UI sweep geometry", twice).
 # The condition that matters is "the lock is free", and this waits for exactly that.
 #
-# Who holds it: the runner image's apt-daily / unattended-upgrades after boot, and -- the case
-# seen on 2026-10-22 -- an apt-get started by an earlier `playwright install --with-deps` that
-# `timeout` gave up on. `timeout` signals its own process group; sudo does not relay a signal
-# sent from inside that group, so the root apt-get outlives the attempt and keeps the lock.
+# Who holds it: the runner image's apt-daily / unattended-upgrades after boot. It is NOT for
+# an apt-get of our own that outlived its deadline (2026-10-22, and PID 2677 on 2026-11-19,
+# which this waited 600 s on, twice): apt-bounded.sh now kills those, and fails at once, naming
+# the holder, if a kill ever leaves one.
 #
 # Usage: wait-for-apt-locks.sh   (no arguments; the constants below are the only knobs)
 # Exits non-zero only when it cannot tell whether a lock is held. When the cap passes with a

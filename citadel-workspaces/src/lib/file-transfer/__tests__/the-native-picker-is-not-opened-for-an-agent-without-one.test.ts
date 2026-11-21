@@ -36,14 +36,14 @@ function harness(): { deps: LifecycleDeps; intents: string[] } {
 
 describe('sending with the native picker', () => {
   it('is refused, without a pick, when the agent says it has no picker', async () => {
-    await greetAs(true, { native_picker: false });
+    await greetAs({ native_picker: false });
     const { deps, intents } = harness();
     await expect(sendFileWithNativePicker(deps, '42')).rejects.toThrow(/File picker not available/);
     expect(intents).not.toContain('pick-file');
   });
 
-  it('NEGATIVE CONTROL: an agent that says nothing is asked for the dialog as before', async () => {
-    await greetAs('older');
+  it('NEGATIVE CONTROL: an agent that says it has one is asked for the dialog', async () => {
+    await greetAs({ native_picker: true });
     const { deps, intents } = harness();
     await sendFileWithNativePicker(deps, '42');
     expect(intents).toContain('pick-file');

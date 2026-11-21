@@ -25,7 +25,7 @@
       printf '"server_addr":%s,"full_name":"Smoke Probe","username":"%s",' "$1" "$2"
       printf '"proposed_password":[112,114,111,98,101],"connect_after_register":false,'
       printf '"session_security_settings":{"security_level":"Standard","secrecy_mode":"BestEffort",'
-      printf '"crypto_params":{"encryption_algorithm":"AES_GCM_256","kem_algorithm":"MlKem","sig_algorithm":"None"},'
+      printf '"crypto_params":{"encryption_algorithm":"AES_GCM_256","kem_algorithm":"MlKem1024Fips203","sig_algorithm":"None"},'
       printf '"header_obfuscator_settings":"Disabled"},"server_password":null}}}'
     }
     deserialize_failures() { grep -c "Failed to deserialize" "$WORK/agent.log" 2>/dev/null || echo 0; }

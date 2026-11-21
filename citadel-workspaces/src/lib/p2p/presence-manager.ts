@@ -77,7 +77,7 @@ export class PresenceManager {
   /**
    * Send presence update to a specific peer
    */
-  public async sendPresenceUpdate(recipientCid: bigint, presence: MessagingLayer): Promise<void> {
+  public async sendPresenceUpdate(recipient_cid: bigint, presence: MessagingLayer): Promise<void> {
     // Gated here rather than in broadcastPresence so that BOTH the broadcast and
     // the single-peer path obey it — broadcastPresence loops through this one.
     if (!getPrivacySettings().showOnlineStatus) return;
@@ -86,7 +86,7 @@ export class PresenceManager {
       return;
     }
 
-    await this.config.sendCommand(recipientCid, presence);
+    await this.config.sendCommand(recipient_cid, presence);
   }
 
   /**
@@ -149,9 +149,9 @@ export class PresenceManager {
    * Call this when the user focuses on the input field.
    * The polling will check every TYPING_POLL_INTERVAL_MS if text changed.
    */
-  public startTypingPolling(recipientCid: bigint, getCurrentText: () => string): void {
+  public startTypingPolling(recipient_cid: bigint, getCurrentText: () => string): void {
     // Stop any existing polling for this peer
-    this.stopTypingPolling(recipientCid);
+    this.stopTypingPolling(recipient_cid);
 
     const state: { intervalId: NodeJS.Timeout | null; lastText: string; lastSentTyping: number; } = {
       intervalId: null as NodeJS.Timeout | null,
@@ -178,24 +178,24 @@ export class PresenceManager {
       // becomes.
       const sinceLastSend: number = Date.now() - state.lastSentTyping;
       if (textChanged && currentText.length > 0 && sinceLastSend >= MIN_TYPING_SEND_INTERVAL_MS) {
-        void this.sendTypingIndicator(recipientCid);
+        void this.sendTypingIndicator(recipient_cid);
         state.lastSentTyping = Date.now();
       }
     }, TYPING_POLL_INTERVAL_MS);
 
-    this.typingPollingState.set(recipientCid, state);
+    this.typingPollingState.set(recipient_cid, state);
   }
 
   /**
    * Stop typing polling for a peer conversation.
    * Call this when the user blurs the input field or sends a message.
    */
-  public stopTypingPolling(recipientCid: bigint): void {
-    const state: { intervalId: NodeJS.Timeout | null; lastText: string; lastSentTyping: number; } | undefined = this.typingPollingState.get(recipientCid);
+  public stopTypingPolling(recipient_cid: bigint): void {
+    const state: { intervalId: NodeJS.Timeout | null; lastText: string; lastSentTyping: number; } | undefined = this.typingPollingState.get(recipient_cid);
     if (state?.intervalId) {
       clearInterval(state.intervalId);
     }
-    this.typingPollingState.delete(recipientCid);
+    this.typingPollingState.delete(recipient_cid);
   }
 
   /**
@@ -206,14 +206,14 @@ export class PresenceManager {
    * effects in a message composer) can fire an indicator without
    * setting up the full polling machinery.
    */
-  public async sendTypingIndicator(recipientCid: bigint): Promise<void> {
+  public async sendTypingIndicator(recipient_cid: bigint): Promise<void> {
     // "Show typing indicators: off" now means the peer is not told. It used to
     // mean nothing at all: the setting was written to localStorage and read by
     // no one.
     if (!getPrivacySettings().showTypingIndicators) return;
     try {
       const layer: MessagingLayer = createTyping();
-      await this.config.sendCommand(recipientCid, layer);
+      await this.config.sendCommand(recipient_cid, layer);
     } catch (error) {
       debugLog('PresenceManager', 'Failed to send typing indicator:', error);
     }

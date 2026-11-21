@@ -31,16 +31,16 @@ export interface LifecycleDeps {
   /** Whether the agent stages browser files (its greeting); decides the ceiling. */
   agentStagesUploads: () => Promise<boolean>;
   /** Whether the agent can open a native file dialog (its greeting); absent means not asked. */
-  agentNativePicker?: () => Promise<boolean | undefined>;
+  agentNativePicker?: () => Promise<boolean>;
 }
 
 export async function sendFile(
   deps: LifecycleDeps,
-  recipientCid: string,
+  recipient_cid: string,
   file: File,
 ): Promise<string> {
-  const senderCid: bigint | null = await deps.io.getCurrentCid();
-  if (!senderCid) {
+  const sender_cid: bigint | null = await deps.io.getCurrentCid();
+  if (!sender_cid) {
     throw new Error('No active session');
   }
 
@@ -73,8 +73,8 @@ export async function sendFile(
   // Applied here too, it capped every send at the receiving default.
 
   // A peer known to be offline is not waited for: the send is held at once.
-  const peerOnline: boolean | null = deps.queue.peerOnlineStatus(BigInt(recipientCid));
-  const channelOpened: boolean = peerOnline === false ? false : await openChannelBeforeSending(deps, recipientCid);
+  const peerOnline: boolean | null = deps.queue.peerOnlineStatus(BigInt(recipient_cid));
+  const channelOpened: boolean = peerOnline === false ? false : await openChannelBeforeSending(deps, recipient_cid);
   // A preview, not a condition of sending: a picture this browser cannot draw (HEIC in Chrome,
   // a damaged JPEG) is offered without one and its bubble keeps the file icon.
   const thumbnail: string | undefined = file.type.startsWith('image/')
@@ -85,7 +85,7 @@ export async function sendFile(
     : undefined;
 
   const transferId: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();
-  eventEmitter.emit(FILE_TRANSFER_EVENTS.FILE_SENT, { transfer: { id: transferId, senderCid, recipientCid: BigInt(recipientCid) }, file });
+  eventEmitter.emit(FILE_TRANSFER_EVENTS.FILE_SENT, { transfer: { id: transferId, sender_cid, recipient_cid: BigInt(recipient_cid) }, file });
   const expiresAt: number = Date.now() + FILE_TRANSFER_REQUEST_TTL_MS;
 
   const transfer: FileTransfer = {
@@ -96,8 +96,8 @@ export async function sendFile(
     thumbnail,
     state: 'pending',
     progress: 0,
-    senderCid: senderCid.toString(),
-    recipientCid,
+    sender_cid: sender_cid.toString(),
+    recipient_cid,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     expiresAt,
@@ -146,7 +146,7 @@ export async function cancelTransfer(deps: LifecycleDeps, transferId: string): P
     await deps.io.executeIntent({
       type: 'send-cancel',
       transferId,
-      targetCid: transfer.recipientCid,
+      targetCid: transfer.recipient_cid,
       reason: 'Sender cancelled transfer',
       failed: false,
     });
@@ -170,7 +170,7 @@ export async function acceptTransfer(deps: LifecycleDeps, transferId: string): P
 
   // Labelled "Max file size to accept" but read only on the SEND path above,
   // so lowering the slider never limited what arrived. Size is on the offer.
-  const settings: FileTransferSettings = deps.state.getSettings(scopedSettingsKey(transfer.senderCid));
+  const settings: FileTransferSettings = deps.state.getSettings(scopedSettingsKey(transfer.sender_cid));
   if (transfer.fileSize > settings.maxFileSize) {
     throw new Error(
       `File size ${formatBytes(transfer.fileSize)} exceeds your limit of ` +
@@ -181,7 +181,7 @@ export async function acceptTransfer(deps: LifecycleDeps, transferId: string): P
   const tickRequestId: unknown = await deps.io.executeIntent({
     type: 'send-response',
     transferId,
-    targetCid: transfer.senderCid,
+    targetCid: transfer.sender_cid,
     accepted: true,
   });
   if (!isStillOpen(deps.state, transfer)) return;
@@ -211,7 +211,7 @@ export async function declineTransfer(
   await deps.io.executeIntent({
     type: 'send-response',
     transferId,
-    targetCid: transfer.senderCid,
+    targetCid: transfer.sender_cid,
     accepted: false,
     reason,
   });

@@ -11,7 +11,7 @@
  * late follower's snapshot is not stale; the router also hands the owning tab
  * its own copy, and recording twice is the same write.
  */
-import { SUPERVISOR_NOTIFICATION, WIRE_STATES, type SupervisorState } from '@/types/agent-supervisor';
+import { SUPERVISOR_NOTIFICATION, WIRE_STATES, type SupervisorPhase } from '@/types/agent-supervisor';
 
 export const SUPERVISOR_STATUS_EVENT: 'p2p:supervisor-status' = 'p2p:supervisor-status';
 
@@ -19,7 +19,7 @@ export interface SupervisorEvent {
   cid: bigint;
   /** The peer the state is about; null when it is about the account's server link. */
   peerCid: bigint | null;
-  state: SupervisorState;
+  state: SupervisorPhase;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -34,13 +34,15 @@ export function readSupervisorEvent(message: unknown): SupervisorEvent | null {
   if (!isRecord(body)) return null;
   // serde-wasm-bindgen hands a Rust None to JavaScript as undefined, not null.
   const peer: unknown = body.peer_cid ?? null;
-  const state: SupervisorState | undefined = typeof body.state === 'string' ? WIRE_STATES[body.state] : undefined;
+  const state: SupervisorPhase | undefined = typeof body.state === 'string' && Object.hasOwn(WIRE_STATES, body.state)
+    ? WIRE_STATES[body.state as keyof typeof WIRE_STATES]
+    : undefined;
   if (typeof body.cid !== 'bigint' || state === undefined) return null;
   if (peer !== null && typeof peer !== 'bigint') return null;
   return { cid: body.cid, peerCid: peer, state };
 }
 
-type Active = Exclude<SupervisorState, 'healed'>;
+type Active = Exclude<SupervisorPhase, 'healed'>;
 
 const accounts: Map<bigint, Active> = new Map<bigint, Active>();
 const peers: Map<bigint, Map<bigint, Active>> = new Map<bigint, Map<bigint, Active>>();

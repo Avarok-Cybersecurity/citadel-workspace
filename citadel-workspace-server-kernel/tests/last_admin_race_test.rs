@@ -1,6 +1,7 @@
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
-use citadel_workspace_types::structs::{Permission, User, UserRole};
+use citadel_workspace_types::structs::{Permission, User};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{with_role, ADMIN_ROLE_ID};
 
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
@@ -11,6 +12,8 @@ const ROLE_SOURCE: &str = concat!(
     include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs"),
     "\n",
     include_str!("../src/handlers/domain/server_ops/role_writes.rs"),
+    "\n",
+    include_str!("../src/handlers/domain/server_ops/bans.rs"),
 );
 
 /// Whether `line` opens a function, at any visibility.
@@ -59,7 +62,7 @@ async fn seed_two_admins<R: citadel_sdk::prelude::Ratchet>(
     for name in names {
         mgr.insert_user(
             name.to_string(),
-            User::new(name.to_string(), name.to_string(), UserRole::Admin),
+            with_role(User::new(name.to_string(), name.to_string()), ADMIN_ROLE_ID),
         )
         .await
         .expect("insert user");
@@ -153,7 +156,7 @@ async fn removing_the_last_admin_is_refused_sequentially() {
 /// This asserts the invariant instead of a neighbourhood: EVERY site that can
 /// write a non-Admin role must sit in a function that holds `lock_workspaces()`,
 /// so the last-admin count and the write cannot interleave. Writing the literal
-/// `UserRole::Admin` is exempt and only that — a promotion cannot empty the
+/// `ADMIN_ROLE_ID` is exempt and only that — a promotion cannot empty the
 /// admin set. Enumerating the sites rather than naming functions is the point:
 /// this found two role writers the previous test did not know existed.
 ///
@@ -188,12 +191,13 @@ fn every_demoting_role_write_is_under_the_workspace_lock() {
     let mut checked = 0usize;
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
-        // A role write: a call of the one helper that writes a role, or an assignment
-        // anywhere else. Not the helper's own definition, nor the assignments inside it,
-        // which is pure and leaves the lock to whoever calls it.
-        let calls_the_writer =
-            trimmed.contains("assign_workspace_role(") && !opens_a_function(trimmed);
-        if !calls_the_writer && !trimmed.contains(".role = ") {
+        // A role write: a call of one of the two helpers that write a role or take
+        // every role away. Not their own definitions, nor the assignments inside them,
+        // which are pure and leave the lock to whoever calls them.
+        let calls_the_writer = (trimmed.contains("assign_workspace_role(")
+            || trimmed.contains("ban_record("))
+            && !opens_a_function(trimmed);
+        if !calls_the_writer {
             continue;
         }
 
@@ -201,7 +205,9 @@ fn every_demoting_role_write_is_under_the_workspace_lock() {
             .iter()
             .rfind(|&&f| f < i)
             .expect("a role assignment outside any function");
-        if lines[owner_idx].contains("fn assign_workspace_role(") {
+        if lines[owner_idx].contains("fn assign_workspace_role(")
+            || lines[owner_idx].contains("fn ban_record(")
+        {
             continue;
         }
         checked += 1;
@@ -225,10 +231,11 @@ fn every_demoting_role_write_is_under_the_workspace_lock() {
     }
 
     assert!(
-        checked >= 4,
+        checked >= 5,
         "found only {checked} role write(s). They are in write_user_role_locked, \
-         remove_user_from_domain and the two bootstrap claims; finding fewer means \
-         this test's matcher has stopped seeing them and is asserting nothing."
+         remove_user_from_domain, ban_member and the two bootstrap claims; finding \
+         fewer means this test's matcher has stopped seeing them and is asserting \
+         nothing."
     );
 }
 

@@ -14,7 +14,7 @@
  * cannot be had the answer is "unknown" for anyone the cache lacks, and unknown
  * is attempted: the send either reaches them or fails with its own reason.
  */
-import type { PeerInfoResponse } from '@/lib/p2p-registration-service/types';
+import type { PeerInformation } from 'citadel-workspace-client-ts';
 import { debugLog } from '@/lib/debug-config';
 
 /** True, false, or null when the agent could not be asked. */
@@ -22,11 +22,11 @@ export type RegistrationLookup = (cid: bigint) => boolean | null;
 
 export async function registrationLookup(
   cached: readonly bigint[],
-  listRegistered: () => Promise<PeerInfoResponse[]>,
+  listRegistered: () => Promise<PeerInformation[]>,
 ): Promise<RegistrationLookup> {
   const known: Set<bigint> = new Set<bigint>(cached);
   try {
-    const listed: PeerInfoResponse[] = await listRegistered();
+    const listed: PeerInformation[] = await listRegistered();
     for (const peer of listed) {
       if (peer.cid !== undefined) known.add(BigInt(peer.cid));
     }

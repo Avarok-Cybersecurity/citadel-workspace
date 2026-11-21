@@ -64,7 +64,7 @@ pub struct TelemetryEntry {
     /// The peer this line concerns, kept so issues between peers can be traced.
     #[ts(type = "bigint | null")]
     pub peer_cid: Option<u64>,
-    /// Exactly when `level` is `Metric`: what was measured. Absent from older agents' entries.
+    /// Exactly when `level` is `Metric`: what was measured.
     pub metric: Option<crate::telemetry_metric::TelemetryMetric>,
 }
 

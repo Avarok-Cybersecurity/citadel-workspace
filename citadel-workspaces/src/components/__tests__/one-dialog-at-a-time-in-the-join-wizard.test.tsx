@@ -48,7 +48,7 @@ const registration: JoinRegistration = {
   handleSubmit: vi.fn(),
   handleConnectModalComplete: vi.fn(),
   handleReturnToLogin: vi.fn(),
-  recoveryCodes: [],
+  recoveryPhrase: null,
   awaitingSignIn: null,
   finishSignIn: vi.fn(),
 } as unknown as JoinRegistration;

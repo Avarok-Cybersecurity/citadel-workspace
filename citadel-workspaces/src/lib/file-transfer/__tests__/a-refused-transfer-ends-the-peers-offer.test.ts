@@ -16,7 +16,7 @@ import type { FileTransfer } from '../types';
 const wire: { from: bigint; to: bigint; bytes: Uint8Array }[] = [];
 vi.mock('../../tab-context', () => ({ getSelectedUser: async (): Promise<{ selectedCid: bigint }> => ({ selectedCid: 7n }) }));
 vi.mock('../../p2p/message-send-operations', () => ({
-  sendAllowingForAConcurrentOpen: async (from: bigint, to: bigint, bytes: Uint8Array): Promise<void> => {
+  sendAtChatLevel: async (from: bigint, to: bigint, bytes: Uint8Array): Promise<void> => {
     wire.push({ from, to, bytes });
   },
 }));
@@ -28,7 +28,7 @@ const { handleProtocolStatus } = await import('../protocol-transfer-events');
 function outgoing(state: FileTransfer['state']): FileTransfer {
   return {
     id: 'T1', fileName: 'a.bin', fileSize: 3, fileType: 'application/octet-stream', mode: 'p2p',
-    state, progress: 0, senderCid: '7', recipientCid: '42', createdAt: 0, updatedAt: 0, isIncoming: false,
+    state, progress: 0, sender_cid: '7', recipient_cid: '42', createdAt: 0, updatedAt: 0, isIncoming: false,
   } as FileTransfer;
 }
 

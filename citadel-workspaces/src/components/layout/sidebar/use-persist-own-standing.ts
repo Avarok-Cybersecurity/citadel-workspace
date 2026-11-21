@@ -11,7 +11,6 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { usePermission } from '@/hooks/use-permission';
 import { confirms, permits, type UsePermissionResult } from '@/hooks/use-permission-result';
 import { useRoleDisplay } from '@/hooks/use-workspace-roles';
-import { Permission } from '@/lib/permissions-service/types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { connectionManager } from '@/lib/connection';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
@@ -33,9 +32,9 @@ export function usePersistOwnStanding(roleName: string | null, administers: bool
  */
 export function useOwnStanding(): boolean {
   const { state } = useWorkspace();
-  const manageRoles: UsePermissionResult = usePermission(WORKSPACE_ROOT_ID, Permission.ManageRoles);
+  const manageRoles: UsePermissionResult = usePermission(WORKSPACE_ROOT_ID, 'ManageRoles');
   const administers: boolean = confirms(manageRoles);
-  const roleName: string | null = useRoleDisplay(state.currentUser?.roleId, state.currentUser?.role)?.name ?? null;
+  const roleName: string | null = useRoleDisplay({ roleId: state.currentUser?.roleId, role: state.currentUser?.role })?.name ?? null;
   // A known no is stored as false; a pending answer is not stored at all.
   usePersistOwnStanding(roleName, administers ? true : permits(manageRoles) ? null : false);
   return administers;

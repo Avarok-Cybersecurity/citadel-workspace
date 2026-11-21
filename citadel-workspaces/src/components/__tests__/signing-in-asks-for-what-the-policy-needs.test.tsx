@@ -1,10 +1,9 @@
 /**
- * The sign-in form, for each sign-in policy and for a recovery code.
+ * The sign-in form, for each sign-in policy.
  *
  * Password accounts are unchanged. A PasswordAndKey account is asked to touch
  * its key after the password, by the challenge the server sends; a KeyOnly
- * account signs in with no password field; a recovery code lands on a screen
- * that can only add a key or set the policy, and starts nothing else.
+ * account signs in with no password field.
  *
  * Doubled, each at an I/O seam:
  * - the agent (fake-agent.ts) behind the REAL AuthOperations, so the Connect on
@@ -12,8 +11,7 @@
  * - the authenticator (passkey fakes): navigator.credentials;
  * - connectionManager, tab-context, post-auth setup and messaging: IndexedDB
  *   and the workspace/ILM requests a signed-in session makes, which have no
- *   backend here. The last two are spies, to prove a recovery session starts
- *   neither.
+ *   backend here.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -24,7 +22,6 @@ vi.mock('@/lib/websocket-service', async (orig: () => Promise<Record<string, unk
 vi.mock('@/lib/connection', async (orig: () => Promise<Record<string, unknown>>) => (await import('./login-world')).connectionDouble(orig));
 vi.mock('@/lib/tab-context', async (orig: () => Promise<Record<string, unknown>>) => (await import('./login-world')).tabContextDouble(orig));
 vi.mock('@/lib/post-auth-setup', async () => ({ postAuthSetup: (await import('./login-world')).loginWorld.postAuth }));
-vi.mock('@/lib/start-messaging', async () => ({ startMessagingForSession: (await import('./login-world')).loginWorld.messaging }));
 // The P2P startup a signed-in session triggers; nothing here to start it against.
 vi.mock('@/lib/session-startup-service', () => ({}));
 vi.mock('@/lib/passkey', async (orig: () => Promise<Record<string, unknown>>) => (await import('./login-world')).passkeyDouble(orig));
@@ -36,7 +33,6 @@ import { SecurityKeyPromptHost as SecurityKeyPrompt } from '../sign-in/SecurityK
 import { enrolKey, world } from '@/lib/sign-in/__tests__/helpers';
 import { loginWorld as h } from './login-world';
 import { listHints } from '@/lib/sign-in/hints';
-import { SIGN_IN_COPY } from '@/lib/sign-in/copy';
 
 let onNext: ReturnType<typeof vi.fn>;
 function renderLogin(): void {
@@ -77,7 +73,7 @@ describe('a PasswordAndKey account', () => {
     expect(screen.getByTestId('security-key-continue')).toHaveFocus();
     fireEvent.click(screen.getByTestId('security-key-continue'));
     await waitFor(() => expect(onNext).toHaveBeenCalledWith('7'));
-    expect(connects()[0]).toMatchObject({ security_key: true, recovery_code: null });
+    expect(connects()[0]).toMatchObject({ security_key: true });
   });
 
   it('Cancel declines: the sign-in fails now, with the reason', async () => {
@@ -103,46 +99,5 @@ describe('a KeyOnly account', () => {
     expect(connects()[0]).toMatchObject({ password: null, security_key: true });
     // Remembered by tenant and CID, so the form offers the key first next time.
     expect(await listHints(h.w.deps.store)).toEqual([{ tenant: 'bench.work.avarok.net', cid: 7n, username: 'alice', keyFirst: true }]);
-  });
-});
-
-describe('a recovery code', () => {
-  it('lands on the restricted screen and starts nothing that uses the workspace', async () => {
-    const alice: FakeAccount = await accountWithKey('KeyOnly');
-    renderLogin();
-    fireEvent.click(screen.getByTestId('login-mode-recovery'));
-    type('username', 'alice'); type('recovery-code', alice.recoveryCodes[0]); submit();
-    expect(await screen.findByTestId('recovery-session')).toBeInTheDocument();
-    expect(onNext).not.toHaveBeenCalled();
-    expect(h.postAuth).not.toHaveBeenCalled();
-    expect(h.messaging).not.toHaveBeenCalled();
-    expect(connects()[0]).toMatchObject({ password: null });
-    // A recovery session cannot list its factors: the screen says what it can do instead.
-    expect(screen.getByText(SIGN_IN_COPY.recoveryBody)).toBeInTheDocument();
-    expect(h.w.agent.sent.some(([v, b]) => v === 'SignInManagement' && b.op === 'ListCredentials')).toBe(false);
-  });
-
-  it('adds a key there, then signs out back to a key-first form', async () => {
-    const alice: FakeAccount = await accountWithKey('KeyOnly');
-    renderLogin();
-    fireEvent.click(screen.getByTestId('login-mode-recovery'));
-    type('username', 'alice'); type('recovery-code', alice.recoveryCodes[1]); submit();
-    fireEvent.click(await screen.findByTestId('add-security-key-continue'));
-    fireEvent.click(await screen.findByTestId('security-key-continue'));
-    expect(await screen.findByTestId('recovery-key-added')).toBeInTheDocument();
-    expect(alice.keys).toHaveLength(2);
-    fireEvent.click(screen.getByTestId('recovery-sign-out'));
-    expect(await screen.findByTestId('login-key-mode')).toBeInTheDocument();
-    expect(h.w.agent.recoverySessions.size).toBe(0);
-  });
-
-  it('works once: the same code is refused the second time', async () => {
-    const alice: FakeAccount = await accountWithKey('KeyOnly');
-    alice.consumed.push(alice.recoveryCodes[0]);
-    renderLogin();
-    fireEvent.click(screen.getByTestId('login-mode-recovery'));
-    type('username', 'alice'); type('recovery-code', alice.recoveryCodes[0]); submit();
-    expect(await screen.findByRole('alert')).toBeInTheDocument();
-    expect(screen.queryByTestId('recovery-session')).toBeNull();
   });
 });

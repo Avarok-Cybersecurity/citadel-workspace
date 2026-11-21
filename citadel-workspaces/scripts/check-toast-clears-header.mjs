@@ -26,8 +26,9 @@
  */
 import { chromium } from 'playwright';
 import { spawnPreview, dismissConnectionFailure } from './lib/preview-world.mjs';
+import { freePort } from './lib/free-port.mjs';
 
-const PORT = 4189;
+const PORT = await freePort(); // chosen per run: concurrent runs cannot collide (lib/free-port.mjs)
 const ORIGIN = `http://localhost:${PORT}`;
 /** What AppLayout writes; the landing page has no header, so it is set here. */
 const HEADER_PX = 56;

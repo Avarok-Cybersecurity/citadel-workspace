@@ -15,7 +15,7 @@ import { handleGeneratedVariants } from '../workspace-response-handler/generated
 import { eventEmitter } from '../event-emitter';
 import type { MembersPayload } from '../workspace-events';
 import { withAccess, levelName, blocksForMember, inheritedRemoveReason } from '../member-access';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { MemberListItems } from '@/components/layout/sidebar/MemberListItems';
@@ -26,27 +26,17 @@ afterEach(cleanup);
 
 const NONE: MemberActionBlocks = { managePermissions: null, changeRole: null, remove: null };
 const member = (id: string, accessVia?: string): WorkspaceMember =>
-  ({ id, username: id, displayName: id, isOnline: null, role: 'member', ...(accessVia ? { accessVia } : {}) }) as WorkspaceMember;
+  ({ id, username: id, displayName: id, isOnline: null, banned: false, roleId: 'member', ...(accessVia ? { accessVia } : {}) }) as WorkspaceMember;
 
 describe('the Members reply', () => {
   it('carries who came through a level above to the list', () => {
     const seen: MembersPayload[] = [];
     const off: () => void = eventEmitter.on('members:loaded', (p: MembersPayload): void => { seen.push(p); });
     handleGeneratedVariants({
-      Members: { domain_id: 'office', members: [{ id: 'thomas', role: 'Admin', permissions: {}, metadata: {} }], inherited_from: { thomas: 'workspace-root' } },
+      Members: { domain_id: 'office', members: [{ id: 'thomas', banned: false, permissions: {}, metadata: {} }], inherited_from: { thomas: 'workspace-root' } },
     } as unknown as WorkspaceProtocolResponse, { cid: 0, request_id: 'r' });
     off();
     expect(seen.at(-1)?.inheritedFrom).toEqual({ thomas: 'workspace-root' });
-  });
-
-  it('reads a reply from an older server as all direct', () => {
-    const seen: MembersPayload[] = [];
-    const off: () => void = eventEmitter.on('members:loaded', (p: MembersPayload): void => { seen.push(p); });
-    handleGeneratedVariants({
-      Members: { domain_id: 'office', members: [{ id: 'thomas', role: 'Admin', permissions: {}, metadata: {} }] },
-    } as unknown as WorkspaceProtocolResponse, { cid: 0, request_id: 'r' });
-    off();
-    expect(seen.at(-1)?.inheritedFrom).toEqual({});
   });
 });
 
@@ -100,9 +90,9 @@ describe('a sidebar member row', () => {
 describe('an admin member row', () => {
   function row(accessViaName?: string): HTMLElement {
     render(
-      <MemberRow member={{ userId: 'thomas', username: 'thomas', roleId: 'admin', isGuest: false, ...(accessViaName ? { accessViaName } : {}) }}
+      <MemberRow member={{ userId: 'thomas', username: 'thomas', roleId: 'admin', banned: false, isGuest: false, ...(accessViaName ? { accessViaName } : {}) }}
         showAdvanced={false} isUpdatingRole={false}
-        rules={{ roles: [], assignable: new Set(), isOnlyManager: false, actOnBlocked: null }}
+        rules={{ roles: [], assignable: new Set(), isOnlyManager: false, actOnBlocked: null, banBlocked: null }}
         onRoleChange={() => undefined} onAdvancedPermissions={() => undefined} onRemove={() => undefined} />,
     );
     return screen.getByTestId('member-remove-thomas');

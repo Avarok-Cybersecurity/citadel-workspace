@@ -7,24 +7,20 @@
  * A refusal the server words (`Error`) rejects, as every write here does. `LinkUnavailable` and
  * `LimitReached` are answers, not failures, and resolve as outcomes the caller must handle.
  */
-import type {
-  LinkGrant, LinkLifetime, SecureLinkInfo, SecureLinksRequest, SecureLinksResponse,
+import type { SecureLinkInfo, SecureLinksRequest, SecureLinksResponse,
 } from 'citadel-workspace-client-ts';
 import { awaitWriteResponse } from './await-write-response';
 import type { ProtocolSender } from './workspace-operations';
 import type { LinkQuota } from '@/lib/share/link-lifetime';
+import { everyMember } from '@/types/every-member';
+import type { VariantName } from '@/types/variant-name';
 
 export interface SecureLinksListing {
   links: SecureLinkInfo[];
   quota: LinkQuota;
 }
 
-export interface NewSecureLink {
-  target: string;
-  label: string;
-  grants: LinkGrant[];
-  lifetime: LinkLifetime;
-}
+export type NewSecureLink = Extract<SecureLinksRequest, { Create: unknown }>['Create'];
 
 export type CreateOutcome =
   | { kind: 'created'; info: SecureLinkInfo; token: string }
@@ -34,17 +30,18 @@ export type ExtendOutcome = { kind: 'extended'; info: SecureLinkInfo } | { kind:
 export type DeleteOutcome = { kind: 'deleted' } | { kind: 'unavailable' };
 export type ResolveOutcome = { kind: 'resolved'; target: string } | { kind: 'unavailable' };
 
-const KINDS: readonly string[] = ['Created', 'Regenerated', 'Extended', 'Deleted', 'Links', 'Resolved', 'LimitReached'];
+/** The answers that carry a body; the list fails to compile when the enum gains or loses one. */
+type Kind = VariantName<Exclude<SecureLinksResponse, string>>;
+const KINDS: readonly Kind[] = everyMember<Kind>()(['Created', 'Regenerated', 'Extended', 'Deleted', 'Links', 'Resolved', 'LimitReached']);
 
 /** The secure-links answer a payload carries, or null for anything else. */
 export function secureLinksAnswer(payload: unknown): SecureLinksResponse | null {
   if (payload === 'LinkUnavailable') return 'LinkUnavailable';
   if (!payload || typeof payload !== 'object') return null;
   const keys: string[] = Object.keys(payload);
-  return keys.length === 1 && KINDS.includes(keys[0]) ? (payload as SecureLinksResponse) : null;
+  return keys.length === 1 && (KINDS as readonly string[]).includes(keys[0]) ? (payload as SecureLinksResponse) : null;
 }
 
-type Kind = 'Created' | 'Regenerated' | 'Extended' | 'Deleted' | 'Links' | 'Resolved' | 'LimitReached';
 type Of<K extends Kind> = Extract<SecureLinksResponse, Record<K, unknown>>[K];
 
 function variant<K extends Kind>(answer: SecureLinksResponse, kind: K): Of<K> | null {

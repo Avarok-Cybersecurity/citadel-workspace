@@ -37,7 +37,7 @@ export function decideIncomingRequest(facts: IncomingRequestFacts): IncomingRequ
 
 export interface IncomingRegistration {
   /** The session the request is addressed to. */
-  recipientCid: bigint;
+  recipient_cid: bigint;
   peerCid: bigint;
   peerUsername: string | undefined;
 }
@@ -47,8 +47,8 @@ export interface IncomingRegistrationDeps {
   trustedByWorkspace: (request: IncomingRegistration) => Promise<boolean>;
   acceptsRequestsFromStrangers: () => boolean;
   isContact: (peerCid: bigint) => boolean;
-  weAskedThemFirst: (peerCid: bigint, recipientCid: bigint) => boolean;
-  readAutoAccept: (recipientCid: bigint) => Promise<boolean>;
+  weAskedThemFirst: (peerCid: bigint, recipient_cid: bigint) => boolean;
+  readAutoAccept: (recipient_cid: bigint) => Promise<boolean>;
   accept: (request: IncomingRegistration) => Promise<void>;
   ask: (request: IncomingRegistration) => Promise<void>;
   decline: (request: IncomingRegistration) => Promise<void>;
@@ -63,8 +63,8 @@ export async function handleIncomingRegistration(
     trustedByWorkspace: await deps.trustedByWorkspace(request).catch((): boolean => false),
     acceptsRequestsFromStrangers: deps.acceptsRequestsFromStrangers(),
     isContact: deps.isContact(request.peerCid),
-    weAskedThemFirst: deps.weAskedThemFirst(request.peerCid, request.recipientCid),
-    autoAccept: await deps.readAutoAccept(request.recipientCid),
+    weAskedThemFirst: deps.weAskedThemFirst(request.peerCid, request.recipient_cid),
+    autoAccept: await deps.readAutoAccept(request.recipient_cid),
   });
   if (action === 'decline') await deps.decline(request);
   else if (action === 'auto-accept') await deps.accept(request);

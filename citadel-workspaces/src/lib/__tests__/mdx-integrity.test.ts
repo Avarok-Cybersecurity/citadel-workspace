@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { webcrypto } from 'node:crypto';
-import { hashDocument, verifyDocument } from '../mdx-integrity';
+import { EMPTY_DOCUMENT_HASH, hashDocument, verifyDocument } from '../mdx-integrity';
 import type { IntegrityVerdict } from '@/lib/mdx-integrity';
 
 // jsdom ships no SubtleCrypto. Node's real WebCrypto is the same algorithm the
@@ -62,12 +62,12 @@ describe('verifyDocument', () => {
     expect(verdict.status).toBe('mismatch');
   });
 
-  it('distinguishes "no hash stored" from "hash does not match"', async () => {
-    // A document written before the field existed has none, and treating that
-    // as a mismatch would make every old document refuse to render.
-    expect((await verifyDocument('# Hello', null)).status).toBe('unhashed');
-    expect((await verifyDocument('# Hello', undefined)).status).toBe('unhashed');
-    expect((await verifyDocument('# Hello', '')).status).toBe('unhashed');
+  it('refuses a document whose stored hash is empty', async () => {
+    expect((await verifyDocument('# Hello', '')).status).toBe('mismatch');
+  });
+
+  it('names the hash of an empty document exactly', async () => {
+    expect(await hashDocument('')).toBe(EMPTY_DOCUMENT_HASH);
   });
 
   it('carries both hashes on a mismatch, so the report can say what differed', async () => {

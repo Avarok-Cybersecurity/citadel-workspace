@@ -7,12 +7,11 @@ import { useEffect, useState } from 'react';
 import { usePermission } from '@/hooks/use-permission';
 import { gateOnKnownAnswer, permits, type ActionGate, type UsePermissionResult } from '@/hooks/use-permission-result';
 import { useTabIdentity } from '@/hooks/use-tab-identity';
-import { Permission } from '@/contexts/PermissionsContext';
 import { errorLog } from '@/lib/debug-config';
 import { isServerAnswer, lastKnownEditAnswer, offlineEditGate, rememberEditAnswer } from '@/lib/document-save/last-known-access';
 
 export function useEditGate(nodeId: string): ActionGate {
-  const answer: UsePermissionResult = usePermission(nodeId, Permission.EditContent);
+  const answer: UsePermissionResult = usePermission(nodeId, 'EditContent');
   const account: bigint | null = useTabIdentity()?.cid ?? null;
   const [lastKnown, setLastKnown] = useState<boolean | null>(null);
   // Of a server answer, permits() is its yes or no (no loading, unanswered or missing state is left).

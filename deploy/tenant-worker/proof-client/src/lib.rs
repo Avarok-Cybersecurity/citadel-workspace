@@ -15,6 +15,12 @@ use futures::StreamExt;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
+/// What the proof client demands of a tenant's certificate. The local proof dials the tenant
+/// over plain `ws://` (proof-lib.mjs), which `Required` refuses; over `wss://` the JavaScript
+/// runtime's own WebSocket verifies the certificate whatever this says. The session's own key
+/// exchange still runs. (The shipped agent requires a verified certificate: its own setting.)
+pub(crate) const SERVER_CERTIFICATE: CertVerification = CertVerification::SelfSignedAccepted;
+
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = performance, js_name = now)]
@@ -111,8 +117,9 @@ impl ProofKernel {
                 "Proof User",
                 self.username.as_str(),
                 self.password.as_str(),
-                SessionSecuritySettings::default(),
+                default_session_security_settings(),
                 None,
+                SERVER_CERTIFICATE,
             )
             .await?;
         let t1 = performance_now();
@@ -123,8 +130,9 @@ impl ProofKernel {
                 ConnectMode::Standard { force_login: false },
                 UdpMode::Disabled,
                 None,
-                SessionSecuritySettings::default(),
+                default_session_security_settings(),
                 None,
+                SERVER_CERTIFICATE,
             )
             .await?;
         let t2 = performance_now();
@@ -164,8 +172,9 @@ impl ProofKernel {
                 ConnectMode::Standard { force_login: false },
                 UdpMode::Disabled,
                 None,
-                SessionSecuritySettings::default(),
+                default_session_security_settings(),
                 None,
+                SERVER_CERTIFICATE,
             )
             .await?;
         let t4 = performance_now();
@@ -262,6 +271,10 @@ pub async fn run_proof(
         // Required by the SDK for every node, and only ever handed to a peer connection's ICE
         // agent: a proof client dials its server and never a peer, so these are never contacted.
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
+        // The tenant server's maximum (the SDK's test one is the same Custom(10)), and the links
+        // this release runs: both required, with no default.
+        .with_max_security_level(citadel_sdk::test_common::localhost_max_security_level())
+        .with_link_manager(citadel_sdk::prelude::LinkManagerMode::Legacy)
         .with_backend(BackendType::InMemory)
         .with_client_config(client_config)
         .build(kernel)

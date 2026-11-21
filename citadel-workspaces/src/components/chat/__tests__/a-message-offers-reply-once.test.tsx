@@ -20,7 +20,7 @@ const QUOTED: QuotedMessage = { id: 'm0', authorName: 'Ada', excerpt: 'earlier' 
 
 // Fixed shapes, not defaults: only the fields these components read are meaningful.
 const p2p = (message_type: P2PMessage['message_type']): P2PMessage => ({
-  id: 'm1', content: 'hello', senderCid: 2n, recipientCid: 1n, timestamp: 1, index: 0, status: 'delivered', message_type, replyTo: 'm0',
+  id: 'm1', content: 'hello', sender_cid: 2n, recipient_cid: 1n, timestamp: 1, index: 0, status: 'delivered', message_type, reply_to: 'm0',
 });
 const noop = (): void => {};
 

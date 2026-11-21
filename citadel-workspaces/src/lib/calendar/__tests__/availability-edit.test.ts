@@ -12,6 +12,7 @@ import { INTRO } from './booking-fixture';
 import type { Interval } from '@/lib/calendar/generated/Interval';
 import type { AvailabilityCheck } from '@/lib/calendar/availability-edit';
 import type { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
+import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
 
 const engine: CalendarEngine = realEngine();
 const known = (zone: string): boolean => zone === NY || zone === 'Europe/London';
@@ -33,7 +34,7 @@ describe('the availability editor', () => {
   });
 
   it('names the day and the date each error is on, and refuses an unknown zone and a second override of a date', () => {
-    const date: { y: number; m: number; d: number; } = { y: 2024, m: 12, d: 24 };
+    const date: CivilDate = { y: 2024, m: 12, d: 24 };
     const draft: AvailabilityDraft = {
       name: ' ', zone: 'Mars/Olympus', weekly: [[], [{ start: '10:00', end: '09:00' }], ...none.slice(2)],
       overrides: [{ date, windows: [] }, { date, windows: [{ start: '09:00', end: '10:00' }] }],

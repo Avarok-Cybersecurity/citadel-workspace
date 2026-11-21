@@ -10,7 +10,6 @@ import { MessagesSquare } from 'lucide-react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { usePermission } from '@/hooks/use-permission';
 import { permits } from '@/hooks/use-permission-result';
-import { Permission } from '@/lib/permissions-service/types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { getEntityMetadata } from '@/lib/entity-type-registry';
 import { messagingTrustApi } from '@/lib/messaging-trust/messaging-trust-api';
@@ -27,7 +26,7 @@ const CHOICES: readonly WorkspaceTrustChoice[] = ['AllTrusted', 'NodeLevelTruste
 export function MessagingTrustSection(): JSX.Element {
   const { state } = useWorkspace();
   // EditWorkspaceConfig is what the server asks; this was "Admin" by name, which an Owner is not.
-  const admin: boolean = permits(usePermission(WORKSPACE_ROOT_ID, Permission.EditWorkspaceConfig));
+  const admin: boolean = permits(usePermission(WORKSPACE_ROOT_ID, 'EditWorkspaceConfig'));
   const trust: MessagingTrustState = useMessagingTrust();
   // The node option, picked before its node: shown, not yet written.
   const [pending, setPending] = useState<WorkspaceTrustChoice | null>(null);

@@ -3,14 +3,17 @@
 // `windows_shell::init` routes it. Debug builds keep the console a developer reads.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use citadel_internal_service::kernel::CitadelWorkspaceService;
+use citadel_internal_service::kernel::{revfs_seed, CitadelWorkspaceService};
 use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
 use citadel_internal_service::{sweep_stale_browser_transfers, BrowserTransferRoot};
 use citadel_internal_service::{OriginPolicy, AGENT_SUPERVISOR, SERVER_RECONNECT};
-use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
+use citadel_sdk::prelude::{
+    BackendType, LinkManagerMode, MaxSecurityLevel, NodeBuilder, NodeType, SecurityLevel,
+    StackedRatchet,
+};
 use std::error::Error;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 mod app_net;
@@ -18,6 +21,8 @@ mod apps_authority;
 mod identity_setup;
 mod log_setup;
 mod notice_token;
+mod p2p_kex_setup;
+mod server_certificate;
 mod server_identity_codec;
 mod shell_menu;
 mod telemetry;
@@ -128,7 +133,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     // sibling service for the same configuration. The unit tests below
     // mirror the kernel's backend_select_tests so a divergence loudly
     // fails CI in both crates.
-    let default_dir = default_data_dir(Path::new(LEGACY_DATA_DIR).is_dir(), dirs2::home_dir())?;
+    let default_dir = default_data_dir(dirs2::home_dir())?;
     let backend_type = select_backend_type(
         std::env::var("INTERNAL_SERVICE_BACKEND").ok().as_deref(),
         std::env::var("INTERNAL_SERVICE_DATA_DIR").ok().as_deref(),
@@ -147,11 +152,22 @@ async fn run() -> Result<(), Box<dyn Error>> {
     )?;
     let identity = identity_setup::identity_config(unlock_idle, &backend_type)?;
 
+    let skips_verification = server_certificate::skips_verification(
+        opts.dangerous.unwrap_or(false),
+        server_certificate::SERVER_CERTIFICATE,
+    )?;
+
     // Every required setting has resolved, and nothing is bound yet: an updating agent asks
     // a staged version this before installing it (citadel-internal-service's
     // updater/launch_check.rs), so one that would refuse its command is never swapped in.
     if opts.check_launch {
         return Ok(());
+    }
+
+    // After the launch check, so an update still installs; the new agent then refuses an
+    // earlier agent's data by name, saying where it is (citadel_internal_service::data_format).
+    if let BackendType::Filesystem(dir) = &backend_type {
+        citadel_internal_service::data_format::check_data_dir(std::path::Path::new(dir))?;
     }
 
     // TLS by default. See BUILTIN_TLS_CERT for why the key ships in the binary,
@@ -165,6 +181,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
             origins,
             SERVER_RECONNECT,
             browser_transfers,
+            server_certificate::SERVER_CERTIFICATE,
         )
         .await?
     } else {
@@ -175,6 +192,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
             BUILTIN_TLS_KEY,
             SERVER_RECONNECT,
             browser_transfers,
+            server_certificate::SERVER_CERTIFICATE,
         )
         .await?
     }
@@ -185,15 +203,25 @@ async fn run() -> Result<(), Box<dyn Error>> {
         std::sync::Arc::new(apps_authority::WorkspaceHostNetAuthority),
     )
     .with_app_sessions(app_net::app_session_config());
+    // Each account's RE-VFS key, from a seed sealed under a vault that follows the backend.
+    let revfs_keys = service.revfs_key_source(revfs_seed::vault_for(&backend_type)?)?;
+    // Each identity session signs its P2P key exchanges, and peers' keys are pinned.
+    let kex_identity = p2p_kex_setup::kex_identity(&service, &backend_type).await?;
 
     // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
     let mut node_builder = NodeBuilder::<StackedRatchet>::default();
     let mut builder = stun_servers
         .apply(&mut node_builder)
         .with_backend(backend_type)
-        .with_node_type(NodeType::Peer);
+        .with_node_type(NodeType::Peer)
+        // The owner's production maximum for the agent (2026-11-18); the SDK has no default.
+        .with_max_security_level(MaxSecurityLevel::new(SecurityLevel::Custom(10))?)
+        // Managed links are not switched on in this release.
+        .with_link_manager(LinkManagerMode::Legacy)
+        .with_revfs_key_source(revfs_keys)
+        .with_p2p_kex_identity(kex_identity);
 
-    if opts.dangerous.unwrap_or(false) {
+    if skips_verification {
         citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED via --dangerous flag. Never use in production!");
         builder = builder.with_insecure_skip_cert_verification()
     }
@@ -357,28 +385,10 @@ fn select_backend_type(
     }
 }
 
-/// Where an agent started before the per-user default kept its account.
-const LEGACY_DATA_DIR: &str = "./data";
-
-/// The data directory used when neither `--data-dir` nor the environment names one.
-///
-/// It was `./data`, relative to wherever the agent happened to be started, so
-/// starting it from another folder silently began a new account -- and that
-/// directory is the account: its keys, with no copy on any server. The default
-/// is now one place per user. An existing `./data` is still used, never moved:
-/// moving the only copy of someone's keys automatically is not a risk to take
-/// for them, and a half-finished move across filesystems loses them.
-fn default_data_dir(
-    legacy_dir_exists: bool,
-    home: Option<PathBuf>,
-) -> Result<String, Box<dyn Error>> {
-    if legacy_dir_exists {
-        citadel_logging::warn!(target: "citadel",
-            "Using the existing {LEGACY_DATA_DIR}, which is relative to the folder the agent was \
-             started from. To keep your account wherever you start it, move that folder to \
-             ~/.citadel-agent (with the agent stopped), or pass --data-dir.");
-        return Ok(LEGACY_DATA_DIR.to_string());
-    }
+/// The data directory used when neither `--data-dir` nor the environment names one: one place
+/// per user, whichever folder the agent is started from (that directory is the account: its
+/// keys, with no copy on any server).
+fn default_data_dir(home: Option<PathBuf>) -> Result<String, Box<dyn Error>> {
     let home = home.ok_or(
         "no home directory to keep the account in. Pass --data-dir, or set \
          INTERNAL_SERVICE_DATA_DIR, to the folder that should hold it.",
@@ -392,7 +402,7 @@ mod default_data_dir_tests {
 
     #[test]
     fn a_fresh_install_keeps_its_account_in_the_home_directory() {
-        let dir = default_data_dir(false, Some(PathBuf::from("/home/tester"))).unwrap();
+        let dir = default_data_dir(Some(PathBuf::from("/home/tester"))).unwrap();
         assert_eq!(
             PathBuf::from(dir),
             PathBuf::from("/home/tester").join(".citadel-agent")
@@ -400,16 +410,8 @@ mod default_data_dir_tests {
     }
 
     #[test]
-    fn an_existing_data_folder_keeps_being_used_and_is_not_moved() {
-        assert_eq!(
-            default_data_dir(true, Some(PathBuf::from("/home/tester"))).unwrap(),
-            "./data"
-        );
-    }
-
-    #[test]
     fn no_home_directory_is_an_error_not_a_silent_cwd() {
-        assert!(default_data_dir(false, None).is_err());
+        assert!(default_data_dir(None).is_err());
     }
 }
 
@@ -424,7 +426,7 @@ mod backend_select_tests {
     use citadel_sdk::prelude::BackendType;
 
     // An explicit stand-in: the real default is computed from the host (home
-    // directory, legacy ./data), which default_data_dir_tests cover.
+    // directory), which default_data_dir_tests cover.
     const DEFAULT: &str = "/home/tester/.citadel-agent";
 
     #[test]

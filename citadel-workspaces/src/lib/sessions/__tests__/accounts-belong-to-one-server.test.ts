@@ -17,7 +17,6 @@ const known: KnownAccount[] = knownAccounts({
   agent: [{ username: 'alice', server: A }, { username: 'alice', server: B }],
   stored: [{ username: 'bob', serverAddress: `wss://${B}/` }, { username: 'carol', serverAddress: '' }],
   hints: [{ username: 'dave', tenant: A }],
-  device: ['erin'],
 });
 
 describe('the accounts this device knows', () => {
@@ -25,12 +24,12 @@ describe('the accounts this device knows', () => {
     expect(known).toEqual([
       { username: 'alice', server: B }, { username: 'alice', server: A },
       { username: 'bob', server: B }, { username: 'carol', server: null },
-      { username: 'dave', server: A }, { username: 'erin', server: null },
+      { username: 'dave', server: A },
     ]);
   });
 
   it('drops an unplaced copy of a name another source places', () => {
-    const merged: KnownAccount[] = knownAccounts({ agent: [{ username: 'bob', server: B }], stored: [], hints: [], device: ['bob'] });
+    const merged: KnownAccount[] = knownAccounts({ agent: [{ username: 'bob', server: B }], stored: [{ username: 'bob', serverAddress: '' }], hints: [] });
     expect(merged).toEqual([{ username: 'bob', server: B }]);
   });
 
@@ -61,17 +60,13 @@ describe('a typed username against the server being signed in to', () => {
 describe('the passkey rows under the username', () => {
   const hints: { username: string; tenant: string }[] = [{ username: 'alice', tenant: A }, { username: 'dave', tenant: A }];
   it('name each account by its server', () => {
-    expect(offeredRows(['alice', 'dave', 'erin'], hints, ['erin'], known, null)).toEqual([
-      { username: 'alice', server: A }, { username: 'dave', server: A }, { username: 'erin', server: null },
+    expect(offeredRows(['alice', 'dave', 'erin'], hints, null)).toEqual([
+      { username: 'alice', server: A }, { username: 'dave', server: A },
     ]);
   });
 
   it('show only the server being signed in to', () => {
-    expect(offeredRows(['alice', 'dave', 'erin'], hints, ['erin'], known, B)).toEqual([]);
-    expect(offeredRows(['alice', 'dave'], hints, [], known, A).map((r: KnownAccount) => r.username)).toEqual(['alice', 'dave']);
-  });
-
-  it('place an old passkey by where the account is known to be', () => {
-    expect(offeredRows(['alice'], [], ['alice'], known, null)).toEqual([{ username: 'alice', server: B }, { username: 'alice', server: A }]);
+    expect(offeredRows(['alice', 'dave', 'erin'], hints, B)).toEqual([]);
+    expect(offeredRows(['alice', 'dave'], hints, A).map((r: KnownAccount) => r.username)).toEqual(['alice', 'dave']);
   });
 });

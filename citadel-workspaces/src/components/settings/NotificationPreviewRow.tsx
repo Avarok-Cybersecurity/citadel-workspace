@@ -4,13 +4,12 @@
  * notifications itself), and off until the user turns it on: a lock screen
  * should not read your messages out to the room.
  *
- * Shown only when the agent hosts the account; an older agent raises none.
+ * Shown once a session is signed in.
  */
 import { useEffect, useState } from 'react';
 import type { AccountPreferences } from 'citadel-internal-service-wasm-client';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { agentHostsConversations } from '@/lib/agent-conversations/capabilities';
 import { agentConversations } from '@/lib/agent-conversations/requests';
 import { pushAccountPreferences } from '@/lib/agent-conversations/push-preferences';
 import { getCurrentCid } from '@/lib/p2p/current-cid';
@@ -28,7 +27,7 @@ export function NotificationPreviewRow(): JSX.Element | null {
     let live: boolean = true;
     void (async (): Promise<void> => {
       const cid: bigint | null = await getCurrentCid();
-      if (cid === null || !(await agentHostsConversations())) return;
+      if (cid === null) return;
       const prefs: AccountPreferences = await agentConversations.getPreferences(cid);
       if (live) { setAccount(cid); setShows(prefs.notification_preview === 'Text'); }
     })().catch((e: unknown) => { if (live) setError(describeFailure(e, 'The notification setting could not be read.')); });

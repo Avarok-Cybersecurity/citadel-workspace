@@ -15,7 +15,7 @@ function membersArrive(members: Array<{ id: string; name: string }>): void {
   const response: WorkspaceProtocolResponse = {
     Members: {
       domain_id: 'root',
-      members: members.map((m) => ({ ...m, role: 'Member', permissions: {}, metadata: {} })),
+      members: members.map((m) => ({ ...m, banned: false, permissions: {}, metadata: {} })),
     },
   } as unknown as WorkspaceProtocolResponse;
   handleGeneratedVariants(response, { cid: 0, request_id: 'r' });

@@ -129,6 +129,11 @@ fn main() {
         }
     }
 
+    // Source paths mapped, as every shipped artefact is (scripts/lib/remap-paths.mjs): the binary
+    // otherwise carries this machine's home directory. Cargo merges this variable with the wasm
+    // target's config rustflags, which RUSTFLAGS would replace.
+    let (remap_name, remap_value) = remap_path_env(workspace_root);
+
     // Build the WASM client
     let output = Command::new("wasm-pack")
         .arg("build")
@@ -151,6 +156,7 @@ fn main() {
         .env_remove("CARGO_MAKEFLAGS")
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .env_remove("RUSTFLAGS")
+        .env(remap_name, remap_value)
         // See nested_target_dir(): a nested cargo that shares the outer build's
         // target directory waits forever on the lock the outer build holds.
         .env(
@@ -372,4 +378,26 @@ fn generate_typescript_types(citadel_internal_service_root: &Path, workspace_roo
 /// CI never reaches this: it sets SKIP_WASM_BUILD, which returns first.
 fn nested_target_dir(citadel_internal_service_root: &Path) -> std::path::PathBuf {
     citadel_internal_service_root.join("target")
+}
+
+/// `scripts/remap-path-env.mjs`'s `NAME=VALUE` for the wasm target; exits when node cannot give it.
+fn remap_path_env(workspace_root: &Path) -> (String, String) {
+    let out = Command::new("node")
+        .arg(workspace_root.join("scripts/remap-path-env.mjs"))
+        .arg("wasm32-unknown-unknown")
+        .output();
+    let line = match out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        other => {
+            eprintln!("remap-path-env.mjs failed ({other:?}); node is required.");
+            std::process::exit(1);
+        }
+    };
+    match line.split_once('=') {
+        Some((name, value)) => (name.to_string(), value.to_string()),
+        None => {
+            eprintln!("remap-path-env.mjs printed '{line}', not NAME=VALUE.");
+            std::process::exit(1);
+        }
+    }
 }

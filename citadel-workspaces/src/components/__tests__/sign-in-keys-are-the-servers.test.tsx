@@ -2,8 +2,8 @@
  * Settings -> Sign-in keys is the server's list, and every change goes through
  * the server with a fresh step-up: list, add (with its Enrol touch), rename,
  * remove (refused, in the server's words, when the policy would be left
- * unsatisfiable), switch the policy, and regenerate the recovery codes (shown
- * once).
+ * unsatisfiable), switch the policy, and replace the recovery phrase (shown
+ * once, then checked).
  *
  * Doubled at the I/O seams: the agent and authenticator (sign-in fakes) via the
  * composition root, and the tab selection, which is IndexedDB.
@@ -26,6 +26,7 @@ import { SignInKeysSection } from '../passkey/SignInKeysSection';
 import { SecurityKeyPrompt } from '../sign-in/SecurityKeyPrompt';
 import { enrolKey, world } from '@/lib/sign-in/__tests__/helpers';
 import { listHints } from '@/lib/sign-in/hints';
+import { PHRASE_COPY } from '@/lib/recovery/copy';
 
 let alice: FakeAccount;
 const PASSWORD: string = 'correct horse battery';
@@ -59,9 +60,9 @@ beforeEach(async () => {
 afterEach(() => h.w.stop());
 
 describe('Settings -> Sign-in keys', () => {
-  it('lists the keys the server holds', async () => {
+  it('lists the keys the server holds, and says what the phrase is for', async () => {
     await openSection('password');
-    expect(screen.getByTestId('recovery-codes-left')).toHaveTextContent('10 unused');
+    expect(screen.getByTestId('recovery-phrase-state')).toHaveTextContent(`${PHRASE_COPY.settingsBody} ${PHRASE_COPY.regenerateWarning}`);
   });
 
   it('adds a key after a step-up, with its Enrol touch', async () => {
@@ -106,17 +107,25 @@ describe('Settings -> Sign-in keys', () => {
     ]));
   });
 
-  it('regenerates the recovery codes and shows them once', async () => {
+  it('replaces the recovery phrase behind a step-up, shows it once, and checks it', async () => {
     await openSection('password');
-    const before: string[] = [...alice.recoveryCodes];
-    fireEvent.click(screen.getByTestId('regenerate-recovery-codes'));
+    const before: string[] = [...alice.phrase];
+    fireEvent.click(screen.getByTestId('regenerate-recovery-phrase'));
     await stepUpWithPassword();
-    const shown: string[] = (await screen.findAllByTestId('recovery-code')).map((li) => li.textContent ?? '');
-    expect(shown).toEqual(alice.recoveryCodes);
+    const shown: string[] = (await screen.findAllByTestId('recovery-phrase-word')).map((li) => li.lastElementChild?.textContent ?? '');
+    expect(shown).toEqual(alice.phrase);
     expect(shown).not.toEqual(before);
-    fireEvent.click(screen.getByTestId('recovery-codes-saved'));
-    fireEvent.click(screen.getByTestId('recovery-codes-done'));
-    expect(screen.queryByTestId('recovery-code')).toBeNull();
+    const op: Record<string, unknown> | undefined = h.w.agent.sent.map(([, b]) => b).find((b) => b.op === 'RegenerateRecoveryPhrase');
+    expect(op?.step_up).toEqual({ password: Array.from(new TextEncoder().encode(PASSWORD)), security_key: true });
+    fireEvent.click(screen.getByTestId('recovery-phrase-written'));
+    screen.getAllByTestId('recovery-phrase-check-word').forEach((box: HTMLElement) => {
+      fireEvent.change(box, { target: { value: shown[Number(box.getAttribute('data-position'))] } });
+    });
+    fireEvent.click(screen.getByTestId('recovery-phrase-confirm'));
+    await waitFor(() => expect(screen.queryByTestId('recovery-phrase-check')).toBeNull());
+    expect(screen.queryByTestId('recovery-phrase-word')).toBeNull();
+    // Codes gone: Settings no longer says they work.
+    expect(screen.getByTestId('recovery-phrase-state')).toHaveTextContent(PHRASE_COPY.settingsBody);
   });
 
   it('asks for the step-up before it lists anything, and sends the list with it', async () => {
@@ -144,7 +153,7 @@ describe('Settings -> Sign-in keys', () => {
   it('sends nothing when the step-up is cancelled', async () => {
     await openSection('password');
     const sent: number = h.w.agent.sent.length;
-    fireEvent.click(screen.getByTestId('regenerate-recovery-codes'));
+    fireEvent.click(screen.getByTestId('regenerate-recovery-phrase'));
     fireEvent.click(await screen.findByTestId('step-up-cancel'));
     await new Promise<void>((r) => setTimeout(r, 20));
     expect(h.w.agent.sent.length).toBe(sent);

@@ -9,7 +9,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import {
   permissionsService,
   Permission,
-  DomainPermissions,
+  DomainPermissionEntry,
   PERMISSION_LABELS,
   PERMISSION_CATEGORIES,
 } from '@/lib/permissions-service';
@@ -21,7 +21,7 @@ import { debugLog } from '@/lib/debug-config';
  */
 interface PermissionsContextType {
   // State
-  permissions: Map<string, DomainPermissions>;
+  permissions: Map<string, DomainPermissionEntry>;
   loading: boolean;
   error: string | null;
 
@@ -33,7 +33,7 @@ interface PermissionsContextType {
 
   // Actions
   refreshPermissions: (domainId?: string) => Promise<void>;
-  fetchPermissionsForDomain: (domainId: string) => Promise<DomainPermissions | null>;
+  fetchPermissionsForDomain: (domainId: string) => Promise<DomainPermissionEntry | null>;
 
   // Utilities
   getPermissionLabel: (permission: Permission) => string;
@@ -46,7 +46,7 @@ const PermissionsContext: React.Context<PermissionsContextType | null> = createC
  * Permissions Provider component
  */
 export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [permissions, setPermissions] = useState<Map<string, DomainPermissions>>(new Map());
+  const [permissions, setPermissions] = useState<Map<string, DomainPermissionEntry>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,18 +54,18 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
    * Sync state with service cache
    */
   const syncWithService: () => void = useCallback((): void => {
-    const cached: Map<string, DomainPermissions> = permissionsService.getAllCachedPermissions();
+    const cached: Map<string, DomainPermissionEntry> = permissionsService.getAllCachedPermissions();
     setPermissions(new Map(cached));
   }, []);
 
   /**
    * Fetch permissions for a specific domain
    */
-  const fetchPermissionsForDomain: (domainId: string) => Promise<DomainPermissions | null> = useCallback(async (domainId: string): Promise<DomainPermissions | null> => {
+  const fetchPermissionsForDomain: (domainId: string) => Promise<DomainPermissionEntry | null> = useCallback(async (domainId: string): Promise<DomainPermissionEntry | null> => {
     setLoading(true);
     setError(null);
     try {
-      const result: DomainPermissions | null = await permissionsService.fetchPermissions(domainId);
+      const result: DomainPermissionEntry | null = await permissionsService.fetchPermissions(domainId);
       // Only sync if we got a result - avoids infinite loop when no user is logged in
       if (result) {
         syncWithService();
@@ -89,7 +89,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
       await fetchPermissionsForDomain(domainId);
     } else {
       // Refresh all cached domains
-      const cached: Map<string, DomainPermissions> = permissionsService.getAllCachedPermissions();
+      const cached: Map<string, DomainPermissionEntry> = permissionsService.getAllCachedPermissions();
       setLoading(true);
       try {
         await Promise.all(
@@ -211,5 +211,5 @@ export function usePermissions(): PermissionsContextType {
 }
 
 // Re-export types and constants for convenience
-export { Permission, PERMISSION_LABELS, PERMISSION_CATEGORIES };
-export type { DomainPermissions };
+export { PERMISSION_LABELS, PERMISSION_CATEGORIES };
+export type { DomainPermissionEntry, Permission };

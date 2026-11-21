@@ -64,9 +64,10 @@ describe('a tab that hears another build', () => {
     expect(staleness.getTabStaleness().inert).toBe(true);
   });
 
-  it('does not read a build too old for it, but does read protocol 1', () => {
+  it('does not read a build too old for it, protocol 1 (no envelope) included', () => {
     expect(skew.admitByVersion(from('77', 'leader-heartbeat', envelope({ proto: 1, minProto: 1 })))).toBe(false);
-    expect(skew.admitByVersion(from('78', 'leader-heartbeat', undefined))).toBe(true);
+    expect(skew.admitByVersion(from('78', 'leader-heartbeat', undefined))).toBe(false);
+    expect(skew.admitByVersion(from('79', 'leader-election', undefined))).toBe(false);
     expect(staleness.getTabStaleness()).toEqual({ stale: false, inert: false, cause: null });
   });
 });

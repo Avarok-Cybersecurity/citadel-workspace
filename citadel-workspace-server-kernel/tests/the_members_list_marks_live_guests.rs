@@ -6,10 +6,10 @@
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::secure_links::SecureLinksRequest;
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use common::booking_guest_test_utils::{booking, node, outsiders, target};
 use common::member_test_utils::GateKernel;
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::secure_links_test_utils::{
     create, enrol, expires, links, links_kernel, resolve, HOUR_MS,
 };
@@ -40,7 +40,7 @@ async fn an_admin_sees_a_live_guest_listed_and_marked_and_a_member_is_not_told()
     let kernel = links_kernel(50, 0).await;
     let sales = node(&kernel, "Sales").await;
     outsiders(&kernel, &["gus", "hal"]).await;
-    enrol(&kernel, "mia", UserRole::Member).await;
+    enrol(&kernel, "mia", MEMBER_ROLE_ID).await;
     let (info, token) = create(
         &kernel,
         TEST_ADMIN_USER_ID,

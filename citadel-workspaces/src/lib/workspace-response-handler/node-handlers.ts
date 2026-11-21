@@ -93,7 +93,7 @@ export function handleNodeVariants(
     eventEmitter.emit('node:content-updated', {
       nodeId: node_id,
       mdxContent: mdx_content,
-      mdxContentHash: mdx_content_hash ?? undefined,
+      mdxContentHash: mdx_content_hash,
       updatedBy: updated_by,
       // ts-rs declares this bigint; the wire is JSON with no reviver, so it
       // arrives as a number. Coerced rather than cast, so the value is what the

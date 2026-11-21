@@ -6,14 +6,10 @@
  * we asked about.
  */
 import type { PeerConsent, PeerDirection } from 'citadel-workspace-client-ts';
-import { peerDirectionKey, type PeerAuthorization } from '@/lib/citadel-apps/member-consent-types';
+import { peerDirectionKey, type ConsentChoice, type PeerAuthorization } from '@/lib/citadel-apps/member-consent-types';
 import { ask, type AppsResult, type AppsTransport, type Of } from './apps-operations';
 
-export interface ConsentChoice {
-  readonly serve: boolean;
-  readonly call: boolean;
-  readonly topics: boolean;
-}
+export type { ConsentChoice };
 
 export const setPeerConsentForMe = (t: AppsTransport, installId: string, c: ConsentChoice): Promise<AppsResult<PeerConsent>> =>
   ask(t, { SetPeerConsentForMe: { install_id: installId, serve: c.serve, call: c.call, topics: c.topics } }, 'peer-consent',

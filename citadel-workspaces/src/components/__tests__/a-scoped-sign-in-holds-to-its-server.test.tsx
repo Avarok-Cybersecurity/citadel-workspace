@@ -5,7 +5,7 @@
  * another server: the agent would sign in THERE. The user is offered that server
  * instead, or types the username they use here.
  *
- * Doubled: the passkey ports (records written by the real enrolment code), the agent's
+ * Doubled: the agent's LocalDB (sign-in hints written by the real hint code), the agent's
  * account list (GetAccountInformation), the browser's saved sessions, and the agent's
  * Connect -- counted, so a sign-in that should not be sent can be seen not to be.
  */
@@ -13,17 +13,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { AccountHost } from '@/lib/admission/account-servers';
-import { testDeps } from '@/lib/passkey/__tests__/fakes';
-import { enrolCredential } from '@/lib/passkey/__tests__/legacy-enrol';
+import { MemoryStore } from '@/lib/passkey/__tests__/fakes';
+import { saveHint } from '@/lib/sign-in/hints';
 
 const A: string = 'bench.work.avarok.net';
 const B: string = 'acme.work.avarok.net';
-const h: { deps: ReturnType<typeof testDeps>; connects: string[] } = vi.hoisted(() => ({
-  deps: undefined as unknown as ReturnType<typeof testDeps>, connects: [] as string[],
+const h: { store: MemoryStore; connects: string[] } = vi.hoisted(() => ({
+  store: undefined as unknown as MemoryStore, connects: [] as string[],
 }));
 
 vi.mock('@/lib/passkey', async (importOriginal: () => Promise<Record<string, unknown>>) => ({
-  ...(await importOriginal()), passkeysAvailableHere: (): boolean => true, browserPasskeyDeps: (): ReturnType<typeof testDeps> => h.deps,
+  ...(await importOriginal()), passkeysAvailableHere: (): boolean => true,
+}));
+vi.mock('@/lib/sign-in', async (importOriginal: () => Promise<Record<string, unknown>>) => ({
+  ...(await importOriginal()), browserSignInDeps: (): { store: MemoryStore } => ({ store: h.store }),
 }));
 vi.mock('@/lib/admission', async (importOriginal: () => Promise<Record<string, unknown>>) => ({
   ...(await importOriginal()),
@@ -50,10 +53,10 @@ function renderLogin(scope: string | undefined): void {
 const typeUsername: (value: string) => void = (value: string): void => { fireEvent.change(screen.getByLabelText(/^username$/i), { target: { value } }); };
 
 beforeEach(async () => {
-  h.deps = testDeps();
+  h.store = new MemoryStore();
   h.connects = [];
-  await enrolCredential(h.deps, { username: 'alice', cid: 7n, label: 'Mac', password: 'correct horse battery' });
-  await enrolCredential(h.deps, { username: 'bob', cid: 8n, label: 'Mac', password: 'correct horse battery' });
+  await saveHint(h.store, { tenant: A, cid: 7n, username: 'alice', keyFirst: true });
+  await saveHint(h.store, { tenant: B, cid: 8n, username: 'bob', keyFirst: true });
 });
 
 describe('a sign-in scoped to a server', () => {

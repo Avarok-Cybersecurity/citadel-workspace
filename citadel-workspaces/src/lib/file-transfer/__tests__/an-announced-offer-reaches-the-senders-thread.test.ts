@@ -26,7 +26,7 @@ function transfer(): FileTransfer {
   return {
     id: 'transfer-1', fileName: 'notes.md', fileSize: 4, fileType: 'text/markdown',
     state: 'pending', progress: 0,
-    senderCid: '7', recipientCid: '42',
+    sender_cid: '7', recipient_cid: '42',
     createdAt: 0, updatedAt: 0, isIncoming: false,
   };
 }
@@ -61,7 +61,7 @@ describe('announcing an offer', () => {
     const wire: { message_id: string } = sent[0] as { message_id: string };
     expect(added[0].peer).toBe(42n);
     expect(added[0].message.id, 'the recorded entry is not the offer that was sent').toBe(wire.message_id);
-    expect(added[0].message.senderCid).toBe(7n);
+    expect(added[0].message.sender_cid).toBe(7n);
     expect(added[0].message.transfer_state).toBe('pending');
   });
 });

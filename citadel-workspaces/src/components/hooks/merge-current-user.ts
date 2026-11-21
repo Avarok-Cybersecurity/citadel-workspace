@@ -57,7 +57,6 @@ export function mergeCurrentUser(
 
 /** The fields the signed-in user's own member record supplies. */
 export interface OwnMemberFields {
-  readonly role?: string;
   readonly roleId?: string;
   readonly displayName?: string;
   readonly avatarUrl?: string;
@@ -75,13 +74,12 @@ export interface OwnMemberFields {
  * record's privacy choice never reached Settings and its switch stayed disabled.
  *
  * Email and title are taken as they are (absent means cleared); the avatar and
- * role keep the previous value when the record has none.
+ * role id keep the previous value when the record has none.
  */
 export function applyOwnMemberRecord<T extends CurrentUser & OwnMemberFields>(user: T, member: OwnMemberFields | undefined): T {
   if (!member) return user;
   return {
     ...user,
-    role: member.role ?? user.role,
     roleId: member.roleId ?? user.roleId,
     displayName: member.displayName || user.name,
     avatarUrl: member.avatarUrl ?? user.avatarUrl,

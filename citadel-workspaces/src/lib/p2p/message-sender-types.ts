@@ -10,7 +10,7 @@ import type { MessageType } from '@/types/message-protocol';
 import type { AgentActionDeps } from '../agent-conversations/agent-actions';
 
 export interface SendMessageOptions {
-  replyTo?: string;
+  reply_to?: string;
   mentions?: string[];
   attachments?: P2PAttachment[];
   messageType?: MessageType;

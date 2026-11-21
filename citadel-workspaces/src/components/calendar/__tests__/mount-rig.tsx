@@ -13,6 +13,7 @@ import type { IhttpPort } from '@/lib/citadel-apps/host/ports';
 import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { MemoryStore } from '@/lib/calendar/__tests__/memory-store';
 import { CalendarMount } from '../CalendarMount';
+import type { DomainNode } from 'citadel-workspace-client-ts';
 
 /**
  * The page's server-call pace is proven in a-glue-app-never-outruns-the-one-server-rate.test.ts; on
@@ -21,7 +22,7 @@ import { CalendarMount } from '../CalendarMount';
  */
 const POLICY: { serverCallsPerSecond: number; memoryMaxPages: number; computeBudgetMs: number; hostNetTimeoutMs: number; serverNetTimeoutMs: number; portTimeoutMs: number; hostCallsPerSecond: number; maxLiveInstancesPerPage: number; maxRequestBytes: number; maxReplyBytes: number; maxLiveReplies: number; replyTtlMs: number; maxLogBytes: number; peerAuthorizationsPerSecond: number; ihttp: IhttpLimits; } = { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_000 };
 const HELD: Capability[] = ['storage.user', 'storage.node', 'storage.node.authored'];
-const NODE: { id: string; name: string; parent_id: null; children: never[]; metadata: number[]; } = { id: 'n1', name: 'Platform', parent_id: null, children: [], metadata: [...new TextEncoder().encode(JSON.stringify({ time_zone: 'America/New_York' }))] };
+const NODE: Pick<DomainNode, 'id' | 'name' | 'parent_id' | 'children' | 'metadata'> = { id: 'n1', name: 'Platform', parent_id: null, children: [], metadata: [...new TextEncoder().encode(JSON.stringify({ time_zone: 'America/New_York' }))] };
 
 export interface MountRig {
   readonly store: MemoryStore;

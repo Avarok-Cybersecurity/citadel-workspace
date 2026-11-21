@@ -26,8 +26,8 @@ export interface PeerGroupTransportParams {
 
 function peerGroupSend(io: PeerGroupChatIO): SendPort {
   return {
-    text: async ({ content, replyTo, onRecorded }: TextSend): Promise<void> => {
-      await io.send(content, replyTo);
+    text: async ({ content, reply_to, onRecorded }: TextSend): Promise<void> => {
+      await io.send(content, reply_to);
       onRecorded();
     },
     revise: null,

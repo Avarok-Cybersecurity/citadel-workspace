@@ -8,15 +8,15 @@
 
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use citadel_workspace_types::roles::{
-    seed_roles, WorkspaceRoles, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID,
+    WorkspaceRoles, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID,
 };
 use citadel_workspace_types::roles_protocol::{RoleChange, RolesRequest, RolesResponse};
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use citadel_workspace_types::{WorkspaceProtocolRequest as Req, WorkspaceProtocolResponse as Res};
 use common::member_test_utils::{
-    create_test_user, insert_user_with_role, join_root, member_holding, role_id_of, seed_role,
-    GateKernel as Kernel,
+    insert_user_with_role, join_root, member_holding, role_id_of, seed_role, GateKernel as Kernel,
 };
+use common::roles_fixture::BANNED;
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::time::Duration;
 
@@ -57,9 +57,9 @@ fn scribe() -> RolesRequest {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_member_reads_the_table_and_a_banned_account_cannot() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "mia", UserRole::Member).await;
+    insert_user_with_role(&kernel, "mia", MEMBER_ROLE_ID).await;
     join_root(&kernel, "mia").await;
-    insert_user_with_role(&kernel, "bo", UserRole::Banned).await;
+    insert_user_with_role(&kernel, "bo", BANNED).await;
     join_root(&kernel, "bo").await;
 
     match send(&kernel, "mia", RolesRequest::List).await {
@@ -84,7 +84,7 @@ async fn a_member_reads_the_table_and_a_banned_account_cannot() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn without_manage_roles_every_edit_is_refused_alike() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "mia", UserRole::Member).await;
+    insert_user_with_role(&kernel, "mia", MEMBER_ROLE_ID).await;
     join_root(&kernel, "mia").await;
 
     let edits = [
@@ -190,14 +190,6 @@ async fn a_deleted_roles_holders_move_to_the_named_role() {
         role_id_of(&kernel, "sam").await.as_deref(),
         Some(GUEST_ROLE_ID)
     );
-    let sam = kernel
-        .domain_operations
-        .backend_tx_manager
-        .get_user("sam")
-        .await
-        .expect("read")
-        .expect("sam");
-    assert_eq!(sam.role, UserRole::Guest, "older clients read the enum");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -231,46 +223,5 @@ async fn an_edit_reaches_the_roles_holders_at_once() {
     assert!(
         may(&kernel, "sam", Permission::EditMdx).await,
         "the grant did not reach sam"
-    );
-}
-
-/// A record the old role write left: the enum, the Member set copied into the root, no role id.
-/// Read through the table, the copy must not outlive an edit to Member.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_record_from_before_the_table_follows_it() {
-    let kernel = create_test_kernel().await;
-    let mut old = create_test_user("ola", UserRole::Member);
-    let member_set = seed_roles()
-        .into_iter()
-        .find(|role| role.id == MEMBER_ROLE_ID)
-        .expect("member seed")
-        .permissions;
-    old.permissions.insert(ROOT.to_string(), member_set);
-    kernel
-        .domain_operations
-        .backend_tx_manager
-        .insert_user("ola".to_string(), old)
-        .await
-        .expect("insert");
-    join_root(&kernel, "ola").await;
-    assert!(may(&kernel, "ola", Permission::SendMessages).await);
-
-    let revoked = send(
-        &kernel,
-        TEST_ADMIN_USER_ID,
-        RolesRequest::Update {
-            id: MEMBER_ROLE_ID.to_string(),
-            changes: vec![RoleChange::Revoke(vec![Permission::SendMessages])],
-        },
-    )
-    .await;
-    assert!(matches!(revoked, Res::Roles(_)), "{revoked:?}");
-    assert!(
-        !may(&kernel, "ola", Permission::SendMessages).await,
-        "the copied Member set outlived the edit to Member"
-    );
-    assert_eq!(
-        role_id_of(&kernel, "ola").await.as_deref(),
-        Some(MEMBER_ROLE_ID)
     );
 }

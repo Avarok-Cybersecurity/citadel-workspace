@@ -12,15 +12,13 @@
  * inbound side takes the reactor from the protocol's `peer_cid`.
  */
 import { encode as cborEncode, decode as cborDecode } from 'cbor-x';
+import type { GroupReaction } from 'citadel-workspace-client-ts';
 
-export interface GroupReactionBody {
-  /** The chat message reacted to; `message_id` below is this envelope's own id. */
-  target_id: string;
-  emoji: string;
-  active: boolean;
-  /** The reactor's clock; receivers keep the latest per (reactor, emoji). */
-  at: number;
-}
+/**
+ * A reaction entry (the generated `GroupReaction`) less its reactor, which the receiver takes from
+ * the protocol; `target_id` is the chat message reacted to (`message_id` below is this envelope's).
+ */
+export type GroupReactionBody = Omit<GroupReaction, 'reactorCid'> & { target_id: string };
 
 export interface PeerGroupReaction {
   group_id: string;

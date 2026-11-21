@@ -57,7 +57,9 @@ function gitPackages(text) {
     if (!name || !source) continue;
     const hash = source.lastIndexOf('#');
     if (hash === -1) continue;
-    found.set(name, { url: source.slice(0, hash), rev: source.slice(hash + 1) });
+    const pins = found.get(name) ?? [];
+    pins.push({ url: source.slice(0, hash), rev: source.slice(hash + 1) });
+    found.set(name, pins);
   }
   return found;
 }
@@ -80,14 +82,18 @@ const parsed = present.map((l) => ({ ...l, packages: gitPackages(readFileSync(jo
 /** Names that appear in more than one lockfile — the only ones worth comparing. */
 const shared = new Set();
 for (const a of parsed) {
-  for (const name of a.packages.keys()) {
-    if (parsed.filter((b) => b.packages.has(name)).length > 1) shared.add(name);
+  for (const [name, pins] of a.packages) {
+    // A crate held at two revisions in ONE lockfile is the same skew: a `branch = "master"`
+    // copy beside the pinned one (a nested crate's own manifest) hid behind the pinned name.
+    if (pins.length > 1 || parsed.filter((b) => b.packages.has(name)).length > 1) shared.add(name);
   }
 }
 
 const problems = [];
 for (const name of [...shared].sort()) {
-  const pins = parsed.filter((p) => p.packages.has(name)).map((p) => ({ label: p.label, path: p.path, ...p.packages.get(name) }));
+  const pins = parsed
+    .filter((p) => p.packages.has(name))
+    .flatMap((p) => p.packages.get(name).map((pin) => ({ label: p.label, path: p.path, ...pin })));
   const revs = new Set(pins.map((p) => p.rev));
   if (revs.size === 1) continue;
   problems.push(

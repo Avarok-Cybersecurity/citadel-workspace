@@ -22,8 +22,8 @@ mod turn;
 mod usage;
 
 use citadel_sdk::prelude::{
-    ArgonDefaultServerSettings, BackendType, StunServers, WasmConnectionInjector, WasmIO,
-    WasmListener, WasmStream, WasmWebSocketStream,
+    ArgonDefaultServerSettings, BackendType, MaxSecurityLevel, SecurityLevel, StunServers,
+    WasmConnectionInjector, WasmIO, WasmListener, WasmStream, WasmWebSocketStream,
 };
 use citadel_workspace_server_kernel::config::ServerConfig;
 use citadel_workspace_server_kernel::kernel::sign_in::HostedSignIn;
@@ -127,6 +127,10 @@ impl TenantServer {
             path_policy: path_policy
                 .policy()
                 .map_err(|e| JsError::new(&format!("invalid path policy: {e:?}")))?,
+            // The owner's production maximum for the tenant server (2026-11-18), the agent's
+            // too.
+            max_security_level: MaxSecurityLevel::new(SecurityLevel::Custom(10))
+                .map_err(|e| JsError::new(&e.to_string()))?,
         };
         let backend = BackendType::HostSql(storage::backend_handle(storage));
         let ice_servers = Some(ice::source(ice));

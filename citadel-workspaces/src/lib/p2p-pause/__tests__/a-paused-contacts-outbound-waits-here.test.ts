@@ -139,6 +139,14 @@ describe('a send to a contact', () => {
     expect(flushed).toEqual(['before reload']);
   });
 
+  it('refuses a key in an earlier, shorter shape rather than guessing its reason', async (): Promise<void> => {
+    for (const earlier of [`p2p_paused_outbox_${MAX}_1_a`, `p2p_paused_outbox_${MAX}_1_a_-_-`]) {
+      db.rows.clear();
+      db.rows.set(`${LARA.toString()}/${earlier}`, stringToBytes('held'));
+      await expect(outbox.flush(LARA, MAX, 'paused', async (): Promise<void> => {})).rejects.toThrow(/Unreadable held-message key/);
+    }
+  });
+
   it('flushes nothing, without error, when nothing was held', async (): Promise<void> => {
     expect(await outbox.flush(LARA, MAX, 'paused', async (): Promise<void> => { throw new Error('should not send'); })).toBe(0);
   });

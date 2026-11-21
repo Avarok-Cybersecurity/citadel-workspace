@@ -22,11 +22,13 @@ import { PERMISSION_SCENARIOS } from './scenarios-permissions.jsx';
 import { FILE_MANAGER_SCENARIOS } from './scenarios-file-manager.jsx';
 import { SHARE_SCENARIOS } from './scenarios-share.jsx';
 import { RIBBON_SCENARIOS } from './scenarios-ribbons.jsx';
-import { MIGRATION_SCENARIOS } from './scenarios-migration.jsx';
 import { APP_TOOLBAR_SCENARIOS } from './scenarios-app-toolbar.jsx';
 import { PEER_CONSENT_SCENARIOS } from './scenarios-peer-consent.jsx';
+import { SIGN_IN_SCENARIOS } from './scenarios-sign-in.jsx';
+import { RECOVERY_SCENARIOS } from './scenarios-recovery.jsx';
 import { CHAT_FILE_SCENARIOS } from './scenarios-chat-files.jsx';
 import { ACCOUNT_SWITCH_SCENARIOS } from './scenarios-account-switch.jsx';
+import { PEER_IDENTITY_SCENARIOS } from './scenarios-peer-identity.jsx';
 import { SERVER_FILE_SCENARIOS } from './scenarios-server-files.jsx';
 import { NODE_TAB_SCENARIOS } from './scenarios-node-tabs.jsx';
 import { CALENDAR_SCENARIOS } from './scenarios-calendar.jsx';
@@ -71,7 +73,7 @@ const PEER = 2n;
 const NOON = new Date().setHours(12, 0, 0, 0);
 
 const message = (index, from, extra) => ({
-  id: `m${index}`, content: `Message number ${index}`, senderCid: from, recipientCid: from === ME ? PEER : ME,
+  id: `m${index}`, content: `Message number ${index}`, sender_cid: from, recipient_cid: from === ME ? PEER : ME,
   timestamp: NOON + index * 60_000, index, status: 'delivered', message_type: 'text', ...extra,
 });
 
@@ -139,4 +141,4 @@ function DropUnavailable({ state }) {
   );
 }
 
-export const SCENARIOS = { 'document-open': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: true, paused: false }} />, 'paused-drag': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: false, paused: true }} />, 'p2p-chat': WholeChat, 'sidebar-members': SidebarMembers, 'p2p-conversation': P2PConversation, ...PEOPLE_SCENARIOS, ...OVERLAY_SCENARIOS, ...SPACING_SCENARIOS, ...SCREEN_SCENARIOS, ...SIDEBAR_SCENARIOS, ...PERMISSION_SCENARIOS, ...FILE_MANAGER_SCENARIOS, ...SHARE_SCENARIOS, ...RIBBON_SCENARIOS, ...MIGRATION_SCENARIOS, ...APP_TOOLBAR_SCENARIOS, ...PEER_CONSENT_SCENARIOS, ...NODE_TAB_SCENARIOS, ...CALENDAR_SCENARIOS, ...CALENDAR_CHANGE_SCENARIOS, ...CALENDAR_TEAM_SCENARIOS, ...NODE_CHAT_SCENARIOS, ...SERVER_FILE_SCENARIOS, ...CHAT_FILE_SCENARIOS, ...ACCOUNT_SWITCH_SCENARIOS };
+export const SCENARIOS = { 'document-open': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: true, paused: false }} />, 'paused-drag': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: false, paused: true }} />, 'p2p-chat': WholeChat, 'sidebar-members': SidebarMembers, 'p2p-conversation': P2PConversation, ...PEOPLE_SCENARIOS, ...OVERLAY_SCENARIOS, ...SPACING_SCENARIOS, ...SCREEN_SCENARIOS, ...SIDEBAR_SCENARIOS, ...PERMISSION_SCENARIOS, ...FILE_MANAGER_SCENARIOS, ...SHARE_SCENARIOS, ...RIBBON_SCENARIOS, ...APP_TOOLBAR_SCENARIOS, ...PEER_CONSENT_SCENARIOS, ...NODE_TAB_SCENARIOS, ...CALENDAR_SCENARIOS, ...CALENDAR_CHANGE_SCENARIOS, ...CALENDAR_TEAM_SCENARIOS, ...NODE_CHAT_SCENARIOS, ...SERVER_FILE_SCENARIOS, ...CHAT_FILE_SCENARIOS, ...ACCOUNT_SWITCH_SCENARIOS, ...SIGN_IN_SCENARIOS, ...RECOVERY_SCENARIOS, ...PEER_IDENTITY_SCENARIOS };

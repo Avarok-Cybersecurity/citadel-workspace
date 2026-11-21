@@ -3,7 +3,6 @@
 //! This module provides async workspace-specific operations
 use async_trait::async_trait;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::roles_protocol::MemberRole;
 use citadel_workspace_types::structs::Workspace;
 
 use crate::handlers::domain::server_ops::async_domain_server_ops::WorkspaceDBList;
@@ -90,7 +89,7 @@ pub trait AsyncWorkspaceOperations<R: Ratchet + Send + Sync + 'static>: Send + S
         user_id: &str,
         workspace_id: &str,
         member_id: &str,
-        role: MemberRole,
+        role: String,
     ) -> Result<(), NetworkError>;
 
     /// Removes a user from a workspace and all associated permissions

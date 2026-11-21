@@ -17,7 +17,6 @@ export type {
   InitWebSocketIntent,
   SetOrphanModeIntent,
   SendWebSocketMessageIntent,
-  ConnectIntent,
   DisconnectIntent,
   ClaimSessionIntent,
   LocalDBSetIntent,
@@ -25,7 +24,6 @@ export type {
   BroadcastConnectionStatusIntent,
   UpdateConnectionServiceIntent,
   SetWorkspaceConnectionIdIntent,
-  MarkUserDisconnectedIntent,
   EmitEventIntent,
   SetInstanceCidIntent,
   AnnouncePresenceIntent,
@@ -37,13 +35,9 @@ export type {
 // Constants
 export {
   CACHE_TTL_MS,
-  MAX_RECONNECT_ATTEMPTS,
-  MAX_RECONNECT_DELAY_MS,
-  HEALTH_CHECK_TIMEOUT_MS,
   GET_SESSIONS_TIMEOUT_MS,
   WEBSOCKET_INIT_TIMEOUT_MS,
   SET_USER_TIMEOUT_MS,
-  POST_DISCONNECT_DELAY_MS,
 } from './constants';
 
 // State Management

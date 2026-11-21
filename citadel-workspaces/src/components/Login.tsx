@@ -10,23 +10,20 @@ import { SecuritySettings, SecuritySettingsValues } from "./SecuritySettings";
 import { useLoginHandler, type LoginHandler } from "./useLoginHandler";
 import { SignInAccounts, SignInScopeLine } from "./sign-in/SignInAccounts";
 import { scopeDescribedBy, scopedSubmit, useSignInScope, type SignInScope } from "./sign-in/useSignInScope";
-import { usePasskeyAccounts } from "./passkey/usePasskeyAccounts";
 import { PASSWORD_THEN_KEY, passkeyAction, passkeyOffer, type PasskeyAction } from "./passkey/passkey-offer";
 import { LoginFactorFields } from "./LoginFactorFields";
 import { AddSecurityKeyCard } from "./sign-in/AddSecurityKeyCard";
-import { RecoverySessionScreen } from "./sign-in/RecoverySessionScreen";
+import { LoginRecoveryCard, showsRecovery, useAccountRecovery, type AccountRecovery } from "./recovery/LoginRecovery";
 import { useSignInHints } from "./sign-in/useSignInHints";
-import { websocketService } from "@/lib/websocket-service";
 import { passkeysAvailableHere } from "@/lib/passkey";
 import type { SignInHint } from "@/lib/sign-in";
-import { SIGN_IN_COPY } from "@/lib/sign-in/copy";
 import { AdmissionCheck } from "./admission/AdmissionCheck";
 import { useAdmissionGate, type AdmissionGate } from "./admission/useAdmissionGate";
 import { useAccountServer } from "./admission/useAccountServer";
 import { useSignInLevel } from "./security/useSignInLevel";
 import { ADMISSION_ACTION } from "@/lib/admission/copy";
 import { useSignedOutAccounts } from "./signed-out/use-signed-out-accounts";
-import type { SignedOutAccount } from "@/types/session-types";
+import type { SignedOutSession } from 'citadel-workspace-client-ts';
 
 interface LoginProps {
   onNext: (connectionId: string) => void;
@@ -47,7 +44,7 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
   // says, and an account the server signed out is told so.
   const [accountServer, setAccountServer] = useState<string | undefined>(undefined);
   const [typed, setTyped] = useState<string>(initialUsername ?? '');
-  const signedOut: SignedOutAccount[] = useSignedOutAccounts();
+  const signedOut: SignedOutSession[] = useSignedOutAccounts();
   const admission: AdmissionGate = useAdmissionGate(ADMISSION_ACTION.signIn, {
     serverAddress: accountServer, reauth: signedOut.some((a) => a.username === typed), accountNamed: typed !== '',
   });
@@ -57,21 +54,20 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
   const signInLevel: number | undefined = useSignInLevel(h.username);
   const {
     username, setUsername, error, invalidField, loading, securitySettings, setSecuritySettings,
-    handleLogin, passkey, handlePasskeyLogin, handleKeyLogin, keyOffer, recoverySession, mode,
+    handleLogin, handleKeyLogin, keyOffer, mode,
   } = h;
+  const recovery: AccountRecovery = useAccountRecovery();
 
-  // Offered before a username is typed: option-A passkeys and this device's sign-in hints (passkey-offer.ts).
-  const legacyAccounts: string[] = usePasskeyAccounts();
-  const passkeyAccounts: string[] = passkeyOffer(username, mode, passkey.hasKeys, legacyAccounts, hints);
-  const scope: SignInScope = useSignInScope(h.server, h.setServer, username, passkeyAccounts, hints, legacyAccounts);
+  // Offered before a username is typed: this device's sign-in hints (passkey-offer.ts).
+  const passkeyAccounts: string[] = passkeyOffer(username, mode, hints);
+  const scope: SignInScope = useSignInScope(h.server, h.setServer, username, passkeyAccounts, hints);
   // A known server is the one the check binds to; a scoped sign-in is for that server.
   useEffect((): void => { setAccountServer(scope.server ?? knownServer); setTyped(h.username.trim()); }, [scope.server, knownServer, h.username]);
   const elsewhere: boolean = scope.typed.kind === 'elsewhere';
   const [keyNext, setKeyNext] = useState<string | null>(null);
   const signInAs = (account: string): void => {
-    const action: PasskeyAction = passkeyAction(account, legacyAccounts, hints);
-    if (action === 'legacy') void handlePasskeyLogin(account);
-    else if (action === 'key-first') void handleKeyLogin(account);
+    const action: PasskeyAction = passkeyAction(account, hints);
+    if (action === 'key-first') void handleKeyLogin(account);
     else { setUsername(account); setKeyNext(account); setTimeout((): void => { document.getElementById('password')?.focus(); }, 0); }
   };
 
@@ -98,15 +94,8 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 p-4" ref={dialogRef} {...dialogProps}>
-      {recoverySession ? (
-        <Card className="bg-background border-border shadow-2xl shadow-black/40 w-full max-w-md">
-          <CardContent className="pt-6">
-            <RecoverySessionScreen
-              account={recoverySession}
-              signOut={async (): Promise<void> => { await websocketService.disconnect(recoverySession.cid); h.endRecoverySession(); }}
-            />
-          </CardContent>
-        </Card>
+      {showsRecovery(recovery) ? (
+        <LoginRecoveryCard h={h} recovery={recovery} scope={scope.server ?? knownServer ?? null} />
       ) : keyOffer ? (
         <Card className="bg-background border-border shadow-2xl shadow-black/40 w-full max-w-md" data-testid="passkey-enrol">
           <CardContent className="pt-6">
@@ -181,8 +170,8 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
                 <p className="text-sm text-muted-foreground" data-testid="login-key-next">{PASSWORD_THEN_KEY}</p>
               )}
 
-              {/* How the account is proved: password, key alone, or recovery code */}
-              <LoginFactorFields h={h} keysHere={passkeysAvailableHere()} />
+              {/* How the account is proved: password, or a key alone */}
+              <LoginFactorFields h={h} keysHere={passkeysAvailableHere()} onRecover={recovery.start} />
               {/* No Server Address field.
                   Signing in does not need one and never did: the SDK pins the
                   server in the account's CNAC at registration, and `connect`
@@ -200,7 +189,7 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
                 onConfigureSecurity={() => setShowSecuritySettings(true)}
                 securitySettings={securitySettings}
                 setSecuritySettings={setSecuritySettings}
-                passkey={passkey}
+                passkeysAvailable={passkeysAvailableHere()}
               />
 
               <AdmissionCheck gate={admission} />
@@ -235,7 +224,7 @@ export function Login({ onNext, onCancel, initialUsername, notice, scope: scoped
                 ) : (
                   <>
                     <LogIn className="h-4 w-4" />
-                    {mode === 'recovery' ? SIGN_IN_COPY.recoverySubmit : mode === 'key' ? 'Continue with security key' : 'Sign In'}
+                    {mode === 'key' ? 'Continue with security key' : 'Sign In'}
                   </>
                 )}
               </Button>

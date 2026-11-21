@@ -14,7 +14,6 @@
  * message twice.
  */
 import { groupMessagingManager } from '@/lib/group-messaging-manager';
-import { GroupMessageTypeTS } from '@/types/workspace-protocol';
 import type { GroupMessage } from '@/types/workspace-entities';
 import type { GroupFileShare } from '@/types/group-file-share';
 
@@ -32,7 +31,7 @@ export interface PeerGroupDelivery {
   senderName: string;
   content: string;
   timestamp: number;
-  replyTo?: string;
+  reply_to?: string;
   /** A shared file; see group-file-codec. */
   fileShare?: GroupFileShare;
 }
@@ -43,10 +42,10 @@ export function deliverPeerGroupMessage(delivery: PeerGroupDelivery): void {
     group_id: delivery.groupId,
     sender_id: delivery.senderId,
     sender_name: delivery.senderName,
-    message_type: GroupMessageTypeTS.Text as unknown as GroupMessage['message_type'],
+    message_type: 'Text',
     content: delivery.content,
     timestamp: BigInt(delivery.timestamp),
-    reply_to: delivery.replyTo ?? null,
+    reply_to: delivery.reply_to ?? null,
     reply_count: 0,
     mentions: [],
     edited_at: null,

@@ -15,7 +15,7 @@
  * script on a host, as everyone does locally, cannot show it.
  */
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -25,7 +25,30 @@ const COMPOSE = 'docker-compose.yml';
 
 const read = (path) => readFileSync(join(ROOT, path), 'utf8');
 
-const invoked = [...read(SCRIPT).matchAll(/^\s*node "\$WORKSPACE_ROOT\/([^"]+)"/gm)].map((m) => m[1]);
+// The script and every file it `source`s (scripts/lib/wasm-pkg.sh holds the build and
+// the stamp now): a sourced file must be in the image too, and its node calls count.
+const sourced = [...read(SCRIPT).matchAll(/^\s*(?:source|\.) "\$WORKSPACE_ROOT\/([^"]+)"/gm)].map((m) => m[1]);
+// `node "$WORKSPACE_ROOT/..."` anywhere on a line, a command substitution included:
+// `remap="$(node "$WORKSPACE_ROOT/scripts/remap-path-env.mjs" ...)"` was invisible to the
+// old line-start pattern, so the image lacked it and the check passed.
+const nodeCalls = /(?:^|[\s(])node "\$WORKSPACE_ROOT\/([^"]+)"/gm;
+const direct = [SCRIPT, ...sourced].flatMap((file) => [...read(file).matchAll(nodeCalls)].map((m) => m[1]));
+// What those scripts import, relatively, at any depth: node needs it in the image too.
+const imported = [];
+for (const file of direct) {
+  const queue = [file];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    for (const m of read(current).matchAll(/\bfrom '(\.{1,2}\/[^']+)'/g)) {
+      const next = relative(ROOT, resolve(ROOT, dirname(current), m[1]));
+      if (!imported.includes(next)) {
+        imported.push(next);
+        queue.push(next);
+      }
+    }
+  }
+}
+const invoked = [...direct, ...imported, ...sourced];
 const copied = [...read(DOCKERFILE).matchAll(/^COPY\s+\.\/(\S+)/gm)].map((m) => m[1]);
 
 const compose = read(COMPOSE);
@@ -38,7 +61,7 @@ const mounted = [...service[1].matchAll(/^\s+- \.\/([^:]+):\/workspace\/\1(?::\w
 
 // A script this scan cannot see looks exactly like a passing scan.
 if (invoked.length === 0) {
-  console.error(`check-sync-image-has-its-scripts: found no \`node "$WORKSPACE_ROOT/..."\` call in ${SCRIPT}; its shape changed.`);
+  console.error(`check-sync-image-has-its-scripts: found no \`node "$WORKSPACE_ROOT/..."\` call in ${SCRIPT} or what it sources; its shape changed.`);
   process.exit(1);
 }
 
@@ -52,4 +75,4 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-console.log(`  ${invoked.length} script(s) sync-wasm-clients.sh runs with node are in the sync image  ok`);
+console.log(`  ${invoked.length} script(s) sync-wasm-clients.sh sources or runs with node are in the sync image  ok`);

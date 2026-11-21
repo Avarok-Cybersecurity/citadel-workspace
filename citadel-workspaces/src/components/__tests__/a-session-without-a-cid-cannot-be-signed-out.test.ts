@@ -17,7 +17,6 @@
  */
 import { describe, it, expect } from 'vitest';
 import { disconnectRefusal, signOutRefusal } from '../orphan-session-disconnect';
-import { SESSION_OWNED_ELSEWHERE } from '@/lib/sessions/claim-session';
 
 describe('signing out of a session', () => {
   it('is refused, with a reason, when the session has no CID', () => {
@@ -45,13 +44,6 @@ describe('signing out of a session', () => {
 });
 
 describe('signing out a session this connection does not own', () => {
-  it('refuses when another tab has it', () => {
-    // The one case where refusing is right: somebody is using it.
-    expect(signOutRefusal({ status: 'owned-by-another-tab', instanceId: 'tab-2' })).toBe(
-      SESSION_OWNED_ELSEWHERE.description,
-    );
-  });
-
   it('proceeds once the claim succeeded', () => {
     // Claiming is what makes the service's ownership gate permit the
     // Disconnect. Without it the request was refused every time -- in silence

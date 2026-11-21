@@ -1,7 +1,7 @@
 /**
  * A question that was never asked is not the answer "no".
  *
- * Round 362 wired the office composer to `Permission.SendMessages`, and got the
+ * Round 362 wired the office composer to `'SendMessages'`, and got the
  * absent cases right in two places out of three: `loading` (nobody has answered
  * yet) and `unanswered` (the retry budget ran out) both count as allowed.
  *

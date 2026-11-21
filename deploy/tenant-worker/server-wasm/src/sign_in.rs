@@ -127,6 +127,7 @@ fn kind_name(kind: AdmissionKind) -> &'static str {
     match kind {
         AdmissionKind::SignIn => "SignIn",
         AdmissionKind::Register => "Register",
+        AdmissionKind::Recover => "Recover",
     }
 }
 

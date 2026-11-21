@@ -53,10 +53,10 @@ describe('a document whose hash does not match', () => {
   });
 
   it('renders an unsaved buffer, which no hash can match', async () => {
-    // While editing, the content is the user's own typing. Passing undefined is
+    // While editing, the content is the user's own typing. Passing null is
     // how BaseOffice says "not the stored document"; refusing to render
     // someone's own draft would be absurd.
-    const { result } = renderHook(() => useCompiledMdx('# Draft', components, undefined, false));
+    const { result } = renderHook(() => useCompiledMdx('# Draft', components, null, false));
 
     await waitFor(() => expect(result.current.compiled).not.toBeNull());
     expect(result.current.renderError).toBeNull();

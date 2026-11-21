@@ -6,7 +6,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { usePermission } from '@/hooks/use-permission';
 import { permits } from '@/hooks/use-permission-result';
-import { Permission } from '@/lib/permissions-service/types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { describeFailure } from '@/lib/failure-message';
 import WorkspaceService from '@/lib/workspace-service';
@@ -29,7 +28,7 @@ export function MembersVisibilitySwitch({ entityType, entityId }: { entityType: 
   const { state } = useWorkspace();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const configures: boolean = permits(usePermission(WORKSPACE_ROOT_ID, Permission.EditWorkspaceConfig));
+  const configures: boolean = permits(usePermission(WORKSPACE_ROOT_ID, 'EditWorkspaceConfig'));
   const node: DomainNode | undefined = state.nodes[entityId];
   if (entityType === 'workspace' || !node || !configures) return null;
 

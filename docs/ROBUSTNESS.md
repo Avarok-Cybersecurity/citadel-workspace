@@ -5921,7 +5921,7 @@ the cleared message was absent after a reload, under a comment saying that is
 "the half that proves the PERSISTED pages were deleted". `toHaveCount(0)`
 immediately after a reload is true before anything renders — and this test clears
 the WHOLE transcript, so there is no surviving message to wait for either. Delete
-the on-disk removal in `lib/p2p/message-page-delete.ts`, keep only the in-memory
+the on-disk removal in `lib/p2p/message-page-delete.ts` (since removed: the agent keeps the store), keep only the in-memory
 clear, and it stayed green.
 
 It now sends a message after the reload and waits for it to arrive. That proves
@@ -11351,7 +11351,7 @@ to `inbound-revision.ts`, the mirror of `messenger-revision.ts`. 261 → 224.
 The control was then re-run **against the new module**, not the old path:
 
 ```
-src/lib/p2p/inbound-revision.ts::removeMessageFromPages  (0 allowed, 1 found)
+inbound-revision.ts::removeMessageFromPages  (0 allowed, 1 found; the file has since been removed)
 TRUE flags gate with control = 1
 TRUE flags gate reverted     = 0
 ```

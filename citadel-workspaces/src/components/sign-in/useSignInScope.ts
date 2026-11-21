@@ -28,7 +28,7 @@ export interface SignInScope {
 /** `server`/`choose`: the scope, held by the login handler, which names it on the Connect. */
 export function useSignInScope(
   server: string | null, choose: (server: string) => void,
-  username: string, offered: readonly string[], hints: readonly SignInHint[], legacy: readonly string[],
+  username: string, offered: readonly string[], hints: readonly SignInHint[],
 ): SignInScope {
   const [agent, setAgent] = useState<AccountHost[]>([]);
   useEffect((): (() => void) => {
@@ -37,12 +37,12 @@ export function useSignInScope(
     return (): void => { live = false; };
   }, []);
   const known: KnownAccount[] = useMemo((): KnownAccount[] => knownAccounts({
-    agent, stored: connectionManager.getStoredSessions().sessions, hints, device: legacy,
-  }), [agent, hints, legacy]);
+    agent, stored: connectionManager.getStoredSessions().sessions, hints,
+  }), [agent, hints]);
   return {
     server,
     choose,
-    rows: offeredRows(offered, hints, legacy, known, server),
+    rows: offeredRows(offered, hints, server),
     onServer: server === null ? 0 : accountsOnServer(known, server).length,
     typed: checkTypedAccount(known, username, server),
   };

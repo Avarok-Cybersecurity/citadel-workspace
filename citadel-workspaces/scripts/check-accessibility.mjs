@@ -26,9 +26,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { chromium } from 'playwright';
 import { AxeBuilder } from '@axe-core/playwright';
+import { freePort } from './lib/free-port.mjs';
+import { AGENT_OPTIONAL_SCREENS, serveSignInIssuer, signInScreens } from './lib/sign-in-world.mjs';
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = Number(process.env.A11Y_PORT ?? 4186);
+const PORT = await freePort(); // chosen per run: concurrent runs cannot collide (lib/free-port.mjs)
 const ORIGIN = `http://localhost:${PORT}`;
 // These checks drive the production bundle, where first-run onboarding is ON
 // (isOnboardingEnabled in src/lib/debug-config.ts). They exercise the
@@ -100,6 +102,7 @@ async function main() {
     // starts producing the overlaps and clipped labels axe can see.
     const context = await browser.newContext({ viewport: { width: 375, height: 667 } });
     await context.addInitScript(INSTALL_SCOPE);
+    await serveSignInIssuer(context, APP_ROOT);
     const page = await context.newPage();
 
     /** The wizard's second step, from a fresh load. Waits, never sleeps. */
@@ -270,6 +273,8 @@ async function main() {
       ['not-found', async () => {
         await page.goto(`${ORIGIN}/no-such-page`, { waitUntil: 'domcontentloaded' });
       }],
+      // "Sign in with Citadel": the install screen a visitor with no agent meets, and a refused link.
+      ...signInScreens(page, ORIGIN, APP_ROOT),
     ];
 
     /**
@@ -302,6 +307,8 @@ async function main() {
       'join/profile with a validation error': 'Create Your Profile',
       'connection-failed': 'Connection Failed',
       'not-found': 'document',
+      'sign-in-with-citadel/no-agent': 'document',
+      'sign-in-with-citadel/refused': 'document',
     };
     record(
       'every screen has an expected scope',
@@ -457,7 +464,7 @@ async function main() {
       // dismissal placed earlier left it standing over the form -- and the
       // walk then measured its seven buttons and passed, which is exactly the
       // reading this gate is supposed to make impossible.
-      if (name !== 'connection-failed') await dismissConnectionFailure(page);
+      if (name !== 'connection-failed' && !AGENT_OPTIONAL_SCREENS.has(name)) await dismissConnectionFailure(page);
       const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
       scanned += 1;
 

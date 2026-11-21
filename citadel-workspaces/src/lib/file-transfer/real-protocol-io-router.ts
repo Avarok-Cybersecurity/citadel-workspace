@@ -186,7 +186,7 @@ export class RealProtocolIORouter implements IFileTransferIORouter {
   }
 
   notifyStateChange(transfer: FileTransfer): void {
-    const peerCid: string = transfer.isIncoming ? transfer.senderCid : transfer.recipientCid;
+    const peerCid: string = transfer.isIncoming ? transfer.sender_cid : transfer.recipient_cid;
     p2pMessengerManager.updateFileTransferState(BigInt(peerCid), transfer.id, {
       transfer_state: toStoredState(transfer.state),
       transfer_progress: transfer.progress,

@@ -136,7 +136,7 @@ async function registerUser(page: Page, username: string, password: string): Pro
         await submitBtn.click();
         submitted = true;
         // Answers "Secure your account" (a post-quantum server's key and
-        // recovery codes) and waits for the workspace, instead of a blind 5s.
+        // recovery phrase) and waits for the workspace, instead of a blind 5s.
         await waitForRegistrationToSettle(page);
       }
     }

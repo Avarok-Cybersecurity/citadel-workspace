@@ -56,6 +56,10 @@ WASM_OPT_VERSION="$(wasm-opt --version | awk '{ print $3 }')"
 echo "Building cdoc-wasm's artefacts at $COMMIT (wasm-bindgen $CLI_BINDGEN, wasm-opt $WASM_OPT_VERSION)"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
+# Source paths mapped (the parent's scripts/lib/remap-paths.mjs, plus the checkout built from), so
+# the binaries carry no build machine's home directory; scripts/check-no-home-paths-shipped.mjs.
+REMAP_ENV="$(node "$UI/../scripts/remap-path-env.mjs" wasm32-unknown-unknown "$(cd "$DOCS" && pwd)=/citadel-docs")"
+export "$REMAP_ENV"
 "$DOCS/scripts/build-wasm.sh" "$STAGE"
 
 mkdir -p "$WASM_OUT" "$GLUE_OUT" "$FONT_OUT" "$PATTERN_OUT" "$(dirname "$MANIFEST_OUT")"

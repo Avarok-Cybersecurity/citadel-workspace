@@ -1,7 +1,8 @@
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use citadel_workspace_server_kernel::kernel::profile_limits::MAX_AVATAR_BASE64_LEN;
-use citadel_workspace_types::structs::{MetadataValue, User, UserRole};
+use citadel_workspace_types::structs::{MetadataValue, User};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{with_role, MEMBER_ROLE_ID};
 
 use common::workspace_test_utils::*;
 
@@ -26,7 +27,10 @@ async fn kernel_with_user() -> std::sync::Arc<
         .backend_tx_manager
         .insert_user(
             USER.to_string(),
-            User::new(USER.to_string(), "Stranger".to_string(), UserRole::Member),
+            with_role(
+                User::new(USER.to_string(), "Stranger".to_string()),
+                MEMBER_ROLE_ID,
+            ),
         )
         .await
         .expect("insert user");

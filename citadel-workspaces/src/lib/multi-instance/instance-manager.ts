@@ -97,25 +97,10 @@ class InstanceManager {
     return replacement;
   }
 
-  /**
-   * Take `lower` so a protocol-1 leader yields to this tab (legacy-v1-put-down.ts). Unlike a
-   * twin's reissue, the id given up was this tab's alone, so messages still addressed to it
-   * (acks and forwards in flight) are this tab's to answer: see isOwnInstanceId.
-   */
-  takeLowerInstanceId(lower: string): void {
-    // This tab's own registry entry moves with it, or the leader routes its CID to a dead id.
-    // (A twin's reissue leaves it: that key is the twin's id too, and the twin still holds it.)
-    this.formerIds.add(this._instanceId);
-    this.knownInstances.delete(this._instanceId);
-    this.replaceInstanceId(lower);
-    this.knownInstances.set(lower, this._cid);
-  }
-
   isOwnInstanceId(instanceId: string): boolean {
-    return instanceId === this._instanceId || this.formerIds.has(instanceId);
+    return instanceId === this._instanceId;
   }
 
-  private readonly formerIds: Set<string> = new Set<string>();
 
   private replaceInstanceId(replacement: string): void {
     // Storage refused; the replacement must still take effect for this document.

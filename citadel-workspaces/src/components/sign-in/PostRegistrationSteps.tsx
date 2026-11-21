@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type LazyExoticComponent } from 'react';
+import type { RecoveryPhrasePanel as RecoveryPhrasePanelComponent } from '@/components/recovery/RecoveryPhrasePanel';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDialogOverlay } from '@/hooks/use-dialog-overlay';
 import { stringToBytes } from '@/lib/utils/encoding-utils';
@@ -6,40 +7,41 @@ import { SIGN_IN_COPY } from '@/lib/sign-in/copy';
 import { tenantOf } from '@/lib/sign-in/factors';
 import type { AccountRef } from '@/lib/sign-in/types';
 import { AddSecurityKeyCard } from './AddSecurityKeyCard';
-import { RecoveryCodesPanel } from './RecoveryCodesPanel';
+import type { RecoveryPhrase } from '@/lib/recovery/secret';
 import { FinishSignInStep } from './FinishSignInStep';
 
-type Step = 'key' | 'codes' | 'sign-in';
+// Its own chunk: the phrase panel is met once per account, never on the landing path.
+const RecoveryPhrasePanel: LazyExoticComponent<typeof RecoveryPhrasePanelComponent> = lazy(() => import('@/components/recovery/RecoveryPhrasePanel').then((m) => ({ default: m.RecoveryPhrasePanel })));
+
+type Step = 'key' | 'phrase' | 'sign-in';
 
 /**
- * The steps, in order. Signed in: an optional key, then the codes. Registered
- * but not signed in (a workspace that checks spent the register token): the
- * codes first, then the sign-in with a fresh check, then the key -- which needs
- * the session. A server without post-quantum sign-in sends no codes and has no
- * keys to enrol, so only the sign-in, if any, is left.
+ * The steps, in order. Signed in: an optional key, then the recovery phrase.
+ * Registered but not signed in (a workspace that checks spent the register
+ * token): the phrase first, then the sign-in with a fresh check, then the key --
+ * which needs the session.
  */
-export function stepsFor(signedIn: boolean, hasCodes: boolean): Step[] {
-  if (!hasCodes) return signedIn ? [] : ['sign-in'];
-  return signedIn ? ['key', 'codes'] : ['codes', 'sign-in', 'key'];
+export function stepsFor(signedIn: boolean): Step[] {
+  return signedIn ? ['key', 'phrase'] : ['phrase', 'sign-in', 'key'];
 }
 
 /**
  * Right after an account is created: an optional security key and the recovery
- * codes (shown once), and on a workspace that asks for a human check, the
- * sign-in its spent register token could not make.
+ * phrase (shown once, then three of its words checked), and on a workspace that
+ * asks for a human check, the sign-in its spent register token could not make.
  */
-export function PostRegistrationSteps({ session, username, serverAddress, password, recoveryCodes, signIn, onDone }: {
+export function PostRegistrationSteps({ session, username, serverAddress, password, recoveryPhrase, signIn, onDone }: {
   /** The new account's session, or null while its sign-in still needs a fresh check. */
   session: bigint | null;
   username: string;
   serverAddress: string;
   /** The password just chosen: the step-up for the new account's first key. */
   password: string;
-  recoveryCodes: readonly string[];
+  recoveryPhrase: RecoveryPhrase;
   signIn: (admissionToken: string) => Promise<bigint>;
   onDone: (cid: bigint) => void;
 }): JSX.Element | null {
-  const [steps] = useState<Step[]>(() => stepsFor(session !== null, recoveryCodes.length > 0));
+  const [steps] = useState<Step[]>(() => stepsFor(session !== null));
   const [at, setAt] = useState<number>(0);
   const [cid, setCid] = useState<bigint | null>(session);
   const { ref, dialogProps } = useDialogOverlay({ label: 'Secure your account' });
@@ -68,7 +70,11 @@ export function PostRegistrationSteps({ session, username, serverAddress, passwo
               onFinished={next}
             />
           )}
-          {step === 'codes' && <RecoveryCodesPanel codes={recoveryCodes} account={username} onDone={next} />}
+          {step === 'phrase' && (
+            <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+              <RecoveryPhrasePanel words={recoveryPhrase} account={username} server={serverAddress} onDone={next} />
+            </Suspense>
+          )}
           {step === 'sign-in' && (
             <FinishSignInStep tenantAddress={serverAddress} signIn={signIn} onSignedIn={(signed: bigint) => { setCid(signed); next(); }} />
           )}

@@ -37,7 +37,7 @@ export interface PeerGroupMessageSummary {
   senderName: string;
   content: string;
   timestamp: number;
-  replyTo?: string;
+  reply_to?: string;
   /** The group's name, present only when its owner sent this. */
   groupName?: string;
   /** Present when this message announces a shared file; `content` then previews it. */
@@ -93,7 +93,7 @@ export function peerGroupMessageEvent(
     senderName: peerName(sender),
     content: decoded.content,
     timestamp: decoded.timestamp,
-    replyTo: decoded.reply_to,
+    reply_to: decoded.reply_to,
     groupName: ownerGivenName(notification, key, decoded),
   };
 }
@@ -111,7 +111,7 @@ function fileShareEvent(
   const sender: bigint | null = toCid(notification.peer_cid);
   if (sender === null) return null;
   const key: MessageGroupKey = notification.group_key as MessageGroupKey;
-  const fileShare: GroupFileShare = { ...fileInfoOf(envelope), senderCid: sender };
+  const fileShare: GroupFileShare = { ...fileInfoOf(envelope), sender_cid: sender };
   return {
     groupId: groupKeyToId(key),
     messageId: envelope.message_id,

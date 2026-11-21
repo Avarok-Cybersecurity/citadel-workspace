@@ -117,11 +117,11 @@ export class MessageAckHandler {
     updatedMessages: Array<{ peerCid: bigint; messageId: string; status: P2PMessage['status']; error?: string }>
   ): void {
     const ackedMessageTimestamp: number = ackedMessage.timestamp;
-    const ackedMessageSender: bigint = ackedMessage.senderCid;
+    const ackedMessageSender: bigint = ackedMessage.sender_cid;
 
     conversation.messages.forEach(earlierMsg => {
       if (
-        earlierMsg.senderCid === ackedMessageSender &&
+        earlierMsg.sender_cid === ackedMessageSender &&
         earlierMsg.timestamp < ackedMessageTimestamp &&
         earlierMsg.id !== ackedMessage.id &&
         (earlierMsg.status === 'sent' || earlierMsg.status === 'delivered')

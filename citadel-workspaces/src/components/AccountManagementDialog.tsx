@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { connectionManager } from '@/lib/connection';
 import { Clock, Wifi } from 'lucide-react';
-import type { ActiveSession, StoredSession } from '@/types/session-types';
+import type { StoredSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 import { debugLog } from '@/lib/debug-config';
 import { DeleteConfirmDialog, ClearAllConfirmDialog } from './AccountConfirmDialogs';
@@ -47,7 +48,7 @@ export function AccountManagementDialog({ isOpen, onClose, onRestoreFocus }: Acc
   const [liveAsked, setLiveAsked] = useState(false);
   const live: LiveSessions = useLiveSessions();
   const loadLive: () => Promise<void> = live.load;
-  const activeSessions: ActiveSession[] | null = live.sessions;
+  const activeSessions: SessionInformation[] | null = live.sessions;
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<{ username: string; serverAddress: string } | null>(null);
   const [clearAllConfirmOpen, setClearAllConfirmOpen] = useState(false);
@@ -104,7 +105,7 @@ export function AccountManagementDialog({ isOpen, onClose, onRestoreFocus }: Acc
   // connectionManager.switchAccount, which reconnects with a SAVED password --
   // and passwords are no longer saved -- and never claimed anything, so a
   // session open in another browser window could not be switched to at all.
-  const switchToLive = async (session: ActiveSession): Promise<void> => {
+  const switchToLive = async (session: SessionInformation): Promise<void> => {
     const [target] = withWorkspaceNames([session], storedSessions, readLastAccessed);
     if (!target) return;
     onClose();
@@ -180,7 +181,7 @@ export function AccountManagementDialog({ isOpen, onClose, onRestoreFocus }: Acc
                   <Clock className="h-4 w-4" />Saved Accounts ({storedSessions.length})
                 </h3>
                 {storedSessions.map((session) => {
-                  const liveSession: ActiveSession | undefined =
+                  const liveSession: SessionInformation | undefined =
                     activeSessions?.find(a => a.username === session.username && sessionIsOnServer(a, session.serverAddress));
                   return (
                     <AccountRow

@@ -35,32 +35,9 @@ export type {
   VirtualObjectMetadata,
 } from '@avarok/citadel-protocol-types';
 
-import type { ObjectTransferStatus, VirtualObjectMetadata } from '@avarok/citadel-protocol-types';
-
-// ============================================================================
-// Notification envelopes (match the generated typescript-client types)
-// ============================================================================
-
-export interface FileTransferRequestNotification {
-  cid: bigint;
-  peer_cid: bigint;
-  metadata: VirtualObjectMetadata;
-  request_id: string | null;
-}
-
-export interface FileTransferStatusNotification {
-  cid: bigint;
-  object_id: bigint;
-  success: boolean;
-  /** true if this is a response to our request */
-  response: boolean;
-  message: string | null;
-  request_id: string | null;
-}
-
-export interface FileTransferTickNotification {
-  cid: bigint;
-  peer_cid: bigint | null;
-  status: ObjectTransferStatus;
-  request_id: string | null;
-}
+// The notification envelopes are the generated agent types, re-exported for the router.
+export type {
+  FileTransferRequestNotification,
+  FileTransferStatusNotification,
+  FileTransferTickNotification,
+} from 'citadel-workspace-client-ts';

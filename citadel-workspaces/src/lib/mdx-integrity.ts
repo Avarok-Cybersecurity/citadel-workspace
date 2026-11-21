@@ -29,16 +29,14 @@
  */
 
 export type IntegrityVerdict =
-  /** Hash present and matching. Safe to execute. */
+  /** The hash matches. Safe to execute. */
   | { status: 'verified' }
-  /**
-   * The server stored no hash for this document. Not a failure: documents
-   * written before the field existed have none, and a client must be able to
-   * tell that from a mismatch.
-   */
-  | { status: 'unhashed' }
-  /** Hash present and different. Do not execute. */
+  /** The hash is different, or empty. Do not execute. */
   | { status: 'mismatch'; expected: string; actual: string };
+
+/** The hash of an empty document, for a node the client makes up with no content. */
+export const EMPTY_DOCUMENT_HASH: string =
+  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
 /** Hex-encoded SHA-256 of the UTF-8 bytes. Mirrors the Rust helper exactly. */
 export async function hashDocument(content: string): Promise<string> {
@@ -49,10 +47,8 @@ export async function hashDocument(content: string): Promise<string> {
 
 export async function verifyDocument(
   content: string,
-  expected: string | null | undefined,
+  expected: string,
 ): Promise<IntegrityVerdict> {
-  if (!expected) return { status: 'unhashed' };
-
   const actual: string = await hashDocument(content);
   // Not a constant-time comparison, deliberately: both values are public
   // properties of a document the caller already holds, so there is no secret

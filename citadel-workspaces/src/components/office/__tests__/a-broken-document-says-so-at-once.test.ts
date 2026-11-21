@@ -18,7 +18,7 @@ const BROKEN: string = '# Hello\n\n<SprintBoard />';
 
 describe('a document that stops rendering', () => {
   it('outside the editor, replaces the old render with the error', async () => {
-    const { result, rerender } = renderHook(({ src }: { src: string }) => useCompiledMdx(src, components, undefined, false), { initialProps: { src: GOOD } });
+    const { result, rerender } = renderHook(({ src }: { src: string }) => useCompiledMdx(src, components, null, false), { initialProps: { src: GOOD } });
     await waitFor(() => expect(result.current.compiled).not.toBeNull());
     rerender({ src: BROKEN });
     await waitFor(() => expect(result.current.renderError).not.toBeNull());
@@ -26,7 +26,7 @@ describe('a document that stops rendering', () => {
   });
 
   it('while editing, keeps the last good render so half-typed markup does not blank the page', async () => {
-    const { result, rerender } = renderHook(({ src }: { src: string }) => useCompiledMdx(src, components, undefined, true), { initialProps: { src: GOOD } });
+    const { result, rerender } = renderHook(({ src }: { src: string }) => useCompiledMdx(src, components, null, true), { initialProps: { src: GOOD } });
     await waitFor(() => expect(result.current.compiled).not.toBeNull());
     rerender({ src: BROKEN });
     await waitFor(() => expect(result.current.renderError).not.toBeNull());

@@ -77,6 +77,9 @@ mod messaging_trust;
 /// The workspace's role table: list, create, edit, delete.
 mod roles;
 
+/// Banning and unbanning a member.
+mod bans;
+
 /// A document node's update log, snapshot and awareness relay.
 mod documents;
 /// Secure links: create, list, delete, regenerate, extend, resolve.

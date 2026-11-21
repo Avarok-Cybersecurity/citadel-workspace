@@ -30,27 +30,27 @@ export function unreachableReason(peerName: string): string {
 
 export async function sendFileWithNativePicker(
   deps: LifecycleDeps,
-  recipientCid: string,
+  recipient_cid: string,
   title?: string,
   allowedExtensions?: string[]
 ): Promise<string> {
-  const senderCid: bigint | null = await deps.io.getCurrentCid();
-  if (!senderCid) {
+  const sender_cid: bigint | null = await deps.io.getCurrentCid();
+  if (!sender_cid) {
     throw new Error('No active session');
   }
-  // Only an agent that SAID it has no picker is refused: one that said nothing is an older agent.
-  // The words are the ones the send dialog already reads as "no picker here".
+  // An agent without a picker is refused before any dialog is asked for. The words are the
+  // ones the send dialog already reads as "no picker here".
   if ((await deps.agentNativePicker?.()) === false) throw new Error('File picker not available: this agent has no desktop session to show it in');
 
   // Opened while the user picks; its answer decides what happens to the pick. It was
   // awaited and dropped, so a send to an unreachable peer went ahead regardless.
-  const peerOnline: boolean | null = deps.queue.peerOnlineStatus(BigInt(recipientCid));
-  const opening: Promise<boolean> = peerOnline === false ? Promise.resolve(false) : openChannelBeforeSending(deps, recipientCid);
+  const peerOnline: boolean | null = deps.queue.peerOnlineStatus(BigInt(recipient_cid));
+  const opening: Promise<boolean> = peerOnline === false ? Promise.resolve(false) : openChannelBeforeSending(deps, recipient_cid);
   debugLog('transfer-lifecycle', 'Starting native file picker flow');
 
   const fileInfo: { file_path: string; file_name: string; file_size: bigint; } = (await deps.io.executeIntent({
     type: 'pick-file',
-    cid: senderCid,
+    cid: sender_cid,
     title,
     allowedExtensions,
   })) as { file_path: string; file_name: string; file_size: bigint };
@@ -62,13 +62,13 @@ export async function sendFileWithNativePicker(
   });
 
   if (shouldQueue(peerOnline, await opening)) {
-    return showUnreachable(deps, senderCid, recipientCid, fileInfo.file_name, Number(fileInfo.file_size));
+    return showUnreachable(deps, sender_cid, recipient_cid, fileInfo.file_name, Number(fileInfo.file_size));
   }
 
   return sendAgentFile(
     deps,
-    senderCid,
-    recipientCid,
+    sender_cid,
+    recipient_cid,
     { path: fileInfo.file_path, name: fileInfo.file_name, size: Number(fileInfo.file_size) },
     crypto.randomUUID(),
   );
@@ -76,12 +76,12 @@ export async function sendFileWithNativePicker(
 
 /** The picked file's bubble, failed with the reason; nothing is offered or sent. */
 async function showUnreachable(
-  deps: LifecycleDeps, senderCid: bigint, recipientCid: string, name: string, size: number,
+  deps: LifecycleDeps, sender_cid: bigint, recipient_cid: string, name: string, size: number,
 ): Promise<string> {
   const transfer: FileTransfer = {
     id: crypto.randomUUID(), fileName: name, fileSize: size, fileType: getMimeType(name),
-    state: 'error', errorMessage: unreachableReason(deps.queue.peerName(recipientCid)), progress: 0,
-    senderCid: senderCid.toString(), recipientCid, createdAt: Date.now(), updatedAt: Date.now(),
+    state: 'error', errorMessage: unreachableReason(deps.queue.peerName(recipient_cid)), progress: 0,
+    sender_cid: sender_cid.toString(), recipient_cid, createdAt: Date.now(), updatedAt: Date.now(),
     expiresAt: Date.now() + FILE_TRANSFER_REQUEST_TTL_MS, isIncoming: false,
   };
   deps.state.setTransfer(transfer);

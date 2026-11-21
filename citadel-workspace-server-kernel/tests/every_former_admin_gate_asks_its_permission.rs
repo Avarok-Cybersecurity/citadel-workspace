@@ -12,8 +12,7 @@
 
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use citadel_workspace_types::roles::GUEST_ROLE_ID;
-use citadel_workspace_types::roles_protocol::MemberRole;
-use citadel_workspace_types::structs::{NodeEntityType, Permission, TreeSchema, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, TreeSchema};
 use citadel_workspace_types::{
     GroupMessageType, UpdateOperation, WorkspaceProtocolRequest as Req,
     WorkspaceProtocolResponse as Res,
@@ -21,6 +20,7 @@ use citadel_workspace_types::{
 use common::member_test_utils::{
     insert_user_with_role, join_root, member_holding, seed_role, GateKernel as Kernel,
 };
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_PASSWORD, TEST_ADMIN_USER_ID};
 use std::sync::Arc;
 
@@ -44,7 +44,7 @@ async fn holder_and_lacker(permission: Permission) -> Arc<Kernel> {
     seed_role(&kernel, "role-without", 240, BASE).await;
     member_holding(&kernel, "with", "role-with").await;
     member_holding(&kernel, "without", "role-without").await;
-    insert_user_with_role(&kernel, "someone", UserRole::Member).await;
+    insert_user_with_role(&kernel, "someone", MEMBER_ROLE_ID).await;
     join_root(&kernel, "someone").await;
     kernel
 }
@@ -100,7 +100,7 @@ async fn changing_a_role_takes_manage_roles() {
     let kernel = holder_and_lacker(Permission::ManageRoles).await;
     let request = Req::UpdateMemberRole {
         user_id: "someone".to_string(),
-        role: MemberRole::Id(GUEST_ROLE_ID.to_string()),
+        role: GUEST_ROLE_ID.to_string(),
         metadata: None,
     };
     gate(&kernel, &request, |r| {

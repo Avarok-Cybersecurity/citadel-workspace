@@ -41,9 +41,10 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { spawnPreview, dismissConnectionFailure } from './lib/preview-world.mjs';
 import { mockControlPlane } from './lib/create-control-plane-mock.mjs';
 import { walkCoupons } from './lib/coupon-walkthrough.mjs';
+import { freePort } from './lib/free-port.mjs';
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = Number(process.env.WALKTHROUGH_PORT ?? 4191);
+const PORT = await freePort(); // chosen per run: concurrent runs cannot collide (lib/free-port.mjs)
 const ORIGIN = `http://localhost:${PORT}`;
 const OUT = resolve(process.argv[2] ?? join(APP_ROOT, 'walkthrough-shots'));
 const VIEWPORTS = [

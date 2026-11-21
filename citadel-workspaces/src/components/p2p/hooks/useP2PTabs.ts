@@ -21,11 +21,10 @@ export interface ChatDocumentMade {
   delivered: Promise<void>;
 }
 
-/** A document a chat message names: its id, its title, and whether the reader sent the message (made it). */
+/** A document a chat message names: its id and its title. */
 export interface ChatDocumentLink {
   readonly documentId: string;
   readonly title: string;
-  readonly mine: boolean;
 }
 
 interface Invitation {
@@ -45,8 +44,6 @@ function whenRecorded(send: (onRecorded: () => void) => Promise<unknown>): Invit
 /** Opens nothing: a conversation without a document port shows no document control to reach it. */
 const NO_OPENING: OpeningPorts = {
   opener: (): never => { throw new Error('This conversation has no live documents'); },
-  migration: (): never => { throw new Error('This conversation has no live documents'); },
-  report: (): void => undefined,
 };
 
 interface UseP2PTabsOptions {
@@ -131,10 +128,9 @@ export function useP2PTabs({ documents: port, currentUserCid }: UseP2PTabsOption
     setActiveTabId(newTab.id);
   }, [currentUserCid, openDocument]);
 
-  const handleOpenDocument: (link: ChatDocumentLink) => void = useCallback(({ documentId, title, mine }: ChatDocumentLink): void => {
+  const handleOpenDocument: (link: ChatDocumentLink) => void = useCallback(({ documentId, title }: ChatDocumentLink): void => {
     if (port === null) return;
-    // Whoever sent the message that names the document made it: the creator's move is the document's.
-    showDocument({ docId: documentId, title, creator: mine ? 'self' : 'peer', seed: null });
+    showDocument({ docId: documentId, title, seed: null });
   }, [showDocument, port]);
 
   const handleCreateDocument: (input: NewChatDocumentInput) => Promise<ChatDocumentMade> = useCallback(async ({ app, title, initialContent }: NewChatDocumentInput): Promise<ChatDocumentMade> => {
@@ -157,7 +153,7 @@ export function useP2PTabs({ documents: port, currentUserCid }: UseP2PTabsOption
     // ("Could not create the document…"); swallowing it here made that branch unreachable.
     await invitation.recorded;
     // The typed message becomes the document's first paragraphs, written by the canvas as it opens.
-    showDocument({ docId, title: checked.title, creator: 'self', seed: initialContent.trim() === '' ? null : initialContent });
+    showDocument({ docId, title: checked.title, seed: initialContent.trim() === '' ? null : initialContent });
     return { delivered: invitation.delivered };
   }, [port, currentUserCid, showDocument]);
 

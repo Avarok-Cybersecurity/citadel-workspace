@@ -135,6 +135,12 @@ pub async fn start_native_server(
 /// `ServerIdentityChallenge` under that name. Bound on the first address `localhost` resolves
 /// to. Returns the name and its key's fingerprint, which a member is handed out of band.
 pub async fn start_server_named_localhost() -> (String, String) {
+    start_server_named_localhost_taking("require_canonical").await
+}
+
+/// As [`start_server_named_localhost`], whose `registration_names` is `names` (`allow_legacy`
+/// also takes an account registered with a typed password).
+pub async fn start_server_named_localhost_taking(names: &str) -> (String, String) {
     let first = std::net::ToSocketAddrs::to_socket_addrs("localhost:0")
         .expect("resolve localhost")
         .next()
@@ -145,7 +151,7 @@ pub async fn start_server_named_localhost() -> (String, String) {
         .expect("addr");
     let name = format!("localhost:{}", addr.port());
     let dir = sign_in_dir();
-    let identity = pinned_identity_toml(&dir, &name, "require_canonical");
+    let identity = pinned_identity_toml(&dir, &name, names);
     let parsed: toml::Value = toml::from_str(&identity).expect("[identity]");
     let config: IdentityConfig = parsed["identity"].clone().try_into().expect("[identity]");
     let key = native_identity(Some(&config), 0).expect("the server's identity");
@@ -193,6 +199,13 @@ async fn start_native_server_on(
             }
             None => citadel_workspace_server_kernel::run_server_with_base_path(config, None).await,
         };
+        // As a test ends, its runtime cancels the server's own tasks, and the server can see that
+        // before its task is dropped: an end the test caused, not a server that died under it.
+        // The SDK reports it as tokio's JoinError text. A panic here exits the process
+        // (citadel_logging's hook), failing whichever test was finishing.
+        if matches!(&result, Err(e) if e.to_string().ends_with("was cancelled")) {
+            return;
+        }
         panic!("the production server ended: {result:?}");
     });
     for _ in 0..200 {

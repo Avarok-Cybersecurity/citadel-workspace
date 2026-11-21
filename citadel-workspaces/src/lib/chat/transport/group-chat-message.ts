@@ -50,7 +50,7 @@ export function groupChatMessage(message: GroupMessage, self: ChatSelf | null, s
     index: 0,
     status,
     ...kindOf(message.message_type, message.content),
-    ...(message.reply_to !== null ? { replyTo: message.reply_to } : {}),
+    ...(message.reply_to !== null ? { reply_to: message.reply_to } : {}),
     ...(message.edited_at !== null ? { edited_at: Number(message.edited_at) } : {}),
     ...(message.reactions !== undefined ? { reactions: message.reactions } : {}),
     author: groupAuthor(message, self),

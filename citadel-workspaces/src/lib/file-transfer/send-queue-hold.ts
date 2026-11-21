@@ -39,7 +39,7 @@ export async function holdUntilOnline(deps: HoldDeps, transfer: FileTransfer, fi
   const refusal: string | null = queueRefusal(deps.state.getAllTransfers(), file.size);
   if (refusal !== null) throw new Error(refusal);
   transfer.state = 'queued';
-  transfer.waitingFor = deps.queue.peerName(transfer.recipientCid);
+  transfer.waitingFor = deps.queue.peerName(transfer.recipient_cid);
   deps.state.setTransfer(transfer);
   transfer.bytesKept = await deps.queue.hold(transfer.id, file);
   await deps.saveTransfer(transfer);

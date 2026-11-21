@@ -8,7 +8,6 @@
 // Types
 export type {
   Peer,
-  PeerInfoResponse,
   PeerRegistrationOptions,
   PendingRequestEntry,
   SessionSecuritySettings,
@@ -25,7 +24,6 @@ export {
   DEFAULT_LIST_RETRIES,
   PEER_REGISTER_TIMEOUT_MS,
   CID_RESOLUTION_TIMEOUT_MS,
-  toGeneratedSecuritySettings,
 } from './constants';
 
 // Discovery functions

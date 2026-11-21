@@ -4,6 +4,7 @@
  * nothing here may depend on "Office" or "Room".
  */
 import { beforeAll, describe, expect, it } from 'vitest';
+import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 import { setTreeSchema } from '@/lib/entity-type-registry';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import type { DomainNode, TreeSchema } from '@/components/layout/sidebar/tree-node-types';
@@ -19,7 +20,7 @@ const config = (type: string, label: string): TreeSchema['entity_type_configs'][
 function node(id: string, parent: string | null, type: string, name: string): DomainNode {
   return {
     id, parent_id: parent, entity_type: { Child: type }, depth: 0, name, description: '', owner_id: '',
-    members: [], children: [], mdx_content: '', mdx_content_hash: null, rules: null, chat_enabled: false,
+    members: [], children: [], mdx_content: '', mdx_content_hash: EMPTY_DOCUMENT_HASH, rules: null, chat_enabled: false,
     chat_channel_id: null, default_permissions: {} as DomainNode['default_permissions'], metadata: [],
     allowed_child_types: [], is_default: false, created_at: 0n, updated_at: 0n,
   };
@@ -31,7 +32,7 @@ const NODES: Record<string, DomainNode> = Object.fromEntries([
   node('standup', 'hq', 'Room', 'Standup'),
 ].map((n: DomainNode) => [n.id, n]));
 
-const loaded = (...permissions: string[]): PermissionsLoad => ({ status: 'loaded', permissions: new Set(permissions), role: 'Member', roleId: 'member' });
+const loaded = (...permissions: string[]): PermissionsLoad => ({ status: 'loaded', permissions: new Set(permissions), roleId: 'member' });
 
 beforeAll(() => {
   setTreeSchema({ entity_type_configs: [config('Workspace', 'Company'), config('Office', 'Studio'), config('Room', 'Booth')] } as unknown as TreeSchema);

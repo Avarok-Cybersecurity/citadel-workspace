@@ -26,8 +26,6 @@ export type CdocChatSync =
       readonly kind: 'hello';
       readonly state_vector: Uint8Array;
       readonly answer: boolean;
-      /** What the document was migrated from, when it was (null: created in Citadel Docs). */
-      readonly migration_origin: string | null;
       readonly title: CdocChatTitleStamp | null;
     }
   /** One chunk of the answer to a hello, a valid update on its own: `index` of `count`. */
@@ -51,7 +49,7 @@ export interface CdocChatSyncPayload {
 export interface CdocChatCommandEvent {
   readonly peerCid: bigint;
   /** The notification's recipient session; absent on the legacy PeerMessage path. */
-  readonly recipientCid: bigint | undefined;
+  readonly recipient_cid: bigint | undefined;
   readonly payload: CdocChatSyncPayload;
 }
 

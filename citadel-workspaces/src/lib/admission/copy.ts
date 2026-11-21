@@ -38,4 +38,5 @@ export const ADMISSION_COPY: {
 } as const;
 
 /** Must match what the workspace server's siteverify expects for each form. */
-export const ADMISSION_ACTION: { readonly signIn: 'sign-in'; readonly register: 'register' } = { signIn: 'sign-in', register: 'register' } as const;
+export const ADMISSION_ACTION: { readonly signIn: 'sign-in'; readonly register: 'register'; readonly recover: 'recover' } =
+  { signIn: 'sign-in', register: 'register', recover: 'recover' } as const;

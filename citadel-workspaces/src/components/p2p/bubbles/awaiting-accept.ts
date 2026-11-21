@@ -1,9 +1,9 @@
 /**
  * Who a held message is waiting for, and the words for it.
  *
- * A message to someone who has not accepted your request is held, not sent
- * (lib/p2p/held-until-registered.ts). Its bubble says so, and the composer says
- * so before you write it, in the same words.
+ * A message to someone who has not accepted your request waits until they do.
+ * Its bubble says so, and the composer says so before you write it, in the same
+ * words.
  *
  * `null` means nobody: the chat is with a contact, or it is a group chat, which
  * has no registration to wait for. That is also what a bubble outside a direct

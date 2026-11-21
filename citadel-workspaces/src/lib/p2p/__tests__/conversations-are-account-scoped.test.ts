@@ -19,11 +19,7 @@ vi.mock('@/lib/multi-instance/instance-manager', async (importOriginal: () => Pr
   return { ...real, instanceManager: instanceManagerWith(real.instanceManager, { get cid(): bigint | null { return cidRef.current; } }) };
 });
 
-import {
-  conversationPrefix,
-  legacyConversationPrefix,
-  hasLegacyFallback,
-} from '../message-page-keys';
+import { conversationPrefix } from '../message-page-keys';
 
 const PEER: bigint = 999n;
 
@@ -46,14 +42,7 @@ describe('conversation storage keys', () => {
     expect(key).toContain('999');
   });
 
-  it('falls back to the legacy shape when there is no session yet', () => {
-    // A record filed under a guessed account is worse than an unscoped one.
-    expect(conversationPrefix(PEER)).toBe(legacyConversationPrefix(PEER));
-    expect(hasLegacyFallback(PEER)).toBe(false);
-  });
-
-  it('reports a legacy fallback only when the key actually differs', () => {
-    cidRef.current = 111n;
-    expect(hasLegacyFallback(PEER)).toBe(true);
+  it('refuses to name a key with no signed-in account, rather than an unscoped one', () => {
+    expect(() => conversationPrefix(PEER)).toThrow(/No signed-in account/);
   });
 });

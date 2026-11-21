@@ -16,7 +16,7 @@ export function stagedPaths(repo, prefix) {
 }
 
 /** The branch a new remote branch is compared against: the remote's default, which a clone records. */
-function remoteDefault(repo, remote) {
+export function remoteDefault(repo, remote) {
   try {
     return git(repo, 'symbolic-ref', '--quiet', `refs/remotes/${remote}/HEAD`);
   } catch {
@@ -26,31 +26,42 @@ function remoteDefault(repo, remote) {
 }
 
 /**
+ * The commits a push introduces to `remote`: reachable from `localSha` and from no ref of that
+ * remote. Each was never gated by a push; every other commit was, when it reached the remote.
+ * `boundary` holds the remote-known parents they grow from: empty when no ancestor is on the remote.
+ */
+function newCommits(repo, remote, localSha) {
+  const lines = list(git(repo, 'rev-list', '--boundary', localSha, '--not', `--remotes=${remote}`));
+  return {
+    commits: lines.filter((l) => !l.startsWith('-')),
+    boundary: lines.filter((l) => l.startsWith('-')).map((l) => l.slice(1)),
+  };
+}
+
+/**
  * Paths changed by the refs a pre-push hook is given on stdin
  * (`<local ref> <local sha> <remote ref> <remote sha>` per line).
  *
- * Against the remote's current sha when the remote has the branch and this clone has that
- * commit; against the merge base with the remote's default branch when it is new. A deletion
- * changes nothing.
+ * Only the commits no ref of the remote has yet are judged, diffed from the remote-known
+ * commits they grow from. A new branch cut from a release branch used to be diffed against the
+ * remote's DEFAULT branch, so the release's own commits -- already gated when they were pushed --
+ * were judged again as this push's: a UI-only branch ran the whole agent test suite. A branch
+ * whose history the remote has none of still falls back to the merge base with the remote's
+ * default branch. A deletion, or a push of commits the remote already has, changes nothing.
  */
 export function pushedPaths(repo, prefix, remote, stdin) {
   const paths = new Set();
   const refs = [];
   for (const line of list(stdin)) {
-    const [localRef, localSha, remoteRef, remoteSha] = line.split(/\s+/);
+    const [localRef, localSha, remoteRef] = line.split(/\s+/);
     if (ZERO.test(localSha)) continue;
-    let base = null;
-    if (!ZERO.test(remoteSha)) {
-      try {
-        git(repo, 'cat-file', '-e', `${remoteSha}^{commit}`);
-        base = remoteSha;
-      } catch {
-        // The remote moved past anything fetched here; compare with the merge base instead.
-      }
-    }
-    if (base === null) base = git(repo, 'merge-base', localSha, remoteDefault(repo, remote));
-    for (const p of list(git(repo, 'diff', '--name-only', base, localSha))) paths.add(prefix + p);
     refs.push({ localRef, localSha, remoteRef });
+    const { commits, boundary } = newCommits(repo, remote, localSha);
+    if (commits.length === 0) continue;
+    const bases = boundary.length > 0 ? boundary : [git(repo, 'merge-base', localSha, remoteDefault(repo, remote))];
+    for (const base of bases) {
+      for (const p of list(git(repo, 'diff', '--name-only', base, localSha))) paths.add(prefix + p);
+    }
   }
   return { paths: [...paths], refs };
 }

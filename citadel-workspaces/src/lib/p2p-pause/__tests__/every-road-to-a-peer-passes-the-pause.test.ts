@@ -58,10 +58,7 @@ describe('the roads to a peer', () => {
     expect(callersOf(/p2pOps\.sendP2PMessage(Bytes)?\(/)).toEqual(['lib/websocket-service/core.ts']);
   });
 
-  it('the WASM reliable send has only its two known callers', () => {
-    expect(callersOf(/client\??\.sendP2PMessageReliable\(/)).toEqual([
-      'lib/multi-instance/leader-proxy-handlers.ts',
-      'lib/websocket/messenger-operations.ts',
-    ]);
+  it('the agent’s reliable send has only its one known caller, beneath the pause', () => {
+    expect(callersOf(/agentConversations\.sendReliable\(/)).toEqual(['lib/websocket/messenger-operations.ts']);
   });
 });

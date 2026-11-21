@@ -7,12 +7,12 @@
  * (connect without a relay) and is retried on the next call.
  */
 import { warnLog } from '@/lib/debug-config';
-import type { TurnConfig } from '@/types/ice-servers';
+import type { PeerTurnConfig } from 'citadel-workspace-client-ts';
 import type { TurnSource } from './peer-connect-turn';
 
 export function lazyTurnSource(load: () => Promise<TurnSource>): TurnSource {
   let loading: Promise<TurnSource> | null = null;
-  return async (cid: bigint): Promise<TurnConfig | null> => {
+  return async (cid: bigint): Promise<PeerTurnConfig | null> => {
     loading ??= load();
     let source: TurnSource;
     try {

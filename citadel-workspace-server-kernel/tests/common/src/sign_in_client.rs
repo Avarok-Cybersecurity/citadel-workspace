@@ -1,6 +1,7 @@
 //! A client node whose remote a test drives directly: register, sign in with chosen factors,
 //! manage those factors. The SDK's own sign-in suites drive theirs the same way.
 
+use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_sdk::async_trait;
 use citadel_sdk::prelude::*;
 use std::future::Future;
@@ -65,6 +66,7 @@ where
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()
+        .as_test_node()
         .build(kernel)
         .expect("client node");
     match tokio::time::timeout(MUST_FINISH_WITHIN, client).await {
@@ -75,6 +77,10 @@ where
     }
 }
 
+/// What these tests' clients demand of a test server's certificate: the in-process servers
+/// present self-signed ones, as the agent's workspace servers do (its `SERVER_CERTIFICATE`).
+pub const TEST_SERVER_CERTIFICATE: CertVerification = CertVerification::SelfSignedAccepted;
+
 /// Signs `user` in with `factors`.
 pub async fn sign_in(
     remote: &NodeRemote<StackedRatchet>,
@@ -82,7 +88,10 @@ pub async fn sign_in(
     factors: SignInFactors,
 ) -> Result<CitadelClientServerConnection<StackedRatchet>, NetworkError> {
     remote
-        .connect_with_defaults(AuthenticationRequest::sign_in(user.to_string(), factors))
+        .connect_with_defaults(
+            AuthenticationRequest::sign_in(user.to_string(), factors),
+            TEST_SERVER_CERTIFICATE,
+        )
         .await
 }
 

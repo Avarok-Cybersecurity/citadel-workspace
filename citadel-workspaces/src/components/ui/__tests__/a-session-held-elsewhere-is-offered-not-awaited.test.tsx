@@ -28,9 +28,8 @@ import { greetAs } from '@/lib/agent-conversations/__tests__/agent-greeting';
 // rather than inside the test after the click.
 import '@/components/TakeoverSignIn';
 
-// The agent that refused the claim greeted this tab's socket first, as every
-// agent does; this one predates agent hosting, so the takeover is the offer.
-beforeAll(() => greetAs('older'));
+// The agent that refused the claim greeted this tab's socket first, as every agent does.
+beforeAll(() => greetAs());
 
 function renderLoader(): void {
   const state: WorkspaceState = { nodes: {}, members: {}, loading: { workspace: true, members: false, nodes: false } } as unknown as WorkspaceState;
@@ -48,15 +47,16 @@ function renderLoader(): void {
 describe('a session another browser holds', () => {
   it('is offered for takeover with the same prompt the switcher uses', async () => {
     renderLoader();
-    expect(await screen.findByRole('alertdialog', { name: /alice0924 is open in another browser window/i })).toBeInTheDocument();
+    expect(await screen.findByRole('alertdialog', { name: /alice0924 is open in another window/i })).toBeInTheDocument();
     expect(screen.queryByText(/taking longer than expected/i)).toBeNull();
     expect(screen.getByTestId('session-held-elsewhere')).toBeInTheDocument();
   });
 
-  it('opens sign-in with the username filled in when taken over', async () => {
+  it('offers to open it here too, and to move it with the username filled in', async () => {
     renderLoader();
     await screen.findByRole('alertdialog');
-    fireEvent.click(screen.getByRole('button', { name: 'Use it here' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open here too' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Move it here instead' }));
     expect(await screen.findByDisplayValue('alice0924')).toBeInTheDocument();
   });
 });

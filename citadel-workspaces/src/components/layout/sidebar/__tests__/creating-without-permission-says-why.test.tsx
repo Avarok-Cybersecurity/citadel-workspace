@@ -30,8 +30,9 @@ vi.mock('@/hooks/use-permission', () => ({
 }));
 
 import { HierarchySidebar } from '../HierarchySidebar';
+import type { DomainNode } from 'citadel-workspace-client-ts';
 
-const NODE: { id: string; name: string; entity_type: { Child: string }; parent_id: null; children: string[]; allowed_child_types: string[] } = {
+const NODE: Pick<DomainNode, 'id' | 'name' | 'entity_type' | 'parent_id' | 'children' | 'allowed_child_types'> = {
   id: 'office-1', name: 'Engineering', entity_type: { Child: 'Office' }, parent_id: null, children: [], allowed_child_types: ['Room'],
 };
 

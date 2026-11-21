@@ -22,7 +22,6 @@ export function isOwnershipRefusal(error: unknown): boolean {
 }
 
 export interface PreferencesTellerDeps {
-  hosts: () => Promise<boolean>;
   ownCid: () => Promise<bigint | null>;
   push: (ownCid: bigint) => Promise<void>;
   /** A refusal that the claim will answer: worth a debug line, not an error. */
@@ -40,7 +39,7 @@ export function createPreferencesTeller(deps: PreferencesTellerDeps): Preference
   let claimed: boolean = false;
   const changed = async (): Promise<void> => {
     const cid: bigint | null = await deps.ownCid();
-    if (cid === null || !(await deps.hosts())) return;
+    if (cid === null) return;
     try {
       await deps.push(cid);
     } catch (error: unknown) {

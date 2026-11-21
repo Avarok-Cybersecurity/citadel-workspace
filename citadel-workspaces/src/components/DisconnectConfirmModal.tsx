@@ -11,14 +11,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { MemberAvatar } from "@/components/shared/MemberAvatar";
-import type { ActiveSession } from "@/types/session-types";
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 export type DisconnectAction = "disconnect" | "deregister";
 
 interface DisconnectConfirmModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  session: ActiveSession | null;
+  session: SessionInformation | null;
   workspaceName: string | null;
   onConfirm: (action: DisconnectAction) => void;
 }
@@ -88,10 +88,10 @@ export const DisconnectConfirmModal = ({
 
         <div className="my-4 p-4 bg-input rounded-lg border border-border">
           <div className="flex items-center gap-3">
-            <MemberAvatar username={session.username} name={session.full_name || session.username} className="h-10 w-10 text-sm" />
+            <MemberAvatar username={session.username} name={session.username} className="h-10 w-10 text-sm" />
             <div>
               <div className="font-medium text-foreground">
-                {session.full_name || session.username}
+                {session.username}
               </div>
               <div className="text-sm text-muted-foreground">@{session.username}</div>
             </div>

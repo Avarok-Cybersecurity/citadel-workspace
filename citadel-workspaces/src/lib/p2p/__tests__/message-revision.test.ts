@@ -13,9 +13,9 @@ import type { RevisionOutcome } from '@/lib/p2p/message-revision';
 const ALICE: bigint = 1n;
 const BOB: bigint = 2n;
 
-function msg(id: string, senderCid: bigint, content: string): P2PMessage {
+function msg(id: string, sender_cid: bigint, content: string): P2PMessage {
   return {
-    id, content, senderCid, recipientCid: senderCid === ALICE ? BOB : ALICE,
+    id, content, sender_cid, recipient_cid: sender_cid === ALICE ? BOB : ALICE,
     timestamp: 100, index: 0, status: 'delivered', message_type: 'text',
   } as P2PMessage;
 }

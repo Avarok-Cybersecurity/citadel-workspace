@@ -19,7 +19,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
-import { Permission } from '../types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
 const currentUser: { id: string } = { id: 'alice' };
@@ -49,8 +48,8 @@ function loadPermissionsFor(userId: string): void {
     eventEmitter.emit('user:permissions:loaded', {
       userId,
       domainId,
-      role: 'Member',
-      permissions: [Permission.SendMessages],
+      roleId: 'member',
+      permissions: ['SendMessages'],
     });
   }
 }
@@ -68,7 +67,7 @@ describe('a permissions change', () => {
     await new Promise((resolve): void => { setTimeout(resolve, 0); });
     expect(permissionsService.hasAnswerFor('node-1')).toBe(true);
 
-    eventEmitter.emit('member:role-updated', { userId: 'alice', role: 'Admin' });
+    eventEmitter.emit('member:role-updated', { userId: 'alice', roleId: 'admin' });
     await new Promise((resolve): void => { setTimeout(resolve, 0); });
 
     // Gone, so the next read asks again rather than answering from the rights
@@ -84,7 +83,7 @@ describe('a permissions change', () => {
     await new Promise((resolve): void => { setTimeout(resolve, 0); });
     expect(permissionsService.hasAnswerFor('node-1')).toBe(true);
 
-    eventEmitter.emit('member:role-updated', { userId: 'bob', role: 'Admin' });
+    eventEmitter.emit('member:role-updated', { userId: 'bob', roleId: 'admin' });
     await new Promise((resolve): void => { setTimeout(resolve, 0); });
 
     expect(permissionsService.hasAnswerFor('node-1')).toBe(true);

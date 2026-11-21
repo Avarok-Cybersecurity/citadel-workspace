@@ -36,8 +36,8 @@ function recorder(overrides: Partial<Omit<IncomingRegistrationDeps, 'accept' | '
   return { calls, deps };
 }
 
-const REQUEST: { recipientCid: bigint; peerCid: bigint; peerUsername: string } = {
-  recipientCid: 7n, peerCid: 42n, peerUsername: 'mallory',
+const REQUEST: { recipient_cid: bigint; peerCid: bigint; peerUsername: string } = {
+  recipient_cid: 7n, peerCid: 42n, peerUsername: 'mallory',
 };
 
 describe('a registration request from a stranger', () => {

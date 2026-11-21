@@ -9,7 +9,7 @@
  * to the agent, recorded where the websocket would send it.
  */
 import type { InternalServiceRequest, InternalServiceResponse } from 'citadel-workspace-client-ts';
-import { declareOnLeaderSocket, forgetCapabilities, watchGreeting, type Greeting } from '@/lib/agent-conversations/capabilities';
+import { declareOnLeaderSocket, forgetCapabilities, watchGreeting, type DeclaringClient, type Greeting } from '@/lib/agent-conversations/capabilities';
 import { registerConversationSender } from '@/lib/agent-conversations/sender';
 import { eventEmitter } from '@/lib/event-emitter';
 import { SUPERVISES_P2P_CAPABILITY } from '@/types/agent-supervisor';
@@ -22,6 +22,22 @@ export interface InterestSeen {
   until: bigint;
 }
 
+/** The leader's socket to an agent that answers the declaration, as every agent does. */
+export function answeringSocket(): DeclaringClient {
+  let extract: (m: InternalServiceResponse) => unknown = () => undefined;
+  let settle: (v: unknown) => void = () => undefined;
+  return {
+    nextResponse: <T,>(e: (m: InternalServiceResponse) => T | undefined): Promise<T> => {
+      extract = e;
+      return new Promise<T>((resolve) => { settle = resolve as (v: unknown) => void; });
+    },
+    sendDirectToInternalService: async (request: InternalServiceRequest): Promise<void> => {
+      const id: string = (request as { ConnectionManagement: { request_id: string } }).ConnectionManagement.request_id;
+      settle(extract({ AgentCapabilities: { request_id: id } } as unknown as InternalServiceResponse));
+    },
+  };
+}
+
 export class FakeAgent {
   readonly sent: Record<string, unknown>[] = [];
   /** When set, the agent never answers: a send that waited for it would hang. */
@@ -31,17 +47,13 @@ export class FakeAgent {
     forgetCapabilities();
     const greeting: Greeting = watchGreeting();
     greeting.observe({
-      ServiceConnectionAccepted: { cid: 0n, request_id: null, agent_ilm: false, ...(kind === 'supervising' ? { [SUPERVISES_P2P_CAPABILITY]: true } : {}) },
+      ServiceConnectionAccepted: { cid: 0n, request_id: null, ...(kind === 'supervising' ? { [SUPERVISES_P2P_CAPABILITY]: true } : {}) },
     });
     registerConversationSender((request: Record<string, unknown>): Promise<void> => {
       this.sent.push(request);
       return this.silent ? new Promise<void>(() => undefined) : Promise.resolve();
     });
-    // agent_ilm is false, so nothing is declared and nothing is awaited from the socket.
-    await declareOnLeaderSocket({
-      sendDirectToInternalService: (_request: InternalServiceRequest): Promise<void> => Promise.reject(new Error('nothing is declared to this agent')),
-      nextResponse: <T,>(_extract: (m: InternalServiceResponse) => T | undefined): Promise<T> => new Promise<T>(() => undefined),
-    }, greeting);
+    await declareOnLeaderSocket(answeringSocket(), greeting);
   }
 
   /** A notification arriving from the agent. */

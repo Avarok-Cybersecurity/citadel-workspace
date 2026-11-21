@@ -10,7 +10,7 @@ import { encodeWorkspacePayload, type DocumentsResponse, type WorkspaceProtocolP
 import { eventEmitter } from '@/lib/event-emitter';
 import '@/lib/workspace-response-handler';
 import type { ProtocolSender } from '@/lib/workspace-service/workspace-operations';
-import type { WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { workspaceDocumentsTransport } from '../documents-transport';
 import type { DocumentsTransport } from '../ports';
 
@@ -24,9 +24,9 @@ function pushOf(response: WorkspaceProtocolResponse): Record<string, unknown> {
   return { MessageNotification: { message: Array.from(encodeWorkspacePayload(payload)), cid: BOB, peer_cid: 0n, request_id: 'the-authors-request' } };
 }
 
-function recordingSender(): { sender: ProtocolSender; sent: WorkspaceProtocolRequestTS[] } {
-  const sent: WorkspaceProtocolRequestTS[] = [];
-  return { sent, sender: { currentCid: BOB, sendProtocolRequest: (request: WorkspaceProtocolRequestTS): Promise<void> => { sent.push(request); return Promise.resolve(); } } };
+function recordingSender(): { sender: ProtocolSender; sent: WorkspaceProtocolRequest[] } {
+  const sent: WorkspaceProtocolRequest[] = [];
+  return { sent, sender: { currentCid: BOB, sendProtocolRequest: (request: WorkspaceProtocolRequest): Promise<void> => { sent.push(request); return Promise.resolve(); } } };
 }
 
 function listen(transport: DocumentsTransport): { heard: DocumentsResponse[]; stop: () => void } {

@@ -19,6 +19,6 @@ target: string, message: string,
  */
 peer_cid: bigint | null, 
 /**
- * Exactly when `level` is `Metric`: what was measured. Absent from older agents' entries.
+ * Exactly when `level` is `Metric`: what was measured.
  */
 metric: TelemetryMetric | null, };

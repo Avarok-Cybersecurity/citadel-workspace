@@ -34,7 +34,7 @@ describe('a fold', () => {
     const held: Promise<void> = new Promise<void>((resolve: () => void): void => { release = resolve; });
     let inside: () => void = (): void => undefined;
     const snapshotting: Promise<void> = new Promise<void>((resolve: () => void): void => { inside = resolve; });
-    const store: ChatReplicaStore = new ChatReplicaStore(backend, DOC, CHAT_SYNC, new ManualClock(), { baseStored: false, pending: [], migrationOrigin: null }, {
+    const store: ChatReplicaStore = new ChatReplicaStore(backend, DOC, CHAT_SYNC, new ManualClock(), { baseStored: false, pending: [] }, {
       snapshot: async (): Promise<Uint8Array> => {
         const bytes: Uint8Array = await live.snapshot();
         inside();

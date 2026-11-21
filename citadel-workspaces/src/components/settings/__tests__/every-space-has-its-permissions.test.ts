@@ -7,6 +7,7 @@
  * workspace, not a node, so an office without rooms was neither.
  */
 import { describe, it, expect } from 'vitest';
+import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 import { permissionSections, type PermissionSection } from '../permission-sections';
 import type { DomainNode } from '@/components/layout/sidebar/tree-node-types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
@@ -14,7 +15,7 @@ import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 function node(id: string, name: string, parent: string | null): DomainNode {
   return {
     id, parent_id: parent, entity_type: parent === null ? 'Workspace' : { Child: 'Office' }, depth: parent === null ? 0 : 1,
-    name, description: '', owner_id: 'someone', members: [], children: [], mdx_content: '', mdx_content_hash: null,
+    name, description: '', owner_id: 'someone', members: [], children: [], mdx_content: '', mdx_content_hash: EMPTY_DOCUMENT_HASH,
     rules: null, chat_enabled: false, chat_channel_id: null, default_permissions: {} as DomainNode['default_permissions'],
     metadata: [], allowed_child_types: null, is_default: false, created_at: 0n, updated_at: 0n,
   };

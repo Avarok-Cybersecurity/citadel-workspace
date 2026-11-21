@@ -15,6 +15,7 @@ import { announce } from './cal-topic';
 import type { CalendarEngine } from './engine/calendar-engine';
 import { saveEvent, type SaveOutcome } from './event-save';
 import type { Event } from './generated/Event';
+import type { Adding } from './generated/Adding';
 import type { Placement } from './generated/Placement';
 import type { SdkRefusal } from './generated/SdkRefusal';
 import type { SdkRoute } from './generated/SdkRoute';
@@ -146,7 +147,7 @@ export class SdkHost {
 
   private async create(app: string, req: Parameters<CalendarEngine['sdk']['newEvent']>[0]): Promise<IhttpMessage> {
     const { ports, engine, me } = this.d;
-    const adding: { id: string; me: string; app_id: string; kept: number; now_ms: bigint; } = { id: this.d.newId(), me, app_id: app, kept: await keptBy(ports, app), now_ms: this.d.nowMs() };
+    const adding: Adding = { id: this.d.newId(), me, app_id: app, kept: await keptBy(ports, app), now_ms: this.d.nowMs() };
     const made: SdkAnswer<[Event, Placement]> = engine.sdk.newEvent(req, adding);
     if ('refused' in made) return this.refuse(made.refused);
     const [event, placement] = made.ok;

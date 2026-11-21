@@ -5,7 +5,7 @@
  */
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
-import type { InternalServiceRequest, InternalServiceResponse } from 'citadel-workspace-client-ts';
+import type { ConfigCommand, InternalServiceRequest, InternalServiceResponse } from 'citadel-workspace-client-ts';
 import { P2PMessengerManager } from '@/lib/p2p';
 import { registerConversationSender } from '@/lib/agent-conversations/requests';
 import { registerCapabilityRoute, forgetCapabilities, declareOnLeaderSocket, watchGreeting, type DeclaringClient, type Greeting } from '@/lib/agent-conversations/capabilities';
@@ -26,7 +26,7 @@ export interface HostingAgent {
   focusReports: () => Array<{ session_cid: bigint; peer_cid: bigint | null; focused: boolean }>;
 }
 
-type FocusReport = { session_cid: bigint; peer_cid: bigint | null; focused: boolean };
+type FocusReport = Extract<ConfigCommand, { ReportFocus: unknown }>['ReportFocus'];
 function focusReportOf(request: Record<string, unknown>): FocusReport | null {
   const command: unknown = (request.ConnectionManagement as { management_command?: { ReportFocus?: FocusReport } } | undefined)?.management_command;
   return (command as { ReportFocus?: FocusReport } | undefined)?.ReportFocus ?? null;
@@ -38,7 +38,7 @@ function fakeAgentSocket(): DeclaringClient {
   return {
     async sendDirectToInternalService(request: InternalServiceRequest): Promise<void> {
       const id: unknown = (request as { ConnectionManagement: { request_id: string } }).ConnectionManagement.request_id;
-      settle?.(match?.({ AgentCapabilities: { request_id: id, agent_ilm: true } } as unknown as InternalServiceResponse));
+      settle?.(match?.({ AgentCapabilities: { request_id: id } } as unknown as InternalServiceResponse));
     },
     nextResponse<T>(extract: (m: InternalServiceResponse) => T | undefined): Promise<T> {
       match = extract;
@@ -49,9 +49,9 @@ function fakeAgentSocket(): DeclaringClient {
 
 export async function installHostingAgent(): Promise<HostingAgent> {
   forgetCapabilities();
-  registerCapabilityRoute({ isLeader: () => true, askLeader: async () => ({ agentIlm: true, supervisesP2p: false, noticesHeard: false, stagesUploads: false, takesConsole: false, servesApps: false }) });
+  registerCapabilityRoute({ isLeader: () => true, askLeader: async () => ({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, noticesHeard: false, servesApps: false }) });
   const greeting: Greeting = watchGreeting();
-  greeting.observe({ ServiceConnectionAccepted: { cid: 0n, request_id: null, agent_ilm: true } } as never);
+  greeting.observe({ ServiceConnectionAccepted: { cid: 0n, request_id: null } } as never);
   await declareOnLeaderSocket(fakeAgentSocket(), greeting);
   instanceManager.setCid(OWN);
   let sent: Array<Record<string, unknown>> = [];

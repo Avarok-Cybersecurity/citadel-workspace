@@ -32,7 +32,7 @@ function receiverCopy(): GroupConversation {
   };
 }
 
-const from = (sender: bigint, control: GroupControlBody): GroupControlEvent => ({ groupId: ID, senderCid: sender, ownerCid: OWNER, control });
+const from = (sender: bigint, control: GroupControlBody): GroupControlEvent => ({ groupId: ID, sender_cid: sender, ownerCid: OWNER, control });
 // These groups are all held, never learnt, so no member is ever added and no name is looked up;
 // throwing proves it rather than hiding a lookup behind a stand-in name.
 const noLookup = (cid: bigint): string => { throw new Error(`a held group looked up member ${cid}`); };

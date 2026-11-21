@@ -40,7 +40,7 @@ function harness(): {
   const handler: (raw: unknown) => void = createRegistrationResponseHandler(REQ, resolve, reject, cleanup, {
     handleConnectSuccess: async (payload, res) => { seen.push(payload); res({ cid: String(payload.cid) }); },
     setShowNotInitializedModal: vi.fn(),
-    onRecoveryCodes: vi.fn(), username: 'alice',
+    onRecoveryPhrase: vi.fn(), username: 'alice',
   });
   return { handler, resolve, reject, cleanup, seen };
 }

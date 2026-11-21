@@ -26,8 +26,8 @@ const ACTIVITY_KINDS: ReadonlySet<string> = new Set<string>(['update', 'diff', '
 
 function peerSend(messenger: P2PMessengerManager, peer: ChatPeer): SendPort {
   return {
-    text: async ({ content, messageType, replyTo, onRecorded }: TextSend): Promise<void> => {
-      await messenger.sendMessage(peer.cid, content, { messageType, replyTo: replyTo ?? undefined, onOptimisticAppend: onRecorded });
+    text: async ({ content, messageType, reply_to, onRecorded }: TextSend): Promise<void> => {
+      await messenger.sendMessage(peer.cid, content, { messageType, reply_to: reply_to ?? undefined, onOptimisticAppend: onRecorded });
     },
     revise: {
       edit: (messageId: string, content: string): Promise<void> => messenger.editMessage(peer.cid, messageId, content),

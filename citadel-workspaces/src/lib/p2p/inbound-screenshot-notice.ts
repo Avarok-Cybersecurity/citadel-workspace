@@ -31,8 +31,8 @@ export async function applyScreenshotNotice(
   const message: P2PMessage = {
     id: payload.message_id,
     content: screenshotNoticeText(context.peerName),
-    senderCid: peerCid,
-    recipientCid: BigInt(payload.recipient_cid),
+    sender_cid: peerCid,
+    recipient_cid: BigInt(payload.recipient_cid),
     timestamp: typeof takenAt === 'number' ? takenAt : Date.now(),
     index: payload.index,
     status: 'delivered',

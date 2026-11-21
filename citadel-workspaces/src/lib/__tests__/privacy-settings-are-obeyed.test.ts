@@ -11,8 +11,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PrivacySettings } from '@/lib/privacy-settings';
 import { PresenceManager } from '@/lib/p2p/presence-manager';
-import { markMessagesAsRead } from '@/lib/p2p/messenger-compatibility';
-import { greetAs } from '@/lib/agent-conversations/__tests__/agent-greeting';
 import {
   DEFAULT_PRIVACY_SETTINGS,
   PRIVACY_ENFORCEMENT,
@@ -123,45 +121,5 @@ describe('typing indicators', () => {
     const { manager, sendCommand } = await makeManager(false);
     await manager.sendTypingIndicator(7n);
     expect(sendCommand).not.toHaveBeenCalled();
-  });
-});
-
-describe('read receipts', () => {
-  /**
-   * The local half of "read" must happen either way — the user did read the
-   * message, so their unread badge has to clear. Only the ack, the part that
-   * tells the sender, is theirs to withhold.
-   */
-  async function markRead(sendReadReceipts: boolean): Promise<{ sendMessageAck: ReturnType<typeof vi.fn>; message: { id: string; senderCid: bigint; status: "delivered"; }; conversation: { messages: { id: string; senderCid: bigint; status: "delivered"; }[]; unreadCount: number; }; }> {
-    savePrivacySettings({ ...DEFAULT_PRIVACY_SETTINGS, sendReadReceipts });
-    await greetAs('older');
-
-    const message: { id: string; senderCid: bigint; status: "delivered"; } = { id: 'm1', senderCid: 7n, status: 'delivered' as const };
-    const conversation: { messages: { id: string; senderCid: bigint; status: "delivered"; }[]; unreadCount: number; } = { messages: [message], unreadCount: 1 };
-    const conversationManager: { getConversation: () => { messages: { id: string; senderCid: bigint; status: "delivered"; }[]; unreadCount: number; }; } = { getConversation: (): { messages: { id: string; senderCid: bigint; status: "delivered"; }[]; unreadCount: number; } => conversation };
-    const sendMessageAck: ReturnType<typeof vi.fn> = vi.fn((): Promise<void> => Promise.resolve());
-
-    await markMessagesAsRead(
-      conversationManager as never,
-      sendMessageAck,
-      vi.fn(),
-      7n,
-    );
-    return { sendMessageAck, message, conversation };
-  }
-
-  it('tells the sender when the user allows it', async () => {
-    const { sendMessageAck, message } = await markRead(true);
-    expect(sendMessageAck).toHaveBeenCalledWith('m1', 'read', 7n);
-    expect(message.status).toBe('read');
-  });
-
-  it('marks read locally but tells the sender nothing when declined', async () => {
-    const { sendMessageAck, message, conversation } = await markRead(false);
-    expect(sendMessageAck).not.toHaveBeenCalled();
-    // The user's own view still updates — withholding the receipt must not cost
-    // them their own unread badge.
-    expect(message.status).toBe('read');
-    expect(conversation.unreadCount).toBe(0);
   });
 });

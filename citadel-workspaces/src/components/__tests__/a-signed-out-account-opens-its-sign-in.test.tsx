@@ -27,7 +27,7 @@ function show(onClose: () => void): void {
 
 describe('signing in to an account the agent does not hold', () => {
   it('opens the sign-in form with the username filled and the reason shown', async () => {
-    await greetAs(true);
+    await greetAs();
     show((): void => {});
     expect(await screen.findByDisplayValue('bob', {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByTestId('login-notice')).toHaveTextContent('bob on bench.work.avarok.net is signed out. Enter the password to sign in again.');
@@ -35,7 +35,7 @@ describe('signing in to an account the agent does not hold', () => {
   });
 
   it('leaves the password for the user and puts the cursor there', async () => {
-    await greetAs(true);
+    await greetAs();
     show((): void => {});
     const password: HTMLElement = await screen.findByLabelText(/^password$/i, {}, { timeout: 5000 });
     expect(password).toHaveValue('');
@@ -43,7 +43,7 @@ describe('signing in to an account the agent does not hold', () => {
   });
 
   it('closes on Escape', async () => {
-    await greetAs(true);
+    await greetAs();
     let closed: number = 0;
     show((): void => { closed += 1; });
     await screen.findByDisplayValue('bob', {}, { timeout: 5000 });

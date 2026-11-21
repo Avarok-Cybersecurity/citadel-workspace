@@ -12,30 +12,30 @@ afterEach(() => { forgetCapabilities(); });
 
 describe('native_picker in the greeting', () => {
   it('false is read as false', async () => {
-    await greetAs(true, { native_picker: false });
+    await greetAs({ native_picker: false });
     expect(await agentNativePicker()).toBe(false);
   });
 
   it('true is read as true', async () => {
-    await greetAs(true, { native_picker: true });
+    await greetAs({ native_picker: true });
     expect(await agentNativePicker()).toBe(true);
   });
 
-  it('absent from an older agent is unknown, not false', async () => {
-    await greetAs('older');
-    expect(await agentNativePicker()).toBeUndefined();
+  it('absent is false: the greeting always says, so silence offers nothing', async () => {
+    await greetAs();
+    expect(await agentNativePicker()).toBe(false);
   });
 
-  it('a value that is not a boolean is unknown, not false', async () => {
-    await greetAs(true, { native_picker: 'no' });
-    expect(await agentNativePicker()).toBeUndefined();
+  it('a value that is not a boolean is false', async () => {
+    await greetAs({ native_picker: 'no' });
+    expect(await agentNativePicker()).toBe(false);
   });
 });
 
 describe('the rest of what a greeting may say', () => {
   it('keeps the agent\'s version and operating system for the About tab, and forgets them with the socket', async () => {
-    await greetAs(true, { agent_version: '0.9.1', os: 'linux' });
-    expect(agentFacts.get()).toEqual({ version: '0.9.1', os: 'linux' });
+    await greetAs({ agent_version: '0.9.1', os: 'linux' });
+    expect(agentFacts.get()).toEqual({ version: '0.9.1', os: 'linux', typesHash: null });
     forgetCapabilities();
     expect(agentFacts.get()).toEqual({});
   });

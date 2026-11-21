@@ -13,6 +13,7 @@
  * rule are production code.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { IncomingOffer } from '../incoming-connect';
 
 const OURS: bigint = 9101n;
 const PEER: bigint = 9102n;
@@ -36,7 +37,7 @@ const { AutoConnectState } = await import('../state');
 const { chatAdvancedSettings } = await import('@/lib/p2p/chat-advanced-settings');
 const { instanceManager } = await import('@/lib/multi-instance/instance-manager');
 
-type Offer = { cid: bigint; peer_cid: bigint; session_security_settings: { security_level: unknown }; answered_by_agent?: boolean };
+type Offer = IncomingOffer;
 
 function offer(answeredByAgent: boolean | undefined, level: unknown = 'Standard'): Offer {
   const base: Offer = { cid: OURS, peer_cid: PEER, session_security_settings: { security_level: level } };

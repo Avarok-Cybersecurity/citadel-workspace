@@ -15,7 +15,7 @@ import { isOpenHere } from './open-chat-documents';
 import { appChatStore } from './chat-app-ports';
 
 /** What the inbox did with a command; the app logs the two that drop it. */
-export type InboxOutcome = 'recorded' | 'renamed' | 'open here' | 'not kept' | 'held apart' | 'refused' | 'nothing to record' | 'full';
+export type InboxOutcome = 'recorded' | 'renamed' | 'open here' | 'not kept' | 'refused' | 'nothing to record' | 'full';
 
 const tails: Map<string, Promise<unknown>> = new Map<string, Promise<unknown>>();
 
@@ -31,7 +31,6 @@ async function record(account: bigint, event: CdocChatCommandEvent, store: ChatS
   if (isOpenHere(account, payload.doc_id)) return 'open here';
   const entry: ChatIndexEntry | null = await store.loadEntry(payload.doc_id);
   if (entry === null || entry.peerCid !== event.peerCid) return 'not kept';
-  if (entry.heldApart) return 'held apart';
   if (payload.doc_version !== config.docVersion) return 'refused';
   const sync: CdocChatSync = readChatSync(payload);
   if (sync.kind === 'rename') {
@@ -55,7 +54,7 @@ export function recordClosedDocumentCommand(account: bigint, event: CdocChatComm
 
 /** The app's inbox: the notification's recipient is the account; the legacy path, which names none, is not recorded. */
 export function recordForClosedDocument(event: CdocChatCommandEvent): void {
-  const account: bigint | undefined = event.recipientCid;
+  const account: bigint | undefined = event.recipient_cid;
   if (account === undefined) return;
   recordClosedDocumentCommand(account, event, appChatStore(account), CHAT_SYNC).then(
     (outcome: InboxOutcome): void => {

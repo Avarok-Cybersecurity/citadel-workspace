@@ -201,6 +201,7 @@ dependencies = [
  "citadel_types",
  "custom_debug",
  "serde",
+ "sha3",
  "uuid",
  "zeroize",
 ]
@@ -249,8 +250,9 @@ dependencies = [
 [[package]]
 name = "citadel_io"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=721029bb#721029bb41b6bdd74486d1b00f0fb7a6233fecd9"
 dependencies = [
+ "bincode",
  "bytes",
  "citadel_io_macros",
  "futures",
@@ -268,7 +270,7 @@ dependencies = [
 [[package]]
 name = "citadel_io_macros"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=721029bb#721029bb41b6bdd74486d1b00f0fb7a6233fecd9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -278,20 +280,22 @@ dependencies = [
 [[package]]
 name = "citadel_types"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=cdaa0555#cdaa0555039c70be659829b1f31a48f65c1a3c04"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=721029bb#721029bb41b6bdd74486d1b00f0fb7a6233fecd9"
 dependencies = [
  "bincode",
  "bytes",
  "citadel_io",
  "getrandom 0.2.17",
- "kernel32-sys",
  "libc",
+ "log",
  "packed_struct",
  "serde",
  "sha3",
  "strum",
  "strum_macros",
  "uuid",
+ "windows-sys 0.59.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -880,16 +884,6 @@ checksum = "d8f198d1db720e4940b5a493201d199d9f24f568f8f746bd13706243a2f71598"
 dependencies = [
  "cfg-if",
  "cpufeatures 0.3.1",
-]
-
-[[package]]
-name = "kernel32-sys"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
-dependencies = [
- "winapi",
- "winapi-build",
 ]
 
 [[package]]
@@ -1774,18 +1768,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "winapi"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "167dc9d6949a9b857f3451275e911c3f44255842c1f7a76f33c55103a909087a"
-
-[[package]]
-name = "winapi-build"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d315eee3b34aca4797b2da6b13ed88266e6d612562a0c46390af8299fc699bc"
-
-[[package]]
 name = "winapi-util"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1805,6 +1787,15 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+dependencies = [
+ "windows-targets",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets",
 ]

@@ -4,13 +4,14 @@
  * copy is the local account's alone: kept under its cid (never the device-wide 0), so another
  * account on the same agent cannot read it. A stored copy in another format is not opened.
  */
+import { encode as cborEncode } from 'cbor-x';
 import { describe, expect, it } from 'vitest';
 import { typeInto } from '../../collab/__tests__/doubles/real-replicas';
 import { hyphenated } from '../../__tests__/wasm-rig';
 import type { EditorSession } from '../../editor/editor-session';
 import type { EditorOrigin, PeerView } from '../../editor/controller';
 import { CHAT_SYNC } from '../chat-config';
-import { localDbChatStore } from '../chat-local-db';
+import { localDbChatStore, type LocalDbPort } from '../chat-local-db';
 import type { ChatStoreBackend } from '../chat-ports';
 import { ChatSyncError } from '../chat-problems';
 import { ALICE, BLANK, BOB, DOC, newWorld, openSide, sameDocument, settle, textOf, type ChatSide, type World } from './doubles/chat-pair';
@@ -72,18 +73,20 @@ describe('a chat document reopened from this device', () => {
     expect(await sameDocument(again.editor(), bob.editor())).toEqual({ snapshots: true, models: true });
   });
 
-  it('opens each replica with a fresh client id, never the migration\'s', async () => {
+  it('opens each replica with a fresh client id, never the one its stored snapshot was written by', async () => {
     const world: World = newWorld();
     const db: FakeAgentLocalDb = new FakeAgentLocalDb();
-    // hyphenated() migrates a document as client 3, as a conversion from the old format would.
-    const migrated: EditorOrigin = hyphenated(null, 'migrated text');
-    if (migrated.kind !== 'snapshot') throw new Error('expected a snapshot');
+    // hyphenated() writes a snapshot as client 3.
+    const written: EditorOrigin = hyphenated(null, 'stored text');
+    if (written.kind !== 'snapshot') throw new Error('expected a snapshot');
+    await localDbChatStore(ALICE, db.connection([ALICE])).saveBase(DOC, { docVersion: CHAT_SYNC.docVersion, snapshot: written.snapshot });
     const clientOf = async (e: EditorSession): Promise<bigint> => ((await e.peerView(await e.awareness())) as PeerView).client;
-    const first: ChatSide = await openSide(world, ALICE, BOB, db, { kind: 'migrated', snapshot: migrated.snapshot, migrationOrigin: 'yjs:chat-doc-1' });
+    const first: ChatSide = await openSide(world, ALICE, BOB, db, BLANK);
+    expect(await textOf(first.editor())).toContain('stored text');
     const firstId: bigint = await clientOf(first.editor());
     await closeAndWrite(first);
     const second: ChatSide = await openSide(world, ALICE, BOB, db, BLANK);
-    expect(await textOf(second.editor())).toContain('migrated text');
+    expect(await textOf(second.editor())).toContain('stored text');
     const secondId: bigint = await clientOf(second.editor());
     expect([firstId === 3n, secondId === 3n, firstId === secondId]).toEqual([false, false, false]);
   });
@@ -92,11 +95,35 @@ describe('a chat document reopened from this device', () => {
     const world: World = newWorld();
     const db: FakeAgentLocalDb = new FakeAgentLocalDb();
     const store: ChatStoreBackend = localDbChatStore(ALICE, db.connection([ALICE]));
-    await store.saveBase(DOC, { docVersion: CHAT_SYNC.docVersion + 1, snapshot: new Uint8Array([1, 2, 3]), migrationOrigin: null });
+    await store.saveBase(DOC, { docVersion: CHAT_SYNC.docVersion + 1, snapshot: new Uint8Array([1, 2, 3]) });
     const opened: Promise<ChatSide> = openSide(world, ALICE, BOB, db, BLANK);
     await expect(opened).rejects.toBeInstanceOf(ChatSyncError);
     await expect(opened).rejects.toMatchObject({ problem: { kind: 'docVersionMismatch', where: 'the stored copy', received: CHAT_SYNC.docVersion + 1 } });
     expect((await store.loadBase(DOC))?.docVersion).toBe(CHAT_SYNC.docVersion + 1);
+  });
+
+  it('refuses a copy or an index written in the earlier, unversioned layout, and leaves both as they are', async () => {
+    const db: FakeAgentLocalDb = new FakeAgentLocalDb();
+    const port: LocalDbPort = db.connection([ALICE]);
+    const base: string = `cdoc-chat:${ALICE.toString()}:${DOC}#base`;
+    const index: string = `cdoc-chat:${ALICE.toString()}:#index`;
+    const earlierBase: number[] = Array.from(cborEncode({ doc_version: CHAT_SYNC.docVersion, snapshot: new Uint8Array([1]), migration_origin: null }));
+    const earlierIndex: number[] = Array.from(cborEncode({ entries: [{ doc_id: DOC, peer_cid: BOB, title: null, held_apart: true }] }));
+    await port.set(ALICE, base, earlierBase);
+    await port.set(ALICE, index, earlierIndex);
+    const store: ChatStoreBackend = localDbChatStore(ALICE, port);
+    await expect(store.loadBase(DOC)).rejects.toThrow(/another layout \(store version 1; this client reads 2\)/);
+    await expect(store.loadEntry(DOC)).rejects.toThrow(/another layout \(store version 1; this client reads 2\)/);
+    expect((await port.get(ALICE, base))?.value).toEqual(earlierBase);
+    expect((await port.get(ALICE, index))?.value).toEqual(earlierIndex);
+  });
+
+  it('reads back the layout it writes', async () => {
+    const store: ChatStoreBackend = localDbChatStore(ALICE, new FakeAgentLocalDb().connection([ALICE]));
+    await store.saveBase(DOC, { docVersion: CHAT_SYNC.docVersion, snapshot: new Uint8Array([4, 5]) });
+    await store.saveEntry(DOC, { peerCid: BOB, title: null });
+    expect(await store.loadBase(DOC)).toEqual({ docVersion: CHAT_SYNC.docVersion, snapshot: new Uint8Array([4, 5]) });
+    expect(await store.loadEntry(DOC)).toEqual({ peerCid: BOB, title: null });
   });
 });
 

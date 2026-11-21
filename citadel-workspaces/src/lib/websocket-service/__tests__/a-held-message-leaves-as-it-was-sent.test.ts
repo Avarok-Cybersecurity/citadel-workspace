@@ -83,10 +83,10 @@ describe('a reliable send', () => {
     expect(sends).toEqual([{ bytes: [3], level: undefined, hint: undefined }]);
   });
 
-  it('held before keys carried either still leaves, as it always did', async (): Promise<void> => {
+  it('refuses a key held by an earlier build, before keys carried a level or a reason', async (): Promise<void> => {
     rows.set(`p2p_paused_outbox_${PEER.toString()}_0000000000001000_7d3c0a52-6f0e-4c1e-9d2a-2b8f5f0c1e11`, [4]);
-    await core.flushPausedOutbox(LOCAL, PEER);
-    expect(sends).toEqual([{ bytes: [4], level: undefined, hint: undefined }]);
+    await expect(core.flushPausedOutbox(LOCAL, PEER)).rejects.toThrow(/unreadable held-message key/i);
+    expect(sends).toEqual([]);
   });
 
   it('refuses to flush a held key it cannot read, rather than send it at a guessed level', async (): Promise<void> => {

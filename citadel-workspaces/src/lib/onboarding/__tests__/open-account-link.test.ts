@@ -35,9 +35,9 @@ function record(ok: boolean, sessions: Session[]): Recorder {
   };
 }
 
-const alice: Session = { cid: 11n, username: 'alice', server_address: 'citadel.example.com:12400' };
-const aliceTenant: Session = { cid: 12n, username: 'alice', server_address: 'acme.work.avarok.net' };
-const bob: Session = { cid: 21n, username: 'bob', server_address: 'citadel.example.com:12400' };
+const alice: Session = { cid: 11n, username: 'alice', server_address: 'citadel.example.com:12400', server_host: null };
+const aliceTenant: Session = { cid: 12n, username: 'alice', server_address: 'acme.work.avarok.net', server_host: null };
+const bob: Session = { cid: 21n, username: 'bob', server_address: 'citadel.example.com:12400', server_host: null };
 
 async function open(link: AccountLink, rec: Recorder): Promise<void> {
   await openAccountLink(link, rec.io);

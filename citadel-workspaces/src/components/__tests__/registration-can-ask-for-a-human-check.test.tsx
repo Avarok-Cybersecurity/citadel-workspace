@@ -89,9 +89,14 @@ describe('registering where a human check is required', () => {
     renderJoin();
     await waitFor(() => expect(turnstile.issued).toHaveLength(1));
     await register();
-    // The codes come first: the account exists, and they are shown once.
-    fireEvent.click(await screen.findByTestId('recovery-codes-saved'));
-    fireEvent.click(screen.getByTestId('recovery-codes-done'));
+    // The phrase comes first: the account exists, and it is shown once, then checked.
+    const words: string[] = (await screen.findAllByTestId('recovery-phrase-word')).map((li) => li.lastElementChild?.textContent ?? '');
+    expect(words).toHaveLength(24);
+    fireEvent.click(screen.getByTestId('recovery-phrase-written'));
+    screen.getAllByTestId('recovery-phrase-check-word').forEach((box: HTMLElement) => {
+      fireEvent.change(box, { target: { value: words[Number(box.getAttribute('data-position'))] } });
+    });
+    fireEvent.click(screen.getByTestId('recovery-phrase-confirm'));
     const issuedBefore: number = turnstile.issued.length;
     expect(await screen.findByTestId('finish-sign-in')).toBeInTheDocument();
     expect(screen.queryByTestId('admission-message')).toBeNull();

@@ -16,8 +16,8 @@ export interface CapabilityCopy {
   installerNeeds: Permission;
 }
 
-const own = (label: string): CapabilityCopy => ({ label, risk: 'low', installerNeeds: Permission.AppInstall });
-const storage = (label: string): CapabilityCopy => ({ label, risk: 'low', installerNeeds: Permission.AppInstallAllowStorage });
+const own = (label: string): CapabilityCopy => ({ label, risk: 'low', installerNeeds: 'AppInstall' });
+const storage = (label: string): CapabilityCopy => ({ label, risk: 'low', installerNeeds: 'AppInstallAllowStorage' });
 
 export const CAPABILITY_COPY: Record<Capability, CapabilityCopy> = {
   canvas: own('Draw in its own area of the page'),
@@ -25,34 +25,34 @@ export const CAPABILITY_COPY: Record<Capability, CapabilityCopy> = {
   events: own('Respond to clicks and typing in its own area'),
   navigate: own('Open other pages in this workspace'),
   log: own('Write to its own diagnostic log'),
-  'nodes.read': { label: 'Read pages and what they contain', risk: 'medium', installerNeeds: Permission.AppInstallAllowNodeRead },
-  'nodes.write': { label: 'Add, rename and move pages', risk: 'high', installerNeeds: Permission.AppInstallAllowNodeWrite },
-  'md.edit': { label: 'Edit documents', risk: 'high', installerNeeds: Permission.AppInstallAllowMdEdit },
-  'files.read': { label: 'Read files stored in this workspace', risk: 'high', installerNeeds: Permission.AppInstallAllowFiles },
-  'files.write': { label: 'Save files to this workspace', risk: 'high', installerNeeds: Permission.AppInstallAllowFiles },
-  'chat.read': { label: 'Read messages in the page’s chat', risk: 'medium', installerNeeds: Permission.AppInstallAllowChat },
-  'chat.send': { label: 'Send messages in the page’s chat', risk: 'medium', installerNeeds: Permission.AppInstallAllowChat },
-  'members.list': { label: 'See who is a member', risk: 'medium', installerNeeds: Permission.AppInstallAllowMembers },
+  'nodes.read': { label: 'Read pages and what they contain', risk: 'medium', installerNeeds: 'AppInstallAllowNodeRead' },
+  'nodes.write': { label: 'Add, rename and move pages', risk: 'high', installerNeeds: 'AppInstallAllowNodeWrite' },
+  'md.edit': { label: 'Edit documents', risk: 'high', installerNeeds: 'AppInstallAllowMdEdit' },
+  'files.read': { label: 'Read files stored in this workspace', risk: 'high', installerNeeds: 'AppInstallAllowFiles' },
+  'files.write': { label: 'Save files to this workspace', risk: 'high', installerNeeds: 'AppInstallAllowFiles' },
+  'chat.read': { label: 'Read messages in the page’s chat', risk: 'medium', installerNeeds: 'AppInstallAllowChat' },
+  'chat.send': { label: 'Send messages in the page’s chat', risk: 'medium', installerNeeds: 'AppInstallAllowChat' },
+  'members.list': { label: 'See who is a member', risk: 'medium', installerNeeds: 'AppInstallAllowMembers' },
   'storage.user': storage('Keep its own data for each person'),
   'storage.scope': storage('Keep data shared by everyone it is installed for'),
   'storage.node': storage('Keep its own data on each page'),
   'storage.blob': storage('Keep files of its own'),
-  'storage.files': { label: 'Keep its own folder in this workspace’s files', risk: 'medium', installerNeeds: Permission.AppInstallAllowFiles },
+  'storage.files': { label: 'Keep its own folder in this workspace’s files', risk: 'medium', installerNeeds: 'AppInstallAllowFiles' },
   'storage.local': storage('Keep data on this device'),
   'storage.node.authored': storage('Let each person post on a page under their own name'),
-  'clipboard.read': { label: 'Read your clipboard when you allow it', risk: 'medium', installerNeeds: Permission.AppInstallAllowClipboard },
-  'clipboard.write': { label: 'Copy to your clipboard', risk: 'medium', installerNeeds: Permission.AppInstallAllowClipboard },
-  notifications: { label: 'Show notifications', risk: 'low', installerNeeds: Permission.AppInstallAllowNotifications },
-  documents: { label: 'Edit documents together in real time', risk: 'high', installerNeeds: Permission.AppInstall },
-  'net.host': { label: 'Reach these websites from each person’s computer', risk: 'high', installerNeeds: Permission.AppInstallAllowHostNetwork },
-  'net.host.private': { label: 'Reach the local network of each person’s computer', risk: 'critical', installerNeeds: Permission.AppInstallAllowPrivateNetwork },
-  'net.server': { label: 'Reach these websites from the workspace server', risk: 'high', installerNeeds: Permission.AppInstallAllowServerNetwork },
-  'ihttp.serve': { label: 'Offer a service other members’ apps can call', risk: 'medium', installerNeeds: Permission.AppInstallAllowInternalServe },
-  'ihttp.call': { label: 'Call services other members’ apps offer', risk: 'medium', installerNeeds: Permission.AppInstallAllowInternalCall },
-  'ihttp.p2p.serve': { label: 'Let other members’ copies of this app run requests on each person’s device', risk: 'high', installerNeeds: Permission.AppInstallAllowPeerServe },
-  'ihttp.p2p.call': { label: 'Send requests straight to other members’ devices', risk: 'medium', installerNeeds: Permission.AppInstallAllowPeerCall },
-  'group.topic.subscribe': { label: 'Listen on this app’s own channels', risk: 'medium', installerNeeds: Permission.AppInstallAllowGroupTopics },
-  'group.topic.publish': { label: 'Post on this app’s own channels', risk: 'medium', installerNeeds: Permission.AppInstallAllowGroupTopics },
+  'clipboard.read': { label: 'Read your clipboard when you allow it', risk: 'medium', installerNeeds: 'AppInstallAllowClipboard' },
+  'clipboard.write': { label: 'Copy to your clipboard', risk: 'medium', installerNeeds: 'AppInstallAllowClipboard' },
+  notifications: { label: 'Show notifications', risk: 'low', installerNeeds: 'AppInstallAllowNotifications' },
+  documents: { label: 'Edit documents together in real time', risk: 'high', installerNeeds: 'AppInstall' },
+  'net.host': { label: 'Reach these websites from each person’s computer', risk: 'high', installerNeeds: 'AppInstallAllowHostNetwork' },
+  'net.host.private': { label: 'Reach the local network of each person’s computer', risk: 'critical', installerNeeds: 'AppInstallAllowPrivateNetwork' },
+  'net.server': { label: 'Reach these websites from the workspace server', risk: 'high', installerNeeds: 'AppInstallAllowServerNetwork' },
+  'ihttp.serve': { label: 'Offer a service other members’ apps can call', risk: 'medium', installerNeeds: 'AppInstallAllowInternalServe' },
+  'ihttp.call': { label: 'Call services other members’ apps offer', risk: 'medium', installerNeeds: 'AppInstallAllowInternalCall' },
+  'ihttp.p2p.serve': { label: 'Let other members’ copies of this app run requests on each person’s device', risk: 'high', installerNeeds: 'AppInstallAllowPeerServe' },
+  'ihttp.p2p.call': { label: 'Send requests straight to other members’ devices', risk: 'medium', installerNeeds: 'AppInstallAllowPeerCall' },
+  'group.topic.subscribe': { label: 'Listen on this app’s own channels', risk: 'medium', installerNeeds: 'AppInstallAllowGroupTopics' },
+  'group.topic.publish': { label: 'Post on this app’s own channels', risk: 'medium', installerNeeds: 'AppInstallAllowGroupTopics' },
 };
 
 /** What the workspace server sees of P2P traffic, said wherever a member is asked to allow it. */

@@ -10,7 +10,7 @@ import type { FileTransfer } from './types';
 
 export interface ResendDeps {
   getTransfer: (transferId: string) => FileTransfer | undefined;
-  sendFile: (recipientCid: string, file: File) => Promise<string>;
+  sendFile: (recipient_cid: string, file: File) => Promise<string>;
   saveTransfer: (transfer: FileTransfer) => Promise<void>;
   emitStateChange: (transfer: FileTransfer) => void;
 }
@@ -21,7 +21,7 @@ export async function resendLostTransfer(deps: ResendDeps, transferId: string, f
   if (lost === undefined || lost.isIncoming || lost.resendable !== true) {
     throw new Error('Only a file you sent that could not be resumed can be sent again from here.');
   }
-  const sent: string = await deps.sendFile(lost.recipientCid, file);
+  const sent: string = await deps.sendFile(lost.recipient_cid, file);
   lost.resendable = false;
   lost.updatedAt = Date.now();
   await deps.saveTransfer(lost);

@@ -1,4 +1,5 @@
-use citadel_workspace_types::structs::{Permission, User, UserRole};
+use citadel_workspace_types::structs::{Permission, User};
+use common::roles_fixture::{seed_permissions, with_role, ADMIN_ROLE_ID, MEMBER_ROLE_ID};
 
 #[cfg(test)]
 mod tests {
@@ -7,10 +8,9 @@ mod tests {
     #[test]
     fn test_permission_management() {
         // Create a new regular user
-        let mut user = User::new(
-            "user1".to_string(),
-            "Test User".to_string(),
-            UserRole::Member,
+        let mut user = with_role(
+            User::new("user1".to_string(), "Test User".to_string()),
+            MEMBER_ROLE_ID,
         );
 
         // Test domain membership initially empty
@@ -54,7 +54,7 @@ mod tests {
 
         // A role's permissions are no longer copied into the map (the role confers them
         // in the workspace); granting the Member set by hand is still per-domain.
-        for permission in Permission::for_legacy_role(&UserRole::Member) {
+        for permission in seed_permissions(MEMBER_ROLE_ID) {
             user.grant_permission("office1", permission);
         }
         assert!(user.is_member_of_domain("office1"));
@@ -68,10 +68,9 @@ mod tests {
     #[test]
     fn test_admin_permissions() {
         // Create admin user
-        let mut admin = User::new(
-            "admin1".to_string(),
-            "Admin User".to_string(),
-            UserRole::Admin,
+        let mut admin = with_role(
+            User::new("admin1".to_string(), "Admin User".to_string()),
+            ADMIN_ROLE_ID,
         );
 
         // The admin wildcard, granted on a domain
@@ -103,10 +102,9 @@ mod tests {
     #[test]
     fn test_multiple_domains() {
         // Create a regular user
-        let mut user = User::new(
-            "user2".to_string(),
-            "Multi-Domain User".to_string(),
-            UserRole::Member,
+        let mut user = with_role(
+            User::new("user2".to_string(), "Multi-Domain User".to_string()),
+            MEMBER_ROLE_ID,
         );
 
         // Grant different permissions to different domains
@@ -138,10 +136,9 @@ mod tests {
     #[test]
     fn test_non_existent_domains() {
         // Test behavior with non-existent domains
-        let user = User::new(
-            "user3".to_string(),
-            "Test User".to_string(),
-            UserRole::Member,
+        let user = with_role(
+            User::new("user3".to_string(), "Test User".to_string()),
+            MEMBER_ROLE_ID,
         );
 
         // These should all handle non-existent domains gracefully

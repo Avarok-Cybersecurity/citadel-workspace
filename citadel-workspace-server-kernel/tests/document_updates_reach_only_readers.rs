@@ -8,10 +8,10 @@
 
 use citadel_workspace_server_kernel::kernel::async_kernel::BroadcastMessage;
 use citadel_workspace_types::documents::{DocumentsRequest, DocumentsResponse};
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::WorkspaceProtocolResponse;
 use common::documents_test_utils::*;
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel};
+use common::roles_fixture::{BANNED, MEMBER_ROLE_ID};
 use common::workspace_test_utils::TEST_ADMIN_USER_ID;
 
 const AUTHOR_CID: u64 = 7;
@@ -19,8 +19,8 @@ const AUTHOR_CID: u64 = 7;
 /// A reader, an account that is not a member, and a member who has been banned.
 async fn audience(kernel: &GateKernel) {
     reader(kernel, "reader").await;
-    insert_user_with_role(kernel, "stranger", UserRole::Member).await;
-    insert_user_with_role(kernel, "banned", UserRole::Banned).await;
+    insert_user_with_role(kernel, "stranger", MEMBER_ROLE_ID).await;
+    insert_user_with_role(kernel, "banned", BANNED).await;
     join_root(kernel, "banned").await;
 }
 

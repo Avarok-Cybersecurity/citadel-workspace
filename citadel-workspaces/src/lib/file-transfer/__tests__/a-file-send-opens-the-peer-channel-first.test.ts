@@ -18,10 +18,9 @@ const world: { failFirstSend: boolean } = vi.hoisted(() => ({ failFirstSend: fal
 
 vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
-    ensureMessengerOpen: async (cid: bigint): Promise<boolean> => { calls.push(`open-messenger:${cid}`); return false; },
     sendP2PMessageReliable: async (from: bigint, to: bigint): Promise<void> => {
       calls.push(`send:${from}->${to}`);
-      if (world.failFirstSend) { world.failFirstSend = false; throw new Error('No messaging handle found for local CID: 100'); }
+      if (world.failFirstSend) { world.failFirstSend = false; throw new Error('ILM refused the message'); }
     },
   },
 }));
@@ -102,17 +101,17 @@ describe('a file send', () => {
 describe('an in-band file signal', () => {
   const transfer: FileTransfer = {
     id: 'x', fileName: 'a.txt', fileSize: 3, fileType: 'text/plain', state: 'pending', progress: 0,
-    senderCid: '100', recipientCid: '900', createdAt: 0, updatedAt: 0, isIncoming: false,
+    sender_cid: '100', recipient_cid: '900', createdAt: 0, updatedAt: 0, isIncoming: false,
   };
 
-  it('opens this session\'s messenger before sending', async () => {
+  it('goes through the reliable send, once', async () => {
     await sendLayerPayload(buildTransferAnnouncement(transfer));
-    expect(calls).toEqual(['open-messenger:100', 'send:100->900']);
+    expect(calls).toEqual(['send:100->900']);
   });
 
-  it('retries once when the messenger was still opening', async () => {
+  it('reports a refused send rather than retrying around it', async () => {
     world.failFirstSend = true;
-    await sendLayerPayload(buildTransferAnnouncement(transfer));
-    expect(calls).toEqual(['open-messenger:100', 'send:100->900', 'open-messenger:100', 'send:100->900']);
+    await expect(sendLayerPayload(buildTransferAnnouncement(transfer))).rejects.toThrow('ILM refused the message');
+    expect(calls).toEqual(['send:100->900']);
   });
 });

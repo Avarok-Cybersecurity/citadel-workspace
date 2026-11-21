@@ -24,10 +24,10 @@
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withArtifact } from './lib/first-party-manifest.mjs';
+import { remapFlags } from './lib/remap-paths.mjs';
 import { PROVISIONED_APPS, signFirstPartyApps } from './lib/sign-first-party-apps.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -60,8 +60,7 @@ if (apps.length === 0) {
   process.exit(1);
 }
 
-const cargoHome = process.env.CARGO_HOME ?? join(homedir(), '.cargo');
-const remaps = [`--remap-path-prefix=${ROOT}=/citadel-workspace`, `--remap-path-prefix=${cargoHome}=/cargo`];
+const remaps = remapFlags({ root: ROOT });
 // The pin and each app's .cargo/config.toml win over the caller's environment.
 delete process.env.RUSTUP_TOOLCHAIN;
 delete process.env.RUSTFLAGS;

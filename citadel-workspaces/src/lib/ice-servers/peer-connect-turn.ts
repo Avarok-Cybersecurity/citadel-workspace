@@ -11,12 +11,12 @@
  * Only `withTurn` lives here: it is on the eager request path. Turning a grant
  * into a config is in turn-source.ts, which only the lazy relay lookup loads.
  */
-import type { TurnConfig } from '@/types/ice-servers';
+import type { PeerTurnConfig } from 'citadel-workspace-client-ts';
 
 /** Resolves the `turn` field for a request sent by `cid`, or null. */
-export type TurnSource = (cid: bigint) => Promise<TurnConfig | null>;
+export type TurnSource = (cid: bigint) => Promise<PeerTurnConfig | null>;
 
 /** The request body with `turn` attached when there is one, and untouched when not. */
-export function withTurn<T extends object>(body: T, turn: TurnConfig | null): T | (T & { turn: TurnConfig }) {
+export function withTurn<T extends object>(body: T, turn: PeerTurnConfig | null): T | (T & { turn: PeerTurnConfig }) {
   return turn === null ? body : { ...body, turn };
 }

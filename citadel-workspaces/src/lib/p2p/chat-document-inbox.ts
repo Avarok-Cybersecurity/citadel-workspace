@@ -12,7 +12,7 @@ const RECORDED_KINDS: ReadonlySet<string> = new Set<string>(['update', 'diff', '
 
 export function bindChatDocumentInbox(listen: (event: string, handler: (data: CdocChatCommandEvent) => void) => void): void {
   listen(CDOC_CHAT_COMMAND_EVENT, (event: CdocChatCommandEvent): void => {
-    if (event.recipientCid === undefined || !RECORDED_KINDS.has(event.payload.sync.kind)) return;
+    if (event.recipient_cid === undefined || !RECORDED_KINDS.has(event.payload.sync.kind)) return;
     import('@/lib/cdoc/chat/chat-inbox').then(
       ({ recordForClosedDocument }): void => recordForClosedDocument(event),
       (error: unknown): void => errorLog('ChatDocumentInbox', 'The chat document recorder did not load:', error),

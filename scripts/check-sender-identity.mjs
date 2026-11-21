@@ -4,7 +4,7 @@
  *
  * Every inbound P2P handler receives `peerCid` — the authenticated channel
  * identity — as a parameter. `payload.sender_cid` is a field the SENDING peer
- * chooses. Setting `senderCid` from it lets any registered peer attribute a
+ * chooses. Setting the message's `sender_cid` from it lets any registered peer attribute a
  * message to anyone: set it to the recipient's own CID and converters.ts
  * renders the message right-aligned, styled as own, and labelled "You" — a
  * forged message from yourself, in your own transcript.
@@ -30,8 +30,10 @@ function* walk(dir) {
   }
 }
 
-// `senderCid: <anything>sender_cid<anything>` — the payload feeding the identity.
-const OFFENDING = /senderCid\s*:\s*[^,\n}]*\bsender_cid\b/;
+// `sender_cid: <anything>payload.sender_cid<anything>` — the payload feeding the identity.
+// The message and the wire now spell the field the same way, so the shape is keyed on the
+// inbound body, which every P2P handler receives as `payload` (message-handler-routing.ts).
+const OFFENDING = /\bsender_cid\s*:\s*[^,\n}]*\bpayload\??\.sender_cid\b/;
 
 const offenders = [];
 // Counted so a pass says what it examined. A fixed sentence cannot be told

@@ -10,7 +10,7 @@ import type { WorkspaceEventState } from '../WorkspaceEventHandler';
 import { setLoading, runAsyncSetup } from './event-setup-utils';
 import { applyOwnMemberRecord, mergeCurrentUser } from './merge-current-user';
 import type { StoredSession } from '@/types/session-types';
-import type { User } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 
 interface UseWorkspaceEventSetupProps {
   setState: React.Dispatch<React.SetStateAction<WorkspaceEventState>>;
@@ -117,7 +117,7 @@ export function useWorkspaceEventSetup({ setState }: UseWorkspaceEventSetupProps
             ...prev,
             currentUser: applyOwnMemberRecord(
               mergeCurrentUser(prev.currentUser, { username, fullName: identity.fullName, role: storedSession?.role }),
-              Object.values(prev.members).find((m: User): boolean => m.username === username),
+              Object.values(prev.members).find((m: WorkspaceMember): boolean => m.username === username),
             ),
           }));
         }

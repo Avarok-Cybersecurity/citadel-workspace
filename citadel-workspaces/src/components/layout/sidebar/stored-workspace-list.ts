@@ -7,7 +7,8 @@
  * without a connection manager, an IndexedDB read or a React render.
  */
 
-import type { ActiveSession, StoredSession } from '@/types/session-types';
+import type { StoredSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { dialledHost, sessionHost, sessionIsOnServer } from '@/lib/sessions/same-server';
 import { liveSessionCid } from '@/lib/sessions/live-session-cid';
 
@@ -89,7 +90,7 @@ export function pickCurrentWorkspace(
 export function switcherWorkspaces(
   stored: readonly StoredSession[],
   /** The agent's sessions, or null when it did not answer. */
-  live: readonly ActiveSession[] | null,
+  live: readonly SessionInformation[] | null,
   workspaceName: string | undefined,
   currentCid: bigint | null,
 ): StoredWorkspace[] {
@@ -97,8 +98,8 @@ export function switcherWorkspaces(
     (row: StoredWorkspace): StoredWorkspace => withAgentAnswer(row, live),
   );
   const liveOnly: StoredWorkspace[] = (live ?? [])
-    .filter((session: ActiveSession) => !stored.some((s: StoredSession) => s.username === session.username && sessionIsOnServer(session, s.serverAddress)))
-    .map((session: ActiveSession): StoredWorkspace => {
+    .filter((session: SessionInformation) => !stored.some((s: StoredSession) => s.username === session.username && sessionIsOnServer(session, s.serverAddress)))
+    .map((session: SessionInformation): StoredWorkspace => {
       const host: string = sessionHost(session);
       return {
         id: `${host}-${session.username}`,
@@ -110,7 +111,6 @@ export function switcherWorkspaces(
         administers: false,
         signedIn: true,
         cid: session.cid,
-        fullName: session.full_name,
       };
     });
   const rows: StoredWorkspace[] = [...saved, ...liveOnly];
@@ -122,7 +122,7 @@ export function switcherWorkspaces(
 }
 
 /** A saved row as the agent sees it: signed in under the CID it holds, or signed out. */
-function withAgentAnswer(row: StoredWorkspace, live: readonly ActiveSession[] | null): StoredWorkspace {
+function withAgentAnswer(row: StoredWorkspace, live: readonly SessionInformation[] | null): StoredWorkspace {
   if (live === null) return row;
   const cid: bigint | undefined = liveSessionCid(live, row);
   return cid === undefined ? { ...row, signedIn: false } : { ...row, signedIn: true, cid };
@@ -141,7 +141,7 @@ export type SwitchPlan =
  */
 export function planSwitch(
   row: Pick<StoredWorkspace, 'username' | 'serverAddress' | 'cid'>,
-  live: readonly ActiveSession[] | null,
+  live: readonly SessionInformation[] | null,
   storedCid: bigint | undefined,
 ): SwitchPlan {
   if (live !== null) {

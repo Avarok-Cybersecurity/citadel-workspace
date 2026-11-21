@@ -20,8 +20,8 @@ import type { P2PMessage } from '@/lib/p2p/p2p-types';
 const ALICE: bigint = 10n;
 const BOB: bigint = 20n;
 
-function msg(id: string, senderCid: bigint, timestamp: number): P2PMessage {
-  return { id, senderCid, recipientCid: 1n, content: 'x', timestamp, index: 0, status: 'delivered' } as P2PMessage;
+function msg(id: string, sender_cid: bigint, timestamp: number): P2PMessage {
+  return { id, sender_cid, recipient_cid: 1n, content: 'x', timestamp, index: 0, status: 'delivered' } as P2PMessage;
 }
 
 describe('mergeMessages offers no peer isolation', () => {
@@ -34,7 +34,7 @@ describe('mergeMessages offers no peer isolation', () => {
     const merged: P2PMessage[] = mergeMessages(stale, incoming);
 
     expect(merged.map((m) => m.id)).toEqual(['a1', 'b1', 'a2']);
-    expect(merged.some((m) => m.senderCid === ALICE)).toBe(true);
+    expect(merged.some((m) => m.sender_cid === ALICE)).toBe(true);
   });
 
   it('starts clean when the previous conversation left nothing behind', () => {
@@ -43,7 +43,7 @@ describe('mergeMessages offers no peer isolation', () => {
     const merged: P2PMessage[] = mergeMessages([], [msg('b1', BOB, 200)]);
 
     expect(merged.map((m) => m.id)).toEqual(['b1']);
-    expect(merged.every((m) => m.senderCid === BOB)).toBe(true);
+    expect(merged.every((m) => m.sender_cid === BOB)).toBe(true);
   });
 
   it('deduplicates by id, so a resend of the same message is not doubled', () => {

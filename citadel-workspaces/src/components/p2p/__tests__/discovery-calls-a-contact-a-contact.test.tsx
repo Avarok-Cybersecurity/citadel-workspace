@@ -43,7 +43,7 @@ describe('a registered peer in Peer Discovery', () => {
 
 describe('the directory profile card', () => {
   // Same meaning, same word: `isConnected` there is "is a registered peer".
-  const user: UserData = { id: 'tbraun96', displayName: 'Thomas Braun', isOnline: false };
+  const user: UserData = { id: 'tbraun96', displayName: 'Thomas Braun', banned: false, isOnline: false };
   const card = (isConnected: boolean): JSX.Element => (
     <UserProfileCard selectedUser={user} isSelf={false} isConnected={isConnected}
       onClose={() => undefined} onSendMessage={() => undefined} onInvite={() => undefined} />

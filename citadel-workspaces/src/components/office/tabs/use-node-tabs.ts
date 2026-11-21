@@ -8,7 +8,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { usePermission } from '@/hooks/use-permission';
 import { permits } from '@/hooks/use-permission-result';
-import { Permission } from '@/lib/permissions-service/types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { toast } from '@/hooks/use-toast';
 import type { MetadataSource } from '@/lib/workspace-metadata/metadata-document';
@@ -72,8 +71,8 @@ export function useNodeTabs({ nodeId, chatEnabled, nodeMetadata, workspaceMetada
     rememberTab(nodeId, key);
   }, [nodeId]);
 
-  const configure: ReturnType<typeof usePermission> = usePermission(nodeId, Permission.UpdateNodeSettings);
-  const setDefault: ReturnType<typeof usePermission> = usePermission(WORKSPACE_ROOT_ID, Permission.EditWorkspaceConfig);
+  const configure: ReturnType<typeof usePermission> = usePermission(nodeId, 'UpdateNodeSettings');
+  const setDefault: ReturnType<typeof usePermission> = usePermission(WORKSPACE_ROOT_ID, 'EditWorkspaceConfig');
   const [busy, setBusy] = useState<boolean>(false);
 
   const change: (requested: TabChange) => Promise<boolean> = useCallback(async (requested: TabChange): Promise<boolean> => {

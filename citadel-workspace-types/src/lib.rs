@@ -45,9 +45,7 @@ pub mod messaging_trust;
 pub mod node_tabs;
 /// A workspace's role table and its built-ins.
 pub mod roles;
-/// Records written before the role table, read into it.
-pub mod roles_legacy;
-/// Reading and editing the role table, and naming a member's role on the wire.
+/// Reading and editing the role table.
 pub mod roles_protocol;
 /// A role table as it is stored, and reading one stored before it named new members' role.
 pub mod roles_stored;
@@ -80,8 +78,8 @@ use ice::IceServer;
 use serde::{Deserialize, Serialize};
 use sign_in::SignInSettings;
 use structs::{
-    CustomNodeType, DomainNode, NodeEntityType, Permission, TreeNode, TreeSchema, User, UserRole,
-    Workspace, WorkspaceMetadata,
+    CustomNodeType, DomainNode, NodeEntityType, Permission, TreeNode, TreeSchema, User, Workspace,
+    WorkspaceMetadata,
 };
 use ts_rs::TS;
 
@@ -176,7 +174,8 @@ pub enum WorkspaceProtocolRequest {
         user_id: String,
         /// Domain (node) to add the member to. None defaults to workspace root.
         domain_id: Option<String>,
-        role: roles_protocol::MemberRole,
+        /// The id of a role in the workspace's table.
+        role: String,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
@@ -185,7 +184,8 @@ pub enum WorkspaceProtocolRequest {
     },
     UpdateMemberRole {
         user_id: String,
-        role: roles_protocol::MemberRole,
+        /// The id of a role in the workspace's table.
+        role: String,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
@@ -200,6 +200,19 @@ pub enum WorkspaceProtocolRequest {
         /// Domain (node) to remove the member from. None defaults to workspace root.
         domain_id: Option<String>,
     },
+    /// Ban an account: it loses its role in every workspace and is refused on join and on
+    /// admission until unbanned. Needs `RemoveUsers`, never applies to the Owner, and only to a
+    /// member below the caller.
+    Ban {
+        user_id: String,
+    },
+    /// Lift a ban. The account gets the role the table gives new members. Needs `RemoveUsers`.
+    Unban {
+        user_id: String,
+    },
+    /// Every banned account, including ones no longer on any roster, so a ban can be found and
+    /// lifted. Needs `RemoveUsers`, as `Unban` does.
+    ListBanned,
     ListMembers {
         /// Domain (node) to list members for. None defaults to workspace root.
         domain_id: Option<String>,
@@ -219,10 +232,8 @@ pub enum WorkspaceProtocolRequest {
         /// `Some("")` removes the stored avatar.
         avatar_data: Option<String>,
         /// Contact email shown to workspace members. `Some("")` clears it.
-        /// Absent from clients that predate the field, which reads as `None`.
         email: Option<String>,
         /// Job title shown to workspace members. `Some("")` clears it.
-        /// Absent from clients that predate the field, which reads as `None`.
         title: Option<String>,
         /// Whether members who are not the user's P2P contacts may see the
         /// avatar, email and title. `None` leaves the stored choice alone.
@@ -553,23 +564,16 @@ pub enum WorkspaceProtocolResponse {
     /// user-search corpus, and the group-call roster. A list fetched for one
     /// domain would render inside another, and the admin tab would then send
     /// role changes naming ITS entity with users taken from somebody else's.
-    ///
-    /// `Option` because a client may be talking to a server that predates the
-    /// field; a client that cannot tell which domain a list is for should keep
-    /// its old behaviour rather than discard the list.
     Members {
-        domain_id: Option<String>,
+        domain_id: String,
         members: Vec<User>,
         /// Member id -> the level above (a node id, or the workspace id) whose
         /// membership gives them access here. Absent for people listed on this
-        /// node directly. `serde(default)` so a reply from a server that
-        /// predates the field still decodes, as a list of direct members.
-        #[serde(default)]
+        /// node directly.
         inherited_from: std::collections::HashMap<String, String>,
         /// The listed members a live booking link names as guests (Calendar design §3.6.4),
         /// derived from the link records on each call. Sent to callers holding ManageRoles only;
-        /// empty for everyone else, and from a server that predates the field.
-        #[serde(default)]
+        /// empty for everyone else.
         guests: Vec<String>,
     },
     /// The roster of `domain_id` exists and an admin has hidden it from this
@@ -583,8 +587,6 @@ pub enum WorkspaceProtocolResponse {
     UserPermissions {
         domain_id: String,
         user_id: String,
-        /// The legacy enum, for clients that predate the role table.
-        role: UserRole,
         /// The role this user holds in the workspace, from its table; `None` when banned or
         /// not a member.
         role_id: Option<String>,
@@ -593,10 +595,22 @@ pub enum WorkspaceProtocolResponse {
     /// Confirmation that member role was updated
     MemberRoleUpdated {
         user_id: String,
-        /// The legacy enum, for clients that predate the role table.
-        new_role: UserRole,
         /// The role id the member now holds; `None` when banned.
         role_id: Option<String>,
+    },
+    /// `user_id` was banned. Sent to the caller and announced to the workspace.
+    MemberBanned {
+        user_id: String,
+    },
+    /// `user_id`'s ban was lifted, and they now hold `role_id`. Sent to the caller and announced
+    /// to the workspace.
+    MemberUnbanned {
+        user_id: String,
+        role_id: String,
+    },
+    /// The answer to `ListBanned`: every banned account, by id.
+    BannedMembers {
+        members: Vec<User>,
     },
 
     /// Response after user profile was updated
@@ -615,12 +629,7 @@ pub enum WorkspaceProtocolResponse {
         /// refusing until the reader navigated away and back. The verifier and
         /// this broadcast were built two rounds apart and their intersection
         /// was never exercised: ordinary collaborative editing was the trigger.
-        ///
-        /// Optional so an older server, which does not send it, degrades to
-        /// "unhashed" rather than "mismatch" — refusing content because the
-        /// server predates the field would be the same defect wearing the fix's
-        /// clothes.
-        mdx_content_hash: Option<String>,
+        mdx_content_hash: String,
         updated_by: String,
         #[ts(type = "bigint")]
         timestamp: u64,
@@ -639,7 +648,6 @@ pub enum WorkspaceProtocolResponse {
         messages: Vec<GroupMessage>,
         has_more: bool,
         /// How far each member has read, so ticks are right the moment the channel opens.
-        #[serde(default)]
         read_cursors: Vec<group_chat::GroupReadCursor>,
     },
 
@@ -836,8 +844,7 @@ pub struct GroupMessage {
     /// Unix timestamp of last edit (None if never edited)
     #[ts(type = "bigint | null")]
     pub edited_at: Option<u64>,
-    /// Reactions, retractions included. Absent on messages stored before reactions existed,
-    /// which is the same fact as an empty list: nobody has reacted.
+    /// Reactions, retractions included. Omitted when empty, so an absent list is empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<group_chat::GroupReaction>>", optional)]
     pub reactions: Vec<group_chat::GroupReaction>,

@@ -26,7 +26,7 @@ export interface BaseBubbleProps {
 
 /** Text and markdown bubbles, the two a reply can be composed as. */
 export interface ReplyableBubbleProps extends BaseBubbleProps {
-  /** The message `message.replyTo` names, or `null` when it is not loaded. */
+  /** The message `message.reply_to` names, or `null` when it is not loaded. */
   quoted: QuotedMessage | null;
 }
 

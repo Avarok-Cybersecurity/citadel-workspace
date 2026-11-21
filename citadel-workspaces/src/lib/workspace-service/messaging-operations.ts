@@ -5,11 +5,7 @@
  * get messages, get threads) plus user profile updates.
  */
 
-import type {
-  WorkspaceProtocolRequestTS,
-  SentGroupMessageType,
-} from '@/types/workspace-protocol';
-import { GroupMessageTypeTS as GroupMessageTypeEnum } from '@/types/workspace-protocol';
+import type { GroupMessageType, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import type { ProtocolSender } from './workspace-operations';
 import { awaitWriteResponse } from './await-write-response';
 
@@ -17,9 +13,9 @@ import { awaitWriteResponse } from './await-write-response';
  * Send a message via workspace protocol
  */
 export async function sendMessage(sender: ProtocolSender, contents: Uint8Array): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
-    Message: { contents: new Uint8Array(contents) }
-  } as WorkspaceProtocolRequestTS;
+  const requestPart: WorkspaceProtocolRequest = {
+    Message: { contents: Array.from(contents) }
+  };
   return sender.sendProtocolRequest(requestPart);
 }
 
@@ -30,17 +26,17 @@ export async function sendGroupMessage(
   sender: ProtocolSender,
   groupId: string,
   content: string,
-  messageType: SentGroupMessageType = GroupMessageTypeEnum.Text,
-  replyTo?: string,
+  messageType: GroupMessageType = 'Text',
+  reply_to?: string,
   mentions?: string[]
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     SendGroupMessage: {
       group_id: groupId,
       message_type: messageType,
       content,
-      reply_to: replyTo,
-      mentions
+      reply_to: reply_to ?? null,
+      mentions: mentions ?? null
     }
   };
   // The composer clears on resolve, so a send that resolved on DISPATCH threw
@@ -66,7 +62,7 @@ export async function editGroupMessage(
   messageId: string,
   newContent: string
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     EditGroupMessage: {
       group_id: groupId,
       message_id: messageId,
@@ -87,7 +83,7 @@ export async function deleteGroupMessage(
   groupId: string,
   messageId: string
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     DeleteGroupMessage: {
       group_id: groupId,
       message_id: messageId
@@ -108,10 +104,10 @@ export async function getGroupMessages(
   beforeTimestamp?: number | bigint,
   limit: number = 50
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     GetGroupMessages: {
       group_id: groupId,
-      before_timestamp: beforeTimestamp != null ? Number(beforeTimestamp) : undefined,
+      before_timestamp: beforeTimestamp != null ? BigInt(beforeTimestamp) : null,
       limit
     }
   };
@@ -126,7 +122,7 @@ export async function getThreadMessages(
   groupId: string,
   parentMessageId: string
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     GetThreadMessages: {
       group_id: groupId,
       parent_message_id: parentMessageId
@@ -159,15 +155,16 @@ export async function updateUserProfile(
   sender: ProtocolSender,
   update: ProfileUpdate,
 ): Promise<void> {
-  const requestPart: WorkspaceProtocolRequestTS = {
+  const requestPart: WorkspaceProtocolRequest = {
     UpdateUserProfile: {
-      name: update.name,
-      avatar_data: update.avatarData,
-      email: update.email,
-      title: update.title,
-      show_profile_to_strangers: update.showProfileToStrangers,
-      accepts_requests_from_strangers: update.acceptsRequestsFromStrangers,
-      shows_online_status: update.showsOnlineStatus,
+      name: update.name ?? null,
+      avatar_data: update.avatarData ?? null,
+      email: update.email ?? null,
+      title: update.title ?? null,
+      show_profile_to_strangers: update.showProfileToStrangers ?? null,
+      accepts_requests_from_strangers: update.acceptsRequestsFromStrangers ?? null,
+      shows_online_status: update.showsOnlineStatus ?? null,
+      identity_binding: null,
     }
   };
   // The settings form disables every input on `isSaving` and cleared it only on

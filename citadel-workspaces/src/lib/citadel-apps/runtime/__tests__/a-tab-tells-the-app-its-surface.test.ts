@@ -12,6 +12,7 @@ import { appModule } from '../../host/__tests__/app-fixtures';
 import { decodeCbor, type Decoded } from '../../host/cbor';
 import type { ToWorker } from '../../host/worker-protocol';
 import { FakeRuntimeKernel, hostOf, release, rig, slotsOf, tabOf, zoneOf, type Rig } from './runtime-rig';
+import type { AppSurface } from 'citadel-workspace-client-ts';
 
 let rigs: Rig[] = [];
 afterEach(() => {
@@ -26,7 +27,7 @@ const make = (...args: Parameters<typeof rig>): Rig => {
 };
 const stateOf = (host: HTMLElement): string | undefined => host.dataset.appState;
 const statusOf = (host: HTMLElement): string => host.querySelector('[data-testid="app-zone-status"]')?.textContent ?? '';
-const TAB_APP: string[] = ['node_tab'];
+const TAB_APP: AppSurface[] = ['node_tab'];
 
 function contextOf(r: Rig): Record<string, unknown> {
   const load: ToWorker | undefined = r.sent.find((m: ToWorker): boolean => m.kind === 'load');

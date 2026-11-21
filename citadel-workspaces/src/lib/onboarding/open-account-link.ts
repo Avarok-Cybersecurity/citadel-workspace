@@ -11,15 +11,12 @@
  * I/O arrives through `AccountLinkIO` so the decision can be tested without a
  * connection manager.
  */
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { sessionIsOnServer } from '@/lib/sessions/same-server';
 import type { AccountLink } from './account-link';
 
 /** The fields of a live session the decision reads. */
-export interface LinkableSession {
-  username: string;
-  server_address: string;
-  server_host?: string | null;
-}
+export type LinkableSession = Pick<SessionInformation, 'username' | 'server_address' | 'server_host'>;
 
 export type AccountLinkDecision<T extends LinkableSession> =
   | { readonly kind: 'switch'; readonly session: T }

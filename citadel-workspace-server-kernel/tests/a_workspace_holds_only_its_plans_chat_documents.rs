@@ -86,12 +86,7 @@ async fn a_deleted_node_gives_its_documents_back_exactly() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_kernel_with_no_limit_makes_no_new_document() {
     let kernel = documents_kernel().await;
-    add_user_with_role(
-        &kernel,
-        MEMBER,
-        citadel_workspace_types::structs::UserRole::Member,
-    )
-    .await;
+    add_user_with_role(&kernel, MEMBER, common::roles_fixture::MEMBER_ROLE_ID).await;
     add_room_with_chat(&kernel, &[MEMBER]).await;
     let answer = make(&kernel, 1).await;
     assert!(

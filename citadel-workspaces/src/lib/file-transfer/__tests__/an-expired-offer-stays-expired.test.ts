@@ -23,7 +23,7 @@ function transfer(overrides: Partial<FileTransfer> = {}): FileTransfer {
   return {
     id: 't-1', fileName: 'notes.md', fileSize: 1, fileType: 'text/plain',
     mode: 'p2p', state: 'pending', progress: 0,
-    senderCid: '7', recipientCid: '9',
+    sender_cid: '7', recipient_cid: '9',
     createdAt: 0, updatedAt: 0,
     expiresAt: 1_000,
     isIncoming: true,

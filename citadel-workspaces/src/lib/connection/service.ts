@@ -3,8 +3,9 @@
 import { ConnectionState } from './state';
 import { ConnectionIO, connectionIO } from './io';
 import type { CurrentConnectionInfo, AuthSuccessParams } from './types';
-import type { StoredSession, ActiveSession, StoredSessions } from '@/types/session-types';
-import { POST_DISCONNECT_DELAY_MS, AGENT_START_RETRY } from './constants';
+import type { StoredSession, StoredSessions } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
+import { AGENT_START_RETRY } from './constants';
 import { retryWithBackoff } from '@/lib/utils/retry-utils';
 import { debugLog } from '@/lib/debug-config';
 import { narrowWebSocketMessage } from '@/lib/ws-message-boundary';
@@ -14,7 +15,7 @@ import {
   handleLogout, updateSessionRole, setActiveSessionIndex,
 } from './session-management';
 import { removeSession, removeAllSessions, clearStoredSessions } from './session-list';
-import { handleSuccessfulConnection, disconnectSession, switchAccount } from './lifecycle';
+import { handleSuccessfulConnection, disconnectSession } from './lifecycle';
 import { attemptLeaderConnection, autoReconnect } from './reconnect';
 import { getActiveSessions, getActiveSessionsResult, type ActiveSessionsResult, handleConnectFailure } from './queries';
 import { tabSelectedSession } from './tab-session';
@@ -67,10 +68,6 @@ export class ConnectionManager {
       this.state.setInitialized(true);
       debugLog('ConnectionService', 'ConnectionManager: Initialized successfully');
 
-      this.io.initServerAutoConnect().catch((error) => {
-        debugLog('ConnectionService', 'Failed to initialize server auto-connect service:', error);
-      });
-
       this.state.resolveReady();
     } catch (error) {
       debugLog('ConnectionService', 'Initialization failed', error);
@@ -122,7 +119,7 @@ export class ConnectionManager {
     this.state.addCleanupFunction(unsub);
   }
 
-  private async autoReconnectInternal(activeSessions: ActiveSession[]): Promise<void> {
+  private async autoReconnectInternal(activeSessions: SessionInformation[]): Promise<void> {
     await autoReconnect(
       activeSessions, this.state, this.io,
       () => this.getActiveSessions(),
@@ -134,7 +131,7 @@ export class ConnectionManager {
   // Public API
   // ============================================================================
 
-  public async getActiveSessions(): Promise<ActiveSession[]> {
+  public async getActiveSessions(): Promise<SessionInformation[]> {
     return getActiveSessions(this.state, this.io);
   }
 
@@ -150,26 +147,6 @@ export class ConnectionManager {
 
   public async storeSession(session: StoredSession): Promise<void> {
     await storeSession(session, this.state, this.io);
-  }
-
-  public async triggerAutoConnect(): Promise<void> {
-    debugLog('ConnectionService', 'ConnectionManager: Manually triggering auto-connect');
-    const active: ActiveSession[] = await this.getActiveSessions();
-    await loadStoredSessions(this.state, this.io);
-    if (this.state.storedSessions.sessions.length > 0) {
-      this.state.resetReconnectAttempts();
-      await this.autoReconnectInternal(active);
-    }
-  }
-
-  public async reconnectToStoredSessions(): Promise<void> {
-    debugLog('ConnectionService', 'ConnectionManager: Reconnecting to stored sessions');
-    const currentSession: StoredSession | null = await this.getTabSelectedSession();
-    if (currentSession?.cid) {
-      await this.io.disconnect(currentSession.cid);
-    }
-    await new Promise((resolve) => setTimeout(resolve, POST_DISCONNECT_DELAY_MS));
-    await this.triggerAutoConnect();
   }
 
   public async setActiveSessionIndex(index: number): Promise<void> {
@@ -219,19 +196,6 @@ export class ConnectionManager {
       await disconnectSession(session, this.state, this.io);
     } catch (error) {
       debugLog('ConnectionService', 'Failed to disconnect', error);
-      throw error;
-    }
-  }
-
-  public async switchAccount(username: string, serverAddress: string): Promise<void> {
-    try {
-      await switchAccount(
-        username, serverAddress, this.state, this.io,
-        () => this.disconnect(),
-        (s) => this.storeSession(s),
-      );
-    } catch (error) {
-      debugLog('ConnectionService', 'Failed to switch account', error);
       throw error;
     }
   }

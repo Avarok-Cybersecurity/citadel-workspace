@@ -42,10 +42,9 @@ children: Array<string>, mdx_content: string,
  * script execution in the page, who could patch the check itself; and it
  * says nothing about whether the document was hostile when it was written.
  *
- * `Option` because documents stored before this existed have no hash, and
- * a client must be able to tell "not hashed" from "hash does not match".
+ * Always the hash of `mdx_content` (`mdx_content_hash`), empty content included.
  */
-mdx_content_hash: string | null, 
+mdx_content_hash: string, 
 /**
  * Rules displayed to users
  */

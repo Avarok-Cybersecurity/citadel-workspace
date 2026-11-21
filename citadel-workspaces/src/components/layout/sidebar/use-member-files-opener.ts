@@ -13,7 +13,7 @@ import type { RegisteredPeer } from '@/hooks/use-registered-peers';
 import { refreshWorkspacePeers, workspacePeerNamed } from '@/lib/workspace-peers';
 import { fileManagerHref } from '@/lib/file-manager-location';
 import { toast } from '@/hooks/use-toast';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { resolveMemberChat, type MemberChatTarget } from './member-chat-target';
 
 /** Null for yourself: there is no storage shared with yourself. */

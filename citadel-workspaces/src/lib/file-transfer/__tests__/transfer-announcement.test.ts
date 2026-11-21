@@ -17,8 +17,8 @@ function transfer(overrides: Partial<FileTransfer> = {}): FileTransfer {
     fileType: 'application/pdf',
         state: 'pending',
     progress: 0,
-    senderCid: '11',
-    recipientCid: '22',
+    sender_cid: '11',
+    recipient_cid: '22',
     createdAt: 1,
     updatedAt: 1,
     expiresAt: 999,
@@ -49,7 +49,7 @@ describe('buildTransferAnnouncement', () => {
   });
 
   it('addresses the message between the two parties of the transfer', () => {
-    const payload: P2PMessagingLayerPayload = buildTransferAnnouncement(transfer({ senderCid: '11', recipientCid: '22' }));
+    const payload: P2PMessagingLayerPayload = buildTransferAnnouncement(transfer({ sender_cid: '11', recipient_cid: '22' }));
 
     expect(payload.sender_cid).toBe(11n);
     expect(payload.recipient_cid).toBe(22n);

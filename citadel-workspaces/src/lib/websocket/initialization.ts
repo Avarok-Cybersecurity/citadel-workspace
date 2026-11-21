@@ -193,8 +193,8 @@ export class WebSocketInitialization {
       debugLog('WebSocketInit', 'Creating WorkspaceClient with config', clientConfig);
       const client: WorkspaceClient = new WorkspaceClient(clientConfig);
       await client.init();
-      // Before reporting up: a hosted account refuses claims on an undeclared socket (capabilities.ts).
-      debugLog('WebSocketInit', (await declareOnLeaderSocket(client, greeting)) ? 'The agent hosts messaging' : 'The browser runs messaging');
+      // Before reporting up, so nothing waits on a declaration not yet asked for (capabilities.ts).
+      await declareOnLeaderSocket(client, greeting);
       this.config.reconnectBackoff.connected();
       this.reconnect.connected();
       this.leaderClient = client;

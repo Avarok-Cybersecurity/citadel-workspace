@@ -18,15 +18,15 @@ export type FileTransferRequestLayer = { type: MessagingLayerType.FileTransferRe
 export function fileTransferMessage(
   payload: P2PMessagingLayerPayload,
   layer: FileTransferRequestLayer,
-  senderCid: bigint,
+  sender_cid: bigint,
   status: P2PMessage['status'],
   transferState: NonNullable<P2PMessage['transfer_state']>,
 ): P2PMessage {
   return {
     id: payload.message_id,
     content: `File transfer: ${layer.file_name}`,
-    senderCid,
-    recipientCid: BigInt(payload.recipient_cid),
+    sender_cid,
+    recipient_cid: BigInt(payload.recipient_cid),
     timestamp: layer.timestamp,
     index: payload.index,
     status,

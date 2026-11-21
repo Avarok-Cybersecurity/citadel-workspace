@@ -25,13 +25,6 @@ describe('deciding whether a member list is ours', () => {
     expect(isForDomain('office-2', 'office-1')).toBe(false);
   });
 
-  it('accepts when the server did not say', () => {
-    // A server that predates the field sends no domain. Discarding those would
-    // empty every member list in the app against an older server — a filter
-    // that silently drops everything is worse than the ambiguity it replaces.
-    expect(isForDomain(undefined, 'office-1')).toBe(true);
-  });
-
   it('accepts when the subscriber has no particular domain', () => {
     expect(isForDomain('office-1', undefined)).toBe(true);
   });

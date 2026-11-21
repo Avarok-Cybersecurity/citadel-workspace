@@ -37,7 +37,7 @@ const REPORTED_PERIODS = 2;
 
 // Which face a request is for -- the control plane or a tenant's object -- is decided in
 // `control/dispatch.mjs`; a tenant's object is reached only while the registry says it is active.
-// The Cron trigger (wrangler.toml [triggers]) runs the identity upgrade and the usage monitor (control/scheduled.mjs).
+// The Cron trigger (wrangler.toml [triggers]) runs the usage monitor (control/scheduled.mjs).
 export default {
   fetch: (request, env) => dispatch(request, env),
   scheduled: (_controller, env) => runScheduled(ioFor(env), config(env)),
@@ -94,12 +94,6 @@ export class WorkspaceServer extends DurableObject {
     await this.identity.provisioned(before !== null && before !== data.tenant_id);
     this.#roll(Date.now());
     await this.#arm(false);
-  }
-
-  /** RPC from the identity upgrade (control/identity-upgrade.mjs): provision() again, for an object that predates server identities. */
-  async upgradeIdentity(registry) {
-    const data = this.provisioning.upgradeData(registry, this.identity.seed !== null);
-    return data === null ? "unchanged" : (await this.provision(data), "upgraded");
   }
 
   /** RPC for discovery (dispatch.mjs): whether this workspace requires a check to sign in. */

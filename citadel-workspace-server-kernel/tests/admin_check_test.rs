@@ -1,4 +1,5 @@
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
+use common::roles_fixture::{ADMIN_ROLE_ID, MEMBER_ROLE_ID};
 
 use common::permissions_test_utils::*;
 
@@ -38,7 +39,7 @@ async fn test_admin_check() {
 
     // Create a non-admin user for testing this specific check
     let non_admin_id = "non_admin_user";
-    let non_admin_user_obj = create_test_user(non_admin_id, UserRole::Member);
+    let non_admin_user_obj = create_test_user(non_admin_id, MEMBER_ROLE_ID);
     kernel
         .domain_operations
         .backend_tx_manager
@@ -52,7 +53,7 @@ async fn test_admin_check() {
 
     // Create another user with admin role
     let second_admin_id = "second_admin";
-    let admin2 = create_test_user(second_admin_id, UserRole::Admin);
+    let admin2 = create_test_user(second_admin_id, ADMIN_ROLE_ID);
 
     // Add the user to the kernel
     kernel

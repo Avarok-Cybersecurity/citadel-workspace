@@ -26,6 +26,7 @@
     "check:pwa-update": "node scripts/check-pwa-update.mjs",
     "check:reduced-motion": "node scripts/check-reduced-motion.mjs",
     "check:mobile": "node scripts/check-mobile-layout.mjs",
+    "check:peer-identity": "node scripts/check-peer-identity.mjs",
     "check:chat-polish": "node scripts/check-chat-polish-geometry.mjs",
     "check:chat-files": "node scripts/check-chat-files-geometry.mjs",
     "check:account-switch": "node scripts/check-account-switch-geometry.mjs",
@@ -48,10 +49,11 @@
     "check:cdoc-scroll-perf": "node scripts/check-cdoc-scroll-perf.mjs"
   },
   "dependencies": {
-    "@avarok/citadel-protocol-types": "^0.14.0",
+    "@avarok/citadel-protocol-types": "^0.15.0",
     "@hookform/resolvers": "^3.9.0",
     "@mdx-js/mdx": "^3.1.0",
     "@mdx-js/react": "^3.1.0",
+    "@noble/hashes": "1.8.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-avatar": "^1.1.0",

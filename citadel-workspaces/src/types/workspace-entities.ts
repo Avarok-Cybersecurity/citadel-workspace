@@ -10,8 +10,8 @@ export interface Entity {
   updatedAt: number;
 }
 
-// User entity (Member in workspace context)
-export interface User extends Entity {
+// A workspace member as the UI holds it (mapped from the wire User by member-mapping)
+export interface WorkspaceMember extends Entity {
   username: string;
   displayName: string;
   profileImage?: string;
@@ -26,8 +26,8 @@ export interface User extends Entity {
   showProfileToStrangers?: boolean;
   /** True, false, or null when nobody has said. See lib/presence.ts. */
   isOnline: boolean | null;
-  /** The legacy role mirror, as the wire sends it ('Admin', 'Banned'...). Display only, as a fallback. */
-  role?: string;
+  /** Banned from the workspace; they hold no role while banned. */
+  banned: boolean;
   /** Their role in the workspace's role table; see lib/workspace-roles. */
   roleId?: string;
   permissions?: UserPermissions;
@@ -51,21 +51,6 @@ export interface UserPermissions {
   domainId: string; // ID of the domain these permissions apply to
 }
 
-// Message types
-export interface Message extends Entity {
-  content: string;
-  senderId: string;
-  receiverId?: string;
-  nodeId?: string;
-  type: MessageType;
-}
-
-export enum MessageType {
-  Text = 'text',
-  File = 'file',
-  System = 'system'
-}
-
 // Re-export generated GroupMessageType (string literal union: "Text" | "Markdown" | "System")
 // This replaces the local enum to maintain type compatibility with generated GroupMessage
 export type { GroupMessageType } from 'citadel-workspace-client-ts';
@@ -76,6 +61,4 @@ import type { GroupFileShare } from './group-file-share';
 export interface GroupMessage extends GeneratedGroupMessage {
   /** A file shared into a peer group; local-only, see types/group-file-share. */
   file_share?: GroupFileShare;
-  /** A node channel's come from the server (the same shape); a peer group keeps its own in the stored transcript. See lib/reactions. */
-  reactions?: import('@/lib/reactions/reaction-state').MessageReaction[];
 }

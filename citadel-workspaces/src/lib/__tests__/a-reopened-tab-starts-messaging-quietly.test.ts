@@ -17,7 +17,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const toasts: Array<{ title?: string }> = [];
 vi.mock('@/hooks/use-toast', () => ({ toast: (t: { title?: string }): void => { toasts.push(t); } }));
-vi.mock('@/lib/start-messaging', () => ({ startMessagingForSession: async (): Promise<boolean> => true }));
 vi.mock('@/lib/p2p-auto-connect-service', () => ({
   p2pAutoConnectService: {
     resetConnectionState: async (): Promise<void> => undefined,

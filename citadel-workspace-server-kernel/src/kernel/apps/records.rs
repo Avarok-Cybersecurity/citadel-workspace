@@ -164,8 +164,7 @@ pub struct PendingRelease {
 pub struct UserApps {
     pub disabled: BTreeSet<String>,
     /// Install id to what this member allowed of its peer-to-peer and topic capabilities, and
-    /// whom they blocked. Absent from records written before it existed: nothing allowed.
-    #[serde(default)]
+    /// whom they blocked.
     pub peer: BTreeMap<String, PeerSettings>,
 }
 

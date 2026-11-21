@@ -14,26 +14,8 @@ use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::roles::{
     first_missing, owner_permissions, RoleDefinition, OWNER_ROLE_ID,
 };
-use citadel_workspace_types::roles_legacy::legacy_role_id;
-use citadel_workspace_types::roles_protocol::MemberRole;
-use citadel_workspace_types::structs::{DomainNode, Permission, User, UserRole};
+use citadel_workspace_types::structs::{DomainNode, Permission, User};
 use std::collections::{HashMap, HashSet};
-
-/// What a role write hands out: a role from the table, or the Banned standing.
-#[derive(Debug, Clone)]
-pub enum Assignment {
-    Role(RoleDefinition),
-    Banned,
-}
-
-impl Assignment {
-    pub fn permissions(&self) -> HashSet<Permission> {
-        match self {
-            Assignment::Role(role) => role.permissions.clone(),
-            Assignment::Banned => HashSet::new(),
-        }
-    }
-}
 
 impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     /// The role `user` holds in `workspace_id`'s table, whether or not they are a member: the
@@ -97,32 +79,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             .await
     }
 
-    /// The table entry a request names. A legacy enum role names its built-in; `Custom` names
-    /// nothing in the table and is refused rather than guessed at.
-    pub(crate) async fn resolve_assignment(
-        &self,
-        role: &MemberRole,
-    ) -> Result<Assignment, NetworkError> {
-        let role_id = match role {
-            MemberRole::Legacy(UserRole::Custom(name, _)) => {
-                return Err(NetworkError::msg(format!(
-                    "'{name}' is not a role in this workspace; create it in the role table and assign it by id"
-                )))
-            }
-            MemberRole::Legacy(legacy) => match legacy_role_id(legacy) {
-                Some(id) => id,
-                None => return Ok(Assignment::Banned),
-            },
-            MemberRole::Id(id) => id.as_str(),
-        };
+    /// The table entry a request names by id.
+    pub(crate) async fn resolve_role(&self, role_id: &str) -> Result<RoleDefinition, NetworkError> {
         let roles = self.backend_tx_manager.get_roles(WORKSPACE_ROOT_ID).await?;
-        roles
-            .get(role_id)
-            .cloned()
-            .map(Assignment::Role)
-            .ok_or_else(|| {
-                NetworkError::msg(format!("No role '{role_id}' exists in this workspace"))
-            })
+        roles.get(role_id).cloned().ok_or_else(|| {
+            NetworkError::msg(format!("No role '{role_id}' exists in this workspace"))
+        })
     }
 
     /// Refuse assigning a role the actor may not hand out.
@@ -137,11 +99,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     pub(crate) async fn ensure_may_grant_role(
         &self,
         actor_user_id: &str,
-        assignment: &Assignment,
+        role: &RoleDefinition,
     ) -> Result<(), NetworkError> {
-        let Assignment::Role(role) = assignment else {
-            return Ok(());
-        };
         let actor = self.actor_role(actor_user_id).await?;
         if actor.is_owner() {
             return Ok(());
@@ -186,8 +145,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     /// Refuse acting on a member whose role is not below the actor's.
     ///
     /// The other half of `ensure_may_grant_role`: nobody may demote, ban, remove or strip the
-    /// grants of someone at or above them. Banning grants nothing, so the granting check alone
-    /// would let anyone ban anyone. A banned or roleless member is below everyone.
+    /// grants of someone at or above them. Banning grants nothing, so it has only this check.
+    /// A banned or roleless member is below everyone.
     ///
     /// Self-action is exempt, since standing down hands nobody anything; `role_writes` refuses
     /// the one case that matters, the last member who can manage roles. So is a target who is

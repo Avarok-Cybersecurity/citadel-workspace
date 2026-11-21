@@ -23,7 +23,6 @@ export interface ReplicaStoreHost {
 export interface OpenedCopy {
   readonly baseStored: boolean;
   readonly pending: readonly Uint8Array[];
-  readonly migrationOrigin: string | null;
 }
 
 export class ChatReplicaStore {
@@ -79,7 +78,7 @@ export class ChatReplicaStore {
       if (!this.baseStored || this.pending.length >= this.config.foldAfterUpdates) {
         const cut: number = this.pending.length;
         const snapshot: Uint8Array = await this.host.snapshot();
-        await this.backend.saveBase(this.docId, { docVersion: this.config.docVersion, snapshot, migrationOrigin: this.opened.migrationOrigin });
+        await this.backend.saveBase(this.docId, { docVersion: this.config.docVersion, snapshot });
         this.baseStored = true;
         this.pending.splice(0, cut);
       }

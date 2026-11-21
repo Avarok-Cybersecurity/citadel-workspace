@@ -13,8 +13,8 @@ import { askPeerTrust, PEER_TRUST_TIMEOUT_MS, UNTRUSTED } from '@/lib/messaging-
 import type { MessagingTrustApi } from '@/lib/messaging-trust/messaging-trust-api';
 import type { PeerTrust } from '@/lib/workspace-service/messaging-trust-operations';
 
-const REQUEST: { recipientCid: bigint; peerCid: bigint; peerUsername: string } = {
-  recipientCid: 7n, peerCid: 42n, peerUsername: 'colleague',
+const REQUEST: { recipient_cid: bigint; peerCid: bigint; peerUsername: string } = {
+  recipient_cid: 7n, peerCid: 42n, peerUsername: 'colleague',
 };
 
 function recorder(trusted: () => Promise<boolean>): { calls: IncomingRequestAction[]; deps: IncomingRegistrationDeps } {

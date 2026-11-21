@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * The Permission enum exists twice: authoritatively in Rust
- * (citadel-workspace-types) and mirrored in TypeScript for the admin UI. They
- * drifted — EditTreeStructure and ManageNodeTypes were held by the Owner role
- * on the server but absent from the TS enum entirely, so the permission editor
- * could neither show nor grant them, and a server response carrying one had no
- * TypeScript value to land on.
+ * The Permission enum is defined once, in Rust (citadel-workspace-types), and
+ * reaches the admin UI as the generated ts-rs union. A hand-written TS enum once
+ * mirrored it and drifted — EditTreeStructure and ManageNodeTypes were held by
+ * the Owner role on the server but absent from the TS enum entirely, so the
+ * permission editor could neither show nor grant them. The mirror is gone; the
+ * UI's label table is typed `Record<Permission, string>` over the generated
+ * union, so a missing label is a compile error as well as a finding here.
  *
  * This checks five things:
- *   1. every Rust variant has a TS enum member with the same string value;
+ *   1. every Rust variant is in the generated binding, and nothing else is;
  *   2. every TS member has a human label;
  *   3. every permission appears in exactly one PERMISSION_CATEGORIES group, so
  *      the editor renders all of them.
@@ -43,29 +44,26 @@ const enumBody = /pub enum Permission \{([\s\S]*?)\n\}/.exec(rust);
 if (!enumBody) throw new Error('could not locate `pub enum Permission` in structs.rs');
 const rustVariants = [...enumBody[1].matchAll(/^\s*(\w+),/gm)].map((m) => m[1]);
 
-const tsBody = /export enum Permission \{([\s\S]*?)\n\}/.exec(ts);
-if (!tsBody) throw new Error('could not locate `export enum Permission` in types.ts');
-const tsMembers = new Map(
-  [...tsBody[1].matchAll(/^\s*(\w+)\s*=\s*'([^']+)',/gm)].map((m) => [m[1], m[2]]),
-);
+const binding = readFileSync('citadel-workspace-types/bindings/Permission.ts', 'utf8');
+const unionBody = /export type Permission = ([^;]*);/.exec(binding);
+if (!unionBody) throw new Error('could not locate `export type Permission` in bindings/Permission.ts');
+const generated = new Set([...unionBody[1].matchAll(/"(\w+)"/g)].map((m) => m[1]));
 
 const labelBlock = /PERMISSION_LABELS[\s\S]*?\n\};/.exec(ts)?.[0] ?? '';
-const labelled = new Set([...labelBlock.matchAll(/\[Permission\.(\w+)\]/g)].map((m) => m[1]));
+if (labelBlock === '') throw new Error('could not locate PERMISSION_LABELS in types.ts');
+const labelled = new Set([...labelBlock.matchAll(/^\s*(\w+):\s*'/gm)].map((m) => m[1]));
 
 const categoryBlock = /PERMISSION_CATEGORIES[\s\S]*?\n\} as const;/.exec(ts)?.[0] ?? '';
-const categorised = [...categoryBlock.matchAll(/Permission\.(\w+)/g)].map((m) => m[1]);
+if (categoryBlock === '') throw new Error('could not locate PERMISSION_CATEGORIES in types.ts');
+const categorised = [...categoryBlock.matchAll(/permissions:\s*\[([\s\S]*?)\]/g)]
+  .flatMap((m) => [...m[1].matchAll(/'(\w+)'/g)].map((n) => n[1]));
 
 const problems = [];
 
 for (const variant of rustVariants) {
-  if (!tsMembers.has(variant)) {
-    problems.push(`${variant}: in the Rust enum, missing from the TypeScript enum`);
+  if (!generated.has(variant)) {
+    problems.push(`${variant}: in the Rust enum, missing from the generated binding (regenerate the bindings)`);
     continue;
-  }
-  if (tsMembers.get(variant) !== variant) {
-    problems.push(
-      `${variant}: TypeScript value is '${tsMembers.get(variant)}', which will not match the wire format`,
-    );
   }
   if (!labelled.has(variant)) {
     problems.push(`${variant}: no entry in PERMISSION_LABELS`);
@@ -80,10 +78,13 @@ for (const variant of rustVariants) {
   }
 }
 
-for (const member of tsMembers.keys()) {
+for (const member of generated) {
   if (!rustVariants.includes(member)) {
-    problems.push(`${member}: in the TypeScript enum but not in the Rust enum`);
+    problems.push(`${member}: in the generated binding but not in the Rust enum (regenerate the bindings)`);
   }
+}
+for (const member of labelled) {
+  if (!rustVariants.includes(member)) problems.push(`${member}: labelled in PERMISSION_LABELS but not a Rust variant`);
 }
 
 // ---------------------------------------------------------------------------

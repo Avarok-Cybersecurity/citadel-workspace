@@ -20,8 +20,8 @@ function messageSaying(content: string): P2PMessage {
   return {
     id: 'm1',
     content,
-    senderCid: 2n,
-    recipientCid: 1n,
+    sender_cid: 2n,
+    recipient_cid: 1n,
     timestamp: 1_700_000_000_000,
     index: 0,
     status: 'delivered',

@@ -51,7 +51,7 @@ import type { FileTransfer } from '@/lib/file-transfer/types';
 
 const transfer: FileTransfer = {
   id: 't1', fileName: 'holiday photo.png', fileSize: PNG.length, fileType: '', state: 'complete', progress: 100,
-  senderCid: '42', recipientCid: '7', downloadPath: '/home/u/.citadel/transfers/42/holiday photo.png',
+  sender_cid: '42', recipient_cid: '7', downloadPath: '/home/u/.citadel/transfers/42/holiday photo.png',
   createdAt: 1, updatedAt: 1, isIncoming: true,
 };
 

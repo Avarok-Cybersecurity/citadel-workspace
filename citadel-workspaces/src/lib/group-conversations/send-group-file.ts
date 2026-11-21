@@ -31,10 +31,10 @@ import { shareFileWithGroup, type ShareFileResult } from './share-file-with-grou
 import { registrationLookup, type RegistrationLookup } from './group-file-registration';
 
 function announce(groupId: string, info: GroupFileInfo): Promise<string> {
-  return sendPeerGroupBody(groupId, (senderCid: bigint, messageId: string): Uint8Array => encodeGroupFileShare({
+  return sendPeerGroupBody(groupId, (sender_cid: bigint, messageId: string): Uint8Array => encodeGroupFileShare({
     group_id: groupId,
     message_id: messageId,
-    sender_cid: senderCid,
+    sender_cid: sender_cid,
     timestamp: Date.now(),
     file_share: { name: info.name, size: info.size, mime_type: info.mimeType },
   }));
@@ -59,7 +59,7 @@ export async function sendGroupFile(groupId: string, file: File): Promise<ShareF
   return shareFileWithGroup(groupId, group.members, file, {
     selfCid: self,
     isRegistered,
-    sendFile: (recipientCid: string, f: File): Promise<string> => fileTransferService.sendFile(recipientCid, f),
+    sendFile: (recipient_cid: string, f: File): Promise<string> => fileTransferService.sendFile(recipient_cid, f),
     announce,
     deliverOwn,
     now: Date.now,

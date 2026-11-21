@@ -13,8 +13,9 @@
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
 use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, Permission, User, UserRole,
+    DomainNode, DomainPermissions, NodeEntityType, Permission, User,
 };
+use common::roles_fixture::{roles_for, MEMBER_ROLE_ID};
 use common::workspace_test_utils::create_test_kernel;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -31,7 +32,7 @@ fn node(id: &str, parent: &str) -> DomainNode {
         members: vec![],
         children: vec![],
         mdx_content: String::new(),
-        mdx_content_hash: None,
+        mdx_content_hash: citadel_workspace_types::structs::mdx_content_hash(""),
         rules: None,
         chat_enabled: false,
         chat_channel_id: None,
@@ -65,8 +66,8 @@ async fn permission_walks_terminate_on_a_cyclic_tree() {
             User {
                 id: "victim".to_string(),
                 name: "Victim".to_string(),
-                role: UserRole::Member,
-                workspace_roles: Default::default(),
+                banned: false,
+                workspace_roles: roles_for(MEMBER_ROLE_ID),
                 permissions: HashMap::new(),
                 metadata: HashMap::new(),
             },

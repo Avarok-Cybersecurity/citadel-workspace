@@ -11,6 +11,7 @@ import {
 } from '../security-utils';
 
 export type { SessionSecuritySettings, HeaderObfuscatorSettings };
+export type { PeerInformation } from 'citadel-workspace-client-ts';
 
 export interface Peer {
   cid: bigint;
@@ -35,14 +36,6 @@ export interface Peer {
   isRegistered: boolean;
 }
 
-/** Shape of peer info from ListAllPeers/ListRegisteredPeers backend responses */
-export interface PeerInfoResponse {
-  cid?: bigint;
-  username?: string;
-  peer_username?: string;
-  name?: string;
-  online_status?: boolean;
-}
 
 export interface PeerRegistrationOptions {
   autoRegisterAll?: boolean;

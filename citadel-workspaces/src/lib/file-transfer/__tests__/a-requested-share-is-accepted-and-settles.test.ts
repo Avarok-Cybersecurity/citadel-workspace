@@ -21,7 +21,6 @@ vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
     sendRequest: (r: unknown): Promise<void> => sendRequest(r),
     sendP2PMessageReliable: async (): Promise<void> => undefined,
-    ensureMessengerOpen: async (): Promise<boolean> => false,
     canSendRequests: (): boolean => false,
   },
 }));
@@ -48,7 +47,7 @@ function offer(transferId: string, objectId: bigint, name: string): void {
       type: MessagingLayerType.FileTransferRequest, transfer_id: transferId, file_name: name, file_size: 1400,
       file_type: 'image/png', transfer_mode: 'p2p', timestamp: Date.now(), expiry_timestamp: Date.now() + 60_000,
     },
-    senderCid: ALICE.toString(), recipientCid: BOB.toString(),
+    sender_cid: ALICE.toString(), recipient_cid: BOB.toString(),
   });
   frame({ FileTransferRequestNotification: { cid: BOB, peer_cid: ALICE, metadata, request_id: null } });
 }

@@ -21,8 +21,8 @@
 //! tightening cannot quietly close the claim path.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::async_workspace_ops::AsyncWorkspaceOperations;
-use citadel_workspace_types::structs::UserRole;
 use common::member_test_utils::{insert_user_with_role, join_root};
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_PASSWORD};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
@@ -34,7 +34,7 @@ async fn a_non_owner_is_refused_identically_whatever_password_they_send() {
 
     // An enrolled account that is neither owner nor admin — exactly what open
     // enrolment produces for anyone who registers.
-    insert_user_with_role(&kernel, OUTSIDER, UserRole::Member).await;
+    insert_user_with_role(&kernel, OUTSIDER, MEMBER_ROLE_ID).await;
     join_root(&kernel, OUTSIDER).await;
 
     let with_wrong = kernel

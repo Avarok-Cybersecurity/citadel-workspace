@@ -14,7 +14,10 @@ import type { ProtocolSender } from '@/lib/workspace-service/workspace-operation
 import { handleGroupVariants } from '@/lib/workspace-response-handler/group-handlers';
 import { eventEmitter } from '@/lib/event-emitter';
 import type { GroupMessage } from '@/types/workspace-entities';
-import type { GroupMessageTypeTS, WorkspaceProtocolRequestTS } from '@/types/workspace-protocol';
+import type { GroupMessageType } from 'citadel-workspace-client-ts';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
+import type { RequestBody, WorkspaceRequestView } from '@/types/workspace-protocol';
+import { viewOf } from '@/test-utils/request-view';
 import type { GroupReaction, GroupReadCursor, WorkspaceProtocolResponse } from 'citadel-workspace-client-ts';
 
 /** How the next SendGroupMessage is answered: stored and echoed, refused, or held until `release`. */
@@ -25,7 +28,7 @@ interface ServerState {
   /** The workspace id the server writes as the sender of this session's messages. */
   sessionUser: string;
   stored: GroupMessage[];
-  requests: WorkspaceProtocolRequestTS[];
+  requests: WorkspaceRequestView[];
   nextSend: SendAnswer;
   /** False: history requests are taken and never answered (a lost response). */
   answersHistory: boolean;
@@ -51,7 +54,7 @@ const cursorList = (): GroupReadCursor[] => [...state.cursors].map(([member, upt
 const refuse = (reason: string): void => queueMicrotask((): void => { eventEmitter.emit('workspace:raw-response', { Error: reason }); });
 
 /** The kernel's ReactGroupMessage: one entry per (reactor, emoji), attributed to the session. */
-function react({ group_id, message_id, emoji, on }: NonNullable<WorkspaceProtocolRequestTS['ReactGroupMessage']>): void {
+function react({ group_id, message_id, emoji, on }: RequestBody<'ReactGroupMessage'>): void {
   const message: GroupMessage | undefined = state.stored.find((m: GroupMessage): boolean => m.id === message_id);
   if (message === undefined || !REACTION_EMOJIS.includes(emoji)) { refuse('Message not found'); return; }
   state.clock += 1;
@@ -60,13 +63,13 @@ function react({ group_id, message_id, emoji, on }: NonNullable<WorkspaceProtoco
   answer({ GroupMessageReacted: { group_id, message_id, reactions: message.reactions } });
 }
 
-function page(before: number | undefined, limit: number): WorkspaceProtocolResponse {
-  const older: GroupMessage[] = state.stored.filter((m: GroupMessage): boolean => before === undefined || Number(m.timestamp) < before);
+function page(before: bigint | null, limit: number): WorkspaceProtocolResponse {
+  const older: GroupMessage[] = state.stored.filter((m: GroupMessage): boolean => before === null || BigInt(m.timestamp) < before);
   const messages: GroupMessage[] = older.slice(-limit);
   return { GroupMessages: { group_id: state.channelId, messages, has_more: older.length > messages.length, read_cursors: cursorList() } };
 }
 
-type SendRequest = NonNullable<WorkspaceProtocolRequestTS['SendGroupMessage']>;
+type SendRequest = RequestBody<'SendGroupMessage'>;
 
 function store(request: SendRequest): void {
   state.clock += 1;
@@ -81,11 +84,12 @@ function store(request: SendRequest): void {
 
 const sender: ProtocolSender = {
   currentCid: 1n,
-  sendProtocolRequest: async (request: WorkspaceProtocolRequestTS): Promise<void> => {
+  sendProtocolRequest: async (sent: WorkspaceProtocolRequest): Promise<void> => {
+    const request: WorkspaceRequestView = viewOf(sent);
     state.requests.push(request);
     if (request.GetGroupMessages !== undefined) {
       const { before_timestamp, limit } = request.GetGroupMessages;
-      if (state.answersHistory) answer(page(before_timestamp ?? undefined, limit ?? 50));
+      if (state.answersHistory) answer(page(before_timestamp, limit ?? 50));
       return;
     }
     if (request.SendGroupMessage !== undefined) {
@@ -123,7 +127,7 @@ export interface ChannelServer {
   /** Mocked in for the default export of `@/lib/workspace-service`. */
   readonly service: {
     getGroupMessages(groupId: string, before?: number | bigint, limit?: number): Promise<void>;
-    sendGroupMessage(groupId: string, content: string, type?: GroupMessageTypeTS, replyTo?: string): Promise<void>;
+    sendGroupMessage(groupId: string, content: string, type?: GroupMessageType, reply_to?: string): Promise<void>;
     editGroupMessage(groupId: string, messageId: string, content: string): Promise<void>;
     deleteGroupMessage(groupId: string, messageId: string): Promise<void>;
     reactGroupMessage(groupId: string, messageId: string, emoji: string, on: boolean): Promise<void>;
@@ -133,7 +137,7 @@ export interface ChannelServer {
   reset(channelId: string, sessionUser: string, stored: GroupMessage[]): void;
   nextSend: SendAnswer;
   answersHistory: boolean;
-  readonly requests: readonly WorkspaceProtocolRequestTS[];
+  readonly requests: readonly WorkspaceRequestView[];
   release(): void;
   broadcast(message: GroupMessage): void;
   /** Another member's cursor move, or their typing, broadcast as the kernel does. */
@@ -148,7 +152,7 @@ export interface ChannelServer {
 export const channelServer: ChannelServer = {
   service: {
     getGroupMessages: (groupId: string, before?: number | bigint, limit?: number): Promise<void> => messaging.getGroupMessages(sender, groupId, before, limit),
-    sendGroupMessage: (groupId: string, content: string, type?: GroupMessageTypeTS, replyTo?: string): Promise<void> => messaging.sendGroupMessage(sender, groupId, content, type, replyTo),
+    sendGroupMessage: (groupId: string, content: string, type?: GroupMessageType, reply_to?: string): Promise<void> => messaging.sendGroupMessage(sender, groupId, content, type, reply_to),
     editGroupMessage: (groupId: string, messageId: string, content: string): Promise<void> => messaging.editGroupMessage(sender, groupId, messageId, content),
     deleteGroupMessage: (groupId: string, messageId: string): Promise<void> => messaging.deleteGroupMessage(sender, groupId, messageId),
     reactGroupMessage: (groupId: string, messageId: string, emoji: string, on: boolean): Promise<void> => signals.reactGroupMessage(sender, groupId, messageId, emoji, on),
@@ -162,7 +166,7 @@ export const channelServer: ChannelServer = {
   set nextSend(how: SendAnswer) { state.nextSend = how; },
   get answersHistory(): boolean { return state.answersHistory; },
   set answersHistory(answers: boolean) { state.answersHistory = answers; },
-  get requests(): readonly WorkspaceProtocolRequestTS[] { return state.requests; },
+  get requests(): readonly WorkspaceRequestView[] { return state.requests; },
   /** Answers every held send, in order. */
   release(): void { const held: (() => void)[] = state.held.splice(0); held.forEach((run: () => void): void => run()); },
   /** Another member's message, broadcast as the kernel does. */

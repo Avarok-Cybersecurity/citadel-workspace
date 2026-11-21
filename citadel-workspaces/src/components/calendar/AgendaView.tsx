@@ -9,14 +9,14 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { dateKey, sameDate } from '@/lib/calendar/grid-keyboard';
 import { formatDayLong, formatMonth } from '@/lib/calendar/format';
 import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
-import type { Chip, Placement } from '@/lib/calendar/placement';
+import type { Chip, GridPlacement } from '@/lib/calendar/placement';
 import { EventChip } from './EventChip';
 
 interface AgendaViewProps {
   days: CivilDate[];
   cursor: CivilDate;
   today: CivilDate;
-  placement: Placement;
+  placement: GridPlacement;
   displayZone: string;
   nodeName: (id: string) => string;
   /** Move focus to the cursor day's first event once drawn. */

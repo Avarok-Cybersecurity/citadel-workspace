@@ -1,0 +1,144 @@
+name: Types bump
+
+# Moves this repository onto its producers' newest types, on ONE branch,
+# bot/types-bump, with ONE PR that each run updates (TYPES-SYNC D2):
+#   - the citadel-internal-service submodule onto its master (the pointer IS
+#     the agent's release), with citadel-workspace-client-ts/pkg regenerated
+#     from it by scripts/regenerate-committed-pkg.sh, the recipe
+#     wasm-rebuild-diff holds it to;
+#   - @avarok/citadel-protocol-types pinned EXACTLY (TYPES-SYNC D1) in every
+#     workspace that depends on it.
+# Validate runs on the PR, so a type the page no longer matches is a compile
+# error there, before anything merges.
+#
+# Started by a producer (repository_dispatch `types-released`, from the agent's
+# notify-consumers or the SDK's typescript-publish), nightly in case a dispatch
+# was lost, and by hand.
+
+on:
+  repository_dispatch:
+    types: [types-released]
+  schedule:
+    - cron: '47 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: types-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: The types-sync App is configured
+        env:
+          APP_ID: ${{ vars.TYPES_SYNC_APP_ID }}
+          APP_KEY: ${{ secrets.TYPES_SYNC_APP_PRIVATE_KEY }}
+        run: |
+          missing=""
+          [ -n "$APP_ID" ] || missing="$missing variable TYPES_SYNC_APP_ID"
+          [ -n "$APP_KEY" ] || missing="$missing secret TYPES_SYNC_APP_PRIVATE_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::not configured:$missing (see TYPES-SYNC-DESIGN.md, 'Creating the types-sync App')."
+            exit 1
+          fi
+      - uses: actions/create-github-app-token@v1
+        id: app
+        with:
+          app-id: ${{ vars.TYPES_SYNC_APP_ID }}
+          private-key: ${{ secrets.TYPES_SYNC_APP_PRIVATE_KEY }}
+          owner: Avarok-Cybersecurity
+          repositories: citadel-workspace,citadel-agent
+      # The App's token, not GITHUB_TOKEN: a push or PR made with GITHUB_TOKEN
+      # starts no workflow, so Validate would never judge the bump.
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app.outputs.token }}
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Start from master
+        run: git checkout -B bot/types-bump origin/master
+      - name: The agent pointer onto its master
+        id: agent
+        run: |
+          before=$(git rev-parse HEAD:citadel-internal-service)
+          git -C citadel-internal-service fetch --quiet origin master
+          git -C citadel-internal-service checkout --quiet --detach origin/master
+          git -C citadel-internal-service submodule update --init --recursive
+          after=$(git -C citadel-internal-service rev-parse HEAD)
+          echo "moved=$([ "$before" != "$after" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "agent $before -> $after"
+      # The pinned recipe wasm-rebuild-diff holds the committed pkg to, so the
+      # bump PR passes it (scripts/wasm-toolchain.env).
+      - name: The pinned WASM toolchain
+        if: steps.agent.outputs.moved == 'true'
+        run: bash scripts/install-wasm-toolchain.sh
+      - name: Regenerate the committed pkg from the new agent
+        if: steps.agent.outputs.moved == 'true'
+        run: |
+          bash scripts/regenerate-committed-pkg.sh
+          node scripts/check-wasm-matches-its-source.mjs
+      - name: Which protocol-types version
+        id: version
+        env:
+          FROM_DISPATCH: ${{ github.event.client_payload.producer == 'sdk' && github.event.client_payload.version || '' }}
+        run: |
+          if [ -n "$FROM_DISPATCH" ]; then
+            version=$FROM_DISPATCH
+          else
+            # The most recently published, whichever dist-tag it carries.
+            version=$(npm view @avarok/citadel-protocol-types time --json | node -e '
+              const t = JSON.parse(require("fs").readFileSync(0, "utf8"));
+              delete t.created; delete t.modified;
+              const [v] = Object.entries(t).sort((a, b) => b[1].localeCompare(a[1]))[0];
+              console.log(v);')
+          fi
+          [ -n "$version" ] || { echo "::error::no published version found"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Pin it exactly in every workspace that uses it
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          users=$(node -e '
+            const fs = require("fs");
+            for (const ws of require("./package.json").workspaces) {
+              const p = JSON.parse(fs.readFileSync(ws + "/package.json", "utf8"));
+              if ({ ...p.dependencies, ...p.devDependencies, ...p.peerDependencies }["@avarok/citadel-protocol-types"]) console.log(ws);
+            }')
+          # The agent's own client is the agent's to pin (its types-bump); the
+          # pointer move above brings that pin here.
+          users=$(echo "$users" | grep -v '^citadel-internal-service/' || true)
+          [ -n "$users" ] || { echo "::error::no workspace depends on @avarok/citadel-protocol-types; the package list changed"; exit 1; }
+          args=""; for ws in $users; do args="$args -w $ws"; done
+          npm install --save-exact --package-lock-only --ignore-scripts $args "@avarok/citadel-protocol-types@$VERSION"
+          git status --short
+      - name: Commit, push and open or update the PR
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SLUG: ${{ steps.app.outputs.app-slug }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git add -A citadel-internal-service citadel-workspace-client-ts package-lock.json $(git ls-files -m -- '*package.json')
+          if git diff --cached --quiet; then
+            echo "Already current; nothing to do."
+            exit 0
+          fi
+          id=$(gh api "/users/${SLUG}[bot]" --jq .id)
+          git config user.name "${SLUG}[bot]"
+          git config user.email "${id}+${SLUG}[bot]@users.noreply.github.com"
+          git commit -m "chore(types): follow the agent at $(git -C citadel-internal-service rev-parse --short HEAD) and @avarok/citadel-protocol-types $VERSION"
+          git push --force origin bot/types-bump
+          if [ -z "$(gh pr list --head bot/types-bump --state open --json number --jq '.[].number')" ]; then
+            gh pr create --base master --head bot/types-bump \
+              --title "chore(types): follow the agent and @avarok/citadel-protocol-types" \
+              --body "Opened by the types-bump workflow (TYPES-SYNC D2). Each run moves this branch to the agent's master (with the pkg regenerated from it) and the newest published protocol types, pinned exactly; Validate judges whether the page still compiles against them."
+          fi

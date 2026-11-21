@@ -4,6 +4,7 @@
  * Type definitions for file transfer functionality.
  */
 
+import type { PickFileSuccess } from 'citadel-workspace-client-ts';
 import type { FileTransferState } from '@/types/messaging-layer';
 
 // ============================================================================
@@ -18,8 +19,8 @@ export interface FileTransfer {
   thumbnail?: string;
   state: FileTransferState;
   progress: number; // 0-100
-  senderCid: string;
-  recipientCid: string;
+  sender_cid: string;
+  recipient_cid: string;
   downloadPath?: string;
   errorMessage?: string;
   createdAt: number;
@@ -192,12 +193,9 @@ export type FileTransferIntent =
 
 export interface IncomingFileTransferMessage {
   layer: unknown;
-  senderCid: string;
-  recipientCid: string;
+  sender_cid: string;
+  recipient_cid: string;
 }
 
-export interface FilePickerResult {
-  file_path: string;
-  file_name: string;
-  file_size: bigint;
-}
+/** A picked file: the generated `PickFileSuccess`, less its addressing. */
+export type FilePickerResult = Omit<PickFileSuccess, 'cid' | 'request_id'>;

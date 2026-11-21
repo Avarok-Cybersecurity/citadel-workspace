@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { toStoredWorkspaces, pickCurrentWorkspace, switcherWorkspaces } from '../stored-workspace-list';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import type { StoredSession } from '@/types/session-types';
 import type { StoredWorkspace } from '@/components/layout/sidebar/stored-workspace-list';
 
@@ -82,17 +82,17 @@ describe('the switcher across two workspace orgs', () => {
   // sessions live on the same agent were missing, because the switcher read saved
   // accounts only and a resumed session is never saved -- and every group was labelled
   // with the CURRENT workspace's name.
-  const live = (username: string, cid: bigint, host: string, full_name?: string): ActiveSession =>
-    ({ username, cid, server_address: '104.21.0.1:443', server_host: host, full_name }) as ActiveSession;
+  const live = (username: string, cid: bigint, host: string): SessionInformation =>
+    ({ username, cid, server_address: '104.21.0.1:443', server_host: host, peer_connections: {} });
 
   it('adds live sessions the saved list does not hold, so another org can be reached', () => {
     const rows: StoredWorkspace[] = switcherWorkspaces(
       [session('alice.lab', 5n, 'admin-lab.work.avarok.net')],
-      [live('alice.lab', 5n, 'admin-lab.work.avarok.net'), live('alice0924', 1n, 'bench.work.avarok.net', 'Alice Anders')],
+      [live('alice.lab', 5n, 'admin-lab.work.avarok.net'), live('alice0924', 1n, 'bench.work.avarok.net')],
       'Admin Lab', 5n,
     );
     expect(rows.map((r) => `${r.username}@${r.serverAddress}`)).toEqual(['alice.lab@admin-lab.work.avarok.net', 'alice0924@bench.work.avarok.net']);
-    expect(rows[1]).toMatchObject({ cid: 1n, fullName: 'Alice Anders', isActive: false });
+    expect(rows[1]).toMatchObject({ cid: 1n, isActive: false });
   });
 
   it('labels only the current server with the current workspace name', () => {

@@ -46,7 +46,7 @@ export interface Unplaced {
   code: RefusalCode;
 }
 
-export interface Placement {
+export interface GridPlacement {
   /** The instant the first day starts at, on the display zone's clock. */
   fromMs: bigint;
   days: ReadonlyMap<string, Chip[]>;
@@ -79,7 +79,7 @@ function byStart(a: Chip, b: Chip): number {
   return (a.title ?? '').localeCompare(b.title ?? '');
 }
 
-export function place(entries: Iterable<CalendarEntry>, days: CivilDate[], displayZone: string, viewer: string, engine: PlacementEngine): Placement {
+export function place(entries: Iterable<CalendarEntry>, days: CivilDate[], displayZone: string, viewer: string, engine: PlacementEngine): GridPlacement {
   const last: CivilDate | undefined = days[days.length - 1];
   if (last === undefined) throw new Error('a view places entries on at least one day');
   const edges: bigint[] = [...days, engine.addDays(last, 1)].map((date: CivilDate): bigint => engine.instantOf(displayZone, { date, minute: 0 }));

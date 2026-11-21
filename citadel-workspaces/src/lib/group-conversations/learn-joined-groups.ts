@@ -76,6 +76,6 @@ export function bindJoinedGroups(): void {
   eventEmitter.on('group:control-received', (data: GroupControlEvent) => {
     if (!data.control.request_state) return;
     const group: GroupConversation | undefined = getGroups().find((g: GroupConversation) => g.id === data.groupId);
-    if (shouldAnswerStateRequest(group, data.senderCid, instanceManager.cid)) announceGroupState(group);
+    if (shouldAnswerStateRequest(group, data.sender_cid, instanceManager.cid)) announceGroupState(group);
   });
 }

@@ -9,8 +9,6 @@ import { WorkspaceSessionManager, type SessionConfig } from './session.js';
 
 // Extends parent WasmModule with workspace-specific WASM methods
 interface WorkspaceWasmModule extends WasmModule {
-  open_messenger_for(cid_str: string): Promise<void>;
-  ensure_messenger_open(cid_str: string): Promise<boolean>;
   send_media_frame(
     local_cid_str: string,
     peer_cid_str: string,
@@ -422,7 +420,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   /**
    * Get the WASM module instance with workspace-specific methods.
    * Parent's wasmModule is typed as WasmModule; this casts to WorkspaceWasmModule
-   * which adds open_messenger_for and ensure_messenger_open.
+   * which adds send_media_frame.
    */
   private getWorkspaceWasmModule(): WorkspaceWasmModule {
     if (!this.wasmModule) {
@@ -458,27 +456,6 @@ export class WorkspaceClient extends InternalServiceWasmClient {
       flags,
       payload,
     );
-  }
-
-  /**
-   * Open a messenger handle for the given CID.
-   * Creates an ISM (InterSession Messaging) channel for reliable-ordered messaging.
-   * @param cid The CID to open the messenger for
-   */
-  async openMessengerFor(cid: string): Promise<void> {
-    const wasmModule = this.getWorkspaceWasmModule();
-    await wasmModule.open_messenger_for(cid);
-  }
-
-  /**
-   * Ensures a messenger handle is open for the given CID.
-   * Returns true if the messenger was just opened, false if already open.
-   * Use this for polling to maintain messenger handles across leader/follower tab transitions.
-   * @param cid The CID to ensure messenger is open for
-   */
-  async ensureMessengerOpen(cid: string): Promise<boolean> {
-    const wasmModule = this.getWorkspaceWasmModule();
-    return await wasmModule.ensure_messenger_open(cid);
   }
 
   /**

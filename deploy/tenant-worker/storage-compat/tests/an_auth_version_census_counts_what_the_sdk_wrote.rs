@@ -13,7 +13,7 @@ use tenant_auth_versions::{count, AuthVersions};
 type Account = ClientNetworkAccount<StackedRatchet, StackedRatchet>;
 
 /// Every `bin` in the fixture: the legacy account and the server's own transient row (cid 0),
-/// as a real object holds them (see a_0_10_durable_object_account_loads.rs).
+/// as a real object holds them.
 fn fixture_records() -> Vec<Vec<u8>> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/do-0.10.0.sqlite");
     let db =

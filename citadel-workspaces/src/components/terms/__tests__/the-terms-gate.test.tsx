@@ -16,8 +16,8 @@ type ApiMocks<K extends keyof TelemetryApi> = { [P in K]: Mock<TelemetryApi[P]> 
 const api: ApiMocks<'getMyConsent' | 'getTerms' | 'acceptTerms'> = vi.hoisted(() => ({ getMyConsent: vi.fn(), getTerms: vi.fn(), acceptTerms: vi.fn() }));
 vi.mock('@/lib/telemetry/telemetry-api', () => ({ telemetryApi: api }));
 // The session store, the WASM client and the tab's stored selection are the sign-out's I/O.
-const session: Record<'disconnect' | 'removeSession' | 'stop' | 'clearSelectedUser', Mock> = vi.hoisted(() => ({
-  disconnect: vi.fn(), removeSession: vi.fn(), stop: vi.fn(), clearSelectedUser: vi.fn(),
+const session: Record<'disconnect' | 'removeSession' | 'clearSelectedUser', Mock> = vi.hoisted(() => ({
+  disconnect: vi.fn(), removeSession: vi.fn(), clearSelectedUser: vi.fn(),
 }));
 vi.mock('@/lib/connection', () => ({
   connectionManager: {
@@ -29,7 +29,6 @@ vi.mock('@/lib/tab-context', () => ({ getSelectedUser: async (): Promise<{ selec
 // jsdom has no IndexedDB: the sign-out's check for edits held on the device reads the stand-in (none held).
 const deviceStore: Map<string, unknown> = vi.hoisted((): Map<string, unknown> => new Map<string, unknown>());
 vi.mock('@/lib/storage-utils', async () => (await import('@/lib/cdoc/collab/__tests__/doubles/memory-storage')).memoryStorageUtils(deviceStore));
-vi.mock('@/lib/wasm-connection-manager', () => ({ wasmConnectionManager: { stop: session.stop } }));
 import { TermsGate } from '../TermsGate';
 import { trackSignupConsent } from '@/lib/telemetry/signup-consent-pending';
 

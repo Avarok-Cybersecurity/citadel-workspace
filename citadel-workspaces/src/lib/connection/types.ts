@@ -6,6 +6,7 @@
  */
 
 import type { SessionSecuritySettings } from '../p2p-registration-service';
+import type { AgentRequestBody } from '@/types/agent-request';
 
 /**
  * Current connection info including CID and user details.
@@ -63,7 +64,6 @@ export type ConnectionIntent =
   | InitWebSocketIntent
   | SetOrphanModeIntent
   | SendWebSocketMessageIntent
-  | ConnectIntent
   | DisconnectIntent
   | ClaimSessionIntent
   | LocalDBSetIntent
@@ -71,7 +71,6 @@ export type ConnectionIntent =
   | BroadcastConnectionStatusIntent
   | UpdateConnectionServiceIntent
   | SetWorkspaceConnectionIdIntent
-  | MarkUserDisconnectedIntent
   | EmitEventIntent
   | SetInstanceCidIntent
   | AnnouncePresenceIntent
@@ -93,16 +92,6 @@ export interface SendWebSocketMessageIntent {
   message: unknown;
 }
 
-export interface ConnectIntent {
-  type: 'connect';
-  requestId: string;
-  username: string;
-  password: string;
-  serverAddress: string;
-  serverPassword: string;
-  sessionSecuritySettings?: SessionSecuritySettings;
-}
-
 export interface DisconnectIntent {
   type: 'disconnect';
   cid: bigint;
@@ -114,12 +103,7 @@ export interface ClaimSessionIntent {
   onlyIfOrphaned: boolean;
 }
 
-export interface LocalDBSetIntent {
-  type: 'localdb-set';
-  cid: bigint;
-  key: string;
-  value: number[];
-}
+export type LocalDBSetIntent = { type: 'localdb-set' } & Pick<AgentRequestBody<'LocalDBSetKV'>, 'cid' | 'key' | 'value'>;
 
 export interface LocalDBGetIntent {
   type: 'localdb-get';
@@ -144,12 +128,6 @@ export interface UpdateConnectionServiceIntent {
 export interface SetWorkspaceConnectionIdIntent {
   type: 'set-workspace-connection-id';
   cid: bigint;
-}
-
-export interface MarkUserDisconnectedIntent {
-  type: 'mark-user-disconnected';
-  username: string;
-  serverAddress: string;
 }
 
 export interface EmitEventIntent {

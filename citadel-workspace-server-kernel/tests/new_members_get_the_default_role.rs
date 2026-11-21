@@ -10,7 +10,7 @@ use citadel_workspace_types::roles::{
     RoleDefinition, WorkspaceRoles, ADMIN_ROLE_ID, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID,
 };
 use citadel_workspace_types::roles_protocol::{RoleChange, RolesRequest, RolesResponse};
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use citadel_workspace_types::{WorkspaceProtocolRequest as Req, WorkspaceProtocolResponse as Res};
 use common::member_test_utils::{
     insert_user_with_role, join_root, member_holding, role_id_of, seed_role, GateKernel as Kernel,
@@ -160,7 +160,7 @@ fn make_guest_default() -> RolesRequest {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn setting_the_default_takes_manage_roles_and_is_announced() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "mia", UserRole::Member).await;
+    insert_user_with_role(&kernel, "mia", MEMBER_ROLE_ID).await;
     join_root(&kernel, "mia").await;
 
     let refused = send(&kernel, "mia", make_guest_default()).await;

@@ -20,7 +20,7 @@ import { ChatPane, type ChatPaneStatus } from '@/components/chat/pane/ChatPane';
 import { createPeerTransport } from '@/lib/chat/transport/peer-transport';
 import type { ChatTransport } from '@/lib/chat/transport/chat-transport';
 import type { ChatPeer } from '@/lib/cdoc/chat/chat-app-ports';
-import type { SupervisorState } from '@/types/agent-supervisor';
+import type { SupervisorPhase } from '@/types/agent-supervisor';
 import type { PeerPathReport } from '@/types/ice-servers';
 
 interface P2PChatProps {
@@ -44,7 +44,7 @@ export function P2PChat({ peerCid, peerName = 'Peer', peerUsername, currentUserC
     opening: peerOpeningPorts(peer),
   }), [peer, currentUserCid, currentUserName]);
   const route: PeerPathReport | null = useConnectionRoute(currentUserCid ?? null, peerCid);
-  const supervisor: SupervisorState | null = useSupervisorState(currentUserCid ?? null, peerCid);
+  const supervisor: SupervisorPhase | null = useSupervisorState(currentUserCid ?? null, peerCid);
   useChatInterest(currentUserCid ?? null, peerCid);
   // Paused: the link is down on purpose. Messages still send and queue; calls and files need the
   // live link, so those say why they are unavailable.
@@ -57,7 +57,7 @@ export function P2PChat({ peerCid, peerName = 'Peer', peerUsername, currentUserC
       transport={transport}
       pause={pause.status}
       header={(status: ChatPaneStatus) => (
-        <PeerChatTop peer={peer} knowsUsername={peerUsername !== undefined} status={status} pause={pause} call={call} share={share} route={route} supervisor={supervisor} />
+        <PeerChatTop sessionCid={currentUserCid ?? null} peer={peer} knowsUsername={peerUsername !== undefined} status={status} pause={pause} call={call} share={share} route={route} supervisor={supervisor} />
       )}
     />
   );

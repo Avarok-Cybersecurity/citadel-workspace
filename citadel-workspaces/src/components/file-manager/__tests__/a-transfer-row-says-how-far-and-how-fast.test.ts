@@ -15,7 +15,7 @@ const nameOf = (cid: string): string => (cid === '20' ? 'Donovan' : 'Thomas');
 function transfer(over: Partial<FileTransfer>): FileTransfer {
   return {
     id: 't1', fileName: 'plan.dwg', fileSize: 10 * MB, fileType: '', state: 'transferring', progress: 68,
-    senderCid: '20', recipientCid: '10', createdAt: NOW - 60_000, updatedAt: NOW, isIncoming: true, ...over,
+    sender_cid: '20', recipient_cid: '10', createdAt: NOW - 60_000, updatedAt: NOW, isIncoming: true, ...over,
   };
 }
 

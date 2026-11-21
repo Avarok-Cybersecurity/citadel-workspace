@@ -7,7 +7,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { updatePeerMaps } from '../p2p-registration-service/discovery';
-import type { Peer, PeerInfoResponse } from '../p2p-registration-service/types';
+import type { Peer } from '../p2p-registration-service/types';
+import type { PeerInformation } from 'citadel-workspace-client-ts';
 
 function peer(cid: bigint, username: string): Peer {
   return { cid, username, fullName: username, isOnline: true, isRegistered: false };
@@ -17,12 +18,12 @@ describe('updatePeerMaps', () => {
   it('marks peers present in the registered list, and only those', () => {
     const all: Map<bigint, Peer> = new Map<bigint, Peer>();
     const registered: Map<bigint, Peer> = new Map<bigint, Peer>();
-    const allResponse: PeerInfoResponse[] = [
-      { cid: 1n, username: 'alice' },
-      { cid: 2n, username: 'bob' },
+    const allResponse: PeerInformation[] = [
+      { cid: 1n, username: 'alice', name: null, online_status: false },
+      { cid: 2n, username: 'bob', name: null, online_status: false },
     ];
 
-    updatePeerMaps(all, registered, allResponse, [{ cid: 2n, username: 'bob' }]);
+    updatePeerMaps(all, registered, allResponse, [{ cid: 2n, username: 'bob', name: null, online_status: false }]);
 
     expect(all.get(1n)?.isRegistered).toBe(false);
     expect(all.get(2n)?.isRegistered).toBe(true);
@@ -35,7 +36,7 @@ describe('updatePeerMaps', () => {
     const all: Map<bigint, Peer> = new Map<bigint, Peer>([[1n, peer(1n, 'alice')]]);
     const registered: Map<bigint, Peer> = new Map<bigint, Peer>();
 
-    updatePeerMaps(all, registered, [{ cid: 1n, username: 'Unknown' }], []);
+    updatePeerMaps(all, registered, [{ cid: 1n, username: 'Unknown', name: null, online_status: false }], []);
 
     expect(all.get(1n)?.username).toBe('alice');
   });
@@ -44,7 +45,7 @@ describe('updatePeerMaps', () => {
     const all: Map<bigint, Peer> = new Map<bigint, Peer>([[1n, peer(1n, 'User 12345678')]]);
     const registered: Map<bigint, Peer> = new Map<bigint, Peer>();
 
-    updatePeerMaps(all, registered, [{ cid: 1n, username: 'alice' }], []);
+    updatePeerMaps(all, registered, [{ cid: 1n, username: 'alice', name: null, online_status: false }], []);
 
     expect(all.get(1n)?.username).toBe('alice');
   });
@@ -53,7 +54,7 @@ describe('updatePeerMaps', () => {
     const all: Map<bigint, Peer> = new Map<bigint, Peer>([[1n, peer(1n, 'alice')], [2n, peer(2n, 'bob')]]);
     const registered: Map<bigint, Peer> = new Map<bigint, Peer>([[1n, peer(1n, 'alice')]]);
 
-    updatePeerMaps(all, registered, [{ cid: 2n, username: 'bob' }], []);
+    updatePeerMaps(all, registered, [{ cid: 2n, username: 'bob', name: null, online_status: false }], []);
 
     expect(all.has(1n)).toBe(false);
     expect(registered.size).toBe(0);
@@ -63,7 +64,10 @@ describe('updatePeerMaps', () => {
     const all: Map<bigint, Peer> = new Map<bigint, Peer>();
     const registered: Map<bigint, Peer> = new Map<bigint, Peer>();
 
-    updatePeerMaps(all, registered, [{ username: 'nameless' }, { cid: 1n, username: 'alice' }], []);
+    // Malformed on purpose: the generated PeerInformation always has a cid, and a reply that
+    // lost one must be dropped rather than keyed under undefined.
+    const nameless: PeerInformation = { username: 'nameless' } as unknown as PeerInformation;
+    updatePeerMaps(all, registered, [nameless, { cid: 1n, username: 'alice', name: null, online_status: false }], []);
 
     expect([...all.keys()]).toEqual([1n]);
   });
@@ -72,7 +76,7 @@ describe('updatePeerMaps', () => {
     const all: Map<bigint, Peer> = new Map<bigint, Peer>();
     const registered: Map<bigint, Peer> = new Map<bigint, Peer>();
 
-    updatePeerMaps(all, registered, [], [{ cid: 7n, username: 'carol', online_status: false }]);
+    updatePeerMaps(all, registered, [], [{ cid: 7n, username: 'carol', name: null, online_status: false }]);
 
     expect(registered.get(7n)).toMatchObject({ username: 'carol', isRegistered: true, isOnline: false });
   });
@@ -84,7 +88,9 @@ describe('updatePeerMaps', () => {
     const all: Map<bigint, Peer> = new Map<bigint, Peer>();
     const registered: Map<bigint, Peer> = new Map<bigint, Peer>();
 
-    updatePeerMaps(all, registered, [{ cid: 1n, username: 'alice' }], []);
+    // Malformed on purpose: the generated PeerInformation always carries online_status.
+    const silent: PeerInformation = { cid: 1n, username: 'alice', name: null } as unknown as PeerInformation;
+    updatePeerMaps(all, registered, [silent], []);
 
     expect(all.get(1n)?.isOnline).toBeNull();
   });
@@ -98,7 +104,7 @@ describe('updatePeerMaps', () => {
     updatePeerMaps(
       all,
       registered,
-      [{ cid: 1n, username: 'alice', online_status: true }, { cid: 2n, username: 'bob', online_status: false }],
+      [{ cid: 1n, username: 'alice', name: null, online_status: true }, { cid: 2n, username: 'bob', name: null, online_status: false }],
       [],
     );
 

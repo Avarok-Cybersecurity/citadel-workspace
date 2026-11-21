@@ -17,7 +17,7 @@ import { useChatSettings } from '../useChatSettings';
 function record(id: string, state: string): Record<string, unknown> {
   const now: number = Date.now();
   return {
-    id, fileName: `${id}.pdf`, fileSize: 10, senderCid: '7', recipientCid: '42',
+    id, fileName: `${id}.pdf`, fileSize: 10, sender_cid: '7', recipient_cid: '42',
     state, isIncoming: false, mode: 'p2p', createdAt: now, updatedAt: now,
   };
 }

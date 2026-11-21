@@ -39,7 +39,7 @@ function tick(status: FileTransferTickNotification['status'], requestId: string 
 function outgoing(id: string, state: FileTransfer['state'], createdAt: number): FileTransfer {
   return {
     id, fileName: `${id}.png`, fileSize: 10, fileType: 'image/png', state,
-    progress: 0, senderCid: ME.toString(), recipientCid: PEER.toString(),
+    progress: 0, sender_cid: ME.toString(), recipient_cid: PEER.toString(),
     createdAt, updatedAt: createdAt, expiresAt: createdAt + 1_000_000, isIncoming: false,
   };
 }

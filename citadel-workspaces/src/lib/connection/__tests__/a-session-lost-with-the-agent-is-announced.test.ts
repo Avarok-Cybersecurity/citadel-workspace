@@ -10,7 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { watchForSessionLostWithAgent, type SessionLostDeps } from '../sessions-lost-with-agent';
 import type { ActiveSessionsResult } from '../queries';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import type { AgentSocketState } from '@/lib/multi-instance/agent-socket-state';
 
 type Handler = (state: AgentSocketState) => void;
@@ -38,7 +38,7 @@ function harness(opts: { currentCid: bigint | null; sessions: ActiveSessionsResu
   return { deps, fire, notify };
 }
 
-const session: (cid: bigint) => ActiveSession = (cid: bigint): ActiveSession => ({ cid } as unknown as ActiveSession);
+const session: (cid: bigint) => SessionInformation = (cid: bigint): SessionInformation => ({ cid } as unknown as SessionInformation);
 
 describe('a session lost with the agent', () => {
   it('is announced after the socket comes back without it', async () => {

@@ -10,9 +10,10 @@ import { glueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY, type HostPolicy } from '@/lib/citadel-apps/host/limits';
 import type { TopicArrival, TopicPort } from '@/lib/citadel-apps/host/ports';
 import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
-import { treeNodesPort, type TreeNode } from '@/lib/citadel-apps/runtime/nodes-port';
+import { treeNodesPort, type PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
 import { calendarPorts, type CalendarPorts } from '../ports';
 import { MemoryStore } from './memory-store';
+import type { IhttpFrom } from 'citadel-workspace-client-ts';
 
 /**
  * The page's server-call pace is proven in a-glue-app-never-outruns-the-one-server-rate.test.ts;
@@ -23,8 +24,8 @@ const POLICY: HostPolicy = { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_
 const HELD: Capability[] = ['storage.user', 'storage.node', 'storage.node.authored', 'nodes.read', 'group.topic.subscribe', 'group.topic.publish'];
 
 /** A tree from `child: parent` pairs; a parent of null is a root. */
-export function treeOf(parents: Record<string, string | null>): Record<string, TreeNode> {
-  const nodes: Record<string, TreeNode> = {};
+export function treeOf(parents: Record<string, string | null>): Record<string, PageNode> {
+  const nodes: Record<string, PageNode> = {};
   for (const [id, parent] of Object.entries(parents)) {
     const children: string[] = Object.entries(parents).filter(([, p]) => p === id).map(([c]) => c);
     nodes[id] = { id, name: id.toUpperCase(), parent_id: parent, children };
@@ -48,7 +49,7 @@ export class TopicGroup {
         this.sent.push({ from: me, body });
         for (const [who, hear] of this.joined) {
           if (who === me) continue;
-          const from: { username: string; cid: bigint; app_id: string; install_id: string; via: "group"; } = { username: me, cid: 1n, app_id: 'net.avarok.calendar', install_id: 'i1', via: 'group' as const };
+          const from: IhttpFrom & { via: 'group' } = { username: me, cid: 1n, app_id: 'net.avarok.calendar', install_id: 'i1', via: 'group' as const };
           for (const l of hear) l({ name, event: { message: { from, body } } });
         }
         return { ok: null };
@@ -70,7 +71,7 @@ export interface Member {
   readonly ports: CalendarPorts;
 }
 
-export function member(me: string, values: Map<string, Uint8Array>, tree: Record<string, TreeNode>, group: TopicGroup): Member {
+export function member(me: string, values: Map<string, Uint8Array>, tree: Record<string, PageNode>, group: TopicGroup): Member {
   const store: MemoryStore = new MemoryStore(me, values);
   const ports: CalendarPorts = calendarPorts(glueInstance({
     appId: 'net.avarok.calendar',

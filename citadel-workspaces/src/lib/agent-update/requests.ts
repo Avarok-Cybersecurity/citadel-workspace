@@ -2,13 +2,14 @@
  * The agent's updater requests. Each is answered with `UpdateStatus`, which is
  * applied to the stores (update-state.ts) before it resolves.
  */
+import type { RequestType } from 'citadel-workspace-client-ts';
 import type { UpdateStatus } from 'citadel-internal-service-wasm-client';
 import { requestResponse } from '../websocket/request-response';
 import { conversationSender, type RequestSender } from '../agent-conversations/sender';
 import { TIMEOUT } from '../timeout-constants';
 import { applyUpdaterMessage } from './update-state';
 
-export type UpdaterRequest = 'UpdateGetStatus' | 'UpdateCheckNow' | 'UpdateApply' | 'UpdateSetSettings';
+export type UpdaterRequest = Extract<RequestType, 'UpdateGetStatus' | 'UpdateCheckNow' | 'UpdateApply' | 'UpdateSetSettings'>;
 
 function answered(message: Record<string, unknown>, requestId: string): UpdateStatus | undefined {
   const root: Record<string, unknown> = (message.Response as Record<string, unknown> | undefined) ?? message;

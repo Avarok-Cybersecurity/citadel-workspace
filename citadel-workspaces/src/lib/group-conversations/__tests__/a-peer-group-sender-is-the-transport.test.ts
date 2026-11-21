@@ -39,7 +39,7 @@ describe('a peer-group sender comes from the transport', () => {
     const event: PeerGroupMessageSummary | null = peerGroupMessageEvent(notification(file, AUTHOR), peerName);
     expect(event?.senderId).toBe('7');
     expect(event?.senderName).toBe('ada');
-    expect(event?.fileShare?.senderCid).toBe(AUTHOR);
+    expect(event?.fileShare?.sender_cid).toBe(AUTHOR);
   });
 
   it('drops a message whose transport names no sender rather than falling back to the body', () => {

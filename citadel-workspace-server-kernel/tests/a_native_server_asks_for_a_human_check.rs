@@ -13,8 +13,8 @@ use citadel_workspace_server_kernel::kernel::sign_in::admission::CHECK_UNAVAILAB
 use citadel_workspace_server_kernel::kernel::sign_in::turnstile::{
     SiteVerify, SiteVerifyUnreachable,
 };
-use common::production_server::{sign_in_dir, start_native_server};
-use common::sign_in_client::{drive, sign_in, username, PASSWORD};
+use common::production_server::{sign_in_dir, start_native_server, TEST_CANONICAL_DOMAIN};
+use common::sign_in_client::{drive, sign_in, username, PASSWORD, TEST_SERVER_CERTIFICATE};
 use serde_json::{json, Value};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -128,9 +128,11 @@ async fn register(
             user,
             user,
             PASSWORD,
-            Default::default(),
+            citadel_sdk::prelude::default_session_security_settings(),
             None,
             admission,
+            Some(TEST_CANONICAL_DOMAIN.to_string()),
+            TEST_SERVER_CERTIFICATE,
         )
         .await
 }
@@ -168,8 +170,8 @@ async fn with_the_switch_on_only_a_good_token_is_admitted() {
         assert!(reason(down).contains(CHECK_UNAVAILABLE));
         let registered = register(&remote, addr, &user, Some("pass")).await?;
         assert_eq!(
-            registered.recovery_codes.len(),
-            10,
+            registered.recovery_phrase.as_ref().map(Vec::len),
+            Some(24),
             "not a post-quantum account"
         );
 
@@ -202,7 +204,7 @@ async fn with_the_switch_off_nobody_is_asked() {
     let user = username("nocheck");
     drive(move |remote| async move {
         let registered = register(&remote, addr, &user, None).await?;
-        assert_eq!(registered.recovery_codes.len(), 10);
+        assert_eq!(registered.recovery_phrase.as_ref().map(Vec::len), Some(24));
         let conn = sign_in(&remote, &user, password()).await?;
         conn.disconnect().await
     })

@@ -1,0 +1,51 @@
+name: WASM rebuild diff
+
+# The committed citadel-workspace-client-ts/pkg must be the bytes its source
+# builds to (TYPES-SYNC D3). check-wasm-matches-its-source proves the stamp
+# names this source and these bytes; this proves the bytes are what the source
+# BUILDS to, which a stamp cannot: it rebuilds with the pinned recipe and fails
+# on any difference. Two clean builds on different runners were byte-identical
+# (run 44557022429), so a difference here is the committed pkg, not the runner.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  wasm-rebuild-diff:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: The pinned toolchain
+        run: bash scripts/install-wasm-toolchain.sh
+      - name: Rebuild the committed pkg
+        run: bash scripts/regenerate-committed-pkg.sh
+      - name: Nothing changed
+        run: |
+          changed=$(git status --porcelain -- citadel-workspace-client-ts/pkg)
+          if [ -n "$changed" ]; then
+            echo "$changed"
+            echo "::error::citadel-workspace-client-ts/pkg is not what its source builds to with scripts/wasm-toolchain.env"
+            echo "A pkg built on a Mac never matches (see scripts/wasm-toolchain.env). Commit this run's"
+            echo "artifact 'pkg-rebuilt' into citadel-workspace-client-ts/pkg, stamp included."
+            exit 1
+          fi
+          echo "OK: the committed pkg is byte-for-byte what its source builds to."
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pkg-rebuilt
+          path: |
+            citadel-workspace-client-ts/pkg/
+            !citadel-workspace-client-ts/pkg/package.json
+          include-hidden-files: true

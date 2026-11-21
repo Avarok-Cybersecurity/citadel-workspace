@@ -1,35 +1,21 @@
 //! A configured workspace structure that cannot be read must stop the boot.
 //!
-//! The deprecated `workspace_structure` JSON path logged its load failure at
-//! INFO ("Warning: … Continuing without pre-configured structure") and carried
-//! on with no structure. That looks harmless and is not.
-//!
-//! The seed-pending marker is armed only when a structure actually loaded — for
-//! a good reason, documented at its call site: arming it unconditionally would
-//! let a later deploy that ADDS a structure inject defaults into a workspace
-//! that has been live for weeks. So a first boot that swallowed this error
-//! records NEITHER marker. The next boot sees no marker at all, takes the
-//! "established workspace predates the seed markers" back-fill branch, and
-//! stamps it seeded.
-//!
-//! The workspace then has no offices, permanently, recoverable only by wiping
-//! the backend — announced by one info line. The recommended `content_base_dir`
-//! branch was already fatal; only the deprecated one swallowed it.
+//! The seed-pending marker is armed only when a structure actually loaded, so a
+//! first boot that swallowed a load error would record neither marker and the
+//! workspace would be stamped seeded with no offices, permanently. The single
+//! JSON-file form (`workspace_structure`) is gone: a config naming it is refused.
 
 use citadel_workspace_server_kernel::config::ServerConfig;
 use citadel_workspace_server_kernel::resolve_workspace_structure;
-use std::io::Write;
 
-/// Writes a kernel.toml naming a structure file, and returns the config path.
-fn config_naming(structure_file: Option<&str>) -> ServerConfig {
+/// A config naming `content_dir` as its structure, or none.
+fn config_naming(content_dir: Option<&str>) -> ServerConfig {
     ServerConfig {
         bind_addr: "127.0.0.1:12349".to_string(),
-        dangerous_skip_cert_verification: None,
         backend: None,
         data_dir: None,
         workspace_master_password: "test-password".to_string(),
-        workspace_structure: structure_file.map(str::to_string),
-        content_base_dir: None,
+        content_base_dir: content_dir.map(str::to_string),
         file_transfer: None,
         allow_first_connect_admin: None,
         workspace_name: None,
@@ -55,31 +41,22 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 }
 
 #[test]
-fn an_unparseable_structure_file_refuses_to_boot() {
-    let dir = temp_dir("unparseable");
-    let mut f = std::fs::File::create(dir.join("workspaces.json")).expect("create structure");
-    f.write_all(b"{ this is not json").expect("write structure");
-
-    let result = resolve_workspace_structure(&config_naming(Some("workspaces.json")), Some(&dir));
-
+fn a_missing_content_directory_refuses_to_boot() {
+    let dir = temp_dir("missing");
     assert!(
-        result.is_err(),
-        "a configured structure that cannot be read is a configuration error; \
-         booting without it permanently stamps the workspace seeded",
+        resolve_workspace_structure(&config_naming(Some("does-not-exist")), Some(&dir)).is_err(),
+        "a configured structure that cannot be read is a configuration error",
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
-fn a_missing_structure_file_refuses_to_boot() {
-    let dir = temp_dir("missing");
-
-    assert!(
-        resolve_workspace_structure(&config_naming(Some("does-not-exist.json")), Some(&dir))
-            .is_err(),
-        "a named structure file that is not there is the same class of error",
-    );
-    let _ = std::fs::remove_dir_all(&dir);
+fn the_removed_structure_file_key_is_refused() {
+    let err = toml::from_str::<ServerConfig>(
+        "bind_addr = \"127.0.0.1:0\"\nworkspace_structure = \"./workspaces.json\"",
+    )
+    .expect_err("a config naming the removed key is refused");
+    assert!(err.to_string().contains("workspace_structure"), "{err}");
 }
 
 #[test]

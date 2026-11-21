@@ -6,6 +6,7 @@
 //! Everyone is also a workspace member, as every connecting account is.
 
 use crate::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use crate::roles_fixture::MEMBER_ROLE_ID;
 use crate::workspace_test_utils::TEST_ADMIN_USER_ID;
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
@@ -14,7 +15,7 @@ use citadel_workspace_types::messaging_trust::{
     MessagingTrustPolicy as Policy, MessagingTrustRequest as Req, MessagingTrustResponse as Res,
     MessagingTrustSettings, WORKSPACE_ROOT_ID as ROOT,
 };
-use citadel_workspace_types::structs::{NodeEntityType, UserRole};
+use citadel_workspace_types::structs::NodeEntityType;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 pub struct Tree {
@@ -40,12 +41,12 @@ pub async fn node(kernel: &Kernel, parent: &str, name: &str) -> String {
 }
 
 pub async fn member(kernel: &Kernel, id: &str, on: Option<&str>) {
-    insert_user_with_role(kernel, id, UserRole::Member).await;
+    insert_user_with_role(kernel, id, MEMBER_ROLE_ID).await;
     join_root(kernel, id).await;
     if let Some(node_id) = on {
         kernel
             .domain_operations
-            .add_user_to_domain(TEST_ADMIN_USER_ID, id, node_id, UserRole::Member.into())
+            .add_user_to_domain(TEST_ADMIN_USER_ID, id, node_id, MEMBER_ROLE_ID.to_string())
             .await
             .expect("an admin may add a member to a node");
     }

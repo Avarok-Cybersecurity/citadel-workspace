@@ -1,6 +1,7 @@
 import { CitadelLogo } from '@/components/brand/CitadelLogo';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { useNewerBuildForUnknownRoute } from '@/pages/use-newer-build-for-unknown-route';
 import { debugLog } from '@/lib/debug-config';
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -9,6 +10,10 @@ import type { NavigateFunction } from 'react-router';
 const NotFound: () => JSX.Element = (): JSX.Element => {
   const location: ReturnType<typeof useLocation> = useLocation();
   const navigate: NavigateFunction = useNavigate();
+
+  // A route this build has never heard of may be one the newer build adds (/sign-in, the first
+  // time): take the update now rather than leave the person on a 404 waiting for them to click.
+  useNewerBuildForUnknownRoute(location.pathname);
 
   useEffect(() => {
     debugLog('NotFound', '404 Error: User attempted to access non-existent route:', location.pathname);

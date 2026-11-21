@@ -22,7 +22,7 @@ describe('avatar fallbacks', () => {
   it('a directory row shows the same', () => {
     render(
       <MemberListItem
-        member={{ id: 'ada', displayName: 'Ada Byron Lovelace', isOnline: null, isSelf: false, isContact: false }}
+        member={{ id: 'ada', displayName: 'Ada Byron Lovelace', banned: false, isOnline: null, isSelf: false, isContact: false }}
         variant="all"
         onSendMessage={(): void => undefined}
         onInvite={(): void => undefined}

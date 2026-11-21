@@ -11,15 +11,16 @@ import { calendarPorts, type CalendarPorts } from '@/lib/calendar/ports';
 import { InstanceSlots } from '../../host/instance-slots';
 import { appModule } from '../../host/__tests__/app-fixtures';
 import type { AppNotice, RosterMember } from '../first-party-ports';
-import type { TreeNode } from '../nodes-port';
+import type { PageNode } from '../nodes-port';
 import { FakeRuntimeKernel, release, rig, tabOf, type Rig } from './runtime-rig';
+import type { ManifestChanges } from '@/test/app-manifests';
 
 let rigs: Rig[] = [];
 afterEach(() => { rigs.forEach((r: Rig) => r.close()); rigs = []; });
 
-const TAB_APP: { surfaces: string[]; } = { surfaces: ['node_tab'] };
+const TAB_APP: ManifestChanges = { surfaces: ['node_tab'] };
 
-function glueTab(kernel: FakeRuntimeKernel, tree: () => Record<string, TreeNode>, notices: AppNotice[]): GlueTabMount {
+function glueTab(kernel: FakeRuntimeKernel, tree: () => Record<string, PageNode>, notices: AppNotice[]): GlueTabMount {
   return { ...tabOf(kernel.rel), firstParty: { tree, roster: (): RosterMember[] => [], notices: (n: AppNotice): void => { notices.push(n); } } };
 }
 
@@ -28,7 +29,7 @@ describe('a glue tab binding', () => {
     const kernel: FakeRuntimeKernel = new FakeRuntimeKernel(release(appModule(), ['nodes.read', 'notifications'], TAB_APP));
     const r: Rig = rig(kernel);
     rigs.push(r);
-    let tree: Record<string, TreeNode> = { 'n-1': { id: 'n-1', name: 'Platform', parent_id: null, children: [] } };
+    let tree: Record<string, PageNode> = { 'n-1': { id: 'n-1', name: 'Platform', parent_id: null, children: [] } };
     const notices: AppNotice[] = [];
     const bound: GlueBound = await r.runtime.bindGlue(glueTab(kernel, () => tree, notices)).ready;
     if (bound.kind !== 'bound') throw new Error(bound.why);

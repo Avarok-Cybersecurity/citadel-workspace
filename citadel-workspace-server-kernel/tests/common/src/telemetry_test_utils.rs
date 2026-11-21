@@ -1,8 +1,8 @@
 //! Driving the Telemetry Service through the real command processor.
 
 use crate::member_test_utils::{insert_user_with_role, join_root, GateKernel};
+use crate::roles_fixture::MEMBER_ROLE_ID;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::telemetry::{
     TelemetryBatch, TelemetryEntry, TelemetryFilter, TelemetryLevel, TelemetryPage,
     TelemetryRequest, TelemetryResponse, TELEMETRY_BATCH_FORMAT_VERSION,
@@ -43,7 +43,7 @@ pub fn refusal(response: WorkspaceProtocolResponse) -> String {
 }
 
 pub async fn member(kernel: &GateKernel, id: &str) {
-    insert_user_with_role(kernel, id, UserRole::Member).await;
+    insert_user_with_role(kernel, id, MEMBER_ROLE_ID).await;
     join_root(kernel, id).await;
 }
 

@@ -92,12 +92,12 @@ describe('a shared file after a reload', () => {
     startGroupEventBindings(noSessionUsername);
     eventEmitter.emit('group:message-received', {
       groupId: GROUP, messageId: 'f-2', senderId: '9', senderName: 'bob', content: 'Shared a file: b.txt (3 B)',
-      timestamp: 2_000, fileShare: { name: 'b.txt', size: 3, mimeType: 'text/plain', senderCid: 9n },
+      timestamp: 2_000, fileShare: { name: 'b.txt', size: 3, mimeType: 'text/plain', sender_cid: 9n },
     });
     await loadTranscript(GROUP);
 
     vi.resetModules();
     const thread: GroupMessage[] = await load();
-    expect(thread[0].file_share).toEqual({ name: 'b.txt', size: 3, mimeType: 'text/plain', senderCid: 9n });
+    expect(thread[0].file_share).toEqual({ name: 'b.txt', size: 3, mimeType: 'text/plain', sender_cid: 9n });
   });
 });

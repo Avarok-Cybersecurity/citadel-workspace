@@ -6,6 +6,7 @@
 import { AdmissionRefusal, admissionReasonOf, type AdmissionReason } from '@/lib/admission/refusal';
 import { signInServerReasonOf, SignInServerRefusal, type SignInServerReason } from '@/lib/sessions/sign-in-server';
 import type { ConnectOutcome } from './await-connect-outcome';
+import { versionRefusalCopy } from './version-refusal-copy';
 
 /** A reason code newer than this page (FailureReason `unknown`): only the current page can act on it. */
 export const UNKNOWN_REASON_COPY: string =
@@ -13,6 +14,8 @@ export const UNKNOWN_REASON_COPY: string =
 
 export function connectRefusal(outcome: Extract<ConnectOutcome, { kind: 'failed' }>, username: string): Error {
   if (outcome.reasonCode === 'unknown') return new Error(UNKNOWN_REASON_COPY);
+  const update: string | null = versionRefusalCopy(outcome.reasonCode);
+  if (update !== null) return new Error(update);
   const wrongServer: SignInServerReason | null = signInServerReasonOf(outcome.reasonCode);
   if (wrongServer !== null) return new SignInServerRefusal(wrongServer, username);
   const admission: AdmissionReason | null = admissionReasonOf({ reason_code: outcome.reasonCode });

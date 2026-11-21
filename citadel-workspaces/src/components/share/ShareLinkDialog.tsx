@@ -13,7 +13,6 @@ import { confirms, gateOnKnownAnswer, permits, type ActionGate, type UsePermissi
 import { useTabIdentity } from '@/hooks/use-tab-identity';
 import { useDomainMembers } from '@/hooks/use-domain-members';
 import { useRoleTable } from '@/hooks/use-workspace-roles';
-import { Permission } from '@/lib/permissions-service/types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { secureLinksApi } from '@/lib/share/secure-links-api';
 import { shareTarget, type ShareSubject, type ShareTarget, type ShareViewer } from '@/lib/share/share-target';
@@ -48,7 +47,7 @@ function SecureShare({ target, server, me, onManageLinks }: { target: ShareTarge
   const flow: ShareLinkFlow = useShareLinkFlow(target, { api: secureLinksApi, origin: window.location.origin, server });
   const members: string[] = useDomainMembers(WORKSPACE_ROOT_ID).members.map((m) => m.username).filter((u: string) => u !== me);
   const roles: RoleOption[] = (useRoleTable()?.roles ?? []).map((r: RoleDefinition) => ({ id: r.id, name: r.name }));
-  const isAdmin: boolean = confirms(usePermission(WORKSPACE_ROOT_ID, Permission.ManageRoles));
+  const isAdmin: boolean = confirms(usePermission(WORKSPACE_ROOT_ID, 'ManageRoles'));
   return <SecureLinkPanel flow={flow} target={target} members={members} roles={roles} isAdmin={isAdmin} onManageLinks={onManageLinks} />;
 }
 
@@ -65,7 +64,7 @@ function OpenShareDialog({ subjects, onClose }: { subjects: readonly ShareSubjec
   const server: string | null = identity?.serverAddress ?? null;
   // Creating is refused by the server on a no, so Secure waits for a known yes (gateOnKnownAnswer);
   // a known no is said in this dialog's words rather than the generic edit refusal.
-  const answer: UsePermissionResult = usePermission(WORKSPACE_ROOT_ID, Permission.ShareSecureLinks);
+  const answer: UsePermissionResult = usePermission(WORKSPACE_ROOT_ID, 'ShareSecureLinks');
   const gate: ActionGate = permits(answer) ? gateOnKnownAnswer(answer) : { enabled: false, reason: SHARE_COPY.noPermission };
   const [mode, setMode] = useState<ShareMode>('plain');
   const [managing, setManaging] = useState<boolean>(false);

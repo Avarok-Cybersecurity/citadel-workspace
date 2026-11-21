@@ -31,7 +31,7 @@ beforeEach(() => {
 
 describe('message text in notifications', () => {
   it('starts off, and turning it on tells the agent for this account', async () => {
-    await greetAs(true);
+    await greetAs();
     render(<NotificationPreviewRow />);
     const toggle: HTMLElement = await screen.findByTestId('notification-preview-switch');
     await waitFor(() => expect(toggle).toBeEnabled());
@@ -40,12 +40,4 @@ describe('message text in notifications', () => {
     await waitFor(() => expect(set.map((p) => p.notification_preview)).toEqual(['Text']));
   });
 
-  it('is not offered by an agent that raises no notices', async () => {
-    await greetAs('older');
-    const { container } = render(<NotificationPreviewRow />);
-    // Every promise the row chains settles within one task; after it, it has decided.
-    await new Promise<void>((resolve) => { setTimeout(resolve, 0); });
-    expect(container).toBeEmptyDOMElement();
-    expect(set).toEqual([]);
-  });
 });

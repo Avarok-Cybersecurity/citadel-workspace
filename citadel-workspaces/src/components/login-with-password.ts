@@ -15,13 +15,13 @@ import { isConnectAlreadyInProgress } from '@/lib/connection/is-connect-in-progr
 import { websocketService } from "@/lib/websocket-service";
 import { connectionManager } from "@/lib/connection";
 import { eventEmitter } from "@/lib/event-emitter";
-import { startMessagingForSession } from "@/lib/start-messaging";
 import { postAuthSetup } from '@/lib/post-auth-setup';
 import { setSelectedUser } from "@/lib/tab-context";
 import { debugLog } from '@/lib/debug-config';
 import { awaitConnectOutcome, type ConnectOutcome } from '@/lib/connection/await-connect-outcome';
 import { mapSecuritySettings, type SessionSecuritySettings } from '@/lib/security-utils';
-import type { StoredSessions, StoredSession, ActiveSession } from '@/types/session-types';
+import type { StoredSessions, StoredSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { sessionLabel, type SessionLabel } from '@/lib/sessions/session-label';
 import type { SecuritySettingsState } from './useLoginHandler';
 import { watchKeyChallenges } from '@/lib/sign-in/challenge-watch';
@@ -33,11 +33,6 @@ import { connectRefusal } from '@/lib/connection/connect-refusal';
 
 export type LoginResult =
   | { kind: 'signed-in'; cid: bigint; messagingReady: boolean; serverAddress: string }
-  /**
-   * A recovery code opened a restricted session: it may only add a key, set the
-   * policy or sign out, so nothing that would use the workspace is started.
-   */
-  | { kind: 'recovery'; cid: bigint; serverAddress: string }
   /** An existing session was claimed instead; the redirect has already run. */
   | { kind: 'redirected' };
 
@@ -63,7 +58,7 @@ export async function loginWithPassword(
   const server: string = requireSignInServer(agentAccounts, username, scope, storedSession?.serverAddress.trim() || null);
   const labelFor = async (cid: bigint): Promise<SessionLabel> => {
     connectionManager.invalidateSessionCache();
-    const live: ActiveSession[] = await connectionManager.getActiveSessions();
+    const live: SessionInformation[] = await connectionManager.getActiveSessions();
     return sessionLabel(cid, username.trim(), live, storedSession);
   };
 
@@ -106,9 +101,9 @@ export async function loginWithPassword(
       await ctx.redirect({ cid: outcome.cid, username: username.trim(), server_address: serverAddress });
       return { kind: 'redirected' };
     }
-    let sessions: ActiveSession[];
+    let sessions: SessionInformation[];
     try { sessions = await connectionManager.getActiveSessions(); } catch { throw new Error(outcome.message); }
-    const match: ActiveSession | undefined = sessions.find(s => s.username === username.trim());
+    const match: SessionInformation | undefined = sessions.find(s => s.username === username.trim());
     if (match?.cid === undefined) throw new Error(outcome.message);
     await ctx.redirect({ cid: match.cid, username: match.username ?? username.trim(), server_address: match.server_address });
     return { kind: 'redirected' };
@@ -116,7 +111,6 @@ export async function loginWithPassword(
 
   const cid: bigint = outcome.cid;
   const { serverAddress, fullName } = await labelFor(cid);
-  if (factors.recoveryCode !== null) return { kind: 'recovery', cid, serverAddress };
   await connectionManager.handleAuthSuccess({
     username, fullName, serverAddress,
     // Stored as chosen too. Persisting the defaults here meant every
@@ -127,11 +121,11 @@ export async function loginWithPassword(
   await setSelectedUser({ selectedUsername: username.trim(), selectedServerAddress: serverAddress, selectedCid: cid });
   await postAuthSetup(cid);
 
-  const messagingReady: boolean = await startMessagingForSession(cid.toString());
 
   eventEmitter.emit('session:activated', {
     cid: cid.toString(), username: username.trim(),
     serverAddress, activationType: 'login',
   });
-  return { kind: 'signed-in', cid, messagingReady, serverAddress };
+  // The agent hosts the account's messaging: nothing in this window can fail to start it.
+  return { kind: 'signed-in', cid, messagingReady: true, serverAddress };
 }

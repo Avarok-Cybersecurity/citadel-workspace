@@ -33,11 +33,11 @@ function p2pQuotableText(message: PaneMessage): string {
 }
 
 export function quoteP2PReply<M extends PaneMessage>(
-  replyTo: string,
+  reply_to: string,
   byId: ReadonlyMap<string, M>,
   authorOf: (message: M) => string,
 ): QuotedMessage | null {
-  const original: M | undefined = byId.get(replyTo);
+  const original: M | undefined = byId.get(reply_to);
   if (!original) return null;
   return { id: original.id, authorName: authorOf(original), excerpt: replyExcerpt(p2pQuotableText(original)) };
 }

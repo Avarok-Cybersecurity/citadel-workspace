@@ -14,7 +14,7 @@ import { MAY_EDIT, renderRibbon } from './render-ribbon';
 describe('a chat document\'s Picture control', () => {
   it('is disabled with the reason, and pressing it explains rather than opening the picker', async () => {
     const chat: ChatDocument = openChatDocument({ cid: 502n, name: 'Bob', username: 'bob' }, {
-      docId: 'chat-doc-1', selfCid: 501n, title: 'Notes', origin: { kind: 'blank' }, heldApart: (): void => undefined,
+      docId: 'chat-doc-1', selfCid: 501n, title: 'Notes', origin: { kind: 'blank' },
     });
     if (chat.editing.kind !== 'replica') throw new Error('a chat document is edited through a kept replica');
     expect([chat.editing.save, chat.editing.pictures]).toEqual([null, CHAT_PICTURES_UNAVAILABLE]);

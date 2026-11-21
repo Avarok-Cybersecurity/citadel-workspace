@@ -5,6 +5,7 @@
  * status tracking, and stale conversation cleanup.
  */
 
+import type { PeerInformation } from 'citadel-workspace-client-ts';
 import { isPlaceholderName, peerDisplayName, peerHandleName } from '@/lib/peer-display';
 import { useState, useEffect, useRef, useCallback , type MutableRefObject } from 'react';
 import { eventEmitter } from '@/lib/event-emitter';
@@ -13,7 +14,7 @@ import { p2pAutoConnectService } from '@/lib/p2p-auto-connect-service';
 import { connectionPathFor } from '@/lib/p2p-auto-connect-service/connection-path';
 import { PATH_CHANGED_EVENT } from '@/lib/p2p-auto-connect-service/path-changes';
 import { getCurrentCid } from '@/lib/p2p/current-cid';
-import type { PeerConnectPath } from '@/types/ice-servers';
+import type { P2pPathReport } from 'citadel-workspace-client-ts';
 import { sessionStartupService } from '@/lib/session-startup-service';
 import { P2PMessengerManager } from '@/lib/p2p';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
@@ -38,7 +39,7 @@ export interface RegisteredPeer {
    */
   isConnected: boolean | null;
   /** How the connection travels, when the agent has said. */
-  connectionPath: PeerConnectPath | null;
+  connectionPath: P2pPathReport | null;
 }
 
 interface UseRegisteredPeersReturn {
@@ -63,7 +64,7 @@ export function useRegisteredPeers(): UseRegisteredPeersReturn {
     try {
       const { registeredPeers: cachedPeers } = p2pRegistrationService.getPeers();
 
-      let freshPeers: Array<{ cid?: bigint; username?: string }> = [];
+      let freshPeers: PeerInformation[] = [];
       try {
         // Retrying variant, not the single-shot one. ListRegisteredPeers times out
         // intermittently under concurrent P2P activity; with a single attempt this
@@ -76,7 +77,7 @@ export function useRegisteredPeers(): UseRegisteredPeersReturn {
       }
 
       // Merge cached and fresh peers
-      const mergedPeersMap: Map<string, { cid?: bigint; username?: string; }> = new Map<string, { cid?: bigint; username?: string }>();
+      const mergedPeersMap: Map<string, { cid?: bigint; username?: string | null; }> = new Map<string, { cid?: bigint; username?: string | null }>();
 
       for (const p of cachedPeers) {
         const cidStr: string = p.cid?.toString() || '';
@@ -86,9 +87,9 @@ export function useRegisteredPeers(): UseRegisteredPeersReturn {
       for (const p of freshPeers) {
         const cidStr: string = p.cid?.toString() || '';
         if (cidStr) {
-          const existing: { cid?: bigint; username?: string; } | undefined = mergedPeersMap.get(cidStr);
+          const existing: { cid?: bigint; username?: string | null; } | undefined = mergedPeersMap.get(cidStr);
           if (existing) {
-            const mergedPeer: { username: string | undefined; cid?: bigint; } = {
+            const mergedPeer: { username: string | null | undefined; cid?: bigint; } = {
               ...p,
               username: isPlaceholderName(existing.username) ? p.username : existing.username
             };
@@ -99,7 +100,7 @@ export function useRegisteredPeers(): UseRegisteredPeersReturn {
         }
       }
 
-      const peersToUse: { cid?: bigint; username?: string; }[] = Array.from(mergedPeersMap.values());
+      const peersToUse: { cid?: bigint; username?: string | null; }[] = Array.from(mergedPeersMap.values());
       // So a call, a group or a transfer that names this peer by CID alone names them as this list does.
       recordPeerUsernames(peersToUse.flatMap((p): { cid: bigint; username: string }[] =>
         p.cid !== undefined && p.username && !isPlaceholderName(p.username) ? [{ cid: p.cid, username: p.username }] : []));
@@ -113,7 +114,7 @@ export function useRegisteredPeers(): UseRegisteredPeersReturn {
           const displayName: string = peerDisplayName({ cid: p.cid, username: p.username });
           const username: string = peerHandleName({ cid: p.cid, username: p.username });
           const peerCidBigInt: bigint = p.cid ?? BigInt(0);
-          const isOnline: boolean | null = shownPresence(p.username, peerCidBigInt, p2pAutoConnectService.peerOnlineStatus(peerCidBigInt));
+          const isOnline: boolean | null = shownPresence(p.username ?? undefined, peerCidBigInt, p2pAutoConnectService.peerOnlineStatus(peerCidBigInt));
           let isConnected: boolean | null = null;
           try {
             // Already `boolean | null`: the service answers null when this tab
@@ -126,7 +127,7 @@ export function useRegisteredPeers(): UseRegisteredPeersReturn {
           } catch {
             isConnected = null;
           }
-          const connectionPath: PeerConnectPath | null = connectionPathFor(sessionCid, peerCidBigInt);
+          const connectionPath: P2pPathReport | null = connectionPathFor(sessionCid, peerCidBigInt);
           return { cid: cidStr, username, displayName, isOnline, isConnected, connectionPath };
         }));
       } catch (mapError) {

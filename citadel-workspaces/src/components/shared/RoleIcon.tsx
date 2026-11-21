@@ -10,33 +10,29 @@
  * the icon follows the built-in role's id, which a rename does not change, and a
  * created role takes the plain one.
  */
-import { Crown, ShieldCheck, Ticket, User, type LucideIcon } from 'lucide-react';
+import { Ban, Crown, ShieldCheck, Ticket, User, type LucideIcon } from 'lucide-react';
 import { roleBadgeClass } from '@/lib/role-badge';
 import { cn } from '@/lib/utils';
 import { useRoleDisplay } from '@/hooks/use-workspace-roles';
-import type { RoleDisplay } from '@/lib/workspace-roles/role-display';
+import type { RoleDisplay, RoleHolder } from '@/lib/workspace-roles/role-display';
+
+export type { RoleHolder };
 
 const ROLE_ICON: Record<string, LucideIcon> = {
   owner: Crown,
   admin: ShieldCheck,
   member: User,
   guest: Ticket,
+  banned: Ban,
 };
 
-export interface RoleHolder {
-  /** Their role-table id; see lib/workspace-roles. */
-  roleId?: string;
-  /** The legacy mirror, shown only when the id is not known. */
-  role?: string;
-}
-
-/** The role's name as the table has it, or the mirror's while the table is on its way. */
+/** The role's name as the table has it, "Banned" for a ban, or the remembered one meanwhile. */
 export function useRoleName(holder: RoleHolder): string | null {
-  return useRoleDisplay(holder.roleId, holder.role)?.name ?? null;
+  return useRoleDisplay(holder)?.name ?? null;
 }
 
 export function RoleIcon({ holder }: { holder: RoleHolder }): JSX.Element | null {
-  const display: RoleDisplay | null = useRoleDisplay(holder.roleId, holder.role);
+  const display: RoleDisplay | null = useRoleDisplay(holder);
   if (display === null) return null;
   const Icon: LucideIcon = ROLE_ICON[display.id] ?? User;
   return (

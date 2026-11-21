@@ -30,7 +30,7 @@ export type MemberDelivery =
   | { kind: 'failed'; cid: bigint; username: string; reason: string };
 
 export interface GroupFileShare extends GroupFileInfo {
-  senderCid: bigint;
+  sender_cid: bigint;
   /** Present only on the sender's own copy: the per-member ledger. */
   deliveries?: MemberDelivery[];
 }

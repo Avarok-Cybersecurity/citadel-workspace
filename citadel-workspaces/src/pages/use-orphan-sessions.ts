@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ConnectionManager } from '@/lib/connection';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 import { debugLog } from '@/lib/debug-config';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 /** Whether the agent holds sessions this browser can resume. Detects only: the navbar lets the user choose. */
 export function useHasOrphanSessions(): boolean {
@@ -19,7 +19,7 @@ export function useHasOrphanSessions(): boolean {
         await connectionManager.waitForReady();
 
         // Get active sessions from internal service
-        const activeSessions: ActiveSession[] = await connectionManager.getActiveSessions();
+        const activeSessions: SessionInformation[] = await connectionManager.getActiveSessions();
 
         if (activeSessions && activeSessions.length > 0) {
           debugLog('Landing', 'Landing: Found orphan sessions:', activeSessions.length);

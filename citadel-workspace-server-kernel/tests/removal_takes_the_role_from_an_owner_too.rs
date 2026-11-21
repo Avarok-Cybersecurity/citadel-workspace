@@ -6,7 +6,7 @@
 //! keeps passing every gate while `ensure_not_last_admin` — which counts
 //! administrators among `workspace.members` — can no longer see them.
 //!
-//! The check was `removed.role == UserRole::Admin`, written when Admin was the
+//! The check was `removed.role == ADMIN_ROLE_ID`, written when Admin was the
 //! only role that gated anything. `is_admin_or_owner` later became the gate on
 //! `update_workspace_member_role`, `update_member_permissions` and
 //! UpdateTreeSchema, and `ensure_not_last_admin` grew to count Owner — its own
@@ -26,13 +26,13 @@
 //! thing this file was written for: the authority goes with the membership.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
-use citadel_workspace_types::structs::UserRole;
 use common::member_test_utils::{an_owner, insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::{Standing, ADMIN_ROLE_ID, BANNED, GUEST_ROLE_ID, OWNER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 
-async fn role_of(kernel: &Kernel, user: &str) -> UserRole {
+async fn role_of(kernel: &Kernel, user: &str) -> String {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -40,7 +40,7 @@ async fn role_of(kernel: &Kernel, user: &str) -> UserRole {
         .await
         .expect("backend read")
         .expect("user exists")
-        .role
+        .standing()
 }
 
 /// The authority that outlives removal if the role does: `ManageRoles` is the
@@ -77,13 +77,13 @@ async fn remove_as(kernel: &Kernel, actor: &str, target: &str) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn removing_an_owner_takes_the_role() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "founder", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "founder", OWNER_ROLE_ID).await;
     join_root(&kernel, "founder").await;
     // A peer Owner does the removing. An Admin cannot reach an Owner any more,
     // and a peer of equal authority is the narrowest actor that can -- so the
     // refusal under test below is the ROLE not being dropped, never the caller
     // being turned away at the door.
-    insert_user_with_role(&kernel, "cofounder", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "cofounder", OWNER_ROLE_ID).await;
     join_root(&kernel, "cofounder").await;
     assert!(
         still_administers(&kernel, "founder").await,
@@ -94,7 +94,7 @@ async fn removing_an_owner_takes_the_role() {
 
     assert_eq!(
         role_of(&kernel, "founder").await,
-        UserRole::Banned,
+        BANNED,
         "a removed Owner kept the role, and with it every is_admin_or_owner gate",
     );
     assert!(
@@ -108,14 +108,14 @@ async fn removing_an_admin_still_takes_the_role() {
     // The case that always worked. If this ever goes red the fix above broke the
     // branch it widened rather than widening it.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "deputy", UserRole::Admin).await;
+    insert_user_with_role(&kernel, "deputy", ADMIN_ROLE_ID).await;
     join_root(&kernel, "deputy").await;
     // The Owner removes: an Admin is not below another Admin.
     an_owner(&kernel, "owner").await;
 
     remove_as(&kernel, "owner", "deputy").await;
 
-    assert_eq!(role_of(&kernel, "deputy").await, UserRole::Banned);
+    assert_eq!(role_of(&kernel, "deputy").await, BANNED);
     assert!(!still_administers(&kernel, "deputy").await);
 }
 
@@ -127,13 +127,13 @@ async fn removing_a_plain_member_does_not_promote_them() {
     // that removal leaves a record at all. Banned ranks 0 and grants nothing,
     // so it cannot be the promotion this test exists to catch.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "visitor", UserRole::Guest).await;
+    insert_user_with_role(&kernel, "visitor", GUEST_ROLE_ID).await;
     join_root(&kernel, "visitor").await;
 
     remove_as(&kernel, TEST_ADMIN_USER_ID, "visitor").await;
 
     let after = role_of(&kernel, "visitor").await;
-    assert_eq!(after, UserRole::Banned);
+    assert_eq!(after, BANNED);
     // Banned is a standing below every role: it holds none, so it confers nothing.
     let record = kernel
         .domain_operations

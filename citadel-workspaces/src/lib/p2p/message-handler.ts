@@ -179,7 +179,7 @@ export class MessageHandler {
   /**
    * Handle a P2P command
    */
-  public async handleP2PCommand(command: P2PCommand, peerCid: bigint, recipientCid?: bigint): Promise<void> {
+  public async handleP2PCommand(command: P2PCommand, peerCid: bigint, recipient_cid?: bigint): Promise<void> {
     debugLog('MessageHandler', '[P2P] handleP2PCommand received:', {
       type: command.type,
       typeValue: P2PCommandType[command.type] || command.type,
@@ -195,7 +195,7 @@ export class MessageHandler {
             this.fileTransferHandler,
             command.payload as P2PMessagingLayerPayload,
             peerCid,
-            recipientCid
+            recipient_cid
           );
         } else {
           debugLog('P2PMessageHandler', 'handleP2PCommand: MessagingLayerCommand payload failed type check');
@@ -234,7 +234,7 @@ export class MessageHandler {
 
       case P2PCommandType.CdocChatSync:
         // Emitted, never handled here: the chat document's keeper (lib/cdoc/chat) is lazy, and this module never reaches cdoc.
-        if (isCdocChatSyncPayload(command.payload)) eventEmitter.emit<CdocChatCommandEvent>(CDOC_CHAT_COMMAND_EVENT, { peerCid, recipientCid, payload: command.payload });
+        if (isCdocChatSyncPayload(command.payload)) eventEmitter.emit<CdocChatCommandEvent>(CDOC_CHAT_COMMAND_EVENT, { peerCid, recipient_cid, payload: command.payload });
         else debugLog('P2PMessageHandler', 'handleP2PCommand: CdocChatSync payload failed type check');
         break;
 

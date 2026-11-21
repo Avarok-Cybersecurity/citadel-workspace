@@ -61,7 +61,7 @@ export function createConversationEventApplier(deps: ConversationEventDeps): (ev
       case 'Appended':
         if (message && (await deps.holdInMemory(peer, message))) {
           deps.notifyMessage(message);
-          if (message.senderCid === event.cid) {
+          if (message.sender_cid === event.cid) {
             deps.emit('p2p:message-sent', { peerCid: peer, message });
           } else {
             deps.emit('p2p:message-received', {

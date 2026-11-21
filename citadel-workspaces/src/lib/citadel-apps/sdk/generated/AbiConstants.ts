@@ -29,6 +29,7 @@ import type { Group } from "./Group";
 import type { HeightGranted } from "./HeightGranted";
 import type { HostFetch } from "./HostFetch";
 import type { HostFetchOpen } from "./HostFetchOpen";
+import type { HttpMethod } from "./HttpMethod";
 import type { HttpResponse } from "./HttpResponse";
 import type { IhttpCall } from "./IhttpCall";
 import type { IhttpConsumed } from "./IhttpConsumed";
@@ -197,6 +198,9 @@ export const KV_BACKEND_CAPABILITY = {
   local: "storage.local",
   node_authored: "storage.node.authored",
 } as const;
+
+/** Every method an HttpRequest may name. */
+export const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"] as const satisfies readonly HttpMethod[];
 
 /** The capability a client stream's first attempt needs, and its relay fallback's (null: none). */
 export const TRANSPORT_CAPABILITY = {

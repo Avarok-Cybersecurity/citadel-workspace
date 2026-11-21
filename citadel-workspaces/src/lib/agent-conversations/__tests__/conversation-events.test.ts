@@ -17,14 +17,14 @@ const BOB: bigint = 22n;
 
 function message(id: string, from: bigint, extra: Partial<P2PMessage> = {}): P2PMessage {
   return {
-    id, content: `text of ${id}`, senderCid: from, recipientCid: from === ME ? BOB : ME,
+    id, content: `text of ${id}`, sender_cid: from, recipient_cid: from === ME ? BOB : ME,
     timestamp: 1000, index: 1, status: 'delivered', message_type: 'text', ...extra,
   };
 }
 
 function metadata(extra: Partial<ConversationMetadata> = {}): ConversationMetadata {
   return {
-    peerCid: BOB, totalMessageCount: 1, oldestMessageTimestamp: 1000, newestMessageTimestamp: 1000,
+    peerCid: BOB, ownerCid: ME, totalMessageCount: 1, oldestMessageTimestamp: 1000, newestMessageTimestamp: 1000,
     latestPage: 0, messagesPerPage: 50, unreadCount: 0, lastMessageIndex: 1, lastUpdated: 0, ...extra,
   };
 }

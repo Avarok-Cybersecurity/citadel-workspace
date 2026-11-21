@@ -7,7 +7,7 @@
  * one identity.
  *
  * A seed is never made when one is read: a new key makes every client that pinned the old one
- * refuse the server. An object with none (provisioned before server identities) cannot start and
+ * refuse the server. An object with none (provisioned by an earlier release) cannot start and
  * publishes no document.
  */
 import { storedSeed } from "./stored-seed.mjs";
@@ -47,7 +47,7 @@ export class TenantIdentity {
   /** The identity the node is started with. Throws when the object has no key. */
   host() {
     if (this.seed === null) {
-      throw new Error("this workspace has no server key: it was provisioned before server identities, and is provisioned again to get one");
+      throw new Error("this workspace has no server key: it was provisioned by an earlier release, and does not start");
     }
     this.built ??= { host: new (this.wasm().ServerIdentityHost)(this.kernelConfig(), this.seed), document: null };
     return this.built.host;

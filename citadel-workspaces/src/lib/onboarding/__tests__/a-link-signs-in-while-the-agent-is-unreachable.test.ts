@@ -50,7 +50,7 @@ function controlled(): Controlled {
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 const bench: AccountLink = { username: 'bench' };
-const live: Session = { cid: 7n, username: 'bench', server_address: 'mac2.work.avarok.net' };
+const live: Session = { cid: 7n, username: 'bench', server_address: 'mac2.work.avarok.net', server_host: null };
 
 describe('an account link while the agent is unreachable', () => {
   it('opens sign-in with the username once the deadline passes, without an answer', async () => {

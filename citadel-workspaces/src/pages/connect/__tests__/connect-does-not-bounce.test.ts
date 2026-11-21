@@ -19,18 +19,16 @@ const h: {
   claimSession: ReturnType<typeof vi.fn>;
   postAuthSetup: ReturnType<typeof vi.fn>;
   setSelectedUser: ReturnType<typeof vi.fn>;
-  triggerAutoConnect: ReturnType<typeof vi.fn>;
   activeSessions: Array<{ cid: bigint; username: string; server_address: string }>;
   storedSessions: Array<{ username: string; serverAddress: string; password?: string }>;
 } = vi.hoisted(() => ({
   claimSession: vi.fn(() => Promise.resolve()),
   postAuthSetup: vi.fn(() => Promise.resolve()),
   setSelectedUser: vi.fn(() => Promise.resolve()),
-  triggerAutoConnect: vi.fn(() => Promise.resolve()),
   activeSessions: [] as Array<{ cid: bigint; username: string; server_address: string }>,
   storedSessions: [] as Array<{ username: string; serverAddress: string; password?: string }>,
 }));
-const { claimSession, postAuthSetup, setSelectedUser, triggerAutoConnect } = h;
+const { claimSession, postAuthSetup, setSelectedUser } = h;
 
 vi.mock('@/lib/connection', async (importOriginal: () => Promise<typeof import('@/lib/connection')>) => {
   const real: typeof import('@/lib/connection') = await importOriginal();
@@ -42,7 +40,6 @@ vi.mock('@/lib/connection', async (importOriginal: () => Promise<typeof import('
       getActiveSessions: vi.fn(() => Promise.resolve(h.activeSessions)) as never,
       getStoredSessionsArray: vi.fn(() => h.storedSessions) as never,
       setActiveSessionIndex: vi.fn(() => Promise.resolve()) as never,
-      triggerAutoConnect: h.triggerAutoConnect as never,
     }),
   };
 });
@@ -95,16 +92,17 @@ describe('connectToServer', () => {
     expect(postAuthSetup).not.toHaveBeenCalled();
   });
 
-  it('does not silently spin when the user declined credential storage', async () => {
-    h.storedSessions = [{ username: 'alice', serverAddress: SERVER }];
+  it('asks for a sign-in for a stored session that has ended, even one carrying an earlier build\'s password', async () => {
+    h.storedSessions = [{ username: 'alice', serverAddress: SERVER, password: 'p' }];
 
     const outcome: ConnectOutcome = await connectToServer(SERVER);
 
     expect(outcome.kind).toBe('needs-sign-in');
-    // No point asking auto-connect: it skips password-less sessions.
-    expect(triggerAutoConnect).not.toHaveBeenCalled();
+    // Nothing on this device signs a session back in: the stored password is never used.
+    expect(claimSession).not.toHaveBeenCalled();
+    expect(postAuthSetup).not.toHaveBeenCalled();
     if (outcome.kind === 'needs-sign-in') {
-      expect(outcome.reason).toMatch(/credentials were not saved/i);
+      expect(outcome.reason).toMatch(/has ended\. Sign in again/);
     }
   });
 
@@ -117,7 +115,7 @@ describe('connectToServer', () => {
     expect(claimSession).not.toHaveBeenCalled();
   });
 
-  it('treats "not orphaned" as already ours when no other tab holds it', async () => {
+  it('treats "not orphaned" as already ours', async () => {
     h.activeSessions = [{ cid: 9n, username: 'alice', server_address: SERVER }];
     claimSession.mockRejectedValueOnce(new Error('session is not orphaned'));
 
@@ -125,18 +123,5 @@ describe('connectToServer', () => {
 
     expect(outcome).toEqual({ kind: 'connected', cid: 9n });
     expect(postAuthSetup).toHaveBeenCalledWith(9n);
-  });
-
-  it('refuses to adopt a session another tab is using', async () => {
-    const { instanceManager } = await import('@/lib/multi-instance');
-    h.activeSessions = [{ cid: 9n, username: 'alice', server_address: SERVER }];
-    claimSession.mockRejectedValueOnce(new Error('session is not orphaned'));
-    vi.mocked(instanceManager.findInstanceByCid).mockReturnValueOnce('other-tab');
-
-    // Adopting here is what put two tabs on one CID: findInstanceByCid returns
-    // the first map hit, so every message, transfer tick and call frame went to
-    // one of them while the other showed the same conversation and never moved.
-    await expect(connectToServer(SERVER)).rejects.toThrow(/another tab/i);
-    expect(postAuthSetup).not.toHaveBeenCalled();
   });
 });

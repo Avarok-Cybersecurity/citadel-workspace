@@ -119,7 +119,7 @@ export function fakeTransport(options: FakeOptions): { transport: ChatTransport;
 export function fakeMessage(id: string, content: string, timestamp: number, own: boolean): ChatMessage {
   return {
     id, content, timestamp, index: 0, status: 'delivered', message_type: 'text',
-    senderCid: own ? 1n : 2n, recipientCid: own ? 2n : 1n,
+    sender_cid: own ? 1n : 2n, recipient_cid: own ? 2n : 1n,
     author: own ? { own: true, name: 'You', username: null } : { own: false, name: 'Bob', username: 'bob' },
     share: null,
   };

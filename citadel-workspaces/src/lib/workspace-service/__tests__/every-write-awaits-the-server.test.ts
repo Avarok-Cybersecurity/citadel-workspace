@@ -19,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import type { RequestKey } from '@/types/workspace-protocol';
 
 const DIR: string = join(process.cwd(), 'src/lib/workspace-service');
 
@@ -32,7 +33,7 @@ const DIR: string = join(process.cwd(), 'src/lib/workspace-service');
  * covered by the map test below instead, so the gate is ready when someone
  * wires the caller.
  */
-const MUTATING: string[] = [
+const MUTATING: RequestKey[] = [
   'CreateNode', 'UpdateNode', 'DeleteNode',
   'AddMember', 'RemoveMember', 'UpdateMemberRole', 'UpdateMemberPermissions',
   'UpdateWorkspaceTheme', 'EditGroupMessage', 'DeleteGroupMessage',

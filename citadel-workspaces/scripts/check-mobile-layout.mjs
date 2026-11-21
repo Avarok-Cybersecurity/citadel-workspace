@@ -21,9 +21,11 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { chromium } from 'playwright';
+import { freePort } from './lib/free-port.mjs';
+import { AGENT_OPTIONAL_SCREENS, serveSignInIssuer, signInScreens } from './lib/sign-in-world.mjs';
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = Number(process.env.MOBILE_CHECK_PORT ?? 4178);
+const PORT = await freePort(); // chosen per run: concurrent runs cannot collide (lib/free-port.mjs)
 const ORIGIN = `http://localhost:${PORT}`;
 // These checks drive the production bundle, where first-run onboarding is ON
 // (isOnboardingEnabled in src/lib/debug-config.ts). They exercise the
@@ -106,6 +108,7 @@ async function main() {
     const context = await newParityContext(browser, {
       viewport: { width, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2,
     });
+    await serveSignInIssuer(context, APP_ROOT);
     const page = await context.newPage();
 
     // Testids, not button copy.
@@ -191,6 +194,7 @@ async function main() {
           await trigger.click();
         },
       ]),
+      ...signInScreens(page, ORIGIN, APP_ROOT),
     ];
 
     for (const [name, go] of screens) {
@@ -201,7 +205,7 @@ async function main() {
       // Left standing it covers the screen under test: its own buttons get
       // measured for tap size, and the screen's own controls are hidden and
       // therefore SKIPPED -- a surface can pass by being invisible.
-      await dismissConnectionFailure(page);
+      if (!AGENT_OPTIONAL_SCREENS.has(name)) await dismissConnectionFailure(page);
       // Settle transitions before measuring: a box mid-animation is not its size.
       await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))))
         .catch(() => {});

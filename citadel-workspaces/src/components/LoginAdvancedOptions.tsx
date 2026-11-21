@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { SecuritySettingsState } from "./useLoginHandler";
-import type { PasskeyAccount } from "./passkey/usePasskeyAccount";
 import { PASSKEY_COPY } from "@/lib/passkey/copy";
 
 /**
@@ -15,9 +14,8 @@ import { PASSKEY_COPY } from "@/lib/passkey/copy";
  * props, and the toggle is a callback. Nothing here decides anything.
  *
  * The switch that was "Remember Credentials" -- a plaintext password on the
- * agent -- now asks to enrol a passkey after sign-in instead. It is not shown
- * for an account that already has one here (Settings adds more), and where
- * WebAuthn cannot run the reason is said rather than a dead switch shown.
+ * agent -- now asks to enrol a passkey after sign-in instead. Where WebAuthn
+ * cannot run the reason is said rather than a dead switch shown.
  */
 export interface LoginAdvancedOptionsProps {
   isOpen: boolean;
@@ -25,7 +23,8 @@ export interface LoginAdvancedOptionsProps {
   onConfigureSecurity: () => void;
   securitySettings: SecuritySettingsState;
   setSecuritySettings: React.Dispatch<React.SetStateAction<SecuritySettingsState>>;
-  passkey: PasskeyAccount;
+  /** WebAuthn exists in this browser on this page. */
+  passkeysAvailable: boolean;
 }
 
 export function LoginAdvancedOptions({
@@ -34,7 +33,7 @@ export function LoginAdvancedOptions({
   onConfigureSecurity,
   securitySettings,
   setSecuritySettings,
-  passkey,
+  passkeysAvailable,
 }: LoginAdvancedOptionsProps): JSX.Element {
   return (
     <>
@@ -67,9 +66,9 @@ export function LoginAdvancedOptions({
             </Button>
           </div>
 
-          {!passkey.available ? (
+          {!passkeysAvailable ? (
             <p className="text-xs text-muted-foreground">{PASSKEY_COPY.unavailableHere}</p>
-          ) : !passkey.hasKeys && (
+          ) : (
             <div className="flex items-center justify-between gap-3">
               <label
                 htmlFor="enrol-passkey"

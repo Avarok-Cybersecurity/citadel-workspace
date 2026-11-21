@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Shield, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import WorkspaceService from "@/lib/workspace-service";
-import { WorkspaceProtocolRequestTS, WorkspaceProtocolPayloadTS } from "@/types/workspace-protocol";
+import type { WorkspaceProtocolPayload } from 'citadel-workspace-client-ts';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { getUserFriendlyErrorMessage, getErrorTitle } from "@/lib/error-messages";
 import { workspaceEvents } from "@/lib/workspace-events";
 import { runAsyncSetup } from '@/lib/utils/async-utils';
@@ -63,16 +64,17 @@ export const WorkspaceInitializationModal: React.FC<WorkspaceInitializationModal
             const metadataBytes: Uint8Array<ArrayBuffer> = new TextEncoder().encode(JSON.stringify(metadata));
             const metadataArray: number[] = Array.from(metadataBytes);
 
-            const request: WorkspaceProtocolRequestTS = {
+            const request: WorkspaceProtocolRequest = {
                 UpdateWorkspace: {
+                    workspace_id: null,
                     workspace_master_password: masterPassword,
-                    name: undefined,
-                    description: undefined,
+                    name: null,
+                    description: null,
                     metadata: metadataArray
                 }
             };
 
-            const payload: WorkspaceProtocolPayloadTS = { Request: request };
+            const payload: WorkspaceProtocolPayload = { Request: request };
 
             const responsePromise: Promise<void> = new Promise<void>((resolve, reject) => {
                 let unsubscribeWorkspace: (() => void) | null = null;

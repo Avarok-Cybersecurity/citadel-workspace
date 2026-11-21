@@ -46,8 +46,21 @@ vi.mock('citadel-workspace-client-ts', async (importOriginal: () => Promise<type
       socket.opened += 1;
       this.handler({ ServiceConnectionAccepted: { cid: 0n, request_id: null } });
     }
+    private declared: ((message: unknown) => unknown) | null = null;
+    private answerDeclaration: ((value: unknown) => void) | null = null;
+    /** The declaration's answer, as every agent gives one. */
+    nextResponse<T>(extract: (message: unknown) => T | undefined): Promise<T> {
+      this.declared = extract;
+      return new Promise<T>((resolve: (value: T) => void): void => { this.answerDeclaration = resolve as (value: unknown) => void; });
+    }
     async sendDirectToInternalService(request: Record<string, unknown>): Promise<void> {
       socket.sent.push(request);
+      const declaring: { request_id: string; management_command: { DeclareCapabilities?: unknown } } | undefined =
+        request.ConnectionManagement as { request_id: string; management_command: { DeclareCapabilities?: unknown } } | undefined;
+      if (declaring?.management_command.DeclareCapabilities !== undefined) {
+        this.answerDeclaration?.(this.declared?.({ AgentCapabilities: { request_id: declaring.request_id } }));
+        return;
+      }
       const management: { request_id: string; management_command: { ClaimSession?: { session_cid: bigint } } } | undefined =
         request.ConnectionManagement as { request_id: string; management_command: { ClaimSession?: { session_cid: bigint } } } | undefined;
       const claim: { session_cid: bigint } | undefined = management?.management_command.ClaimSession;
@@ -57,6 +70,8 @@ vi.mock('citadel-workspace-client-ts', async (importOriginal: () => Promise<type
     }
     stopMessageProcessing(): void {}
     async close(): Promise<void> {}
+    /** The service records the page's wire-types hash once the client exists (types-step.ts). */
+    typesHash(): string { return 'a'.repeat(64); }
   }
   return { ...real, WorkspaceClient: FakeSocket };
 });

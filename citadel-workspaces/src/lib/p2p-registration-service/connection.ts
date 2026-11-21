@@ -13,7 +13,8 @@ import { stringToBytes, bytesToString } from '../utils/encoding-utils';
 import { wireMapEntries } from '@/lib/wire-map';
 import { debugLog } from '@/lib/debug-config';
 import { eventEmitter } from '../event-emitter';
-import type { Peer, PeerInfoResponse, PendingRequestEntry } from './types';
+import type { Peer, PendingRequestEntry } from './types';
+import type { PeerInformation } from 'citadel-workspace-client-ts';
 import { AUTO_ACCEPT_KEY, RETRY_BACKOFF_MS, DEFAULT_LIST_RETRIES } from './constants';
 import { getCurrentCid, listRegisteredPeers } from './discovery';
 import { registerPeer } from './registration';
@@ -27,7 +28,7 @@ import { isGenuinelyAbsent } from '@/lib/storage/absence';
 export async function listRegisteredPeersWithRetry(
   pendingRequests: Map<string, PendingRequestEntry>,
   maxRetries: number = DEFAULT_LIST_RETRIES
-): Promise<PeerInfoResponse[]> {
+): Promise<PeerInformation[]> {
   let lastError: Error | null = null;
   for (let i: number = 0; i < maxRetries; i++) {
     try {
@@ -71,7 +72,7 @@ export async function syncPeerConnectionsFromSession(
 
   let serverPeerCids: Set<bigint> | null = null;
   try {
-    const serverPeers: PeerInfoResponse[] = await listRegisteredPeers(pendingRequests);
+    const serverPeers: PeerInformation[] = await listRegisteredPeers(pendingRequests);
     serverPeerCids = new Set(
       serverPeers.map(p => p.cid as bigint).filter((c): c is bigint => c !== undefined)
     );

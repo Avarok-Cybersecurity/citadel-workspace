@@ -30,7 +30,6 @@ vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
     sendRequest: async (): Promise<void> => undefined,
     sendP2PMessageReliable: async (): Promise<void> => undefined,
-    ensureMessengerOpen: async (): Promise<boolean> => false,
     canSendRequests: (): boolean => false,
   },
 }));
@@ -69,7 +68,7 @@ async function receiveOffer(transferId: string): Promise<P2PMessage> {
   const { FileTransferMessageHandler } = await import('@/lib/p2p/file-transfer-message-handler');
   const outgoing: FileTransfer = {
     id: transferId, fileName: 'x.txt', fileSize: 3, fileType: 'text/plain', state: 'pending', progress: 0,
-    senderCid: ALICE.toString(), recipientCid: BOB.toString(), createdAt: Date.now(), updatedAt: Date.now(),
+    sender_cid: ALICE.toString(), recipient_cid: BOB.toString(), createdAt: Date.now(), updatedAt: Date.now(),
     expiresAt: Date.now() + 60_000, isIncoming: false,
   };
   const layer: unknown = buildTransferAnnouncement(outgoing).layer;

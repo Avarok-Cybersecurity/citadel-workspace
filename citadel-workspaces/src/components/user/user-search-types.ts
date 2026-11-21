@@ -8,8 +8,8 @@ export interface UserData {
   displayName: string;
   avatarUrl?: string;
   email?: string;
-  /** The legacy role mirror, shown only when `roleId` is unknown. */
-  role?: string;
+  /** Banned from the workspace; shown in place of a role. */
+  banned: boolean;
   /** Their role in the workspace's table. */
   roleId?: string;
   /** True, false, or null when nobody has said. See lib/presence.ts. */

@@ -9,6 +9,7 @@
 //! everything too. So a credentialed registration against the same server must
 //! SUCCEED first, and only then is a transient connection's failure evidence.
 
+use citadel_internal_service_test_common::node_settings::TestNode;
 use citadel_sdk::prefabs::client::single_connection::SingleClientServerConnectionKernel;
 use citadel_sdk::prefabs::client::ServerConnectionSettingsBuilder;
 use citadel_sdk::prelude::*;
@@ -45,6 +46,7 @@ async fn attempt(settings: ServerConnectionSettings<StackedRatchet>) -> Outcome 
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()
+        .as_test_node()
         .build(kernel)
         .expect("client node");
     let client = tokio::spawn(client);
@@ -69,6 +71,7 @@ async fn the_production_server_refuses_a_transient_account() {
             common::test_user!("realuser"),
             "Real User",
             "password123",
+            common::sign_in_client::TEST_SERVER_CERTIFICATE,
         )
         .with_udp_mode(UdpMode::Disabled)
         .build()
@@ -81,10 +84,13 @@ async fn the_production_server_refuses_a_transient_account() {
     );
 
     let transient = attempt(
-        ServerConnectionSettingsBuilder::transient(addr)
-            .with_udp_mode(UdpMode::Disabled)
-            .build()
-            .expect("settings"),
+        ServerConnectionSettingsBuilder::transient(
+            addr,
+            common::sign_in_client::TEST_SERVER_CERTIFICATE,
+        )
+        .with_udp_mode(UdpMode::Disabled)
+        .build()
+        .expect("settings"),
     )
     .await;
     let Outcome::Refused(err) = transient else {

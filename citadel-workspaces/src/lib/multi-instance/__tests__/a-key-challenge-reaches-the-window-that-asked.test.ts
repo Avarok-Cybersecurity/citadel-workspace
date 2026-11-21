@@ -58,7 +58,7 @@ describe('a security-key challenge', () => {
   it('and a registration\'s connect answer still follows its RegisterSuccess', () => {
     instanceInboundRouter.registerPendingRequest('bobs-register', 'bob-tab');
 
-    instanceInboundRouter.routeMessage({ RegisterSuccess: { cid: 23n, request_id: 'bobs-register', recovery_codes: [] } });
+    instanceInboundRouter.routeMessage({ RegisterSuccess: { cid: 23n, request_id: 'bobs-register', recovery_phrase: [] } });
     instanceInboundRouter.routeMessage({ ConnectSuccess: { cid: 23n, request_id: 'bobs-register' } });
 
     expect(targets()).toEqual(['bob-tab', 'bob-tab']);

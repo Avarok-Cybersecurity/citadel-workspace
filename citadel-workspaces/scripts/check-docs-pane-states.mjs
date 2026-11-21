@@ -16,7 +16,6 @@
 import { chromium } from 'playwright';
 import { serveDocsHarness } from './lib/docs-harness/serve.mjs';
 
-const PORT = Number(process.env.DOCS_HARNESS_PORT ?? 4199);
 const VIEWPORTS = [{ name: 'desktop', width: 1280, height: 900 }, { name: 'phone', width: 390, height: 844 }];
 const WASM = '**/cdoc/cdoc_wasm_editor_bg.wasm';
 /** Sub-pixel: layout snaps to device pixels, and a control that moved has moved by whole pixels. */
@@ -120,7 +119,7 @@ async function saveStates(browser, viewport) {
   await context.close();
 }
 
-const harness = await serveDocsHarness(PORT);
+const harness = await serveDocsHarness();
 const browser = await chromium.launch();
 try {
   for (const viewport of VIEWPORTS) {

@@ -52,7 +52,7 @@ export async function sendThroughAgent(
   const out: Outgoing = {
     content,
     message_type: options?.messageType ?? 'text',
-    reply_to: options?.replyTo ?? null,
+    reply_to: options?.reply_to ?? null,
     mentions: options?.mentions ?? null,
     attachments: options?.attachments ?? null,
     document_id: options?.documentId ?? null,

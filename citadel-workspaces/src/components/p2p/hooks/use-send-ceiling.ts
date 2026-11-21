@@ -21,7 +21,7 @@ function askBounded(): Promise<boolean> {
 
 export interface SendCeiling {
   stagesUploads: boolean | null;
-  /** Whether the agent can open a native file dialog: undefined until it says, and if it never does. */
+  /** Whether the agent can open a native file dialog: undefined until it says. */
   nativePicker?: boolean;
   /** Why the agent could not be asked, or null. */
   failure: string | null;
@@ -47,7 +47,7 @@ export function useSendCeiling(isOpen: boolean): SendCeiling {
     );
     // Asked on its own: unknown stays unknown (offered, as before) however long the agent takes.
     agentNativePicker().then(
-      (nativePicker: boolean | undefined): void => { if (live) setCeiling((c: SendCeiling): SendCeiling => ({ ...c, nativePicker })); },
+      (nativePicker: boolean): void => { if (live) setCeiling((c: SendCeiling): SendCeiling => ({ ...c, nativePicker })); },
       (): void => undefined,
     );
     return (): void => { live = false; };

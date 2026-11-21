@@ -11,11 +11,12 @@ use citadel_workspace_server_kernel::kernel::ice_servers::{
     IceServerGrant, IceServerMember, IceServerSource, IceServersUnavailable,
 };
 use citadel_workspace_types::ice::IceServer;
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use common::member_test_utils::{
     insert_user_with_role, join_root, member_holding, seed_role, GateKernel,
 };
+use common::roles_fixture::{BANNED, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, create_test_kernel_with_ice_servers};
 use std::sync::{Arc, Mutex};
 
@@ -75,7 +76,7 @@ async fn kernel_with(source: &Arc<InMemorySource>) -> Arc<GateKernel> {
     create_test_kernel_with_ice_servers(Some(source.clone() as Arc<dyn IceServerSource>)).await
 }
 
-async fn enrol(kernel: &GateKernel, id: &str, role: UserRole) {
+async fn enrol(kernel: &GateKernel, id: &str, role: &str) {
     insert_user_with_role(kernel, id, role).await;
     join_root(kernel, id).await;
 }
@@ -90,7 +91,7 @@ async fn ask(kernel: &GateKernel, user: &str) -> WorkspaceProtocolResponse {
 async fn a_member_gets_the_servers_the_host_minted_for_them() {
     let source = InMemorySource::new(None);
     let kernel = kernel_with(&source).await;
-    enrol(&kernel, "alice", UserRole::Member).await;
+    enrol(&kernel, "alice", MEMBER_ROLE_ID).await;
 
     match ask(&kernel, "alice").await {
         WorkspaceProtocolResponse::IceServers {
@@ -113,7 +114,7 @@ async fn a_member_gets_the_servers_the_host_minted_for_them() {
 async fn a_guest_is_refused_and_nothing_is_minted() {
     let source = InMemorySource::new(None);
     let kernel = kernel_with(&source).await;
-    enrol(&kernel, "visitor", UserRole::Guest).await;
+    enrol(&kernel, "visitor", GUEST_ROLE_ID).await;
 
     let response = ask(&kernel, "visitor").await;
     assert!(refused(&response), "a guest must be refused: {response:?}",);
@@ -124,9 +125,9 @@ async fn a_guest_is_refused_and_nothing_is_minted() {
 async fn a_removed_or_unenrolled_account_is_refused() {
     let source = InMemorySource::new(None);
     let kernel = kernel_with(&source).await;
-    enrol(&kernel, "removed", UserRole::Banned).await;
+    enrol(&kernel, "removed", BANNED).await;
     // A Member record that is not in the workspace's member list.
-    insert_user_with_role(&kernel, "stranger", UserRole::Member).await;
+    insert_user_with_role(&kernel, "stranger", MEMBER_ROLE_ID).await;
 
     for user in ["removed", "stranger", "nobody-at-all"] {
         let response = ask(&kernel, user).await;
@@ -138,7 +139,7 @@ async fn a_removed_or_unenrolled_account_is_refused() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn with_no_source_a_member_is_told_no_relay_is_available() {
     let kernel = create_test_kernel().await;
-    enrol(&kernel, "alice", UserRole::Member).await;
+    enrol(&kernel, "alice", MEMBER_ROLE_ID).await;
 
     let response = ask(&kernel, "alice").await;
     assert!(
@@ -154,7 +155,7 @@ async fn with_no_source_a_member_is_told_no_relay_is_available() {
 async fn a_host_that_declines_is_reported_with_its_reason() {
     let source = InMemorySource::new(Some("this workspace's plan has used its included relay"));
     let kernel = kernel_with(&source).await;
-    enrol(&kernel, "alice", UserRole::Owner).await;
+    enrol(&kernel, "alice", OWNER_ROLE_ID).await;
 
     match ask(&kernel, "alice").await {
         WorkspaceProtocolResponse::IceServersUnavailable { reason } => {

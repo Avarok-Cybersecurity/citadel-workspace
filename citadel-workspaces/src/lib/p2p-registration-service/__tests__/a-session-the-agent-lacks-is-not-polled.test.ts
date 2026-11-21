@@ -14,7 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startPeerPoll, type PeerPoll, type PeerPollDeps } from '../peer-poll';
 import type { ActiveSessionsResult } from '@/lib/connection/queries';
-import type { ActiveSession } from '@/types/session-types';
+import type { SessionInformation } from 'citadel-workspace-client-ts';
 
 const INTERVAL_MS: number = 30_000;
 const STALE_CID: bigint = 7n;
@@ -42,8 +42,8 @@ function fakeAgent(opts: { refusal: string | null; sessions: ActiveSessionsResul
   return { deps, checks: () => checks, gone };
 }
 
-const held: (cid: bigint) => ActiveSession = (cid: bigint): ActiveSession =>
-  ({ cid, username: 'u', server_address: 'a' });
+const held: (cid: bigint) => SessionInformation = (cid: bigint): SessionInformation =>
+  ({ cid, username: 'u', server_address: 'a', server_host: null, peer_connections: {} });
 
 async function runFor(poll: PeerPoll, intervals: number): Promise<void> {
   await poll.runNow();

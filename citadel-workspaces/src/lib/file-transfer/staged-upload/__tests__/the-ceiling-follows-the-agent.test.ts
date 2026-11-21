@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { browserSendCeiling, browserSendRefusal, browserSendRoute } from '../send-route';
 import { STAGED_UPLOAD_CEILING_BYTES } from '../chunk-plan';
 import { MAX_BYTE_CONTENTS_BYTES } from '../../server-upload';
-import { watchGreeting, type AgentCapabilities } from '@/lib/agent-conversations/capabilities';
+import { watchGreeting, type AgentOffers } from '@/lib/agent-conversations/capabilities';
 
 const MB: number = 1024 * 1024;
 
@@ -43,14 +43,14 @@ describe('the advice', () => {
 });
 
 describe('the greeting', () => {
-  async function offers(greeting: Record<string, unknown>): Promise<AgentCapabilities> {
+  async function offers(greeting: Record<string, unknown>): Promise<AgentOffers> {
     const watch: ReturnType<typeof watchGreeting> = watchGreeting();
     watch.observe({ ServiceConnectionAccepted: greeting });
     return watch.offers;
   }
 
   it('reads stages_uploads, and its absence as no', async () => {
-    expect((await offers({ agent_ilm: true, stages_uploads: true })).stagesUploads).toBe(true);
-    expect((await offers({ agent_ilm: true })).stagesUploads).toBe(false);
+    expect((await offers({ stages_uploads: true })).stagesUploads).toBe(true);
+    expect((await offers({})).stagesUploads).toBe(false);
   });
 });

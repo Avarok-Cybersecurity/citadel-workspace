@@ -10,10 +10,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TextBubble } from '@/components/p2p/bubbles/TextBubble';
+import type { PaneMessage } from '@/lib/chat/transport/chat-transport';
 
 async function choose(item: string): Promise<{ focusComposer: ReturnType<typeof vi.fn> }> {
   const focusComposer: ReturnType<typeof vi.fn> = vi.fn();
-  const message: never = { id: 'm1', content: 'hello', timestamp: 1, status: 'sent' } as never;
+  const message: PaneMessage = { id: 'm1', content: 'hello', timestamp: 1, status: 'sent' } as PaneMessage;
   render(<TextBubble message={message} isOwn quoted={null} showSenderName senderName="lara" onEdit={(): void => {}} onDelete={(): void => {}}
     onReply={(): void => {}} focusComposer={focusComposer} />);
   await userEvent.click(screen.getByRole('button', { name: /message actions/i }));
@@ -39,7 +40,7 @@ describe('a P2P bubble menu', () => {
   // The same flaw in the P2P chat's own menus, measured live; one hook serves both.
   it.each(['Edit', 'Reply'])('%s gives the composer focus as the menu closes', async (item: string) => {
     const focusComposer: ReturnType<typeof vi.fn> = vi.fn();
-    const message: never = { id: 'p1', content: 'hi', senderCid: 1n, timestamp: 1, status: 'delivered' } as never;
+    const message: PaneMessage = { id: 'p1', content: 'hi', sender_cid: 1n, timestamp: 1, status: 'delivered' } as PaneMessage;
     render(<TextBubble message={message} isOwn quoted={null} onEdit={(): void => {}} onReply={(): void => {}} focusComposer={focusComposer} />);
     await userEvent.click(screen.getByRole('button', { name: /message actions/i }));
     await userEvent.click(screen.getByRole('menuitem', { name: item }));

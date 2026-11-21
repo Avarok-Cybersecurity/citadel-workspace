@@ -18,12 +18,13 @@ import { p2pIhttpPort } from '../ihttp-p2p-port';
 import { PeerAuthority } from '../peer-authority';
 import { encodeTopicMessage } from '../topic-model';
 import { topicPort, type OwnedTopicPort } from '../topic-port';
+import type { RequestType, ResponseType } from 'citadel-workspace-client-ts';
 
 const APP: string = 'net.avarok.compute-pool';
 const ME: bigint = 100n;
 const PEER: bigint = 8n;
 const GROUP: Readonly<{ cid: bigint; mgid: bigint }> = { cid: 5n, mgid: 9n };
-const SUCCESS: Readonly<Record<string, string>> = {
+const SUCCESS: Readonly<Partial<Record<RequestType, ResponseType>>> = {
   GroupRequestJoin: 'GroupRequestJoinSuccess', GroupLeave: 'GroupLeaveSuccess', GroupRespondRequest: 'GroupRespondRequestSuccess', IhttpSend: 'IhttpSendAccepted',
 };
 
@@ -40,7 +41,7 @@ function agent(): TestAgent {
     send: async (request: Record<string, unknown>) => {
       const [variant, body] = Object.entries(request)[0] as [string, Record<string, unknown>];
       sent.push({ [variant]: body });
-      queueMicrotask(() => handlers.forEach((h) => h({ [SUCCESS[variant]]: { cid: ME, request_id: body.request_id, group_key: body.group_key, peer_cid: body.peer_cid } })));
+      queueMicrotask(() => handlers.forEach((h) => h({ [SUCCESS[variant as RequestType] as string]: { cid: ME, request_id: body.request_id, group_key: body.group_key, peer_cid: body.peer_cid } })));
     },
   };
   return { link, sent, push: async (m: unknown): Promise<void> => { handlers.forEach((h) => h(m)); await new Promise<void>((r) => setTimeout(r, 0)); } };

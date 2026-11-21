@@ -35,7 +35,7 @@ describe('reading profile text out of metadata', () => {
 describe('where they surface', () => {
   it('a member record carries them, and the avatar, to the member list', () => {
     const member: ReturnType<typeof mapWasmMember> = mapWasmMember({
-      id: 'alice', name: 'Alice', role: 'Member',
+      id: 'alice', name: 'Alice', banned: false,
       metadata: {
         avatar: { type: 'String', content: 'UklGR' },
         email: { type: 'String', content: 'a@b' },

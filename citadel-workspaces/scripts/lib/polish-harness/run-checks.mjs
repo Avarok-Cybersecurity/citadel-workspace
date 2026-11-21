@@ -19,17 +19,17 @@ const THEMES = ['light', 'dark'];
 /** Reduced motion only: what every geometry gate measured before motions were a dimension. */
 const REDUCED_ONLY = [{ name: 'reduced', reducedMotion: 'reduce', tier: 'full' }];
 
-export function runChecks(CHECKS, port) {
-  return runMatrix(CHECKS, port, { viewports: VIEWPORTS, motions: REDUCED_ONLY });
+export function runChecks(CHECKS) {
+  return runMatrix(CHECKS, { viewports: VIEWPORTS, motions: REDUCED_ONLY });
 }
 
 /**
  * The same run over chosen viewports and motions. A motion is the media preference the context
  * reports and the app's own tier (`lite` sets the class the app's Lite motion sets).
  */
-export async function runMatrix(CHECKS, port, { viewports, motions }) {
+export async function runMatrix(CHECKS, { viewports, motions }) {
   assertParity();
-  const harness = await serveHarness(port);
+  const harness = await serveHarness();
   let failures = 0;
   try {
     for (const [engineName, engine] of Object.entries(ENGINES)) {

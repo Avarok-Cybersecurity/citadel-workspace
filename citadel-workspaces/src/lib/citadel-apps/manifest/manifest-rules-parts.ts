@@ -4,7 +4,7 @@
  */
 import type { AppLimits, ArtifactLocation, ArtifactRef, CapabilityRequest } from 'citadel-workspace-client-ts';
 import { isAppId } from '../app-identity';
-import { MAX_CLOSE_GRACE_MS } from '../sdk/generated/AbiConstants';
+import { HTTP_METHODS, MAX_CLOSE_GRACE_MS } from '../sdk/generated/AbiConstants';
 import { isHostList, isHttpsUrl } from './net-rules';
 import { peerCapabilitiesProblem, peerLimitsProblem, takesRoutes, takesTargets, takesTopics } from './manifest-rules-peer';
 
@@ -12,7 +12,6 @@ const MAX_WHY_CHARS: number = 200;
 const MAX_CALL_TARGETS: number = 16;
 const MAX_ROUTES: number = 64;
 const MAX_ROUTE_BYTES: number = 256;
-const METHODS: readonly string[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'];
 const MAX_LOCATIONS: number = 4;
 const MAX_GITHUB_PATH_BYTES: number = 256;
 const MAX_ARTIFACT_BYTES: number = 8 * 1024 * 1024;
@@ -36,7 +35,7 @@ export function isRoutePattern(route: string): boolean {
   if (space === -1) return false;
   const method: string = route.slice(0, space);
   const path: string = route.slice(space + 1);
-  if (route.length > MAX_ROUTE_BYTES || !METHODS.includes(method) || !path.startsWith('/')) return false;
+  if (route.length > MAX_ROUTE_BYTES || !(HTTP_METHODS as readonly string[]).includes(method) || !path.startsWith('/')) return false;
   if (path === '/') return true;
   const segments: string[] = path.slice(1).split('/');
   return segments.every((s: string, i: number) => {

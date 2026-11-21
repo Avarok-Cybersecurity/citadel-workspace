@@ -4,7 +4,7 @@
 
 use citadel_workspace_server_kernel::kernel::secure_links::quota::{Limit, LinkQuota};
 use citadel_workspace_types::secure_links::{SecureLinksRequest, SecureLinksResponse};
-use citadel_workspace_types::structs::UserRole;
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::secure_links_test_utils::{
     enrol, expires, links, links_kernel_with, members, try_create, HOUR_MS,
 };
@@ -51,7 +51,7 @@ async fn no_allowance_limit_means_every_link_is_the_members_own() {
         pool: Limit::At(0),
     })
     .await;
-    enrol(&kernel, "alice", UserRole::Member).await;
+    enrol(&kernel, "alice", MEMBER_ROLE_ID).await;
     make_many(&kernel, "alice", MANY).await;
     assert_eq!(listed(&kernel, "alice").await, (None, Some(0), 0));
 }
@@ -64,7 +64,7 @@ async fn no_pool_limit_takes_every_link_past_a_finite_allowance() {
     })
     .await;
     for id in ["alice", "carol"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
         make_many(&kernel, id, MANY / 2).await;
     }
     assert_eq!(listed(&kernel, "alice").await, (Some(2), None, MANY - 4));

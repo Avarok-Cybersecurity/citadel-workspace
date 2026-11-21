@@ -64,7 +64,7 @@ async function mountChat(): Promise<RenderResult> {
 let counter: number = 0;
 async function arrive(): Promise<void> {
   counter += 1;
-  act(() => { deliver?.({ id: `m${counter}`, senderCid: PEER, recipientCid: OWN, timestamp: counter } as unknown as P2PMessage); });
+  act(() => { deliver?.({ id: `m${counter}`, sender_cid: PEER, recipient_cid: OWN, timestamp: counter } as unknown as P2PMessage); });
   await settle();
 }
 

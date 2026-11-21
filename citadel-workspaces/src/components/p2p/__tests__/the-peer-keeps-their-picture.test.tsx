@@ -19,13 +19,13 @@ import type { ReactElement } from 'react';
 import { WorkspaceProvider, type WorkspaceState } from '@/contexts/WorkspaceContext';
 import { MessagingLayerType } from '@/types/messaging-layer';
 import type { P2PMessage, PeerPresence } from '@/lib/p2p';
-import type { User as WorkspaceMember } from '@/types/workspace-entities';
+import type { WorkspaceMember } from '@/types/workspace-entities';
 import { P2PChatHeader } from '../P2PChatHeader';
 import { ConversationPeerItem } from '../ConversationPeerItem';
 import { TextBubble } from '../bubbles/TextBubble';
 
 const PICTURE: string = 'data:image/webp;base64,ADA';
-const ADA: WorkspaceMember = { id: 'ada', username: 'ada', displayName: 'Ada Lovelace', role: 'member', isOnline: true, avatarUrl: PICTURE } as WorkspaceMember;
+const ADA: WorkspaceMember = { id: 'ada', username: 'ada', displayName: 'Ada Lovelace', banned: false, roleId: 'member', isOnline: true, avatarUrl: PICTURE } as WorkspaceMember;
 const ONLINE: PeerPresence = { status: MessagingLayerType.Online, lastUpdate: 0 };
 
 function inWorkspace(children: ReactElement, member: WorkspaceMember = ADA): ReactElement {
@@ -63,7 +63,7 @@ describe('a conversation row', () => {
 
 describe('a peer bubble that carries an avatar', () => {
   it("shows the sender's picture", () => {
-    const message: P2PMessage = { id: 'm1', content: 'hi', senderCid: 2n, recipientCid: 1n, timestamp: 1, index: 0, status: 'delivered', message_type: 'text' };
+    const message: P2PMessage = { id: 'm1', content: 'hi', sender_cid: 2n, recipient_cid: 1n, timestamp: 1, index: 0, status: 'delivered', message_type: 'text' };
     render(inWorkspace(<TextBubble message={message} isOwn={false} quoted={null} showSenderAvatar senderName="Ada Lovelace" senderUsername="ada" />));
     expect(screen.getByTestId('member-avatar-ada').getAttribute('data-avatar-src')).toBe(PICTURE);
   });
