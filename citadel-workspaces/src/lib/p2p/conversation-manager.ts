@@ -85,12 +85,7 @@ export class ConversationManager {
 
   public async addMessageToConversation(peerCid: bigint, message: P2PMessage): Promise<boolean> {
     if (!(await this.holdInMemory(peerCid, message))) return false;
-    await messagePaginationStore.appendMessageToPage(
-      peerCid,
-      message,
-      () => this.config.getCurrentCid(),
-      () => this.cache.conversations.get(peerCid)?.peerUsername
-    );
+    await messagePaginationStore.appendMessageToPage(peerCid, message);
     return true;
   }
 
@@ -103,8 +98,8 @@ export class ConversationManager {
     // nothing incremented it -- only resets and decrements existed. So a message
     // arriving in a conversation the user does not have open produced no badge
     // at all until the next reload, when loadFromStorage copies the persisted
-    // metadata count in. The persisted side has always incremented (see
-    // message-page-append); this is the half that was never wired.
+    // metadata count in. The persisted side (the agent's store) increments;
+    // this is the half that was never wired.
     //
     // Same predicate as the persisted side, deliberately: an own message is not
     // unread, and a message that has not been delivered is not yet news.
@@ -131,7 +126,6 @@ export class ConversationManager {
     const conversation: P2PConversation | undefined = this.cache.conversations.get(peerCid);
     if (conversation) {
       conversation.peerUsername = username;
-      void messagePaginationStore.updatePeerUsernameInMetadata(peerCid, username);
     }
   }
 
@@ -183,11 +177,9 @@ export class ConversationManager {
 
     if (staleCids.length > 0) {
       debugLog('ConversationManager', `[P2P] Cleaned up ${staleCids.length} stale conversation(s)`);
-      // currentCid is the proof of ownership: deleteConversationPages refuses
-      // any record it cannot attribute to this account. Without it, one user
-      // logging in deleted every other user's history on the device.
+      // The agent deletes only the signed-in account's records (agent-store.ts).
       await Promise.all(
-        staleCids.map((cid) => messagePaginationStore.deleteConversationPages(cid, { ownerCid: currentCid }))
+        staleCids.map((cid) => messagePaginationStore.deleteConversationPages(cid))
       );
       eventEmitter.emit('p2p:conversations-cleaned');
     }
@@ -200,7 +192,6 @@ export class ConversationManager {
    */
   public async loadFromStorage(): Promise<void> {
     try {
-      await messagePaginationStore.deleteOldFormat();
       const metadataList: ConversationMetadata[] = await messagePaginationStore.loadAllMetadata();
 
       for (const metadata of metadataList) {

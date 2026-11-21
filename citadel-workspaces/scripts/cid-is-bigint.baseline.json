@@ -26,10 +26,7 @@
   "src/lib/notification-service/peer-registration-notification.ts": 2,
   "src/lib/notification-service/types.ts": 2,
   "src/lib/p2p/message-handler-types.ts": 1,
-  "src/lib/p2p/message-page-operations.ts": 3,
   "src/lib/server-utils.ts": 1,
   "src/lib/session-startup-service.ts": 1,
-  "src/lib/wasm-connection-manager/types.ts": 1,
-  "src/lib/websocket/messenger-operations.ts": 3,
   "src/lib/websocket/workspace-operations.ts": 1
 }

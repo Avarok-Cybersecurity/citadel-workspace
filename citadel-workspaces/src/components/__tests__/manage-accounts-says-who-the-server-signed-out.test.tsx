@@ -46,22 +46,12 @@ vi.mock('@/hooks/use-toast', () => ({
 import { AccountManagementDialog } from '../AccountManagementDialog';
 import { ConfirmDialogProvider } from '../shared/confirm-dialog';
 import { SIGNED_OUT_COPY } from '../signed-out/signed-out-copy';
-import { greetAs } from '@/lib/agent-conversations/__tests__/agent-greeting';
 // What "Sign in" lazy-loads, fetched and transformed now, at collection, rather
 // than inside the test after the click.
 import '../TakeoverSignIn';
 
 describe('Manage Accounts and an account the server signed out', () => {
   it('marks only that account, with the reason, and Sign in opens its sign-in', async (): Promise<void> => {
-    // The leader socket was greeted by an agent that does not host conversations,
-    // so the sign-in is the password form rather than "open it here too".
-    //
-    // Left undecided, TakeoverSignIn's question went to whoever led: the real
-    // instance channel elects this tab 2.5 s (real timers) after it loads. A click
-    // before that asked a leader that did not exist yet and fell through to the
-    // form only when the election answered "Not leader"; a click after it, on a
-    // loaded runner, waited on a socket that never opens, and the form never came.
-    await greetAs('older');
     render(
       <MemoryRouter>
         <ConfirmDialogProvider>

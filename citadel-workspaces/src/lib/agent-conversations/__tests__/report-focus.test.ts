@@ -1,6 +1,6 @@
 /**
  * The agent holds back a native notice for what this window shows; it learns
- * that from ReportFocus, sent when it changes and only to an agent that hosts.
+ * that from ReportFocus, sent when it changes.
  */
 import { describe, it, expect } from 'vitest';
 import { createFocusReporter, type FocusDeps, type FocusReporter } from '../report-focus';
@@ -8,11 +8,10 @@ import type { ConfigCommand } from 'citadel-workspace-client-ts';
 
 type Said = Extract<ConfigCommand, { ReportFocus: unknown }>['ReportFocus'];
 
-function rig(hosts: boolean): { deps: FocusDeps; said: Said[]; state: { front: boolean; peer: bigint | null; failNext: boolean } } {
+function rig(): { deps: FocusDeps; said: Said[]; state: { front: boolean; peer: bigint | null; failNext: boolean } } {
   const said: Said[] = [];
   const state: { front: boolean; peer: bigint | null; failNext: boolean } = { front: true, peer: null, failNext: false };
   const deps: FocusDeps = {
-    hosts: async () => hosts,
     ownCid: async () => 7n,
     activePeer: () => state.peer,
     inFront: () => state.front,
@@ -27,7 +26,7 @@ function rig(hosts: boolean): { deps: FocusDeps; said: Said[]; state: { front: b
 
 describe('reporting focus', () => {
   it('says what is in front when it changes, and only then', async () => {
-    const { deps, said, state } = rig(true);
+    const { deps, said, state } = rig();
     const report: () => Promise<void> = createFocusReporter(deps).changed;
     await report();
     await report();
@@ -42,11 +41,6 @@ describe('reporting focus', () => {
     ]);
   });
 
-  it('says nothing to an agent that raises no notices', async () => {
-    const { deps, said } = rig(false);
-    await createFocusReporter(deps).changed();
-    expect(said).toEqual([]);
-  });
 });
 
 // The agent keys focus by connection, and drops a report from a connection not
@@ -55,7 +49,7 @@ describe('reporting focus', () => {
 // for the conversation on screen until the next focus change.
 describe('saying it again', () => {
   it('once this account\'s session is claimed, though nothing in front changed', async () => {
-    const { deps, said } = rig(true);
+    const { deps, said } = rig();
     const reporter: FocusReporter = createFocusReporter(deps);
     await reporter.changed();
     await reporter.claimed(7n);
@@ -66,7 +60,7 @@ describe('saying it again', () => {
   });
 
   it('not for another account\'s claim', async () => {
-    const { deps, said } = rig(true);
+    const { deps, said } = rig();
     const reporter: FocusReporter = createFocusReporter(deps);
     await reporter.changed();
     await reporter.claimed(99n);
@@ -74,7 +68,7 @@ describe('saying it again', () => {
   });
 
   it('after a report that never left', async () => {
-    const { deps, said, state } = rig(true);
+    const { deps, said, state } = rig();
     const reporter: FocusReporter = createFocusReporter(deps);
     state.failNext = true;
     await expect(reporter.changed()).rejects.toThrow();

@@ -40,7 +40,6 @@ function harness(addBehaviour: () => Promise<boolean>): { rendered: string[]; ac
     getOrCreateConversation: () => ({ peerCid: PEER, messages: [], peerUsername: 'alice' }),
     addMessageToConversation: addBehaviour,
     updateMessageInPages: async () => true,
-    removeMessageFromPages: async () => true,
     getConversations: () => new Map([[PEER, { peerUsername: 'alice' }]]),
     notifyMessageListeners: (m: { id: string }) => rendered.push(m.id),
     notifyMessageStatusListeners: () => {},

@@ -5,25 +5,17 @@
  * is needed only once a switch or a page load finds the session held elsewhere,
  * so the workspace switcher imports it when that happens.
  */
-import { agentHostsConversations } from '../agent-conversations/capabilities';
-
-/** What to ask before moving a session another browser window holds. */
-export function takeoverPrompt(username: string, joinable: boolean): { title: string; description: string; confirmLabel: string } {
-  if (joinable) {
-    return {
-      title: `${username} is open in another window`,
-      description:
-        'Open it here too? Both windows stay signed in and in step. ' +
-        'You will confirm with your password, once for this browser.',
-      confirmLabel: 'Open here too',
-    };
-  }
+/**
+ * What to ask before opening a session another browser window holds: both windows stay
+ * signed in and in step (the agent attaches a session to several connections).
+ */
+export function takeoverPrompt(username: string): { title: string; description: string; confirmLabel: string } {
   return {
-    title: `${username} is open in another browser window`,
+    title: `${username} is open in another window`,
     description:
-      'Use it here instead? You will sign in with your password to move it to this window, ' +
-      'and the other window will stop receiving updates for this account.',
-    confirmLabel: 'Use it here',
+      'Open it here too? Both windows stay signed in and in step. ' +
+      'You will confirm with your password, once for this browser.',
+    confirmLabel: 'Open here too',
   };
 }
 
@@ -42,6 +34,6 @@ export interface TakeoverCallbacks {
  * this asks, and on yes starts the password sign-in that moves it.
  */
 export async function offerTakeover(username: string, callbacks: TakeoverCallbacks): Promise<void> {
-  if (await callbacks.confirm(takeoverPrompt(username, await agentHostsConversations()))) callbacks.signInAs(username);
+  if (await callbacks.confirm(takeoverPrompt(username))) callbacks.signInAs(username);
   else callbacks.declined?.();
 }

@@ -22,9 +22,6 @@ import { instanceManager } from './instance-manager';
 import type { ProxyResponseData } from './outbound-queue-types';
 import {
   handleWorkspaceRequestProxy,
-  handleOpenMessengerProxy,
-  handleEnsureMessengerProxy,
-  handleSendP2PMessageProxy,
   handleAgentCapabilitiesProxy,
 } from './leader-proxy-handlers';
 import { debugLog } from '@/lib/debug-config';
@@ -164,18 +161,6 @@ class LeaderOutboundHandler {
       // Delegate proxy requests to specialized handlers
       if (request.payload?.__workspaceRequestProxy) {
         await handleWorkspaceRequestProxy(request, this.sendAck.bind(this));
-        return;
-      }
-      if (request.payload?.__openMessengerProxy) {
-        await handleOpenMessengerProxy(request, this.sendAck.bind(this));
-        return;
-      }
-      if (request.payload?.__ensureMessengerProxy) {
-        await handleEnsureMessengerProxy(request, this.sendAck.bind(this));
-        return;
-      }
-      if (request.payload?.__sendP2PMessageProxy) {
-        await handleSendP2PMessageProxy(request, this.sendAck.bind(this));
         return;
       }
       if (request.payload?.__agentCapabilitiesProxy) {

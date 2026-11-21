@@ -15,7 +15,6 @@ import { isConnectAlreadyInProgress } from '@/lib/connection/is-connect-in-progr
 import { websocketService } from "@/lib/websocket-service";
 import { connectionManager } from "@/lib/connection";
 import { eventEmitter } from "@/lib/event-emitter";
-import { startMessagingForSession } from "@/lib/start-messaging";
 import { postAuthSetup } from '@/lib/post-auth-setup';
 import { setSelectedUser } from "@/lib/tab-context";
 import { debugLog } from '@/lib/debug-config';
@@ -122,11 +121,11 @@ export async function loginWithPassword(
   await setSelectedUser({ selectedUsername: username.trim(), selectedServerAddress: serverAddress, selectedCid: cid });
   await postAuthSetup(cid);
 
-  const messagingReady: boolean = await startMessagingForSession(cid.toString());
 
   eventEmitter.emit('session:activated', {
     cid: cid.toString(), username: username.trim(),
     serverAddress, activationType: 'login',
   });
-  return { kind: 'signed-in', cid, messagingReady, serverAddress };
+  // The agent hosts the account's messaging: nothing in this window can fail to start it.
+  return { kind: 'signed-in', cid, messagingReady: true, serverAddress };
 }

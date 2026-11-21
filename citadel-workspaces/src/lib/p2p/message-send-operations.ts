@@ -66,49 +66,17 @@ export async function sendMessageAck(
   await sendP2PCommand(config, peerCid, command, senderCid);
 }
 
-/**
- * Send, and give a messenger that is still opening one chance to finish.
- *
- * `ensureMessengerOpen` returns `false` for two different states — "already
- * open" and "being opened by another task" — and its own doc says so. Only one
- * of them is ready, and the callers below awaited it, discarded the answer and
- * sent immediately. A send racing a concurrent open therefore went out against a
- * handle that did not exist yet and came back "No messaging handle found for
- * local CID", which `peer-failure-detail` then translates and shows the user.
- *
- * The ambiguity belongs to the WASM binding and cannot be fixed from here: the
- * artefact is tracked, CI does not rebuild it, so a source change there would not
- * run. What can be fixed here is the consequence — the open completes in
- * milliseconds, so one bounded retry turns a spurious failure into a slightly
- * slower success.
- *
- * Exactly one retry, and only for that error. A channel that is genuinely closed
- * pays 250ms before reporting what it was always going to report.
- */
-const MESSENGER_STILL_OPENING: RegExp = /no messaging handle found/i;
-const RETRY_AFTER_MS: number = 250;
-
-export async function sendAllowingForAConcurrentOpen(
+/** Send at the chat's level, on every send, rather than leaving it unset. */
+export async function sendAtChatLevel(
   currentCid: bigint,
   peerCid: bigint,
   bytes: Uint8Array,
   compressionHint?: CompressionHint
 ): Promise<void> {
-  // The chat's level, on every send, rather than leaving it unset (which the
-  // WASM binding reads as Standard). Dormant today: no control sets a level
-  // above Standard, because the pinned SDK does not honour one -- see
-  // ChatSettingsAdvanced.
+  // Dormant today: no control sets a level above Standard, because the pinned
+  // SDK does not honour one -- see ChatSettingsAdvanced.
   const level: ChatSecurityLevel = (await chatAdvancedSettings.get(currentCid, peerCid)).securityLevel;
-  await websocketService.ensureMessengerOpen(currentCid);
-  try {
-    await websocketService.sendP2PMessageReliable(currentCid, peerCid, bytes, level, compressionHint);
-  } catch (error: unknown) {
-    if (!MESSENGER_STILL_OPENING.test(String(error))) throw error;
-    debugLog('MessageSendOperations', '[P2P] messenger was still opening; retrying once');
-    await new Promise<void>((resolve) => setTimeout(resolve, RETRY_AFTER_MS));
-    await websocketService.ensureMessengerOpen(currentCid);
-    await websocketService.sendP2PMessageReliable(currentCid, peerCid, bytes, level, compressionHint);
-  }
+  await websocketService.sendP2PMessageReliable(currentCid, peerCid, bytes, level, compressionHint);
 }
 
 /**
@@ -130,7 +98,7 @@ export async function sendP2PCommand(
   debugLog('MessageSendOperations', `[P2P] *** sendP2PCommand *** from ${currentCid.toString().slice(0, 8)}... to ${peerCid.toString().slice(0, 8)}... (${messageBytes.length} bytes)`);
 
   debugLog('MessageSendOperations', `[P2P] *** Calling websocketService.sendP2PMessageReliable(${currentCid.toString().slice(0, 8)}..., ${peerCid.toString().slice(0, 8)}..., ...)`);
-  await sendAllowingForAConcurrentOpen(currentCid, peerCid, messageBytes, compressionHintFor(command));
+  await sendAtChatLevel(currentCid, peerCid, messageBytes, compressionHintFor(command));
   debugLog('MessageSendOperations', `[P2P] *** websocketService.sendP2PMessageReliable completed successfully ***`);
 }
 
@@ -149,5 +117,5 @@ export async function sendRawBytes(
     throw new Error('Not connected to server');
   }
 
-  await sendAllowingForAConcurrentOpen(currentCid, peerCid, bytes, compressionHint);
+  await sendAtChatLevel(currentCid, peerCid, bytes, compressionHint);
 }

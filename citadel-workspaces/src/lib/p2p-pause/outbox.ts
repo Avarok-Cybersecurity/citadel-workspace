@@ -17,10 +17,8 @@
  * The key also carries the send's security level and compression hint, so a
  * held message leaves on Resume exactly as it would have left at once.
  *
- * And why it is held. A message to someone who has not yet accepted your
- * request waits here too (`'unregistered'`), and leaves when they accept, not
- * on Resume. One outbox, so one key order and one durability story; the reason
- * is the last key field. A key in any shorter, earlier shape is unreadable.
+ * And why it is held: the reason is the last key field. A key in any shorter
+ * shape is unreadable.
  */
 import type { CompressionHint } from 'citadel-workspace-client-ts';
 import { readPauseStatus, type PauseStorage } from './pause-store';
@@ -36,8 +34,8 @@ export interface OutboxStorage extends PauseStorage {
 export type SendOutcome = 'sent' | 'held';
 
 /** Why a message waits here, and so which event lets it leave. */
-export type HoldReason = 'paused' | 'unregistered';
-const HOLD_REASONS: readonly HoldReason[] = ['paused', 'unregistered'];
+export type HoldReason = 'paused';
+const HOLD_REASONS: readonly HoldReason[] = ['paused'];
 
 /** How a message is sent, apart from its bytes. Absent fields mean the transport's own default. */
 export interface ReliableSendOptions {

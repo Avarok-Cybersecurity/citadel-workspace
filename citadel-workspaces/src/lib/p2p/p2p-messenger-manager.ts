@@ -13,7 +13,7 @@
 import type { MessagingLayer } from '@/types/messaging-layer';
 import { notifyEach } from '@/lib/notify-listeners';
 import { markP2PMessageHandlerAttached } from './p2p-handler-ready';
-import { editMessage, deleteMessage, reactToMessage, markMessagesAsRead } from './messenger-routing';
+import { editThroughAgent, deleteThroughAgent, reactThroughAgent, markReadThroughAgent } from '../agent-conversations/agent-actions';
 import { bindAgentConversations, type AgentBindings } from '../agent-conversations/bind-agent-conversations';
 import { notifyMessageArrived, type ArrivalNotice } from './message-arrival-notification';
 import { websocketService } from '../websocket-service';
@@ -33,10 +33,10 @@ import { bindVisibilityFlush } from './visibility-flush';
 import { clearConversationHistory } from './clear-conversation-history';
 import { resolveCurrentCid, updatePeerPresenceOnConnect } from './messenger-cid-resolver';
 import { bindPeerConnectionState } from './bind-peer-connection-state';
-import { syncConnectionsFromBackend, updateFileTransferState, updateUnreadCount, autoRegisterPeer } from './messenger-compatibility';
+import { syncConnectionsFromBackend, updateFileTransferState, autoRegisterPeer } from './messenger-compatibility';
 import { bindOutgoingFileOffers } from './record-outgoing-file-transfer';
 import { bindChatDocumentInbox } from './chat-document-inbox';
-import { debugLog, errorLog } from '@/lib/debug-config';
+import { debugLog } from '@/lib/debug-config';
 import { conversationInFront } from '@/lib/notification-service/in-front';
 import { TIMEOUT } from '../timeout-constants';
 import type { MessagePage, ConversationMetadata } from '@/lib/p2p/p2p-types';
@@ -98,7 +98,6 @@ export class P2PMessengerManager extends EventListenerManager {
       getOrCreateConversation: (peerCid): P2PConversation => this.conversationManager.getOrCreateConversation(peerCid),
       addMessageToConversation: (peerCid, message): Promise<boolean> => this.conversationManager.addMessageToConversation(peerCid, message),
       updateMessageInPages: (peerCid, messageId, updates): Promise<boolean> => messagePaginationStore.updateMessageInPages(peerCid, messageId, updates),
-      removeMessageFromPages: (peerCid, messageId): Promise<boolean> => messagePaginationStore.removeMessageFromPages(peerCid, messageId),
       notifyMessageListeners: (message): void => notifyEach(this.messageListeners, 'p2p message', message),
       notifyMessageStatusListeners: (messageId, status): void => notifyEach(this.messageStatusListeners, 'p2p message status', messageId, status),
       notifyTypingListeners: (peerCid, isTyping): void => this.presenceManager.notifyTypingChange(peerCid, isTyping),
@@ -162,21 +161,19 @@ export class P2PMessengerManager extends EventListenerManager {
     });
     this.listen<{ peer: { cid: bigint; username: string } }>('p2p:peer-registered', ({ peer }) => {
       if (peer.cid && peer.username) this.conversationManager.setPeerUsername(peer.cid, peer.username);
-      this.flushHeldUntilRegistered(peer.cid); // here, not in a chat, so it goes whether or not the chat is open
     });
   }
 
   private async loadCachedMessages(): Promise<void> { await this.conversationManager.loadFromStorage(); this.cachedMessagesLoaded = true; }
   // ===== Public API: Messaging =====
   public async sendMessage(recipientCid: bigint, content: string, options?: SendMessageOptions): Promise<P2PMessage> { return this.messageSender.sendMessage(recipientCid, content, options); }
-  /** A held message stays held when this fails, so it is reported rather than lost. */
-  public flushHeldUntilRegistered(peerCid: bigint): void { this.messageSender.flushHeldUntilRegistered(peerCid).catch((e: unknown): void => errorLog('P2PMessenger', `Messages held for ${peerCid.toString()} did not send yet`, e)); }
-  public async resendMessage(peerCid: bigint, messageId: string): Promise<void> { const c: P2PConversation | undefined = this.conversationManager.getConversation(peerCid); if (!c) throw new Error(`Conversation with ${peerCid} not found`); return this.messageSender.resendMessage(peerCid, messageId, c); }
+  public async resendMessage(peerCid: bigint, messageId: string): Promise<void> { return this.messageSender.resendMessage(peerCid, messageId); }
   public async sendRawMessage(recipientCid: bigint, layer: MessagingLayer): Promise<void> { return this.messageSender.sendRawMessage(recipientCid, layer); }
-  public async editMessage(peerCid: bigint, messageId: string, contents: string): Promise<void> { return editMessage(this.agent, this.conversationManager, (e, d) => this.emit(e, d), (p, l) => this.sendRawMessage(p, l), peerCid, messageId, contents); }
-  public async deleteMessage(peerCid: bigint, messageId: string): Promise<void> { return deleteMessage(this.agent, this.conversationManager, (e, d) => this.emit(e, d), (p, l) => this.sendRawMessage(p, l), peerCid, messageId); }
-  public async reactToMessage(peerCid: bigint, messageId: string, emoji: string): Promise<void> { return reactToMessage(this.agent, this.conversationManager, (e, d) => this.emit(e, d), (p, l) => this.sendRawMessage(p, l), peerCid, messageId, emoji); }
-  public async markMessagesAsRead(peerCid: bigint, messageIds?: string[]): Promise<void> { return markMessagesAsRead(this.agent, this.conversationManager, (msgId, ackType, peer) => this.messageSender.sendMessageAck(msgId, ackType, peer), (e, d) => this.emit(e, d), peerCid, messageIds); }
+  // The agent writes the account's conversations and tells every window (agent-actions.ts).
+  public async editMessage(peerCid: bigint, messageId: string, contents: string): Promise<void> { return editThroughAgent(this.agent, peerCid, messageId, contents); }
+  public async deleteMessage(peerCid: bigint, messageId: string): Promise<void> { return deleteThroughAgent(this.agent, peerCid, messageId); }
+  public async reactToMessage(peerCid: bigint, messageId: string, emoji: string): Promise<void> { return reactThroughAgent(this.agent, peerCid, messageId, emoji); }
+  public async markMessagesAsRead(peerCid: bigint): Promise<void> { return markReadThroughAgent(this.agent, peerCid); }
 
   // ===== Public API: Presence =====
   public async sendPresenceUpdate(recipientCid: bigint, presence: MessagingLayer): Promise<void> { return this.presenceManager.sendPresenceUpdate(recipientCid, presence); }
@@ -214,7 +211,6 @@ export class P2PMessengerManager extends EventListenerManager {
   public clearPeerReadyState(peerCid: bigint): void { this.checkStateManager.clearPeerReadyState(peerCid); }
   public updateFileTransferState(peerCid: bigint, transferId: string, updates: { transfer_state?: P2PMessage['transfer_state']; transfer_progress?: number }): void { updateFileTransferState(this.conversationManager, (e, d) => this.emit(e, d), peerCid, transferId, updates); }
   public markAsRead(peerCid: bigint): void { void this.markMessagesAsRead(peerCid); }
-  public async updateUnreadCount(peerCid: bigint, unreadCount: number): Promise<void> { return updateUnreadCount(this.conversationManager, peerCid, unreadCount); }
   public async autoRegisterPeer(peerCid: bigint, peerUsername: string): Promise<void> { return autoRegisterPeer(() => resolveCurrentCid(), peerCid, peerUsername); }
 }
 

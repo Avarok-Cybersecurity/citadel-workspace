@@ -30,7 +30,7 @@ export class WebSocketServiceCore {
   initializationPromise: Promise<void> | null = null;
 
   private readonly modules: ServiceModules;
-  /** The one held outbox. Public for the registration hold (lib/p2p/held-until-registered.ts), which flushes through the normal send. */
+  /** The one held outbox (p2p-pause/outbox.ts). */
   readonly outbox: HeldOutbox = heldOutboxOver(this);
 
   // Exposed for initialization.ts
@@ -124,10 +124,6 @@ export class WebSocketServiceCore {
   async disconnectP2P(localCid: bigint, peerCid: bigint): Promise<void> { return this.modules.p2pOps.disconnectP2P(localCid, peerCid) }
 
   // ============== Messenger ==============
-
-  async openMessengerFor(cid: bigint): Promise<void> { return this.modules.messengerOps.openMessengerFor(cid) }
-
-  async ensureMessengerOpen(cid: bigint): Promise<boolean> { return this.modules.messengerOps.ensureMessengerOpen(cid) }
 
   async sendP2PMessageReliable(
     localCid: bigint, peerCid: bigint, message: Uint8Array,

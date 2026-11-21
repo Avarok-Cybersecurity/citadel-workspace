@@ -33,7 +33,9 @@ vi.mock('@/lib/tab-context', () => ({
 }));
 // What a successful switch goes on to do: load the workspace and start messaging.
 vi.mock('@/lib/post-auth-setup', () => ({ postAuthSetup: vi.fn(async (): Promise<void> => {}) }));
-vi.mock('@/lib/start-messaging', () => ({ startMessagingForSession: vi.fn(async (): Promise<void> => {}) }));
+// No join token remembered in this browser: the silent rejoin has nothing to send, and
+// IndexedDB, where it would look, is absent here (a-browser-that-joined-joins-again covers it).
+vi.mock('../attach-session', () => ({ browserAttach: {}, joinWithRememberedToken: async (): Promise<boolean> => false }));
 vi.mock('@/lib/multi-instance', async (importOriginal: () => Promise<Record<string, unknown>>) => ({
   ...(await importOriginal()),
   instanceChannel: { announcePresence: (): void => {} },
@@ -75,8 +77,8 @@ describe('switching to it', () => {
     const signInAs: ReturnType<typeof vi.fn> = vi.fn();
     await switchToSession(target, { navigate: vi.fn(), toast: vi.fn(), confirm, signInAs, signInAgain: vi.fn() });
 
-    expect(confirm).toHaveBeenCalledWith(takeoverPrompt('alice0924', false));
-    expect(takeoverPrompt('alice0924', false).title).toBe('alice0924 is open in another browser window');
+    expect(confirm).toHaveBeenCalledWith(takeoverPrompt('alice0924'));
+    expect(takeoverPrompt('alice0924').title).toBe('alice0924 is open in another window');
     expect(signInAs).toHaveBeenCalledWith('alice0924');
     expect(h.selected).toBe(0);
   });

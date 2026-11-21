@@ -13,8 +13,8 @@ import { renderHook, act } from '@testing-library/react';
 
 const h: {
   disconnect: ReturnType<typeof vi.fn>; removeSession: ReturnType<typeof vi.fn>; clearSelectedUser: ReturnType<typeof vi.fn>;
-  navigate: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; answer: boolean;
-} = vi.hoisted(() => ({ disconnect: vi.fn(), removeSession: vi.fn(), clearSelectedUser: vi.fn(), navigate: vi.fn(), stop: vi.fn(), answer: true }));
+  navigate: ReturnType<typeof vi.fn>; answer: boolean;
+} = vi.hoisted(() => ({ disconnect: vi.fn(), removeSession: vi.fn(), clearSelectedUser: vi.fn(), navigate: vi.fn(), answer: true }));
 
 vi.mock('@/lib/connection', () => ({
   connectionManager: {
@@ -26,7 +26,6 @@ vi.mock('@/lib/tab-context', () => ({ clearSelectedUser: h.clearSelectedUser, ge
 // jsdom has no IndexedDB: the sign-out's check for edits held on the device reads the stand-in (none held).
 const deviceStore: Map<string, unknown> = vi.hoisted((): Map<string, unknown> => new Map<string, unknown>());
 vi.mock('@/lib/storage-utils', async () => (await import('@/lib/cdoc/collab/__tests__/doubles/memory-storage')).memoryStorageUtils(deviceStore));
-vi.mock('@/lib/wasm-connection-manager', () => ({ wasmConnectionManager: { stop: h.stop } }));
 vi.mock('react-router-dom', () => ({ useNavigate: (): unknown => h.navigate }));
 vi.mock('@/components/shared/confirm-dialog', () => ({ useConfirm: (): unknown => async (): Promise<boolean> => h.answer }));
 vi.mock('@/lib/leave-editor', () => ({ mayLeaveEditor: async (): Promise<boolean> => true }));
@@ -48,7 +47,6 @@ describe('Sign Out when the agent refuses the Disconnect', () => {
     expect(result.current.disconnectError).toMatch(/still signed in/i);
     expect(h.removeSession).not.toHaveBeenCalled();
     expect(h.clearSelectedUser).not.toHaveBeenCalled();
-    expect(h.stop).not.toHaveBeenCalled();
   });
 
   it('signs out for real when Retry is pressed and the agent confirms', async () => {

@@ -50,7 +50,6 @@ export interface MessageHandlerConfig {
   getOrCreateConversation: (peerCid: bigint) => P2PConversation;
   addMessageToConversation: (peerCid: bigint, message: P2PMessage) => Promise<boolean>;
   updateMessageInPages: (peerCid: bigint, messageId: string, updates: Partial<P2PMessage>) => Promise<boolean>;
-  removeMessageFromPages: (peerCid: bigint, messageId: string) => Promise<boolean>;
   getConversations: () => Map<bigint, P2PConversation>;
   notifyMessageListeners: (message: P2PMessage) => void;
   notifyMessageStatusListeners: (messageId: string, status: P2PMessage['status']) => void;

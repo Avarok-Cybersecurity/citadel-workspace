@@ -1,17 +1,15 @@
 /**
- * The conversation store, when the agent keeps it.
+ * The conversation store, which the agent keeps.
  *
- * The same surface as the browser-written store (p2p/message-pagination-store.ts),
- * answered by the agent: reads come from `ConversationPage` / `ConversationList`,
+ * Reads come from `ConversationPage` / `ConversationList`,
  * and the two writes a window still authors -- filing a record it built (a file
  * offer, a notice) and patching delivery or transfer state -- become
  * `ConversationRecord` / `ConversationPatch`. A window never reads or writes the
  * agent's LocalDB records itself.
  *
- * The compound actions (sending, editing, reacting, marking read, clearing) do
- * not come through here: the agent both stores them and tells the peer, in one
- * request each (agent-actions.ts). Their store-only halves are refused here
- * rather than quietly writing half an action.
+ * The compound actions (sending, editing, reacting, marking read) do not come
+ * through here: the agent both stores them and tells the peer, in one request
+ * each (agent-actions.ts).
  */
 import type { MessagePatch } from 'citadel-internal-service-wasm-client';
 import type { ConversationMetadata, MessagePage, P2PMessage } from '../p2p/p2p-types';
@@ -22,10 +20,6 @@ async function own(): Promise<bigint> {
   const cid: bigint | null = await getCurrentCid();
   if (cid === null) throw new Error('No session: the agent keeps conversations per account');
   return cid;
-}
-
-function compoundOnly(method: string): never {
-  throw new Error(`${method} is carried out by the agent as one action; call the messenger, not the store`);
 }
 
 /** The fields a window may patch on a stored message (the agent's `MessagePatch`). */
@@ -42,25 +36,16 @@ async function newest(peerCid: bigint): Promise<{ metadata: ConversationMetadata
   return agentConversations.page(await own(), peerCid, null);
 }
 
-/** The store surface the agent answers; the compound-only methods refuse. */
+/** The store surface the agent answers. */
 export interface AgentStore {
   loadAllMetadata(): Promise<ConversationMetadata[]>;
   loadMetadata(peerCid: bigint): Promise<ConversationMetadata | null>;
   loadMessagePage(peerCid: bigint, pageNumber: number): Promise<MessagePage | null>;
   loadLatestMessages(peerCid: bigint): Promise<P2PMessage[]>;
   findMessageInPages(peerCid: bigint, messageId: string): Promise<P2PMessage | null>;
-  findUnreadFromPeer(peerCid: bigint): Promise<P2PMessage[]>;
   appendMessageToPage(peerCid: bigint, message: P2PMessage): Promise<void>;
   updateMessageInPages(peerCid: bigint, messageId: string, updates: Partial<P2PMessage>): Promise<boolean>;
   deleteConversationPages(peerCid: bigint): Promise<void>;
-  updatePeerUsernameInMetadata(): Promise<void>;
-  deleteOldFormat(): Promise<void>;
-  reactToMessageInPages(): never;
-  reviseMessageInPages(): never;
-  removeMessageFromPages(): never;
-  updateUnreadCount(): never;
-  saveMetadata(): never;
-  saveMessagePage(): never;
 }
 
 export const agentStore: AgentStore = {
@@ -86,11 +71,6 @@ export const agentStore: AgentStore = {
     }
     return null;
   },
-  async findUnreadFromPeer(peerCid: bigint): Promise<P2PMessage[]> {
-    const { metadata, page } = await newest(peerCid);
-    if (!metadata || metadata.unreadCount <= 0) return [];
-    return (page?.messages ?? []).filter((m) => m.senderCid === peerCid && m.status === 'delivered');
-  },
   async appendMessageToPage(peerCid: bigint, message: P2PMessage): Promise<void> {
     await agentConversations.record(await own(), peerCid, message);
   },
@@ -100,14 +80,4 @@ export const agentStore: AgentStore = {
   async deleteConversationPages(peerCid: bigint): Promise<void> {
     await agentConversations.clear(await own(), peerCid);
   },
-  /** The agent records peer names itself, from registration and the peer list. */
-  async updatePeerUsernameInMetadata(): Promise<void> {},
-  /** The old monolithic format is the browser store's to retire, not the agent's. */
-  async deleteOldFormat(): Promise<void> {},
-  reactToMessageInPages: (): never => compoundOnly('reactToMessageInPages'),
-  reviseMessageInPages: (): never => compoundOnly('reviseMessageInPages'),
-  removeMessageFromPages: (): never => compoundOnly('removeMessageFromPages'),
-  updateUnreadCount: (): never => compoundOnly('updateUnreadCount'),
-  saveMetadata: (): never => compoundOnly('saveMetadata'),
-  saveMessagePage: (): never => compoundOnly('saveMessagePage'),
 };

@@ -20,7 +20,6 @@ import { markLastAccessed } from './last-accessed';
 import { describeFailure } from '@/lib/failure-message';
 import { connectionManager } from '@/lib/connection';
 import { setSelectedUser } from '@/lib/tab-context';
-import { startMessagingForSession } from '@/lib/start-messaging';
 import { instanceManager, instanceChannel } from '@/lib/multi-instance';
 import { getWorkspacePath } from '@/lib/workspace-navigation';
 import { eventEmitter } from '@/lib/event-emitter';
@@ -67,10 +66,6 @@ export async function switchToSession(session: SwitchTarget, callbacks: SwitchCa
       callbacks.signInAgain(signedOutSignIn(session.username, sessionHost(session)));
       return;
     }
-    if (outcome.status === 'owned-by-another-tab') {
-      toast(notices.ownedElsewhere);
-      return;
-    }
     if (outcome.status === 'held-by-another-connection') {
       const { offerTakeover } = await import('./takeover');
       await offerTakeover(session.username, callbacks);
@@ -92,11 +87,6 @@ export async function switchToSession(session: SwitchTarget, callbacks: SwitchCa
     // aligned and ensures any future steps added to postAuthSetup are
     // applied uniformly.
     await postAuthSetup(session.cid);
-
-    // Was `catch (_) { }`. Best-effort is fine; invisible is not -- a claim
-    // that brought back a session with dead messaging looked exactly like one
-    // that worked.
-    await startMessagingForSession(session.cid.toString());
 
     eventEmitter.emit('session:activated', {
       cid: session.cid.toString(), username: session.username,

@@ -62,7 +62,7 @@ export class ChatDocumentWorld {
     // The leader's answer to "what does the agent host": nothing, so this browser runs its own messaging.
     registerCapabilityRoute({
       isLeader: (): boolean => false,
-      askLeader: async () => ({ agentIlm: false, supervisesP2p: false, stagesUploads: false, takesConsole: false, noticesHeard: false, servesApps: false }),
+      askLeader: async () => ({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, noticesHeard: false, servesApps: false }),
     });
     vi.spyOn(websocketService, 'sendLocalDBGet').mockImplementation(async (cid: bigint, key: string): Promise<{ value: number[] } | null> => {
       const failure: Error | null = this.failRead(cid, key);

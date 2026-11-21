@@ -14,8 +14,8 @@ async function offers(greeting: Record<string, unknown>): Promise<AgentOffers> {
 
 describe('the greeting', () => {
   it('reads browser_console, and its absence as no', async () => {
-    expect((await offers({ agent_ilm: true, browser_console: true })).takesConsole).toBe(true);
-    expect((await offers({ agent_ilm: true, stages_uploads: true })).takesConsole).toBe(false);
-    expect((await offers({ agent_ilm: true, browser_console: 'true' })).takesConsole).toBe(false);
+    expect((await offers({ browser_console: true })).takesConsole).toBe(true);
+    expect((await offers({ stages_uploads: true })).takesConsole).toBe(false);
+    expect((await offers({ browser_console: 'true' })).takesConsole).toBe(false);
   });
 });

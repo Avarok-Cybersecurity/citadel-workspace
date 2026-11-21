@@ -9,7 +9,6 @@
 import type { P2PMessengerManager } from '@/lib/p2p/p2p-messenger-manager';
 import type { ConversationMetadata, MessagePage, P2PMessage } from '@/lib/p2p/p2p-types';
 import type { ChatPeer } from '@/lib/cdoc/chat/chat-app-ports';
-import { applyRetentionOnOpen } from '@/lib/p2p/retention-sweep';
 import { MESSAGES_EXPIRED_EVENT, type MessagesExpired } from '@/lib/p2p/retention';
 import { eventEmitter } from '@/lib/event-emitter';
 import { notificationService } from '@/lib/notification-service';
@@ -36,7 +35,6 @@ export function peerHistory(messenger: P2PMessengerManager, peer: ChatPeer, self
   return {
     loadLatest: async (): Promise<HistoryPage> => {
       await messenger.waitForReady();
-      await applyRetentionOnOpen(peer.cid);
       await messenger.syncConnectionsFromBackend();
       const metadata: ConversationMetadata | null = await messenger.getConversationMetadata(peer.cid);
       if (metadata === null) return { messages: cached(), older: null };
@@ -81,8 +79,8 @@ export function peerHistory(messenger: P2PMessengerManager, peer: ChatPeer, self
       return (): void => { for (const stop of stops) stop(); };
     },
 
-    markRead: (messageIds: readonly string[] | null): Promise<void> =>
-      messenger.markMessagesAsRead(peer.cid, messageIds === null ? undefined : [...messageIds]),
+    // The agent marks what this peer sent as read, all of it: it holds the conversation.
+    markRead: (): Promise<void> => messenger.markMessagesAsRead(peer.cid),
 
     focus: (): (() => void) => {
       messenger.setActiveConversation(peer.cid);

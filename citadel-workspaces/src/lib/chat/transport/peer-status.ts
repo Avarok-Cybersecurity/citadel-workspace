@@ -11,7 +11,7 @@ import { eventEmitter } from '@/lib/event-emitter';
 import { MessagingLayerType } from '@/types/messaging-layer';
 import type { AcceptancePort, StatusChange, StatusPort, StatusProbe, StatusSnapshot } from './chat-transport';
 
-function peerAcceptance(messenger: P2PMessengerManager, peer: ChatPeer): AcceptancePort {
+function peerAcceptance(peer: ChatPeer): AcceptancePort {
   return {
     accepted: (): boolean => p2pRegistrationService.isPeerRegistered(peer.cid),
     onAccepted: (listener: () => void): (() => void) =>
@@ -20,7 +20,6 @@ function peerAcceptance(messenger: P2PMessengerManager, peer: ChatPeer): Accepta
         p2pAutoConnectService.poll();
         listener();
       }),
-    flushHeld: (): void => messenger.flushHeldUntilRegistered(peer.cid),
   };
 }
 
@@ -58,6 +57,6 @@ export function peerStatus(messenger: P2PMessengerManager, peer: ChatPeer): Stat
 
     startTyping: (currentText: () => string): void => messenger.startTypingPolling(peer.cid, currentText),
     stopTyping: (): void => messenger.stopTypingPolling(peer.cid),
-    acceptance: peerAcceptance(messenger, peer),
+    acceptance: peerAcceptance(peer),
   };
 }

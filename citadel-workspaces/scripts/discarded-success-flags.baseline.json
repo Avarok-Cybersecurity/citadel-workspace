@@ -8,11 +8,7 @@
   "src/lib/connection/lifecycle.ts::selectUserWithoutBlocking": 1,
   "src/lib/connection/session-management.ts::selectUserWithoutBlocking": 1,
   "src/lib/file-transfer/peer-signals.ts::noteMessageOffer": 1,
-  "src/lib/p2p/message-send-operations.ts::ensureMessengerOpen": 2,
-  "src/lib/p2p/message-sender.ts::addMessageToConversation": 1,
   "src/lib/p2p/send-failure.ts::reportSendFailure": 1,
   "src/lib/pwa/apply-waiting-update.ts::applyWaitingUpdate": 1,
-  "src/lib/revfs/revfs-inbound.ts::sendOp": 3,
-  "src/lib/session-startup-sequence.ts::startMessagingForSession": 1,
-  "src/lib/sessions/switch-to-session.ts::startMessagingForSession": 1
+  "src/lib/revfs/revfs-inbound.ts::sendOp": 3
 }

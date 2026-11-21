@@ -1028,12 +1028,9 @@ dependencies = [
  "citadel-internal-service-types",
  "citadel_io",
  "citadel_logging",
- "dashmap",
  "futures",
  "futures-util",
  "intersession-layer-messaging",
- "itertools 0.13.0",
- "js-sys",
  "log",
  "parking_lot",
  "rustls-pemfile",
@@ -1043,8 +1040,6 @@ dependencies = [
  "tokio-tungstenite 0.21.0",
  "tungstenite 0.21.0",
  "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "wasmtimer 0.2.1",
 ]
 

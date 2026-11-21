@@ -8,7 +8,6 @@ import { debugLog, errorLog } from '@/lib/debug-config';
 import { createConversationEventApplier, conversationEventOf, type ConversationEventDeps } from './conversation-events';
 import type { AgentActionDeps } from './agent-actions';
 import { chatAdvancedSettings } from '../p2p/chat-advanced-settings';
-import { agentHostsConversations } from './capabilities';
 import { pushAccountPreferences } from './push-preferences';
 import { onPrivacySettingsSaved } from '../privacy-settings';
 import { createFocusReporter, windowInFront, type FocusReporter } from './report-focus';
@@ -50,7 +49,6 @@ export function bindAgentConversations(listen: Listen, parts: AgentConversationP
 
   // The agent acts on these with no window open, so it hears every change.
   const teller: PreferencesTeller = createPreferencesTeller({
-    hosts: agentHostsConversations,
     ownCid: parts.ownCid,
     push: (own: bigint): Promise<void> => pushAccountPreferences(own, parts.peers),
     deferred: (own: bigint): void => debugLog('AgentConversations', `settings for ${own.toString().slice(0, 8)}... wait for this connection to claim the session`),
@@ -62,7 +60,7 @@ export function bindAgentConversations(listen: Listen, parts: AgentConversationP
 
   // What this window has in front of the user, for the agent's native notices.
   const reporter: FocusReporter = createFocusReporter({
-    hosts: agentHostsConversations, ownCid: parts.ownCid, activePeer: parts.activePeer, inFront: windowInFront, send: sendToAgent,
+    ownCid: parts.ownCid, activePeer: parts.activePeer, inFront: windowInFront, send: sendToAgent,
   });
   const failed = (error: unknown): void => errorLog('AgentConversations', 'could not tell the agent what is in front', error);
   const focusChanged = (): void => { reporter.changed().catch(failed); };

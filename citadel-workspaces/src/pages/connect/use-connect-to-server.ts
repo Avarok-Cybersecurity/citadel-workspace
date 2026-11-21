@@ -23,7 +23,7 @@
 import '@/lib/session-startup-service';
 import { eventEmitter } from '@/lib/event-emitter';
 import { connectionManager } from '@/lib/connection';
-import { claimSessionForThisTab, SESSION_OWNED_ELSEWHERE , type ClaimOutcome } from '@/lib/sessions/claim-session';
+import { claimSessionForThisTab } from '@/lib/sessions/claim-session';
 import { postAuthSetup } from '@/lib/post-auth-setup';
 import { setSelectedUser } from '@/lib/tab-context';
 import { instanceManager, instanceChannel } from '@/lib/multi-instance';
@@ -63,14 +63,7 @@ async function waitForSession(serverAddress: string): Promise<SessionInformation
  * loader to guess at from `activeSessions[0]`.
  */
 async function adoptSession(session: SessionInformation): Promise<void> {
-  const outcome: ClaimOutcome = await claimSessionForThisTab(session.cid);
-  if (outcome.status === 'owned-by-another-tab') {
-    // Thrown rather than toasted: this is a module function with no toast in
-    // scope, and its callers already surface what it throws. Returning quietly
-    // would leave the caller believing the session was adopted.
-    throw new Error(SESSION_OWNED_ELSEWHERE.description);
-  }
-
+  await claimSessionForThisTab(session.cid);
   const stored: StoredSession[] = connectionManager.getStoredSessionsArray();
   const index: number = stored.findIndex(
     (s) => s.username === session.username && sessionIsOnServer(session, s.serverAddress),

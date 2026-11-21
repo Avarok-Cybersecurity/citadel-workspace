@@ -24,7 +24,6 @@ import { TIMEOUT } from '../timeout-constants';
 import type { QueuedMessage, AckResult } from './outbound-queue-types';
 
 export type { QueuedMessage, AckResult, ProxyResponseData } from './outbound-queue-types';
-export { isEnsureMessengerOpenResponse } from './outbound-queue-types';
 
 // Deliberately shorter than sendToLeader's 30s: this deadline also bounds
 // giving up, so matching it turns a dead leader into a 90s hang. Duplicate

@@ -261,40 +261,6 @@ export function createMessage(contents: string, timestamp?: number): MessagingLa
 }
 
 /**
- * Create a MessageEdit variant.
- *
- * `message_id` names the message being revised, NOT this instruction — the
- * recipient looks it up in the conversation and replaces its contents.
- */
-export function createMessageEdit(
-  message_id: string,
-  contents: string,
-  edited_at?: number,
-): MessagingLayer {
-  return {
-    type: MessagingLayerType.MessageEdit,
-    message_id,
-    contents,
-    edited_at: edited_at ?? Date.now(),
-  };
-}
-
-/**
- * Create a MessageDelete variant.
- *
- * Deletion removes the message from the conversation, matching how group chat
- * already behaves (`groupMessagingManager.handleMessageDeleted` filters it out)
- * rather than introducing a second convention with tombstones.
- */
-export function createMessageDelete(message_id: string, deleted_at?: number): MessagingLayer {
-  return {
-    type: MessagingLayerType.MessageDelete,
-    message_id,
-    deleted_at: deleted_at ?? Date.now(),
-  };
-}
-
-/**
  * Create a Typing variant
  */
 export function createTyping(): MessagingLayer {
