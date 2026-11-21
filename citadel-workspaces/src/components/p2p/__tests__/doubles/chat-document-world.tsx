@@ -28,8 +28,6 @@ import { ConfirmDialogProvider } from '@/components/shared/confirm-dialog';
 import { Toaster } from '@/components/ui/sonner';
 import { FakeAgentLocalDb } from '@/lib/cdoc/chat/__tests__/doubles/fake-agent-local-db';
 import type { LocalDbPort } from '@/lib/cdoc/chat/chat-local-db';
-import * as Y from 'yjs';
-import type { StoredDocument } from '@/lib/live-document-store/types';
 import { P2PChat } from '../../P2PChat';
 
 export const ALICE: bigint = 10_000_000_000_000_000_101n;
@@ -54,8 +52,6 @@ export class ChatDocumentWorld {
   /** What each person's conversation holds when it opens, by the account it belongs to. */
   private readonly inbox: Map<bigint, P2PMessage[]> = new Map<bigint, P2PMessage[]>();
   delivery: Delivery = 'in-flight';
-  /** A LocalDB read this answers an error for fails with it, as a timed-out agent request does. */
-  failRead: (cid: bigint, key: string) => Error | null = (): null => null;
   private readonly connection: LocalDbPort = this.db.connection([0n, ALICE, BOB]);
 
   install(): void {
@@ -65,8 +61,6 @@ export class ChatDocumentWorld {
       askLeader: async () => ({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, noticesHeard: false, servesApps: false }),
     });
     vi.spyOn(websocketService, 'sendLocalDBGet').mockImplementation(async (cid: bigint, key: string): Promise<{ value: number[] } | null> => {
-      const failure: Error | null = this.failRead(cid, key);
-      if (failure !== null) throw failure;
       const found: { readonly value: readonly number[] } | null = await this.connection.get(cid, key);
       return found === null ? null : { value: [...found.value] };
     });
@@ -86,38 +80,6 @@ export class ChatDocumentWorld {
       return messages === undefined ? undefined : { peerCid: peer, messages, lastMessageIndex: messages.length, unreadCount: 0, typing: false, lastTypingUpdate: 0, presence: null };
     });
     vi.spyOn(messenger, 'sendMessage').mockImplementation(this.send);
-  }
-
-  /**
-   * A document made in the earlier chat editor, stored on this device as that editor stored it
-   * (live_doc_<id> under the device-wide cid 0: its metadata, and its Yjs state as y-prosemirror
-   * wrote StarterKit paragraphs), recorded by `holder` in the chat with `peer`.
-   */
-  async storeEarlierDocument(docId: string, holder: bigint, peer: bigint, title: string, paragraphs: readonly string[]): Promise<void> {
-    const doc: Y.Doc = new Y.Doc();
-    const fragment: Y.XmlFragment = doc.getXmlFragment('default');
-    fragment.insert(0, paragraphs.map((text: string): Y.XmlElement => {
-      const paragraph: Y.XmlElement = new Y.XmlElement('paragraph');
-      paragraph.insert(0, [new Y.XmlText(text)]);
-      return paragraph;
-    }));
-    doc.getMap('cdoc').set('title', title);
-    const now: number = 1_700_000_000_000;
-    const stored: StoredDocument = {
-      metadata: { id: docId, title, peerCid: peer.toString(), creatorCid: holder.toString(), createdAt: now, updatedAt: now },
-      state: Array.from(Y.encodeStateAsUpdate(doc)),
-    };
-    await this.connection.set(0n, `live_doc_${docId}`, Array.from(new TextEncoder().encode(JSON.stringify(stored))));
-  }
-
-  /** The bytes stored under `key` for `cid`, or null. */
-  async stored(cid: bigint, key: string): Promise<readonly number[] | null> {
-    try {
-      return (await this.connection.get(cid, key))?.value ?? null;
-    } catch {
-      // The fake answers an absent key as the agent does, with "Key not found".
-      return null;
-    }
   }
 
   /** The conversation `holder` has with `from` holds `message` when it opens (keyed by the peer, as the store is). */

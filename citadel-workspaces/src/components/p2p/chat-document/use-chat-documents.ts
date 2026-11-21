@@ -1,34 +1,22 @@
 /**
- * The documents a chat has opened in its tabs: each opened once (moved first when it was made
- * in the earlier editor), kept while the chat is mounted so switching tabs does not reopen it,
- * and renamed through its live sync. The canvas's opener and the migration load on first use.
+ * The documents a chat has opened in its tabs: each opened once, kept while the chat is
+ * mounted so switching tabs does not reopen it, and renamed through its live sync. The
+ * canvas's opener loads on first use.
  */
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { toast } from 'sonner';
-import { describeFailure } from '@/lib/failure-message';
 import { openChatDocumentTab, type ChatDocumentOpener, type ChatDocumentOpening, type ChatDocumentTarget, type OpeningPorts } from './chat-document-opening';
-import type { ChatDocumentMigration } from '@/lib/live-doc-migration/boot';
 import type { ChatDocument, ChatDocumentRequest, ChatPeer } from '@/components/documents/chat-replica';
-
-/** A conversation's opening ports over `opener`, with the app's migration and failure notice. */
-export function appOpeningPorts(opener: () => Promise<ChatDocumentOpener>): OpeningPorts {
-  return {
-    opener,
-    migration: (): Promise<ChatDocumentMigration> => import('@/lib/live-doc-migration/boot').then((m): ChatDocumentMigration => m.chatDocumentMigration),
-    report: (title: string, error: unknown): void => { toast.error(title, { description: describeFailure(error, 'Try opening the document again.') }); },
-  };
-}
 
 /** A node channel's: its documents live on the workspace server, beside `nodeId`'s page. `managesSubscription`: whether the reader may buy packs. */
 export function nodeOpeningPorts(nodeId: string, managesSubscription: () => boolean): OpeningPorts {
-  return appOpeningPorts((): Promise<ChatDocumentOpener> => import('@/components/documents/node-chat-document')
-    .then((m): ChatDocumentOpener => (request: ChatDocumentRequest): ChatDocument => m.openNodeChatDocument(nodeId, request, managesSubscription)));
+  return { opener: (): Promise<ChatDocumentOpener> => import('@/components/documents/node-chat-document')
+    .then((m): ChatDocumentOpener => (request: ChatDocumentRequest): ChatDocument => m.openNodeChatDocument(nodeId, request, managesSubscription)) };
 }
 
 /** A direct chat's: its documents are kept live with `peer` over the P2P channel. */
 export function peerOpeningPorts(peer: ChatPeer): OpeningPorts {
-  return appOpeningPorts((): Promise<ChatDocumentOpener> => import('@/components/documents/chat-replica')
-    .then((m): ChatDocumentOpener => (request: ChatDocumentRequest): ChatDocument => m.openChatDocument(peer, request)));
+  return { opener: (): Promise<ChatDocumentOpener> => import('@/components/documents/chat-replica')
+    .then((m): ChatDocumentOpener => (request: ChatDocumentRequest): ChatDocument => m.openChatDocument(peer, request)) };
 }
 
 export interface ChatDocuments {

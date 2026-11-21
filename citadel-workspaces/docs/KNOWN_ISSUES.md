@@ -15,8 +15,8 @@ rather than carried forward.
 | 7 | YJS live-document sync loop (64MB of logs, browser hang) | P0 | the earlier chat editor | Closed — that editor and its Yjs sync were removed; chat documents are Citadel Docs documents kept in step by CdocChatSync, and a received YjsP2PSync is dropped (`lib/p2p/earlier-editor-sync.ts`) |
 | 8 | Peer Discovery lists stale test accounts with no filter | P3 | `p2p/PeerDiscoveryModal.tsx` | Open |
 | 9 | No progress detail during workspace load | P3 | `ui/workspace-loader.tsx` | Open |
-| 10 | An earlier editor's chat document never opened on this device cannot be opened here: no snapshot crosses the chat, and opening it blank and merging the peer's moved copy would add a stray section. The tab says "not on this device" and that the peer still has it | P2 | `components/p2p/chat-document/chat-document-opening.ts` | Open — needs a snapshot hand-off on CdocChatSync |
-| 11 | Two devices that moved the same earlier document from different originals hold their copies apart for good (only hellos cross; the conflict is recorded by the creator rule). The non-creator cannot adopt the creator's copy, because `applyPeerMigration` has no snapshot to apply | P2 | `lib/cdoc/chat/chat-migration-gate.ts`, `lib/live-doc-migration/held-apart.ts` | Open — same hand-off as #10 |
+| 10 | An earlier editor's chat document cannot be opened | P2 | `components/p2p/chat-document/chat-document-opening.ts` | Closed — the move to Citadel Docs was removed; such a document is not opened, and its tab says so |
+| 11 | Two devices that moved the same earlier document from different originals held their copies apart for good | P2 | the move to Citadel Docs | Closed — the move was removed, and with it every copy held apart |
 | 12 | Peers still on an earlier version get no Citadel Docs document: their YjsP2PSync is dropped (a line in the chat says so, once per peer) and they cannot open a `cdoc-` invitation | P3 | `lib/p2p/earlier-editor-sync.ts` | By design for this release; resolves when they update |
 
 ## Fixed upstream — do not re-report

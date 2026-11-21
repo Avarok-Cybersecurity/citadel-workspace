@@ -72,16 +72,12 @@ const SKIP = new Map([
   // explanation is the durable part -- the code without it invites the same
   // change back -- so these carry their exact length and cannot grow.
   //
-  // `server-auto-connect-service/service.ts` is here after THREE extractions
-  // took it 301 -> 252 (attempt-lifecycle, websocket-responses,
-  // sign-out-record); what is left is the singleton and its lifecycle.
   // `peer-registration-store/persistence.ts` is absent because its split
   // (local-db-client.ts) brought it under the cap outright, which is the
   // outcome to prefer where a cohesive unit exists to cut.
   //
   // The natural next cuts, in order: Landing.tsx (three dialogs that could be
   // lazy) and revfs-service.ts (it holds a store AND its persistence).
-  ['lib/server-auto-connect-service/service.ts', 252],
   ['lib/revfs/revfs-retry.ts', 254],
 
   ['components/ui/sidebar.tsx', 487],

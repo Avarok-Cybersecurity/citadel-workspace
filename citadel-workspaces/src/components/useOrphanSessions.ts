@@ -17,7 +17,6 @@ import type { DisconnectStatus } from "./LoadingModal";
 import { useToast } from "@/hooks/use-toast";
 import { useEventListener } from "@/hooks/use-event-listener";
 import { notificationService, type UnreadCountChange } from "@/lib/notification-service";
-import { serverAutoConnectService } from "@/lib/server-auto-connect-service";
 import { SESSION_CLAIMED } from '@/lib/multi-instance/claim-relay';
 import { debugLog } from '@/lib/debug-config';
 import { endedElsewhere, type SessionEnded } from '@/lib/sessions/session-ended';
@@ -108,8 +107,6 @@ export function useOrphanSessions(): UseOrphanSessionsResult {
 
     const result: SignOutResult = await signOutSession(
       {
-        markUserDisconnected: (username, serverAddress) =>
-          serverAutoConnectService.markUserDisconnected(username, serverAddress),
         deregister: (cid) => websocketService.deregister(cid),
         disconnect: (cid) => websocketService.disconnect(cid),
         invalidateSessionCache: () => connectionManager.invalidateSessionCache(),

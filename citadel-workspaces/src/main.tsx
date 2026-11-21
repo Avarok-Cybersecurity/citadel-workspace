@@ -24,16 +24,11 @@ if (import.meta.env.DEV) {
     import('./lib/p2p-auto-connect-service'),
     import('./lib/websocket-service'),
     import('./lib/connection/service'),
-    import('./lib/server-auto-connect-service'),
-  ]).then(([reg, auto, ws, conn, serverAuto]) => {
+  ]).then(([reg, auto, ws, conn]) => {
     window.__p2pRegistrationService = reg.p2pRegistrationService;
     window.__p2pAutoConnectService = auto.p2pAutoConnectService;
     window.__websocketService = ws.websocketService;
     window.__connectionManager = conn.connectionManager;
-    // Exposed so a test can wait for the reconnect cycle to go quiet
-    // (getPendingReconnectCount() === 0) instead of sleeping out its ~30s poll
-    // interval. Two specs were spending 35s each doing exactly that.
-    window.__serverAutoConnectService = serverAuto.serverAutoConnectService;
   });
 }
 

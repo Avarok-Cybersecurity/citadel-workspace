@@ -6,24 +6,27 @@
  * account enrolled on this device is offered up front, with a choice when
  * there are several.
  *
- * Doubled: only the two passkey ports (the agent's LocalDB and the
- * authenticator), as in lib/passkey/__tests__/fakes.ts. Records are written by
- * the real enrolment code.
+ * Doubled: only the agent's LocalDB, as the in-memory store in
+ * lib/passkey/__tests__/fakes.ts. The accounts are the sign-in hints a key-first
+ * sign-in leaves, written by the real hint code.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { testDeps } from '@/lib/passkey/__tests__/fakes';
-import { enrolCredential } from '@/lib/passkey/__tests__/legacy-enrol';
+import { MemoryStore } from '@/lib/passkey/__tests__/fakes';
+import { saveHint } from '@/lib/sign-in/hints';
 
-const h: { deps: ReturnType<typeof testDeps> } = vi.hoisted((): { deps: ReturnType<typeof testDeps> } => ({
-  deps: undefined as unknown as ReturnType<typeof testDeps>,
+const h: { store: MemoryStore } = vi.hoisted((): { store: MemoryStore } => ({
+  store: undefined as unknown as MemoryStore,
 }));
 
 vi.mock('@/lib/passkey', async (importOriginal: () => Promise<Record<string, unknown>>) => ({
   ...(await importOriginal()),
   passkeysAvailableHere: (): boolean => true,
-  browserPasskeyDeps: (): ReturnType<typeof testDeps> => h.deps,
+}));
+vi.mock('@/lib/sign-in', async (importOriginal: () => Promise<Record<string, unknown>>) => ({
+  ...(await importOriginal()),
+  browserSignInDeps: (): { store: MemoryStore } => ({ store: h.store }),
 }));
 
 import { Login } from '../Login';
@@ -37,10 +40,10 @@ function renderLogin(): void {
 }
 
 async function enrol(username: string, cid: bigint): Promise<void> {
-  await enrolCredential(h.deps, { username, cid, label: 'MacBook', password: 'correct horse battery' });
+  await saveHint(h.store, { tenant: 'bench.work.avarok.net', cid, username, keyFirst: true });
 }
 
-beforeEach(() => { h.deps = testDeps(); });
+beforeEach(() => { h.store = new MemoryStore(); });
 
 describe('the sign-in form on a device with a passkey', () => {
   it('offers it with the username still empty', async () => {

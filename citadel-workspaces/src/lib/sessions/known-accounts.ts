@@ -5,7 +5,7 @@
  * A username is unique only on its server, so a name alone cannot say which account
  * is meant. The sources, in order of authority: the agent's own accounts
  * (GetAccountInformation's server_host), the browser's saved sessions, and this
- * device's sign-in hints; an old passkey record carries a name and no server.
+ * device's sign-in hints.
  */
 import { dialledHost, sameAddress } from './same-server';
 
@@ -19,8 +19,6 @@ export interface AccountSources {
   agent: readonly { username: string; server: string }[];
   stored: readonly { username: string; serverAddress: string }[];
   hints: readonly { username: string; tenant: string }[];
-  /** Names with no server recorded (old passkey records). */
-  device: readonly string[];
 }
 
 const hostOf = (address: string): string | null => (address.trim() === '' ? null : dialledHost(address));
@@ -48,7 +46,6 @@ export function knownAccounts(sources: AccountSources): KnownAccount[] {
     ...sources.agent.map((a) => ({ username: a.username, server: hostOf(a.server) })),
     ...sources.stored.map((s) => ({ username: s.username, server: hostOf(s.serverAddress) })),
     ...sources.hints.map((h) => ({ username: h.username, server: hostOf(h.tenant) })),
-    ...sources.device.map((name: string) => ({ username: name, server: null })),
   ]);
 }
 
@@ -72,20 +69,14 @@ export function checkTypedAccount(accounts: readonly KnownAccount[], typed: stri
 }
 
 /**
- * The passkey rows for the offered names, one per (username, server): a sign-in hint
- * names its server; an old passkey record takes the servers the account is known on.
- * With a server chosen, only its rows: an unplaced row could be the wrong account.
+ * The passkey rows for the offered names, one per (username, server), each sign-in hint
+ * naming its server. With a server chosen, only its rows.
  */
 export function offeredRows(
-  offered: readonly string[], hints: readonly { username: string; tenant: string }[], device: readonly string[],
-  accounts: readonly KnownAccount[], server: string | null,
+  offered: readonly string[], hints: readonly { username: string; tenant: string }[], server: string | null,
 ): KnownAccount[] {
-  const rows: KnownAccount[] = offered.flatMap((name: string): KnownAccount[] => {
-    const hinted: KnownAccount[] = hints.filter((h) => h.username === name).map((h) => ({ username: name, server: hostOf(h.tenant) }));
-    if (!device.includes(name)) return hinted;
-    const where: KnownAccount[] = accounts.filter((a: KnownAccount) => a.username === name);
-    return [...hinted, ...(where.length > 0 ? where : [{ username: name, server: null }])];
-  });
+  const rows: KnownAccount[] = offered.flatMap((name: string): KnownAccount[] =>
+    hints.filter((h) => h.username === name).map((h) => ({ username: name, server: hostOf(h.tenant) })));
   const all: KnownAccount[] = dedupe(rows);
   return server === null ? all : accountsOnServer(all, server);
 }

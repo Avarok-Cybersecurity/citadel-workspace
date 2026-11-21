@@ -1,10 +1,10 @@
 /**
  * A chat document's replica, opened and kept for DocsCanvas (the ReplicaKeeper seam): from
  * this device's copy when there is one (its snapshot, then the updates applied since, in
- * order), else blank or from the migration it was converted by; then kept in step with the
+ * order), else blank or seeded with the creator's text; then kept in step with the
  * peer (chat-sync.ts) and written back after each pause (chat-replica-store.ts). Always live:
  * there is no Save. The replica opens with a fresh random client id every time, whatever it
- * opens from (the runtime's EditorOpener mints it), never the migration's.
+ * opens from (the runtime's EditorOpener mints it).
  *
  * A stored copy in another CRDT format, or one that belongs to another chat, is not opened:
  * the open fails with the reason, and the copy is left as it is.
@@ -24,9 +24,7 @@ import { holdOpen } from './open-chat-documents';
 export type ChatDocumentOrigin =
   | { readonly kind: 'blank' }
   /** Blank, with the creator's typed text as its first paragraphs (one per line). */
-  | { readonly kind: 'seeded'; readonly text: string }
-  /** Converted from an earlier format; `migrationOrigin` names the source, and both peers compare it. */
-  | { readonly kind: 'migrated'; readonly snapshot: Uint8Array; readonly migrationOrigin: string };
+  | { readonly kind: 'seeded'; readonly text: string };
 
 export interface ChatKeeperPorts extends ChatSyncPorts {
   readonly store: ChatStoreBackend;
@@ -38,8 +36,6 @@ export interface ChatKeeperHost {
   titled(stamp: CdocChatTitleStamp): void;
   /** The kept sync, while it runs (rename goes through it); null once the document closes. */
   bound(sync: ChatDocumentSync | null): void;
-  /** The peer's copy was moved from another original (`theirs`); the two are held apart from now on. */
-  heldApart(theirs: string | null): void;
 }
 
 interface StoredCopy {
@@ -64,9 +60,8 @@ function checkCopy(copy: StoredCopy, docId: string, peerCid: bigint, docVersion:
   }
 }
 
-const editorOrigin = (base: StoredBase | null, origin: ChatDocumentOrigin): EditorOrigin =>
-  base !== null ? { kind: 'snapshot', snapshot: base.snapshot }
-    : origin.kind === 'migrated' ? { kind: 'snapshot', snapshot: origin.snapshot } : { kind: 'blank' };
+const editorOrigin = (base: StoredBase | null): EditorOrigin =>
+  base !== null ? { kind: 'snapshot', snapshot: base.snapshot } : { kind: 'blank' };
 
 /** The creator's text, typed into the new blank replica: a paragraph per line. */
 export async function seed(editor: EditorController, text: string): Promise<void> {
@@ -88,7 +83,7 @@ export function chatReplicaKeeper<E extends EditorController>(
     let close: (() => Promise<void>) | null = null;
     const keep = async (editor: E, copy: StoredCopy): Promise<void> => {
       for (const update of copy.pending) await editor.applyRemote(update);
-      let entry: ChatIndexEntry = copy.entry ?? { peerCid: ports.transport.peerCid, title: null, heldApart: false };
+      let entry: ChatIndexEntry = copy.entry ?? { peerCid: ports.transport.peerCid, title: null };
       const saveEntry = (next: ChatIndexEntry): void => {
         entry = next;
         ports.store.saveEntry(docId, next).catch((cause: unknown): void => host.report({ kind: 'storeFailed', operation: 'write', cause }));
@@ -96,20 +91,15 @@ export function chatReplicaKeeper<E extends EditorController>(
       if (copy.entry === null) await ports.store.saveEntry(docId, entry);
       else if (copy.entry.title !== null) host.titled(copy.entry.title);
       if (!live) return editor.dispose();
-      const migrationOrigin: string | null = copy.base !== null ? copy.base.migrationOrigin : origin.kind === 'migrated' ? origin.migrationOrigin : null;
       const kept: ChatReplicaStore = new ChatReplicaStore(ports.store, docId, config, ports.clock,
-        { baseStored: copy.base !== null, pending: copy.pending, migrationOrigin },
+        { baseStored: copy.base !== null, pending: copy.pending },
         { snapshot: (): Promise<Uint8Array> => editor.snapshot(), report: host.report });
-      const sync: ChatDocumentSync = new ChatDocumentSync(config, { docId, migrationOrigin, title: entry.title, heldApart: entry.heldApart }, editor, ports, {
+      const sync: ChatDocumentSync = new ChatDocumentSync(config, { docId, title: entry.title }, editor, ports, {
         report: host.report,
         applied: (update: Uint8Array): void => kept.added(update),
         titled: (stamp: CdocChatTitleStamp): void => {
           host.titled(stamp);
           saveEntry({ ...entry, title: stamp });
-        },
-        heldApart: (theirs: string | null): void => {
-          saveEntry({ ...entry, heldApart: true });
-          host.heldApart(theirs);
         },
         // The page draws them (PeerOverlay); a chat document lists no one beside that.
         peers: (): void => undefined,
@@ -130,7 +120,7 @@ export function chatReplicaKeeper<E extends EditorController>(
       if (!isChatDocId(docId)) throw new Error(`not a chat document id: "${docId}"`);
       const copy: StoredCopy = await readCopy(ports.store, docId);
       checkCopy(copy, docId, ports.transport.peerCid, config.docVersion);
-      const editor: E = await open(editorOrigin(copy.base, origin));
+      const editor: E = await open(editorOrigin(copy.base));
       if (!live) return editor.dispose();
       try {
         if (copy.base === null && copy.entry === null && origin.kind === 'seeded') await seed(editor, origin.text);

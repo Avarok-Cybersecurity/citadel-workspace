@@ -3,7 +3,7 @@
  *
  * Tests specific controls within each Settings tab:
  * 1. General tab controls
- * 2. Connections tab (auto-reconnect switch)
+ * 2. Connections tab (auto-accept registrations switch)
  * 3. Appearance tab (theme toggle)
  * 4. Privacy tab controls
  */
@@ -34,14 +34,14 @@ interface TestResults {
 
   // Tab controls
   generalTabControls: boolean;
-  connectionsAutoReconnect: boolean;
+  connectionsAutoAccept: boolean;
   appearanceThemeToggle: boolean;
   privacyControls: boolean;
 
   // Persistence
   settingsReopen: boolean;
   /**
-   * Whether the auto-reconnect choice survived close-and-reopen.
+   * Whether the auto-accept choice survived close-and-reopen.
    *
    * This was a console.log and nothing else: the run printed "Settings
    * persistence verified: false" and exited 0. Persistence is the entire point
@@ -122,35 +122,35 @@ async function testConnectionsTab(page: Page): Promise<boolean> {
   await connectionsTab.click();
   await sleep(300);
 
-  // Look for auto-reconnect switch
-  const autoReconnect = page.locator('#auto-reconnect').first();
-  const visible = await isVisibleWithin(autoReconnect, 3000);
-  console.log(`  Auto-reconnect switch visible: ${visible}`);
+  // Look for the auto-accept registrations switch
+  const autoAccept = page.locator('#auto-accept-registrations').first();
+  const visible = await isVisibleWithin(autoAccept, 3000);
+  console.log(`  Auto-accept switch visible: ${visible}`);
 
   if (!visible) return false;
 
   // Read initial state
-  const initialChecked = await autoReconnect.getAttribute('data-state').catch(() => null);
-  const initialAria = await autoReconnect.getAttribute('aria-checked').catch(() => null);
+  const initialChecked = await autoAccept.getAttribute('data-state').catch(() => null);
+  const initialAria = await autoAccept.getAttribute('aria-checked').catch(() => null);
   console.log(`  Initial state: data-state="${initialChecked}", aria-checked="${initialAria}"`);
 
   // Toggle the switch
-  await autoReconnect.click();
+  await autoAccept.click();
   await sleep(500);
 
   // Verify the state actually changed
-  const afterChecked = await autoReconnect.getAttribute('data-state').catch(() => null);
-  const afterAria = await autoReconnect.getAttribute('aria-checked').catch(() => null);
+  const afterChecked = await autoAccept.getAttribute('data-state').catch(() => null);
+  const afterAria = await autoAccept.getAttribute('aria-checked').catch(() => null);
   console.log(`  After toggle: data-state="${afterChecked}", aria-checked="${afterAria}"`);
 
   const stateChanged = afterChecked !== initialChecked || afterAria !== initialAria;
   console.log(`  State changed: ${stateChanged}`);
 
   // Toggle back to restore original state
-  await autoReconnect.click();
+  await autoAccept.click();
   await sleep(500);
 
-  const restoredChecked = await autoReconnect.getAttribute('data-state').catch(() => null);
+  const restoredChecked = await autoAccept.getAttribute('data-state').catch(() => null);
   const restored = restoredChecked === initialChecked;
   console.log(`  Restored to original: ${restored} (data-state="${restoredChecked}")`);
 
@@ -229,7 +229,7 @@ async function runTest(): Promise<boolean> {
     accountCreated: false,
     settingsModalOpens: false,
     generalTabControls: false,
-    connectionsAutoReconnect: false,
+    connectionsAutoAccept: false,
     appearanceThemeToggle: false,
     privacyControls: false,
     settingsReopen: false,
@@ -285,7 +285,7 @@ async function runTest(): Promise<boolean> {
     console.log('\u2500'.repeat(50));
 
     if (results.settingsModalOpens) {
-      results.connectionsAutoReconnect = await testConnectionsTab(page);
+      results.connectionsAutoAccept = await testConnectionsTab(page);
       await takeScreenshot(page, '04_connections_tab');
     }
 
@@ -326,15 +326,15 @@ async function runTest(): Promise<boolean> {
     await takeScreenshot(page, '07_settings_reopened');
 
     if (results.settingsReopen) {
-      // Verify the auto-reconnect state persisted after close/reopen
+      // Verify the auto-accept state persisted after close/reopen: it starts off, and step 3 toggled it back
       const connectionsTab = page.locator('[role="dialog"] button[role="tab"]').nth(1);
       if (await isVisibleWithin(connectionsTab, 2000)) {
         await connectionsTab.click();
         await sleep(300);
-        const autoReconnect = page.locator('#auto-reconnect').first();
-        const persistedState = await autoReconnect.getAttribute('data-state').catch(() => null);
-        results.settingsPersisted = persistedState === 'checked';
-        console.log(`  Auto-reconnect persisted state: "${persistedState}"`);
+        const autoAccept = page.locator('#auto-accept-registrations').first();
+        const persistedState = await autoAccept.getAttribute('data-state').catch(() => null);
+        results.settingsPersisted = persistedState === 'unchecked';
+        console.log(`  Auto-accept persisted state: "${persistedState}"`);
         console.log(`  Settings persistence verified: ${results.settingsPersisted}`);
       }
 
@@ -354,7 +354,7 @@ async function runTest(): Promise<boolean> {
       results.accountCreated,
       results.settingsModalOpens,
       results.generalTabControls,
-      results.connectionsAutoReconnect,
+      results.connectionsAutoAccept,
       results.appearanceThemeToggle,
       results.privacyControls,
       results.settingsReopen,
@@ -364,7 +364,7 @@ async function runTest(): Promise<boolean> {
     console.log(`\n  Account Created:           ${results.accountCreated ? 'PASS' : 'FAIL'}`);
     console.log(`  Settings Modal Opens:      ${results.settingsModalOpens ? 'PASS' : 'FAIL'}`);
     console.log(`  General Tab Controls:      ${results.generalTabControls ? 'PASS' : 'CHECK'}`);
-    console.log(`  Auto-Reconnect Switch:     ${results.connectionsAutoReconnect ? 'PASS' : 'CHECK'}`);
+    console.log(`  Auto-Accept Switch:        ${results.connectionsAutoAccept ? 'PASS' : 'CHECK'}`);
     console.log(`  Theme Toggle:              ${results.appearanceThemeToggle ? 'PASS' : 'CHECK'}`);
     console.log(`  Privacy Controls:          ${results.privacyControls ? 'PASS' : 'CHECK'}`);
     console.log(`  Settings Reopen:           ${results.settingsReopen ? 'PASS' : 'CHECK'}`);

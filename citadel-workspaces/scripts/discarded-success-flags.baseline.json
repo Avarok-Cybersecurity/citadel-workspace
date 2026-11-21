@@ -5,7 +5,6 @@
   "src/components/office/tabs/TabMenu.tsx::change": 1,
   "src/components/office/tabs/TabNotices.tsx::change": 1,
   "src/components/p2p/bubbles/MessageStatusDetails.tsx::copy": 1,
-  "src/lib/connection/lifecycle.ts::selectUserWithoutBlocking": 1,
   "src/lib/connection/session-management.ts::selectUserWithoutBlocking": 1,
   "src/lib/file-transfer/peer-signals.ts::noteMessageOffer": 1,
   "src/lib/p2p/send-failure.ts::reportSendFailure": 1,

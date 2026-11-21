@@ -1,20 +1,15 @@
 /**
  * Connection Auto-Reconnect
  *
- * Handles auto-reconnect logic, leader connection attempts,
- * and session-already-connected error recovery.
+ * Rejoins the tab-selected session when the agent still holds it, and the
+ * leader's connection attempt that does so.
  */
 
 import type { ConnectionState } from './state';
-import { isConnectAlreadyInProgress } from '@/lib/connection/is-connect-in-progress';
 import type { ConnectionIO } from './io';
 import type { StoredSession } from '@/types/session-types';
 import type { SessionInformation } from 'citadel-workspace-client-ts';
 import { storeSession } from './session-management';
-import {
-  HEALTH_CHECK_TIMEOUT_MS,
-  MAX_RECONNECT_DELAY_MS,
-} from './constants';
 import { debugLog } from '@/lib/debug-config';
 import type { TabSelectionContext } from '@/lib/connection/types';
 import { sessionIsOnServer } from '@/lib/sessions/same-server';
@@ -71,12 +66,6 @@ export async function autoReconnect(
 
   if (!session) return;
 
-  const connectionKey: string = state.createConnectionKey(session.username, session.serverAddress);
-  if (state.hasConnectionAttempt(connectionKey)) {
-    debugLog('ConnectionService', `ConnectionManager: Connection already in progress for ${connectionKey}`);
-    return;
-  }
-
   // Check if session is already active
   const freshActiveSessions: SessionInformation[] = await getActiveSessions();
   const alreadyActive: SessionInformation | undefined = freshActiveSessions.find(
@@ -87,14 +76,8 @@ export async function autoReconnect(
     await reuseExistingSession(alreadyActive, session, state, io, handleSuccessConn);
     return;
   }
-
-  debugLog('ConnectionService', 'ConnectionManager: Attempting auto-reconnect for', session.username);
-  try {
-    state.addConnectionAttempt(connectionKey);
-    await performAutoReconnect(session, activeSessions, state, io, handleSuccessConn, getActiveSessions);
-  } finally {
-    state.removeConnectionAttempt(connectionKey);
-  }
+  // Nothing on this device can sign a session back in: no credential is kept. The sign-in form does it.
+  debugLog('ConnectionService', 'ConnectionManager: Stored session is not active; it needs a sign-in:', session.username);
 }
 
 async function reuseExistingSession(
@@ -118,110 +101,4 @@ async function reuseExistingSession(
   session.lastConnected = Date.now();
   await storeSession(session, state, io);
   debugLog('ConnectionService', 'ConnectionManager: Reusing existing session instead of reconnecting');
-}
-
-async function performAutoReconnect(
-  session: StoredSession,
-  activeSessions: SessionInformation[],
-  state: ConnectionState,
-  io: ConnectionIO,
-  handleSuccessConn: (cid: bigint, shouldUpdate: boolean) => Promise<void>,
-  getActiveSessions: () => Promise<SessionInformation[]>,
-): Promise<void> {
-  try {
-    try {
-      await io.waitForHealthy(HEALTH_CHECK_TIMEOUT_MS);
-    } catch (healthError) {
-      debugLog('ConnectionService', 'Service health check failed, attempting anyway:', healthError);
-    }
-
-    if (!session.password) {
-      // See lifecycle.ts: no stored password means no silent reconnect.
-      throw new Error(
-        `Cannot reconnect ${session.username} automatically: credentials were not saved. Please sign in again.`,
-      );
-    }
-
-    // Never empty here: autoReconnect only reaches a session the tab selected by a non-empty
-    // server (a record without one is never selected; stored-server.ts is for paths that can).
-    const requestId: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();
-    await io.connect({
-      requestId,
-      username: session.username,
-      serverAddress: session.serverAddress,
-      password: session.password,
-      sessionSecuritySettings: session.sessionSecuritySettings,
-    });
-
-    session.lastConnected = Date.now();
-    await storeSession(session, state, io);
-    debugLog('ConnectionService', 'ConnectionManager: Auto-reconnect successful');
-  } catch (error: unknown) {
-    debugLog('ConnectionService', 'Auto-reconnect failed', error);
-    await handleAutoReconnectError(error, session, activeSessions, state, io, handleSuccessConn, getActiveSessions);
-  }
-}
-
-async function handleAutoReconnectError(
-  error: unknown,
-  session: StoredSession,
-  activeSessions: SessionInformation[],
-  state: ConnectionState,
-  io: ConnectionIO,
-  handleSuccessConn: (cid: bigint, shouldUpdate: boolean) => Promise<void>,
-  getActiveSessions: () => Promise<SessionInformation[]>,
-): Promise<void> {
-  io.updateConnectionService({ cid: null, isConnected: false });
-  io.broadcastConnectionStatus({ isConnected: false });
-
-  const errorMessage: string = (error instanceof Error ? error.message : String(error)).toLowerCase();
-  if (isConnectAlreadyInProgress(errorMessage)) {
-    await handleSessionAlreadyConnectedError(error, session, state, io, getActiveSessions);
-    state.resetReconnectAttempts();
-    return;
-  }
-
-  if (!state.hasReachedMaxReconnectAttempts()) {
-    const attempts: number = state.incrementReconnectAttempts();
-    const delay: number = state.calculateBackoffDelay(attempts, MAX_RECONNECT_DELAY_MS);
-    debugLog('ConnectionService', `ConnectionManager: Will retry in ${delay}ms (attempt ${attempts}/${state.maxReconnectAttempts})`);
-
-    setTimeout(async () => {
-      await autoReconnect(activeSessions, state, io, getActiveSessions, handleSuccessConn);
-    }, delay);
-  } else {
-    debugLog('ConnectionService', 'ConnectionManager: Max reconnection attempts reached, giving up');
-  }
-}
-
-async function handleSessionAlreadyConnectedError(
-  error: unknown,
-  session: StoredSession,
-  state: ConnectionState,
-  io: ConnectionIO,
-  getActiveSessions: () => Promise<SessionInformation[]>,
-): Promise<void> {
-  debugLog('ConnectionService', 'ConnectionManager: Session already connected error - likely stale session');
-
-  const errorMessage: string = error instanceof Error ? error.message : String(error);
-  const extractedCid: string | null = state.extractCidFromErrorMessage(errorMessage);
-  if (extractedCid) {
-    io.emitEvent('session-already-connected', { cid: extractedCid, message: errorMessage });
-    return;
-  }
-
-  try {
-    const sessions: SessionInformation[] = await getActiveSessions();
-    const match: SessionInformation | undefined = sessions.find(
-      (s) => s.username === session.username && sessionIsOnServer(s, session.serverAddress)
-    );
-    if (match) {
-      io.emitEvent('session-already-connected', {
-        cid: match.cid.toString(),
-        message: errorMessage,
-      });
-    }
-  } catch (err) {
-    debugLog('ConnectionService', 'Failed to get active sessions:', err);
-  }
 }

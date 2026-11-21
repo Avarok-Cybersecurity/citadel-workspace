@@ -2,24 +2,18 @@
 import * as wsModule from '../websocket-service';
 import { agentPasskeyStore } from '@/lib/passkey/agent-store';
 import { createBrowserAuthenticator, readClientCapabilities } from '@/lib/passkey/browser-authenticator';
-import { RP_NAME, resolveRpId } from '@/lib/passkey/rp-id';
+import { RP_NAME } from '@/lib/passkey/rp-id';
 import type { PasskeyStore } from '@/lib/passkey/repository';
 import type { EnrolDeps } from './enrol-key';
 
 export interface SignInDeps extends EnrolDeps {
-  /** The agent's CID-0 LocalDB: public sign-in hints and legacy records only. */
+  /** The agent's CID-0 LocalDB: public sign-in hints only. */
   store: PasskeyStore;
-  /**
-   * The relying party this page's legacy local records are filed under. A key
-   * ceremony uses the one its challenge names instead: the server's.
-   */
-  rpId: string;
 }
 
 export function browserSignInDeps(): SignInDeps {
   return {
     authenticator: createBrowserAuthenticator(window.navigator.credentials, readClientCapabilities()),
-    rpId: resolveRpId(window.location.hostname),
     rpName: RP_NAME,
     // Namespace import, as agent-store.ts does, to stay out of the websocket-service import cycle.
     send: (request: Record<string, unknown>): Promise<void> => wsModule.websocketService.sendRequest(request),

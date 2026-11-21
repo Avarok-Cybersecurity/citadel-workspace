@@ -29,7 +29,6 @@ vi.mock('@/lib/admission', async (orig: () => Promise<Record<string, unknown>>) 
 import { Login } from '../Login';
 import { enrolKey, world } from '@/lib/sign-in/__tests__/helpers';
 import { saveHint } from '@/lib/sign-in/hints';
-import { enrolCredential } from '@/lib/passkey/__tests__/legacy-enrol';
 import { ADMISSION_COPY } from '@/lib/admission/copy';
 import { PASSWORD_THEN_KEY } from '../passkey/passkey-offer';
 import { ALWAYS_PASS, installFakeTurnstile, type FakeTurnstile } from '../admission/__tests__/fake-turnstile';
@@ -101,16 +100,6 @@ describe('a passkey sign-in on a workspace that asks for a human check', () => {
     renderLogin();
     await signInWithThePasskeyButton();
     await waitFor(() => expect(onNext).toHaveBeenCalledWith('7'));
-  });
-
-  it('an option-A passkey signs in, its token bound to its workspace', async () => {
-    const alice: FakeAccount = h.w.agent.account('alice');
-    await enrolCredential({ ...h.w.deps, now: (): number => 1 }, { username: 'alice', cid: alice.cid, label: 'Mac', password: alice.password });
-    renderLogin();
-    await signInWithThePasskeyButton();
-    // Signed in: the form then offers to move the passkey to the server.
-    expect(await screen.findByTestId('add-security-key')).toBeInTheDocument();
-    expect(connects().at(-1)?.admission_token).toMatch(/@bench$/);
   });
 });
 

@@ -26,10 +26,6 @@ export function utf8(text: string): Bytes {
   return copyBytes(new TextEncoder().encode(text));
 }
 
-export function fromUtf8(bytes: Bytes): string {
-  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-}
-
 export function randomBytes(length: number): Bytes {
   const out: Bytes = new Uint8Array(length);
   crypto.getRandomValues(out);

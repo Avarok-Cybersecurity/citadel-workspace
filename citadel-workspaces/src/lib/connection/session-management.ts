@@ -81,10 +81,8 @@ export async function handleAuthSuccess(
 
   const session: StoredSession = {
     username: params.username,
-    // No password and no server PSK, ever. Plaintext "Remember credentials"
-    // is retired: a password kept for next time is sealed under the user's
-    // passkey (src/lib/passkey) and never enters this record, which lives in
-    // the agent's CID-0 store where any local process can read it.
+    // No password and no server PSK, ever: this record lives in the agent's
+    // CID-0 store, where any local process can read it.
     serverAddress: params.serverAddress,
     fullName: params.fullName,
     lastConnected: Date.now(),

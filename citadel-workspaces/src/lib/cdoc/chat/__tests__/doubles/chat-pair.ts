@@ -33,8 +33,6 @@ export interface ChatSide {
   readonly db: FakeAgentLocalDb;
   readonly problems: ChatSyncProblem[];
   readonly titles: CdocChatTitleStamp[];
-  /** Each time the peer's copy was found to be moved from another original: what it named. */
-  readonly heldApart: (string | null)[];
   editor(): EditorSession;
   sync(): ChatDocumentSync;
   /** The keeper's teardown, as closing the document's view runs it; resolves once its replica is disposed (its last write done). */
@@ -56,7 +54,6 @@ const COLOR: HexColor = '#4F46E5';
 export async function openSide(world: World, self: bigint, peer: bigint, db: FakeAgentLocalDb, origin: ChatDocumentOrigin, config: ChatSyncConfig = CHAT_SYNC): Promise<ChatSide> {
   const problems: ChatSyncProblem[] = [];
   const titles: CdocChatTitleStamp[] = [];
-  const heldApart: (string | null)[] = [];
   let editor: EditorSession | null = null;
   let sync: ChatDocumentSync | null = null;
   // Wall time for title stamps: fixed and moving only with the manual clock.
@@ -71,7 +68,6 @@ export async function openSide(world: World, self: bigint, peer: bigint, db: Fak
     report: (problem: ChatSyncProblem): void => { problems.push(problem); },
     titled: (stamp: CdocChatTitleStamp): void => { titles.push(stamp); },
     bound: (bound: ChatDocumentSync | null): void => { if (bound !== null) sync = bound; },
-    heldApart: (theirs: string | null): void => { heldApart.push(theirs); },
   });
   let teardown: () => void = (): void => undefined;
   let disposed: () => void = (): void => undefined;
@@ -91,7 +87,7 @@ export async function openSide(world: World, self: bigint, peer: bigint, db: Fak
     return gone;
   };
   return {
-    cid: self, db, problems, titles, heldApart, close,
+    cid: self, db, problems, titles, close,
     editor: (): EditorSession => { if (editor === null) throw new Error('not open'); return editor; },
     sync: (): ChatDocumentSync => { if (sync === null) throw new Error('not bound'); return sync; },
   };
