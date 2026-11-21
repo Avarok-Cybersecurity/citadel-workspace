@@ -43,7 +43,7 @@ export default {
   scheduled: (_controller, env) => runScheduled(ioFor(env), config(env)),
 };
 
-export class WorkspaceServer extends DurableObject {
+export class WorkspaceServerV2 extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env); // sets this.ctx and this.env
     this.wasm = null;
