@@ -32,8 +32,6 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     ) -> Result<ReactionWrite, NetworkError> {
         let lock = self.group_lock(group_id);
         let _guard = lock.lock().await;
-        // Migrate before reading, as every other writer of a channel's pages does.
-        self.migrate_group_to_pages(group_id).await?;
         let mut pages = self.load_group_pages(group_id).await?;
         let Some((page, offset)) = group_message_pages::locate(&pages, message_id) else {
             return Ok(ReactionWrite::NoSuchMessage);

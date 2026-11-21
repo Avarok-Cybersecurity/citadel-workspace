@@ -753,12 +753,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         kernel.workspace_password = Some(admin_password.to_string());
         kernel.workspace_structure = workspace_structure;
 
-        // NOTE: Backend initialization (init() / migrate_if_needed()) is deliberately
-        // deferred to on_start(). At this point in the constructor, NodeRemote is not
-        // yet set, so the BackendTransactionManager would run against its in-memory
-        // test_storage rather than the real backend - meaning the migration sentinel
-        // would be written to the wrong place and real migration logic would silently
-        // no-op on every restart. See on_start() below for the real init call.
+        // NOTE: Backend initialization (init()) is deliberately deferred to on_start().
+        // At this point in the constructor, NodeRemote is not yet set, so the
+        // BackendTransactionManager would check its in-memory test_storage rather than
+        // the real backend. See on_start() below for the real init call.
         info!(target: "citadel", "Deferring backend init and admin injection until NodeRemote is available");
 
         Ok(kernel)
@@ -1306,9 +1304,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         // and the server is one container owning one TCP listener - a second instance against
         // the same backend cannot even bind. There is deliberately no compare-and-set here:
         // the backend surface is a plain get/put over the SDK's `BackendHandler` (no CAS
-        // primitive exists to build on), and every other persisted sentinel in this kernel -
-        // `KEY_MIGRATION_DONE` in `migrate_if_needed`, and the schema-version get/set later in
-        // this same `on_start` - has exactly the same shape.
+        // primitive exists to build on), and the schema-version get/set later in this same
+        // `on_start` has exactly the same shape.
         //
         // If multi-process servers over one backend are ever introduced, this marker is NOT the
         // thing to fix first: every node mutation is a load-mutate-save of the single
@@ -1654,12 +1651,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
         if self.domain_operations.backend_tx_manager.is_test_mode() {
             error!(target: "citadel", "NodeRemote not set after node start!");
         } else {
-            // Initialize backend (runs legacy-key migration once against the real
-            // backend). Runs unconditionally in production so migrations fire
-            // even in configurations that didn't set `workspace_password`.
-            // Safe to call every startup: `migrate_if_needed` checks the
-            // persistent KEY_MIGRATION_DONE sentinel and is a no-op once
-            // migration has run.
+            // Initialize the backend: refuses a store an earlier server wrote, in
+            // every configuration.
             info!(target: "citadel", "NodeRemote is available, running backend init");
             self.domain_operations.backend_tx_manager.init().await?;
 

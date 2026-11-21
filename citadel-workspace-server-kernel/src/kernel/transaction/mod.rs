@@ -67,8 +67,6 @@ pub struct BackendTransactionManager<R: Ratchet> {
     node_remote: Arc<RwLock<Option<NodeRemote<R>>>>,
     /// In-memory storage for testing when no NodeRemote is available
     test_storage: Arc<RwLock<HashMap<String, Vec<u8>>>>,
-    /// Whether migration from collection-level keys has been completed
-    migrated: Arc<RwLock<bool>>,
     /// Serializes index-key read-modify-write operations across concurrent
     /// connection tasks. Without this, two connections inserting entities
     /// concurrently would race on the index (both read the same prior set,
@@ -179,13 +177,16 @@ impl<R: Ratchet + Send + Sync + 'static> Default for BackendTransactionManager<R
     }
 }
 
-/// Old collection-level storage keys (pre-migration).
-const LEGACY_KEY_DOMAINS: &str = "citadel_workspace.domains";
-const LEGACY_KEY_USERS: &str = "citadel_workspace.users";
-const LEGACY_KEY_WORKSPACES: &str = "citadel_workspace.workspaces";
-const LEGACY_KEY_PASSWORDS: &str = "citadel_workspace.passwords";
+/// Collection-level keys an earlier server stored everything under. Their
+/// presence means a store this server does not read.
+const EARLIER_COLLECTION_KEYS: [&str; 4] = [
+    "citadel_workspace.domains",
+    "citadel_workspace.users",
+    "citadel_workspace.workspaces",
+    "citadel_workspace.passwords",
+];
 
-/// Per-entity key prefixes (post-migration).
+/// Per-entity key prefixes.
 const KEY_PREFIX_DOMAIN: &str = "citadel_workspace.domain.";
 const KEY_PREFIX_USER: &str = "citadel_workspace.user.";
 const KEY_PREFIX_WORKSPACE: &str = "citadel_workspace.workspace.";
@@ -195,9 +196,6 @@ const KEY_PREFIX_PASSWORD: &str = "citadel_workspace.password.";
 const KEY_INDEX_DOMAIN_IDS: &str = "citadel_workspace.domain_ids";
 const KEY_INDEX_USER_IDS: &str = "citadel_workspace.user_ids";
 const KEY_INDEX_WORKSPACE_IDS: &str = "citadel_workspace.workspace_ids";
-
-/// Sentinel key indicating migration has been completed.
-const KEY_MIGRATION_DONE: &str = "citadel_workspace.migration_v2_done";
 
 /// Key for storing the backend schema version.
 pub(crate) const KEY_SCHEMA_VERSION: &str = "citadel_workspace.schema_version";
@@ -231,7 +229,6 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Self {
             node_remote: Arc::new(RwLock::new(None)),
             test_storage: Arc::new(RwLock::new(HashMap::new())),
-            migrated: Arc::new(RwLock::new(false)),
             index_write_mutex: Arc::new(tokio::sync::Mutex::new(())),
             group_msg_mutex: (0..GROUP_LOCK_STRIPES)
                 .map(|_| Arc::new(tokio::sync::Mutex::new(())))
@@ -444,105 +441,19 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         self.save_index(index_key, &ids).await
     }
 
-    // ========== Migration ==========
+    // ========== Earlier stores ==========
 
-    /// Check for legacy collection-level keys and migrate to per-entity keys.
-    /// This is idempotent: if migration has already run, it is a no-op.
-    pub async fn migrate_if_needed(&self) -> Result<(), NetworkError> {
-        // Fast path: already migrated this process lifetime
-        if *self.migrated.read() {
-            return Ok(());
+    /// Refuse a store an earlier server wrote in the collection-level layout:
+    /// it is not migrated or read.
+    pub async fn refuse_earlier_store(&self) -> Result<(), NetworkError> {
+        for key in EARLIER_COLLECTION_KEYS {
+            if self.backend_get_raw(key).await?.is_some() {
+                return Err(NetworkError::msg(format!(
+                    "This store was written by an earlier workspace server (it holds `{key}`), \
+                     which this version does not read. Start it on an empty store."
+                )));
+            }
         }
-
-        // Check persistent sentinel
-        let done: Option<bool> = self.backend_get(KEY_MIGRATION_DONE).await?;
-        if done == Some(true) {
-            *self.migrated.write() = true;
-            return Ok(());
-        }
-
-        info!(target: "citadel", "Checking for legacy collection-level storage keys to migrate...");
-
-        // Migrate domains.
-        //
-        // Each `save_index` call is wrapped in `index_write_mutex` so a
-        // concurrent request handler calling `add_to_index` cannot race
-        // with the migration writing the migrated set: the handler's
-        // addition would otherwise be loaded by `add_to_index`, then
-        // overwritten when the migration's `save_index` lands. Today
-        // `init()` runs before connections are accepted so the race
-        // window is zero in practice, but the mutex acquisition keeps
-        // the invariant of "every write to an index goes through
-        // `index_write_mutex`" intact regardless of future call order.
-        let legacy_domains: Option<HashMap<String, Domain>> =
-            self.backend_get(LEGACY_KEY_DOMAINS).await?;
-        if let Some(domains) = legacy_domains {
-            info!(target: "citadel", "Migrating {} domains to per-entity keys", domains.len());
-            let mut ids = HashSet::new();
-            for (id, domain) in &domains {
-                let key = format!("{KEY_PREFIX_DOMAIN}{id}");
-                self.backend_save(&key, domain).await?;
-                ids.insert(id.clone());
-            }
-            {
-                let _guard = self.index_write_mutex.lock().await;
-                self.save_index(KEY_INDEX_DOMAIN_IDS, &ids).await?;
-            }
-            self.backend_delete(LEGACY_KEY_DOMAINS).await?;
-        }
-
-        // Migrate users — same mutex contract as domains above.
-        let legacy_users: Option<HashMap<String, User>> =
-            self.backend_get(LEGACY_KEY_USERS).await?;
-        if let Some(users) = legacy_users {
-            info!(target: "citadel", "Migrating {} users to per-entity keys", users.len());
-            let mut ids = HashSet::new();
-            for (id, user) in &users {
-                let key = format!("{KEY_PREFIX_USER}{id}");
-                self.backend_save(&key, user).await?;
-                ids.insert(id.clone());
-            }
-            {
-                let _guard = self.index_write_mutex.lock().await;
-                self.save_index(KEY_INDEX_USER_IDS, &ids).await?;
-            }
-            self.backend_delete(LEGACY_KEY_USERS).await?;
-        }
-
-        // Migrate workspaces — same mutex contract as domains above.
-        let legacy_workspaces: Option<HashMap<String, Workspace>> =
-            self.backend_get(LEGACY_KEY_WORKSPACES).await?;
-        if let Some(workspaces) = legacy_workspaces {
-            info!(target: "citadel", "Migrating {} workspaces to per-entity keys", workspaces.len());
-            let mut ids = HashSet::new();
-            for (id, workspace) in &workspaces {
-                let key = format!("{KEY_PREFIX_WORKSPACE}{id}");
-                self.backend_save(&key, workspace).await?;
-                ids.insert(id.clone());
-            }
-            {
-                let _guard = self.index_write_mutex.lock().await;
-                self.save_index(KEY_INDEX_WORKSPACE_IDS, &ids).await?;
-            }
-            self.backend_delete(LEGACY_KEY_WORKSPACES).await?;
-        }
-
-        // Migrate passwords (no index needed)
-        let legacy_passwords: Option<HashMap<String, String>> =
-            self.backend_get(LEGACY_KEY_PASSWORDS).await?;
-        if let Some(passwords) = legacy_passwords {
-            info!(target: "citadel", "Migrating {} passwords to per-entity keys", passwords.len());
-            for (id, password) in &passwords {
-                let key = format!("{KEY_PREFIX_PASSWORD}{id}");
-                self.backend_save(&key, password).await?;
-            }
-            self.backend_delete(LEGACY_KEY_PASSWORDS).await?;
-        }
-
-        // Write sentinel
-        self.backend_save(KEY_MIGRATION_DONE, &true).await?;
-        *self.migrated.write() = true;
-        info!(target: "citadel", "Migration to per-entity storage keys complete");
         Ok(())
     }
 
@@ -788,12 +699,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     // ========== Group Messaging Storage ==========
 
-    /// Every page of a room's history, oldest first.
-    ///
-    /// A room still in the pre-paging single-blob form reads as one page. It is
-    /// NOT migrated here: reads must not write, and a reader that migrates would
-    /// race every other reader. `migrate_if_legacy` does it under the group lock,
-    /// on the next write.
+    /// Every page of a room's history, oldest first. A room with no index has
+    /// never been written: one empty page. A blob under the pre-paging key is
+    /// never read.
     async fn load_group_pages(
         &self,
         group_id: &str,
@@ -803,11 +711,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             .await?;
 
         let Some(count) = count else {
-            let legacy: Vec<GroupMessage> = self
-                .backend_get(&group_message_pages::legacy_key(group_id))
-                .await?
-                .unwrap_or_default();
-            return Ok(vec![legacy]);
+            return Ok(vec![Vec::new()]);
         };
 
         let mut pages = Vec::with_capacity(count);
@@ -821,35 +725,22 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(pages)
     }
 
-    /// Move a room from the single-blob form to pages. Caller holds the lock.
-    ///
-    /// Idempotent: the index's presence is the flag, so a second call is a
-    /// single get. The legacy key is deleted only after every page and the index
-    /// are written, so a failure part-way leaves the room readable in its old
-    /// form rather than half in each.
-    async fn migrate_group_to_pages(&self, group_id: &str) -> Result<(), NetworkError> {
+    /// Give a room that has never been written its index and one empty page, so
+    /// an append has a last page to fill. Caller holds the lock.
+    async fn ensure_group_index(&self, group_id: &str) -> Result<(), NetworkError> {
         let existing: Option<usize> = self
             .backend_get(&group_message_pages::index_key(group_id))
             .await?;
         if existing.is_some() {
             return Ok(());
         }
-
-        let legacy: Vec<GroupMessage> = self
-            .backend_get(&group_message_pages::legacy_key(group_id))
-            .await?
-            .unwrap_or_default();
-        let pages = group_message_pages::split_into_pages(legacy);
-
-        for (index, page) in pages.iter().enumerate() {
-            self.backend_save(&group_message_pages::page_key(group_id, index), page)
-                .await?;
-        }
-        self.backend_save(&group_message_pages::index_key(group_id), &pages.len())
-            .await?;
-        self.backend_delete(&group_message_pages::legacy_key(group_id))
-            .await?;
-        Ok(())
+        self.backend_save(
+            &group_message_pages::page_key(group_id, 0),
+            &Vec::<GroupMessage>::new(),
+        )
+        .await?;
+        self.backend_save(&group_message_pages::index_key(group_id), &1usize)
+            .await
     }
 
     /// Write `pages` back whole, replacing whatever the room held.
@@ -975,7 +866,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         let group_id = message.group_id.clone();
         let lock = self.group_lock(&group_id);
         let _guard = lock.lock().await;
-        self.migrate_group_to_pages(&group_id).await?;
+        self.ensure_group_index(&group_id).await?;
 
         // A reply has to find its parent, which may be on any page — so that
         // case still reads the room. An ordinary message does not: it reads the
@@ -1044,22 +935,6 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     ) -> Result<Option<GroupMessage>, NetworkError> {
         let lock = self.group_lock(group_id);
         let _guard = lock.lock().await;
-        // Migrate BEFORE reading, exactly as the append path does.
-        //
-        // `migrate_group_to_pages` is the only place the legacy key is deleted.
-        // Without this call, a room whose history is still in the pre-paging
-        // blob gets an index written by `save_group_pages` -- so every
-        // subsequent read goes through the pages and the change LOOKS applied --
-        // while the legacy blob keeps the original message bodies. And
-        // `save_group_pages` cannot clean up after itself here: it computes
-        // `previous` from the index, which does not exist yet, so its orphan
-        // sweep runs over an empty range.
-        //
-        // For a delete that means the plaintext of a "deleted" message stays in
-        // the backend until the whole room is deleted. For an edit it means the
-        // pre-edit content does. `store_group_message` has always migrated
-        // first; these two never did.
-        self.migrate_group_to_pages(group_id).await?;
         let mut messages = self.get_group_messages(group_id).await?;
 
         let mut updated_message = None;
@@ -1088,22 +963,6 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     ) -> Result<Option<GroupMessage>, NetworkError> {
         let lock = self.group_lock(group_id);
         let _guard = lock.lock().await;
-        // Migrate BEFORE reading, exactly as the append path does.
-        //
-        // `migrate_group_to_pages` is the only place the legacy key is deleted.
-        // Without this call, a room whose history is still in the pre-paging
-        // blob gets an index written by `save_group_pages` -- so every
-        // subsequent read goes through the pages and the change LOOKS applied --
-        // while the legacy blob keeps the original message bodies. And
-        // `save_group_pages` cannot clean up after itself here: it computes
-        // `previous` from the index, which does not exist yet, so its orphan
-        // sweep runs over an empty range.
-        //
-        // For a delete that means the plaintext of a "deleted" message stays in
-        // the backend until the whole room is deleted. For an edit it means the
-        // pre-edit content does. `store_group_message` has always migrated
-        // first; these two never did.
-        self.migrate_group_to_pages(group_id).await?;
         let mut messages = self.get_group_messages(group_id).await?;
 
         // Find and remove the message
@@ -1176,8 +1035,6 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             .await?;
         // Who had read how far goes with the history it measured.
         self.backend_delete(&group_message_pages::read_cursors_key(group_id))
-            .await?;
-        self.backend_delete(&group_message_pages::legacy_key(group_id))
             .await
     }
 
@@ -1245,135 +1102,32 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 }
 
 #[cfg(test)]
-mod migration_tests {
-    //! Tests for the legacy-collection -> per-entity-key migration and the
-    //! schema-version stamping in `BackendTransactionManager`.
-    //!
-    //! These tests run against the in-memory `test_storage` backend (no
-    //! `NodeRemote`), which is the only mode reachable from a unit test;
-    //! the real-backend behaviour is exercised end-to-end via the kernel
-    //! integration tests. The contract being verified here is the same
-    //! either way: the migration moves data from legacy collection keys to
-    //! per-entity keys, populates the index, removes the legacy collection,
-    //! sets the persistent sentinel, and is idempotent.
+mod earlier_store_tests {
+    //! Tests for refusing an earlier server's store and for schema-version
+    //! stamping, against the in-memory `test_storage` backend.
     use super::*;
     use citadel_sdk::prelude::StackedRatchet;
-    use citadel_workspace_types::structs::Workspace;
 
     fn fresh() -> BackendTransactionManager<StackedRatchet> {
         BackendTransactionManager::new()
     }
 
-    fn ws(id: &str) -> Workspace {
-        Workspace {
-            id: id.to_string(),
-            name: format!("workspace-{id}"),
-            description: String::new(),
-            owner_id: "owner".to_string(),
-            members: vec![],
-            offices: vec![],
-            metadata: vec![],
-            accepted_domains: Vec::new(),
+    #[tokio::test]
+    async fn a_store_in_the_earlier_collection_layout_is_refused() {
+        for key in EARLIER_COLLECTION_KEYS {
+            let mgr = fresh();
+            mgr.test_storage
+                .write()
+                .insert(key.to_string(), b"{}".to_vec());
+            let err = mgr.refuse_earlier_store().await.unwrap_err().to_string();
+            assert!(err.contains("earlier workspace server"), "{err}");
+            assert!(err.contains(key), "{err}");
         }
     }
 
-    /// Helper: write a serialized blob directly into `test_storage` to
-    /// simulate a backend that already contains a legacy collection. We
-    /// have to reach into the private field (rather than calling the
-    /// public save_* methods) because those write to per-entity keys -
-    /// the very format we're trying to migrate AWAY from.
-    fn seed_legacy<T: Serialize>(
-        mgr: &BackendTransactionManager<StackedRatchet>,
-        key: &str,
-        value: &T,
-    ) {
-        let bytes = serde_json::to_vec(value).expect("serialize");
-        mgr.test_storage.write().insert(key.to_string(), bytes);
-    }
-
     #[tokio::test]
-    async fn migrate_moves_legacy_domains_to_per_entity_keys() {
-        let mgr = fresh();
-
-        // Seed two domains in the legacy collection format.
-        let mut domains: HashMap<String, Domain> = HashMap::new();
-        domains.insert("a".to_string(), Domain::Workspace { workspace: ws("a") });
-        domains.insert("b".to_string(), Domain::Workspace { workspace: ws("b") });
-        seed_legacy(&mgr, LEGACY_KEY_DOMAINS, &domains);
-
-        mgr.migrate_if_needed().await.expect("migration");
-
-        // Each entity now reachable via the per-entity key.
-        assert!(mgr.get_domain_by_key("a").await.unwrap().is_some());
-        assert!(mgr.get_domain_by_key("b").await.unwrap().is_some());
-
-        // Index reflects both IDs.
-        let idx = mgr.get_index(KEY_INDEX_DOMAIN_IDS).await.unwrap();
-        assert_eq!(idx.len(), 2);
-        assert!(idx.contains("a"));
-        assert!(idx.contains("b"));
-
-        // Legacy collection key is removed.
-        assert!(mgr.test_storage.read().get(LEGACY_KEY_DOMAINS).is_none());
-
-        // Persistent sentinel is set so the next startup is a no-op.
-        let sentinel: Option<bool> = mgr.backend_get(KEY_MIGRATION_DONE).await.unwrap();
-        assert_eq!(sentinel, Some(true));
-    }
-
-    #[tokio::test]
-    async fn migrate_is_no_op_on_fresh_database() {
-        let mgr = fresh();
-        // No legacy keys, no per-entity keys. Migration should still run
-        // cleanly and stamp the sentinel.
-        mgr.migrate_if_needed().await.expect("migration");
-
-        let sentinel: Option<bool> = mgr.backend_get(KEY_MIGRATION_DONE).await.unwrap();
-        assert_eq!(sentinel, Some(true));
-        let idx = mgr.get_index(KEY_INDEX_DOMAIN_IDS).await.unwrap();
-        assert!(idx.is_empty());
-    }
-
-    #[tokio::test]
-    async fn migrate_skips_when_persistent_sentinel_already_set() {
-        let mgr = fresh();
-        // Pre-stamp the sentinel as if a previous run had completed.
-        mgr.backend_save(KEY_MIGRATION_DONE, &true).await.unwrap();
-
-        // Plant legacy data; this MUST NOT be migrated because the sentinel
-        // says we're done.
-        let mut domains: HashMap<String, Domain> = HashMap::new();
-        domains.insert("x".to_string(), Domain::Workspace { workspace: ws("x") });
-        seed_legacy(&mgr, LEGACY_KEY_DOMAINS, &domains);
-
-        mgr.migrate_if_needed().await.expect("migration");
-
-        assert!(
-            mgr.get_domain_by_key("x").await.unwrap().is_none(),
-            "sentinel must short-circuit the migration"
-        );
-        assert!(
-            mgr.test_storage.read().get(LEGACY_KEY_DOMAINS).is_some(),
-            "legacy data must remain untouched when sentinel is set"
-        );
-    }
-
-    #[tokio::test]
-    async fn migrate_running_twice_in_same_process_is_cheap() {
-        let mgr = fresh();
-
-        let mut domains: HashMap<String, Domain> = HashMap::new();
-        domains.insert("y".to_string(), Domain::Workspace { workspace: ws("y") });
-        seed_legacy(&mgr, LEGACY_KEY_DOMAINS, &domains);
-
-        mgr.migrate_if_needed().await.expect("first migration");
-        // Second call must be a no-op (process-local fast-path), and must
-        // not undo anything from the first call.
-        mgr.migrate_if_needed().await.expect("second migration");
-
-        let idx = mgr.get_index(KEY_INDEX_DOMAIN_IDS).await.unwrap();
-        assert_eq!(idx.len(), 1);
-        assert!(mgr.get_domain_by_key("y").await.unwrap().is_some());
+    async fn an_empty_store_is_accepted() {
+        fresh().refuse_earlier_store().await.expect("empty store");
     }
 
     #[tokio::test]
@@ -2031,73 +1785,26 @@ mod group_paging_tests {
         messages.iter().map(|m| m.id.clone()).collect()
     }
 
-    /// Seed a room in the PRE-PAGING form, which is what a real upgrade meets.
-    async fn seed_legacy(mgr: &BackendTransactionManager<StackedRatchet>, count: usize) {
+    /// A room's whole history as one blob under the pre-paging key, which an
+    /// earlier server wrote.
+    async fn seed_pre_paging_blob(mgr: &BackendTransactionManager<StackedRatchet>, count: usize) {
         let messages: Vec<GroupMessage> = (0..count).map(|i| message(&format!("m{i}"))).collect();
-        mgr.backend_save(&group_message_pages::legacy_key("room"), &messages)
+        mgr.backend_save("citadel_workspace.group_messages.room", &messages)
             .await
             .expect("seed");
     }
 
     #[tokio::test]
-    async fn a_legacy_room_reads_before_it_is_ever_migrated() {
-        // Reads must not write: a reader that migrated would race every other
-        // reader, and `get_group_messages` is called on every history fetch.
+    async fn a_pre_paging_blob_is_never_read_or_adopted() {
         let mgr = fresh();
-        seed_legacy(&mgr, 5).await;
+        seed_pre_paging_blob(&mgr, 5).await;
+        assert!(mgr.get_group_messages("room").await.unwrap().is_empty());
 
-        let read = mgr.get_group_messages("room").await.unwrap();
-        assert_eq!(ids(&read).len(), 5);
-        let index: Option<usize> = mgr
-            .backend_get(&group_message_pages::index_key("room"))
-            .await
-            .unwrap();
-        assert!(index.is_none(), "a read migrated the room");
-    }
-
-    #[tokio::test]
-    async fn migrating_keeps_every_message_in_order() {
-        let mgr = fresh();
-        let count = group_message_pages::PAGE_SIZE * 2 + 5;
-        seed_legacy(&mgr, count).await;
-        let before = ids(&mgr.get_group_messages("room").await.unwrap());
-
-        mgr.store_group_message(message("newest")).await.unwrap();
-
-        let after = ids(&mgr.get_group_messages("room").await.unwrap());
-        assert_eq!(after.len(), count + 1);
+        mgr.store_group_message(message("first")).await.unwrap();
         assert_eq!(
-            &after[..count],
-            &before[..],
-            "the migration reordered or lost messages"
-        );
-        assert_eq!(after[count], "newest");
-
-        // And the old blob is gone, or the next read would see both copies.
-        let legacy: Option<Vec<GroupMessage>> = mgr
-            .backend_get(&group_message_pages::legacy_key("room"))
-            .await
-            .unwrap();
-        assert!(
-            legacy.unwrap_or_default().is_empty(),
-            "the legacy blob survived"
-        );
-    }
-
-    #[tokio::test]
-    async fn migration_runs_once() {
-        let mgr = fresh();
-        seed_legacy(&mgr, 3).await;
-        mgr.store_group_message(message("a")).await.unwrap();
-        let after_first = ids(&mgr.get_group_messages("room").await.unwrap());
-        mgr.store_group_message(message("b")).await.unwrap();
-        let after_second = ids(&mgr.get_group_messages("room").await.unwrap());
-
-        assert_eq!(after_first.len(), 4);
-        assert_eq!(
-            after_second.len(),
-            5,
-            "the second write re-ran the migration"
+            ids(&mgr.get_group_messages("room").await.unwrap()),
+            vec!["first"],
+            "a write adopted the earlier server's blob"
         );
     }
 
@@ -2268,34 +1975,5 @@ mod group_paging_tests {
             orphan.unwrap_or_default().is_empty(),
             "page 1 was orphaned rather than deleted",
         );
-    }
-
-    #[tokio::test]
-    async fn a_half_finished_migration_reads_the_pages_and_ignores_the_blob() {
-        // The migration writes every page, then the index, then deletes the
-        // legacy blob. A crash between the last two leaves BOTH — and if a read
-        // ever preferred the blob, or concatenated the two, the room would show
-        // its history twice or roll back to the pre-migration copy.
-        //
-        // The index is the discriminator, and `migrate_group_to_pages` returns
-        // early when it exists, so the leftover blob is inert rather than
-        // re-migrated. It is reclaimed when the room is deleted.
-        let mgr = fresh();
-        seed_legacy(&mgr, 3).await;
-        mgr.store_group_message(message("migrated")).await.unwrap();
-
-        // Put the legacy blob back, as a crash before its delete would have.
-        seed_legacy(&mgr, 3).await;
-
-        let read = mgr.get_group_messages("room").await.unwrap();
-        assert_eq!(
-            ids(&read),
-            vec!["m0", "m1", "m2", "migrated"],
-            "the leftover blob was read instead of, or as well as, the pages",
-        );
-
-        // And a further write does not re-run the migration onto itself.
-        mgr.store_group_message(message("after")).await.unwrap();
-        assert_eq!(mgr.get_group_messages("room").await.unwrap().len(), 5);
     }
 }

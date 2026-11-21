@@ -11,11 +11,9 @@
 //! nothing else. Readers still concatenate, because `get_group_messages` returns
 //! the whole history and that is what its callers ask for.
 //!
-//! Pure by design — no I/O here. Which page a message belongs to, how a legacy
-//! blob splits, and where an id lives are decisions that can be tested without a
-//! backend; the reads and writes stay in `BackendTransactionManager`. That is
-//! the SBIO split the project asks for, and it is what makes the migration
-//! testable at all.
+//! Pure by design — no I/O here. Which page a message belongs to, how a history
+//! splits, and where an id lives are decisions that can be tested without a
+//! backend; the reads and writes stay in `BackendTransactionManager`.
 
 use citadel_workspace_types::GroupMessage;
 
@@ -33,18 +31,9 @@ pub(super) fn page_key(group_id: &str, page: usize) -> String {
     format!("citadel_workspace.group_messages.{group_id}.page.{page}")
 }
 
-/// The key holding how many pages a room has.
-///
-/// Its presence is also the migration flag: a room with no index has either
-/// never been written or is still in the legacy single-blob form, and
-/// `legacy_key` decides which.
+/// The key holding how many pages a room has; absent for a room never written.
 pub(super) fn index_key(group_id: &str) -> String {
     format!("citadel_workspace.group_messages.{group_id}.pages")
-}
-
-/// The pre-paging key: one `Vec<GroupMessage>` for the whole room.
-pub(super) fn legacy_key(group_id: &str) -> String {
-    format!("citadel_workspace.group_messages.{group_id}")
 }
 
 /// The key holding every member's read cursor in a room, beside its pages.
@@ -52,10 +41,8 @@ pub(super) fn read_cursors_key(group_id: &str) -> String {
     format!("citadel_workspace.group_messages.{group_id}.read_cursors")
 }
 
-/// Split a legacy blob into pages, preserving order.
-///
-/// Returns at least one page, so a room that existed with no messages still
-/// gets an index and does not look unmigrated on every subsequent write.
+/// Split a whole history into pages, preserving order. Returns at least one
+/// page, so an emptied room keeps an index.
 pub(super) fn split_into_pages(messages: Vec<GroupMessage>) -> Vec<Vec<GroupMessage>> {
     if messages.is_empty() {
         return vec![Vec::new()];
@@ -138,16 +125,11 @@ mod tests {
         assert_eq!(pages.len(), 3);
         let flattened: Vec<String> = pages.iter().flatten().map(|m| m.id.clone()).collect();
         let expected: Vec<String> = original.iter().map(|m| m.id.clone()).collect();
-        assert_eq!(
-            flattened, expected,
-            "the migration reordered or lost messages",
-        );
+        assert_eq!(flattened, expected, "splitting reordered or lost messages",);
     }
 
     #[test]
     fn an_empty_room_still_gets_one_page() {
-        // Otherwise the index is absent, the room reads as unmigrated, and every
-        // subsequent write re-runs the migration.
         assert_eq!(split_into_pages(vec![]).len(), 1);
     }
 
