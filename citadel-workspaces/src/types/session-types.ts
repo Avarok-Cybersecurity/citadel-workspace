@@ -10,15 +10,13 @@ import { SessionSecuritySettings } from "@/lib/p2p-registration-service";
 export interface StoredSession {
   username: string;
   /**
-   * LEGACY, never written. Builds before passkey unlock stored the account
-   * password here in plaintext; every read now removes it (see
-   * connection/scrub-legacy-credentials.ts). Still declared so that scrub, and
-   * the reconnect paths that refuse a session without one, type-check.
+   * Never written: a password kept for next time is sealed under the user's passkey
+   * (src/lib/passkey), not stored here. Read only by the background reconnect paths
+   * (connection/lifecycle.ts, connection/reconnect.ts, server-auto-connect-service), which are
+   * therefore inert and are listed for removal.
    */
   password?: string;
   serverAddress: string;
-  /** LEGACY, never written: the workspace PSK, scrubbed on read like `password`. */
-  serverPassword?: string;
   fullName: string;
   lastConnected: number;
   cid?: bigint; // Store the CID for claiming orphaned sessions

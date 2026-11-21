@@ -84,8 +84,7 @@ export async function handleAuthSuccess(
     // No password and no server PSK, ever. Plaintext "Remember credentials"
     // is retired: a password kept for next time is sealed under the user's
     // passkey (src/lib/passkey) and never enters this record, which lives in
-    // the agent's CID-0 store where any local process can read it. Entries
-    // written by older builds are scrubbed on read (scrub-legacy-credentials).
+    // the agent's CID-0 store where any local process can read it.
     serverAddress: params.serverAddress,
     fullName: params.fullName,
     lastConnected: Date.now(),

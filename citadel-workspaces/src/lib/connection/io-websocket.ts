@@ -12,7 +12,6 @@
 // by which point the cycle has fully resolved and the singleton is initialized.
 import * as wsModule from '../websocket-service';
 import { markSessionsRead, sessionsHaveBeenRead } from './sessions-read-state';
-import { scrubLegacyCredentials, type ScrubResult } from './scrub-legacy-credentials';
 import { dropUnaddressedDuplicates } from './drop-unaddressed-duplicates';
 import { failOnSocketLoss } from '../websocket/request-response';
 import { persistJSON, parsePersistedJSON } from '../storage-utils';
@@ -179,27 +178,25 @@ export class ConnectionIOWebSocket {
 
   /**
    * Every read path passes through here, so no in-memory copy -- and no
-   * read-modify-write built on one -- carries a plaintext password or a
-   * serverless duplicate onward. The write-back repairs the agent's store; if
-   * that write fails, the next read tries again.
+   * read-modify-write built on one -- carries a serverless duplicate onward. The
+   * write-back repairs the agent's store; if that write fails, the next read tries again.
    */
   private async withLegacyEntriesRepaired(parsed: StoredSessions): Promise<StoredSessions> {
-    const scrub: ScrubResult = scrubLegacyCredentials(parsed);
-    const deduped: { sessions: StoredSession[]; removed: number } = dropUnaddressedDuplicates(scrub.sessions.sessions);
+    const deduped: { sessions: StoredSession[]; removed: number } = dropUnaddressedDuplicates(parsed.sessions);
     // The active entry by identity, since dropping entries shifts positions; a dropped
     // serverless entry hands the selection to the addressed record of the same account.
-    const active: StoredSession | undefined = scrub.sessions.sessions[scrub.sessions.activeSessionIndex ?? -1];
+    const active: StoredSession | undefined = parsed.sessions[parsed.activeSessionIndex ?? -1];
     const kept: number = active ? deduped.sessions.indexOf(active) : -1;
     const activeIndex: number = kept >= 0 || !active ? kept : deduped.sessions.findIndex((s: StoredSession) => s.username === active.username);
     const repaired: StoredSessions = {
-      ...scrub.sessions,
+      ...parsed,
       sessions: deduped.sessions,
       activeSessionIndex: activeIndex >= 0 ? activeIndex : undefined,
     };
-    if (scrub.scrubbed > 0 || deduped.removed > 0) {
+    if (deduped.removed > 0) {
       try {
         await this.storeSessionsToLocalDB(repaired);
-        debugLog('ConnectionIO', 'Repaired stored sessions: plaintext removed from', scrub.scrubbed, '; serverless duplicates dropped:', deduped.removed);
+        debugLog('ConnectionIO', 'Repaired stored sessions: serverless duplicates dropped:', deduped.removed);
       } catch (error) {
         debugLog('ConnectionIO', 'Could not write back repaired sessions; will retry on next read', error);
       }
