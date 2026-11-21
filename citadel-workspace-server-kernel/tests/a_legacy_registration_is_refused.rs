@@ -22,7 +22,7 @@ async fn register_legacy(
         proposed_credentials: ProposedCredentials::new_register(user, user, PASSWORD.into())
             .await
             .map_err(|e| e.into_string())?,
-        static_security_settings: Default::default(),
+        static_security_settings: citadel_sdk::prelude::default_session_security_settings(),
         session_password: Default::default(),
         endpoint: None,
         password: None,
@@ -63,7 +63,7 @@ async fn a_legacy_registration_is_refused_and_a_post_quantum_one_is_taken() {
                 user.as_str(),
                 user.as_str(),
                 PASSWORD,
-                Default::default(),
+                citadel_sdk::prelude::default_session_security_settings(),
                 None,
                 None,
                 Some(TEST_CANONICAL_DOMAIN.to_string()),

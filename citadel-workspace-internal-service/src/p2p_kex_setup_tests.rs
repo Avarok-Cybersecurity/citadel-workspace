@@ -52,7 +52,7 @@ async fn the_shipped_agent_signs_with_the_identity_and_marks_a_legacy_peer_unver
         username: format!("legacy{}", &Uuid::new_v4().simple().to_string()[..8]),
         proposed_password: b"a typed password".to_vec().into(),
         connect_after_register: true,
-        session_security_settings: Default::default(),
+        session_security_settings: citadel_sdk::prelude::default_session_security_settings(),
         server_password: None,
         admission_token: None,
     };

@@ -124,7 +124,7 @@ impl ProofClient {
                     "Proof User",
                     username.as_str(),
                     password.as_str(),
-                    SessionSecuritySettings::default(),
+                    default_session_security_settings(),
                     None,
                     admission,
                     Some(inner.recovery_domain.clone()),
@@ -192,7 +192,7 @@ impl ProofClient {
                     ConnectMode::Standard { force_login: false },
                     UdpMode::Disabled,
                     None,
-                    SessionSecuritySettings::default(),
+                    default_session_security_settings(),
                     None,
                     crate::SERVER_CERTIFICATE,
                 )

@@ -128,7 +128,7 @@ async fn register(
             user,
             user,
             PASSWORD,
-            Default::default(),
+            citadel_sdk::prelude::default_session_security_settings(),
             None,
             admission,
             Some(TEST_CANONICAL_DOMAIN.to_string()),

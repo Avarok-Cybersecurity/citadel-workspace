@@ -15,9 +15,10 @@ use futures::StreamExt;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
-/// What the proof client demands of a tenant's certificate: what the agent demands
-/// (citadel-internal-service `SERVER_CERTIFICATE`), so the proof dials as a real user's agent
-/// does. A self-signed certificate is taken; the session's own key exchange still runs.
+/// What the proof client demands of a tenant's certificate. The local proof dials the tenant
+/// over plain `ws://` (proof-lib.mjs), which `Required` refuses; over `wss://` the JavaScript
+/// runtime's own WebSocket verifies the certificate whatever this says. The session's own key
+/// exchange still runs. (The shipped agent requires a verified certificate: its own setting.)
 pub(crate) const SERVER_CERTIFICATE: CertVerification = CertVerification::SelfSignedAccepted;
 
 #[wasm_bindgen]
@@ -116,7 +117,7 @@ impl ProofKernel {
                 "Proof User",
                 self.username.as_str(),
                 self.password.as_str(),
-                SessionSecuritySettings::default(),
+                default_session_security_settings(),
                 None,
                 SERVER_CERTIFICATE,
             )
@@ -129,7 +130,7 @@ impl ProofKernel {
                 ConnectMode::Standard { force_login: false },
                 UdpMode::Disabled,
                 None,
-                SessionSecuritySettings::default(),
+                default_session_security_settings(),
                 None,
                 SERVER_CERTIFICATE,
             )
@@ -171,7 +172,7 @@ impl ProofKernel {
                 ConnectMode::Standard { force_login: false },
                 UdpMode::Disabled,
                 None,
-                SessionSecuritySettings::default(),
+                default_session_security_settings(),
                 None,
                 SERVER_CERTIFICATE,
             )

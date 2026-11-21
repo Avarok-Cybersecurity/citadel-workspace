@@ -36,6 +36,7 @@ pub(super) async fn agent(data: &std::path::Path) -> SocketAddr {
         bind,
         SERVER_RECONNECT,
         common::test_transfers(),
+        common::TEST_SERVER_CERTIFICATE,
     )
     .await
     .unwrap();
@@ -127,7 +128,7 @@ pub(super) fn register_identity(
         discovery: IdentityDiscovery::Pinned {
             server_fp: server_fp.to_string(),
         },
-        session_security_settings: Default::default(),
+        session_security_settings: citadel_sdk::prelude::default_session_security_settings(),
         server_password: None,
         admission_token: None,
     };
@@ -170,7 +171,7 @@ pub(super) async fn link(a: &mut Window, b: &mut Window) -> [PeerIdentityMark; 2
             request_id: Uuid::new_v4(),
             cid: from.cid,
             peer_cid: to,
-            session_security_settings: Default::default(),
+            session_security_settings: citadel_sdk::prelude::default_session_security_settings(),
             connect_after_register: false,
             peer_session_password: None,
         };
@@ -187,7 +188,7 @@ pub(super) async fn link(a: &mut Window, b: &mut Window) -> [PeerIdentityMark; 2
         cid: a.cid,
         peer_cid: b.cid,
         udp_mode: Default::default(),
-        session_security_settings: Default::default(),
+        session_security_settings: citadel_sdk::prelude::default_session_security_settings(),
         peer_session_password: None,
         turn: None,
     };
@@ -202,7 +203,7 @@ pub(super) async fn link(a: &mut Window, b: &mut Window) -> [PeerIdentityMark; 2
         peer_cid: a.cid,
         accept: true,
         udp_mode: Default::default(),
-        session_security_settings: Default::default(),
+        session_security_settings: citadel_sdk::prelude::default_session_security_settings(),
         peer_session_password: None,
         turn: None,
     };

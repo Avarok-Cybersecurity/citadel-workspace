@@ -44,7 +44,7 @@ async fn an_account_registers_and_signs_in_post_quantum() {
                 user.as_str(),
                 user.as_str(),
                 PASSWORD,
-                Default::default(),
+                citadel_sdk::prelude::default_session_security_settings(),
                 None,
                 None,
                 Some(TEST_CANONICAL_DOMAIN.to_string()),

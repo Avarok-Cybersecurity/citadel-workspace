@@ -93,6 +93,7 @@ async fn a_kernel_s_answer_verifies_the_pinned_server() {
         bind,
         citadel_internal_service::SERVER_RECONNECT,
         common::test_transfers(),
+        common::TEST_SERVER_CERTIFICATE,
     )
     .await
     .unwrap();
@@ -148,7 +149,7 @@ async fn a_kernel_s_answer_verifies_the_pinned_server() {
         discovery: IdentityDiscovery::Pinned {
             server_fp: server_fp.clone(),
         },
-        session_security_settings: Default::default(),
+        session_security_settings: citadel_sdk::prelude::default_session_security_settings(),
         server_password: None,
         admission_token: None,
     };
