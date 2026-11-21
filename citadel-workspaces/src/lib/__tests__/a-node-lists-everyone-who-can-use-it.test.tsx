@@ -26,14 +26,14 @@ afterEach(cleanup);
 
 const NONE: MemberActionBlocks = { managePermissions: null, changeRole: null, remove: null };
 const member = (id: string, accessVia?: string): WorkspaceMember =>
-  ({ id, username: id, displayName: id, isOnline: null, role: 'member', ...(accessVia ? { accessVia } : {}) }) as WorkspaceMember;
+  ({ id, username: id, displayName: id, isOnline: null, banned: false, roleId: 'member', ...(accessVia ? { accessVia } : {}) }) as WorkspaceMember;
 
 describe('the Members reply', () => {
   it('carries who came through a level above to the list', () => {
     const seen: MembersPayload[] = [];
     const off: () => void = eventEmitter.on('members:loaded', (p: MembersPayload): void => { seen.push(p); });
     handleGeneratedVariants({
-      Members: { domain_id: 'office', members: [{ id: 'thomas', role: 'Admin', permissions: {}, metadata: {} }], inherited_from: { thomas: 'workspace-root' } },
+      Members: { domain_id: 'office', members: [{ id: 'thomas', banned: false, permissions: {}, metadata: {} }], inherited_from: { thomas: 'workspace-root' } },
     } as unknown as WorkspaceProtocolResponse, { cid: 0, request_id: 'r' });
     off();
     expect(seen.at(-1)?.inheritedFrom).toEqual({ thomas: 'workspace-root' });
@@ -43,7 +43,7 @@ describe('the Members reply', () => {
     const seen: MembersPayload[] = [];
     const off: () => void = eventEmitter.on('members:loaded', (p: MembersPayload): void => { seen.push(p); });
     handleGeneratedVariants({
-      Members: { domain_id: 'office', members: [{ id: 'thomas', role: 'Admin', permissions: {}, metadata: {} }] },
+      Members: { domain_id: 'office', members: [{ id: 'thomas', banned: false, permissions: {}, metadata: {} }] },
     } as unknown as WorkspaceProtocolResponse, { cid: 0, request_id: 'r' });
     off();
     expect(seen.at(-1)?.inheritedFrom).toEqual({});
@@ -100,9 +100,9 @@ describe('a sidebar member row', () => {
 describe('an admin member row', () => {
   function row(accessViaName?: string): HTMLElement {
     render(
-      <MemberRow member={{ userId: 'thomas', username: 'thomas', roleId: 'admin', isGuest: false, ...(accessViaName ? { accessViaName } : {}) }}
+      <MemberRow member={{ userId: 'thomas', username: 'thomas', roleId: 'admin', banned: false, isGuest: false, ...(accessViaName ? { accessViaName } : {}) }}
         showAdvanced={false} isUpdatingRole={false}
-        rules={{ roles: [], assignable: new Set(), isOnlyManager: false, actOnBlocked: null }}
+        rules={{ roles: [], assignable: new Set(), isOnlyManager: false, actOnBlocked: null, banBlocked: null }}
         onRoleChange={() => undefined} onAdvancedPermissions={() => undefined} onRemove={() => undefined} />,
     );
     return screen.getByTestId('member-remove-thomas');

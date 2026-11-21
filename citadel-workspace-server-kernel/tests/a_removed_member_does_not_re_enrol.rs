@@ -16,8 +16,12 @@
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_server_kernel::{connect_enrolment, ConnectEnrolment};
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use common::member_test_utils::{an_owner, insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::{
+    seed_permissions, user_holding, ADMIN_ROLE_ID, BANNED, GUEST_ROLE_ID, MEMBER_ROLE_ID, NO_ROLE,
+    OWNER_ROLE_ID,
+};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
@@ -28,7 +32,7 @@ const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 fn a_removed_account_is_not_re_enrolled() {
     // The defect, stated as a test.
     assert_eq!(
-        connect_enrolment(Some(UserRole::Banned)),
+        connect_enrolment(Some(&user_holding("gone", "Gone", BANNED))),
         ConnectEnrolment::RefuseRemoved,
         "a removed account reconnecting must not add itself back",
     );
@@ -42,25 +46,25 @@ fn an_account_that_never_joined_is_still_enrolled() {
 }
 
 #[test]
-fn every_other_role_is_still_enrolled() {
+fn every_account_in_good_standing_is_still_enrolled() {
     for role in [
-        UserRole::Member,
-        UserRole::Guest,
-        UserRole::Admin,
-        UserRole::Owner,
-        UserRole::Custom("editor".to_string(), 5),
+        MEMBER_ROLE_ID,
+        GUEST_ROLE_ID,
+        ADMIN_ROLE_ID,
+        OWNER_ROLE_ID,
+        NO_ROLE,
     ] {
         assert_eq!(
-            connect_enrolment(Some(role.clone())),
+            connect_enrolment(Some(&user_holding("here", "Here", role))),
             ConnectEnrolment::Enrol,
-            "{role:?} is not a removed account and must still be able to connect",
+            "{role} is not a removed account and must still be able to connect",
         );
     }
 }
 
 // --- the record removal leaves ----------------------------------------------
 
-async fn role_of(kernel: &Kernel, user: &str) -> UserRole {
+async fn record_of(kernel: &Kernel, user: &str) -> citadel_workspace_types::structs::User {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -68,7 +72,6 @@ async fn role_of(kernel: &Kernel, user: &str) -> UserRole {
         .await
         .expect("backend read")
         .expect("user exists")
-        .role
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -77,11 +80,11 @@ async fn removal_leaves_a_record_the_connect_path_can_read() {
     // reads. Asserting them separately would let the fix pass while the two
     // sides disagreed.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "departing", UserRole::Member).await;
+    insert_user_with_role(&kernel, "departing", MEMBER_ROLE_ID).await;
     join_root(&kernel, "departing").await;
 
     assert_eq!(
-        connect_enrolment(Some(role_of(&kernel, "departing").await)),
+        connect_enrolment(Some(&record_of(&kernel, "departing").await)),
         ConnectEnrolment::Enrol,
         "before removal this account would be enrolled, or nothing below is measured",
     );
@@ -93,7 +96,7 @@ async fn removal_leaves_a_record_the_connect_path_can_read() {
         .expect("an admin may remove a member");
 
     assert_eq!(
-        connect_enrolment(Some(role_of(&kernel, "departing").await)),
+        connect_enrolment(Some(&record_of(&kernel, "departing").await)),
         ConnectEnrolment::RefuseRemoved,
         "removal must leave a record the connect path reads, or it lasts one reconnect",
     );
@@ -102,7 +105,7 @@ async fn removal_leaves_a_record_the_connect_path_can_read() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_removed_account_holds_no_permissions_on_the_root() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "departing", UserRole::Admin).await;
+    insert_user_with_role(&kernel, "departing", ADMIN_ROLE_ID).await;
     join_root(&kernel, "departing").await;
     // The Owner: an Admin is not below another Admin, so only the Owner removes one.
     an_owner(&kernel, "owner").await;
@@ -131,7 +134,7 @@ async fn removal_takes_the_per_node_grants_too() {
     // membership, so a member added to a room and then removed from the
     // workspace kept reading and posting in that room.
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "departing", UserRole::Member).await;
+    insert_user_with_role(&kernel, "departing", MEMBER_ROLE_ID).await;
     join_root(&kernel, "departing").await;
 
     // A direct grant on a node, the shape `AddMember { domain_id: <room> }`
@@ -144,10 +147,8 @@ async fn removal_takes_the_per_node_grants_too() {
             .await
             .expect("backend read")
             .expect("user exists");
-        user.permissions.insert(
-            "room-1".to_string(),
-            Permission::for_legacy_role(&UserRole::Member),
-        );
+        user.permissions
+            .insert("room-1".to_string(), seed_permissions(MEMBER_ROLE_ID));
         kernel
             .domain_operations
             .backend_tx_manager

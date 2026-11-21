@@ -59,7 +59,7 @@ async fn a_member_of_a_hosted_tenant_gets_turn_credentials() -> Result<(), Box<d
     let (to, from, cid) = connected.pop().ok_or("the agent did not connect")?;
     let mut from = from;
     let role = role_of(&to, &mut from, cid, &member).await?;
-    println!("CONNECTED {member} (cid {cid}) to {endpoint} as {role:?}");
+    println!("CONNECTED {member} (cid {cid}) to {endpoint} as {role}");
 
     let first = ask(
         &to,

@@ -1,6 +1,7 @@
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{NodeEntityType, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, User};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{with_role, MEMBER_ROLE_ID};
 
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
@@ -33,10 +34,9 @@ async fn test_member_command_processing() {
 
     // Create a test user
     let user_id = "test_user";
-    let user = User::new(
-        user_id.to_string(),
-        format!("Test {}", user_id),
-        UserRole::Member,
+    let user = with_role(
+        User::new(user_id.to_string(), format!("Test {}", user_id)),
+        MEMBER_ROLE_ID,
     );
 
     citadel_logging::trace!(target: "citadel", "Created test user");
@@ -92,7 +92,7 @@ async fn test_member_command_processing() {
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: Some(office_id.clone()),
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         },
     )

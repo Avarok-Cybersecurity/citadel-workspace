@@ -5,7 +5,7 @@
  * Delegates operations to focused sub-modules.
  */
 
-import type { GroupMessageType, MemberRole, NodeEntityType, Permission, SignInSettings, UpdateOperation, WorkspaceProtocolPayload, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
+import type { GroupMessageType, NodeEntityType, Permission, SignInSettings, UpdateOperation, WorkspaceProtocolPayload, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { failOnSocketLoss } from '../websocket/request-response';
 import { websocketService } from '@/lib/websocket-service';
 import { eventEmitter } from '@/lib/event-emitter';
@@ -80,9 +80,10 @@ export class WorkspaceService implements ProtocolSender {
   public updateWorkspaceProfile(workspaceId: string, change: WorkspaceProfileChange): Promise<void> { return updateWorkspaceProfile(this, workspaceId, change); }
 
   // Member operations
-  public addMember(userId: string, role: MemberRole, domainId?: string, metadata?: Uint8Array): Promise<void> { return members.addMember(this, userId, role, domainId, metadata); }
+  public addMember(userId: string, role: string, domainId?: string, metadata?: Uint8Array): Promise<void> { return members.addMember(this, userId, role, domainId, metadata); }
   public getMember(userId: string): Promise<void> { return members.getMember(this, userId); }
-  public updateMemberRole(userId: string, role: MemberRole, metadata?: Uint8Array): Promise<unknown> { return members.updateMemberRole(this, userId, role, metadata); }
+  public updateMemberRole(userId: string, role: string, metadata?: Uint8Array): Promise<unknown> { return members.updateMemberRole(this, userId, role, metadata); }
+  public setBanned(userId: string, banned: boolean): Promise<unknown> { return members.setBanned(this, userId, banned); }
   public updateMemberPermissions(userId: string, domainId: string, perms: Permission[], op: UpdateOperation): Promise<void> { return members.updateMemberPermissions(this, userId, domainId, perms, op); }
   public removeMember(userId: string, domainId?: string): Promise<void> { return members.removeMember(this, userId, domainId); }
   public listMembers(domainId?: string): Promise<void> { return members.listMembers(this, domainId); }

@@ -1,9 +1,12 @@
 use common::async_test_helpers::*;
+use common::roles_fixture::{
+    with_role, Standing, ADMIN_ROLE_ID, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID,
+};
 use common::workspace_test_utils::*;
 
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{NodeEntityType, Permission, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, User};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 #[tokio::test]
@@ -12,22 +15,19 @@ async fn test_role_operations() {
     let root_workspace_id = WORKSPACE_ROOT_ID.to_string();
 
     // Create users with different roles
-    let admin_user = User::new(
-        "admin_user".to_string(),
-        "Admin User".to_string(),
-        UserRole::Admin,
+    let admin_user = with_role(
+        User::new("admin_user".to_string(), "Admin User".to_string()),
+        ADMIN_ROLE_ID,
     );
 
-    let member_user = User::new(
-        "member_user".to_string(),
-        "Member User".to_string(),
-        UserRole::Member,
+    let member_user = with_role(
+        User::new("member_user".to_string(), "Member User".to_string()),
+        MEMBER_ROLE_ID,
     );
 
-    let guest_user = User::new(
-        "guest_user".to_string(),
-        "Guest User".to_string(),
-        UserRole::Guest,
+    let guest_user = with_role(
+        User::new("guest_user".to_string(), "Guest User".to_string()),
+        GUEST_ROLE_ID,
     );
 
     // Insert users
@@ -58,7 +58,10 @@ async fn test_role_operations() {
         .backend_tx_manager
         .insert_user(
             "owner".to_string(),
-            User::new("owner".to_string(), "Owner".to_string(), UserRole::Owner),
+            with_role(
+                User::new("owner".to_string(), "Owner".to_string()),
+                OWNER_ROLE_ID,
+            ),
         )
         .await
         .unwrap();
@@ -103,16 +106,16 @@ async fn test_role_operations() {
         ("guest_user", "Guest"),
     ] {
         let role = match role_name {
-            "Admin" => UserRole::Admin,
-            "Member" => UserRole::Member,
-            "Guest" => UserRole::Guest,
+            "Admin" => ADMIN_ROLE_ID,
+            "Member" => MEMBER_ROLE_ID,
+            "Guest" => GUEST_ROLE_ID,
             _ => panic!("Unknown role"),
         };
 
         let add_member_cmd = WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: Some(office_id.clone()),
-            role: role.clone().into(),
+            role: role.to_string(),
             metadata: None,
         };
 
@@ -137,7 +140,7 @@ async fn test_role_operations() {
     match response {
         WorkspaceProtocolResponse::Member(member) => {
             assert_eq!(member.id, "admin_user");
-            assert!(matches!(member.role, UserRole::Admin));
+            assert_eq!(member.standing(), ADMIN_ROLE_ID);
 
             let domain_permissions = member
                 .permissions
@@ -160,7 +163,7 @@ async fn test_role_operations() {
     match response {
         WorkspaceProtocolResponse::Member(member) => {
             assert_eq!(member.id, "member_user");
-            assert!(matches!(member.role, UserRole::Member));
+            assert_eq!(member.standing(), MEMBER_ROLE_ID);
 
             let domain_permissions = member
                 .permissions
@@ -190,7 +193,7 @@ async fn test_role_operations() {
     match response {
         WorkspaceProtocolResponse::Member(member) => {
             assert_eq!(member.id, "guest_user");
-            assert!(matches!(member.role, UserRole::Guest));
+            assert_eq!(member.standing(), GUEST_ROLE_ID);
 
             let domain_permissions = member
                 .permissions

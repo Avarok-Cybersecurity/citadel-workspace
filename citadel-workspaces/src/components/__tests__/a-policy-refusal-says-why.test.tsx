@@ -23,7 +23,7 @@ afterEach((): void => { cleanup(); toast.mockClear(); });
 function Harness({ acceptsRequestsFromStrangers }: { acceptsRequestsFromStrangers: boolean | undefined }): JSX.Element {
   const base: ReturnType<typeof useWorkspace>['state'] = useWorkspace().state;
   const bob: WorkspaceMember = {
-    id: 'bob', username: 'bob', displayName: 'Bob Brown', isOnline: null,
+    id: 'bob', username: 'bob', displayName: 'Bob Brown', isOnline: null, banned: false,
     createdAt: 0, updatedAt: 0, acceptsRequestsFromStrangers,
   };
   return (

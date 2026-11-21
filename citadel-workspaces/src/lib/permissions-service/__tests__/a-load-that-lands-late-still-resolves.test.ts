@@ -35,7 +35,6 @@ const ASKED_AT: number = 1;
 function permissions(): DomainPermissionEntry {
   return {
     domainId: DOMAIN,
-    role: 'Admin',
     permissions: new Set(),
     lastUpdated: 0,
   } as unknown as DomainPermissionEntry;

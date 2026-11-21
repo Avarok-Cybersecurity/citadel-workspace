@@ -36,6 +36,7 @@ fn a_stored_user_still_loads() {
     let user: User = serde_json::from_str(&fixture("user.json"))
         .expect("a User no longer reads as stored -- bump CURRENT_SCHEMA_VERSION and re-record");
     assert_eq!(user.id, "alice");
+    assert!(!user.is_banned());
     assert_eq!(user.name, "Alice");
 }
 

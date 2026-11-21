@@ -7,16 +7,17 @@
 //! UpdateMemberPermissions -- so that Member could then add anyone, themselves
 //! included, as the workspace's Owner.
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use citadel_workspace_types::UpdateOperation;
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::roles_fixture::{Standing, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 
 /// A Member an Admin has trusted with AddUsers at the root.
 async fn a_member_who_may_add_people(kernel: &Kernel) {
-    insert_user_with_role(kernel, "alice", UserRole::Member).await;
+    insert_user_with_role(kernel, "alice", MEMBER_ROLE_ID).await;
     join_root(kernel, "alice").await;
     kernel
         .domain_operations
@@ -29,10 +30,10 @@ async fn a_member_who_may_add_people(kernel: &Kernel) {
         )
         .await
         .expect("an admin may grant AddUsers");
-    insert_user_with_role(kernel, "newcomer", UserRole::Member).await;
+    insert_user_with_role(kernel, "newcomer", MEMBER_ROLE_ID).await;
 }
 
-async fn role_of(kernel: &Kernel, user: &str) -> UserRole {
+async fn role_of(kernel: &Kernel, user: &str) -> String {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -40,7 +41,7 @@ async fn role_of(kernel: &Kernel, user: &str) -> UserRole {
         .await
         .expect("read user")
         .expect("user exists")
-        .role
+        .standing()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -51,7 +52,7 @@ async fn a_member_cannot_make_anyone_the_first_owner() {
     // Precondition: AddUsers is really held, so the grant rule is what refuses.
     let added = kernel
         .domain_operations
-        .add_user_to_domain("alice", "newcomer", ROOT, UserRole::Guest.into())
+        .add_user_to_domain("alice", "newcomer", ROOT, GUEST_ROLE_ID.to_string())
         .await;
     assert!(
         added.is_ok(),
@@ -60,10 +61,10 @@ async fn a_member_cannot_make_anyone_the_first_owner() {
 
     let outcome = kernel
         .domain_operations
-        .add_user_to_domain("alice", "newcomer", ROOT, UserRole::Owner.into())
+        .add_user_to_domain("alice", "newcomer", ROOT, OWNER_ROLE_ID.to_string())
         .await;
     assert!(outcome.is_err(), "a Member filled the vacant Owner seat");
-    assert_ne!(role_of(&kernel, "newcomer").await, UserRole::Owner);
+    assert_ne!(role_of(&kernel, "newcomer").await, OWNER_ROLE_ID);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -73,21 +74,26 @@ async fn a_member_cannot_make_themselves_the_first_owner() {
 
     let outcome = kernel
         .domain_operations
-        .add_user_to_domain("alice", "alice", ROOT, UserRole::Owner.into())
+        .add_user_to_domain("alice", "alice", ROOT, OWNER_ROLE_ID.to_string())
         .await;
     assert!(outcome.is_err(), "a Member made themselves Owner");
-    assert_eq!(role_of(&kernel, "alice").await, UserRole::Member);
+    assert_eq!(role_of(&kernel, "alice").await, MEMBER_ROLE_ID);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_admin_still_fills_the_vacant_owner_seat() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "newcomer", UserRole::Member).await;
+    insert_user_with_role(&kernel, "newcomer", MEMBER_ROLE_ID).await;
 
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "newcomer", ROOT, UserRole::Owner.into())
+        .add_user_to_domain(
+            TEST_ADMIN_USER_ID,
+            "newcomer",
+            ROOT,
+            OWNER_ROLE_ID.to_string(),
+        )
         .await
         .expect("an Admin appoints the first Owner");
-    assert_eq!(role_of(&kernel, "newcomer").await, UserRole::Owner);
+    assert_eq!(role_of(&kernel, "newcomer").await, OWNER_ROLE_ID);
 }

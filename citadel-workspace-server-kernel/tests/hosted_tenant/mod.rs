@@ -12,10 +12,10 @@ use citadel_internal_service_types::{
     InternalServiceRequest, InternalServiceResponse, MessageNotification, SecurityLevel,
 };
 use citadel_sdk::prelude::*;
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
+use common::roles_fixture::Standing;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -109,7 +109,7 @@ pub async fn role_of(
     from: &mut FromAgent,
     cid: u64,
     user: &str,
-) -> Result<UserRole, Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     // The kernel enrols an account from its ConnectSuccess event, which can land after the
     // agent reported the connection; retry "not found" only.
     for _ in 0..20 {
@@ -129,7 +129,7 @@ pub async fn role_of(
         )
         .await?;
         match response {
-            WorkspaceProtocolResponse::Member(member) => return Ok(member.role),
+            WorkspaceProtocolResponse::Member(member) => return Ok(member.standing()),
             WorkspaceProtocolResponse::Error(e) if e.contains("not found") => {
                 tokio::time::sleep(Duration::from_millis(250)).await
             }

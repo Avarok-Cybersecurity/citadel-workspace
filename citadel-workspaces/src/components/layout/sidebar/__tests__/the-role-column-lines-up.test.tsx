@@ -8,17 +8,20 @@
  * every row and has the same sizing classes. The geometric check is the
  * round's browser verification.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { MemberListItems } from '../MemberListItems';
 import type { WorkspaceMember } from '@/types/workspace-entities';
+import { resetRoles } from '@/lib/workspace-roles/roles-store';
+import { loadRoleTable } from '@/test-utils/loaded-role-table';
+import { SEED } from '@/test-utils/role-table';
 
 const SIZING: readonly string[] = ['tap-target', 'h-6', 'w-6', 'shrink-0'];
 
-function member(username: string, role: string): WorkspaceMember {
-  return { id: username, username, displayName: username, role, isOnline: true } as WorkspaceMember;
+function member(username: string, roleId: string): WorkspaceMember {
+  return { id: username, username, displayName: username, banned: false, roleId, isOnline: true } as WorkspaceMember;
 }
 
 function renderRows(members: WorkspaceMember[], currentUsername: string): void {
@@ -36,6 +39,9 @@ function trailingBox(username: string): Element {
   if (!row?.lastElementChild) throw new Error(`row for ${username} has no trailing box`);
   return row.lastElementChild;
 }
+
+beforeEach(async (): Promise<void> => { await loadRoleTable(SEED); });
+afterEach(resetRoles);
 
 describe('the sidebar member list', () => {
   it('ends your own row in a slot the same size as everyone else’s actions button', () => {

@@ -18,7 +18,7 @@ import { WorkspaceProvider, type WorkspaceState } from '@/contexts/WorkspaceCont
 import { MemberListItems } from '@/components/layout/sidebar/MemberListItems';
 import type { WorkspaceMember } from '@/types/workspace-entities';
 
-const THOMAS: WorkspaceMember = { id: 'thomas', username: 'thomas', displayName: 'Thomas Braun', role: 'admin', isOnline: true } as WorkspaceMember;
+const THOMAS: WorkspaceMember = { id: 'thomas', username: 'thomas', displayName: 'Thomas Braun', banned: false, roleId: 'admin', isOnline: true } as WorkspaceMember;
 
 function stateWith(member: WorkspaceMember, currentUserAvatar?: string): WorkspaceState {
   return {

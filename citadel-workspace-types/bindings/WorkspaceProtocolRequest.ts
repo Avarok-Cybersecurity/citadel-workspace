@@ -4,7 +4,6 @@ import type { ChatAttachmentsRequest } from "./ChatAttachmentsRequest";
 import type { ChatDocumentsRequest } from "./ChatDocumentsRequest";
 import type { DocumentsRequest } from "./DocumentsRequest";
 import type { GroupMessageType } from "./GroupMessageType";
-import type { MemberRole } from "./MemberRole";
 import type { MessagingTrustRequest } from "./MessagingTrustRequest";
 import type { NodeEntityType } from "./NodeEntityType";
 import type { Permission } from "./Permission";
@@ -33,11 +32,19 @@ workspace_id: string | null, workspace_master_password: string, } } | { "AddMemb
 /**
  * Domain (node) to add the member to. None defaults to workspace root.
  */
-domain_id: string | null, role: MemberRole, metadata: Array<number> | null, } } | { "GetMember": { user_id: string, } } | { "UpdateMemberRole": { user_id: string, role: MemberRole, metadata: Array<number> | null, } } | { "UpdateMemberPermissions": { user_id: string, domain_id: string, permissions: Array<Permission>, operation: UpdateOperation, } } | { "RemoveMember": { user_id: string, 
+domain_id: string | null, 
+/**
+ * The id of a role in the workspace's table.
+ */
+role: string, metadata: Array<number> | null, } } | { "GetMember": { user_id: string, } } | { "UpdateMemberRole": { user_id: string, 
+/**
+ * The id of a role in the workspace's table.
+ */
+role: string, metadata: Array<number> | null, } } | { "UpdateMemberPermissions": { user_id: string, domain_id: string, permissions: Array<Permission>, operation: UpdateOperation, } } | { "RemoveMember": { user_id: string, 
 /**
  * Domain (node) to remove the member from. None defaults to workspace root.
  */
-domain_id: string | null, } } | { "ListMembers": { 
+domain_id: string | null, } } | { "Ban": { user_id: string, } } | { "Unban": { user_id: string, } } | { "ListMembers": { 
 /**
  * Domain (node) to list members for. None defaults to workspace root.
  */

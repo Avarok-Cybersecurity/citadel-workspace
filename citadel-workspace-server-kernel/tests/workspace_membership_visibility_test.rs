@@ -1,5 +1,5 @@
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::MEMBER_ROLE_ID;
 
 use common::async_test_helpers::*;
 use common::member_test_utils::insert_user_with_role;
@@ -41,14 +41,14 @@ async fn roster<R: citadel_sdk::prelude::Ratchet>(
 async fn added_member_appears_in_the_roster() {
     let kernel = create_test_kernel().await;
     // A registered account: AddMember admits no other.
-    insert_user_with_role(&kernel, "roster_probe_user", UserRole::Member).await;
+    insert_user_with_role(&kernel, "roster_probe_user", MEMBER_ROLE_ID).await;
 
     let response = execute_command(
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "roster_probe_user".to_string(),
             domain_id: None, // workspace root
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         },
     )
@@ -84,14 +84,14 @@ async fn added_member_appears_in_the_roster() {
 async fn removed_member_leaves_the_roster() {
     let kernel = create_test_kernel().await;
     // A registered account: AddMember admits no other.
-    insert_user_with_role(&kernel, "departing_user", UserRole::Member).await;
+    insert_user_with_role(&kernel, "departing_user", MEMBER_ROLE_ID).await;
 
     execute_command(
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "departing_user".to_string(),
             domain_id: None,
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         },
     )

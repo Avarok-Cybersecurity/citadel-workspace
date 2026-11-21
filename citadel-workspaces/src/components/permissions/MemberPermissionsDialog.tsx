@@ -58,7 +58,7 @@ export function MemberPermissionsDialog({ open, onClose, member, domainId }: Mem
   const name: string = member.displayName || member.username;
   // The role the server reports at this level, once it has; the roster's until then.
   const role: RoleHolder = editor.targetLoad.status === 'loaded'
-    ? { roleId: editor.targetLoad.roleId ?? undefined, role: editor.targetLoad.role }
+    ? { roleId: editor.targetLoad.roleId ?? undefined, banned: member.banned }
     : member;
   const where: string = levelPhrase(editor.target);
   const count: number = changeCount(editor.changes);

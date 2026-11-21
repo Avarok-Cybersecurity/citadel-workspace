@@ -112,7 +112,7 @@ export function useMemberEventSetup({ setState }: UseMemberEventSetupProps): voi
                 id,
                 username: member.username || id,
                 displayName: member.displayName || member.username || id,
-                role: member.role,
+                banned: member.banned,
                 roleId: member.roleId,
                 avatarUrl: member.avatarUrl, email: member.email, title: member.title, acceptsRequestsFromStrangers: member.acceptsRequestsFromStrangers,
                 showProfileToStrangers: member.showProfileToStrangers, showsOnlineStatus: member.showsOnlineStatus,
@@ -153,16 +153,17 @@ export function useMemberEventSetup({ setState }: UseMemberEventSetupProps): voi
       // `members:reload`, emitted from the write path once the server confirms.
 
       // Member role updated event
-      keep(workspaceEvents.onMemberEvent('member:role-updated', (payload: { userId: string; role: string; roleId: string | null; connection: ConnectionInfo }) => {
-        debugLog('UseMemberEventSetup', 'Member role updated:', payload.userId, payload.role);
+      keep(workspaceEvents.onMemberEvent('member:role-updated', (payload: { userId: string; roleId: string | null; connection: ConnectionInfo }) => {
+        debugLog('UseMemberEventSetup', 'Member role updated:', payload.userId, payload.roleId);
         setState(prev => {
           // Update currentUser's role if it matches
           let updatedCurrentUser: WorkspaceEventState['currentUser'] = prev.currentUser;
           if (prev.currentUser && (prev.currentUser.username === payload.userId || prev.currentUser.id === payload.userId)) {
             debugLog('UseMemberEventSetup', `Updating current user role to: ${payload.roleId ?? 'none'}`);
+            // The remembered name described the role before this change; the table names the new one.
             updatedCurrentUser = {
               ...prev.currentUser,
-              role: payload.role,
+              role: undefined,
               roleId: payload.roleId ?? undefined,
             };
 
@@ -175,8 +176,8 @@ export function useMemberEventSetup({ setState }: UseMemberEventSetupProps): voi
       }));
 
       // User permissions loaded event - updates currentUser's role
-      keep(workspaceEvents.onMemberEvent('user:permissions:loaded', (payload: { userId: string; role: string; roleId: string | null; connection?: ConnectionInfo }) => {
-        debugLog('UseMemberEventSetup', 'User permissions loaded:', payload.userId, payload.role);
+      keep(workspaceEvents.onMemberEvent('user:permissions:loaded', (payload: { userId: string; roleId: string | null; connection?: ConnectionInfo }) => {
+        debugLog('UseMemberEventSetup', 'User permissions loaded:', payload.userId, payload.roleId);
         setState(prev => {
           // Update currentUser's role if it matches
           let updatedCurrentUser: WorkspaceEventState['currentUser'] = prev.currentUser;
@@ -191,13 +192,12 @@ export function useMemberEventSetup({ setState }: UseMemberEventSetupProps): voi
           );
 
           if (isCurrentUser && prev.currentUser) {
-            debugLog('UseMemberEventSetup', `Updating current user role from permissions to: ${payload.role}`);
+            debugLog('UseMemberEventSetup', `Updating current user role from permissions to: ${payload.roleId ?? 'none'}`);
             updatedCurrentUser = {
               ...prev.currentUser,
               // Also update username if it was 'Loading...'
               username: isPlaceholderName(prev.currentUser.username) ? payload.userId : prev.currentUser.username,
               id: isPlaceholderName(prev.currentUser.id) ? payload.userId : prev.currentUser.id,
-              role: payload.role,
               roleId: payload.roleId ?? undefined,
             };
 

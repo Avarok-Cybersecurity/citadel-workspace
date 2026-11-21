@@ -16,10 +16,9 @@
 use citadel_sdk::prelude::MonoRatchet;
 use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
-use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, User, UserRole,
-};
+use citadel_workspace_types::structs::{DomainNode, DomainPermissions, NodeEntityType, User};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{roles_for, BANNED, GUEST_ROLE_ID, MEMBER_ROLE_ID};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::collections::HashMap;
 
@@ -36,10 +35,10 @@ const OUTSIDER: &str = "not_in_this_workspace";
 type Kernel = AsyncWorkspaceServerKernel<MonoRatchet>;
 
 async fn add_user(kernel: &Kernel, id: &str) {
-    add_user_with_role(kernel, id, UserRole::Member).await
+    add_user_with_role(kernel, id, MEMBER_ROLE_ID).await
 }
 
-async fn add_user_with_role(kernel: &Kernel, id: &str, role: UserRole) {
+async fn add_user_with_role(kernel: &Kernel, id: &str, role: &str) {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -48,8 +47,8 @@ async fn add_user_with_role(kernel: &Kernel, id: &str, role: UserRole) {
             User {
                 id: id.to_string(),
                 name: id.to_string(),
-                role,
-                workspace_roles: Default::default(),
+                banned: role == BANNED,
+                workspace_roles: roles_for(role),
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },
@@ -335,7 +334,7 @@ async fn membership_of_the_parent_still_grants_the_childs_chat() {
 /// is about whether the account may write at all.
 async fn seed_guest_in_room(kernel: &Kernel) {
     add_user(kernel, MEMBER).await;
-    add_user_with_role(kernel, GUEST, UserRole::Guest).await;
+    add_user_with_role(kernel, GUEST, GUEST_ROLE_ID).await;
     add_room_with_chat(kernel).await;
 
     // In the room, so this is purely about the role and not about membership.

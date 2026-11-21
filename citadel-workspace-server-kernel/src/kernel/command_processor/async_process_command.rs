@@ -384,7 +384,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     };
                     // Scoped to workspace members. A named user's GLOBAL role went
                     // to every session on the box -- other workspaces included, and
-                    // a member set to Banned too, since nothing closes their socket.
+                    // banned members too, since nothing closes their socket.
                     kernel.broadcast_to_workspace(
                         notification.clone(),
                         requester_cid,
@@ -505,6 +505,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             }
         }
 
+        WorkspaceProtocolRequest::Ban { user_id } => {
+            super::bans::ban(kernel, actor_user_id, requester_cid, user_id).await
+        }
+
+        WorkspaceProtocolRequest::Unban { user_id } => {
+            super::bans::unban(kernel, actor_user_id, requester_cid, user_id).await
+        }
+
         WorkspaceProtocolRequest::ListMembers { domain_id } => {
             let target_id = domain_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
 
@@ -534,8 +542,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 // Same propagation the node readers needed: `get_workspace`
                 // learned to ask ViewContent and its siblings did not.
                 // ViewMembers, not ViewContent: seeing who else is here is its own
-                // permission (every role that can access a node holds it; Banned
-                // holds nothing).
+                // permission (every role that can access a node holds it; a
+                // banned account holds nothing).
                 let may_view = kernel
                     .domain_ops()
                     .check_entity_permission(
@@ -781,7 +789,6 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         role_id: user
                             .role_id_in(crate::WORKSPACE_ROOT_ID)
                             .map(str::to_string),
-                        role: user.role.clone(),
                         permissions,
                     })
                 }
@@ -1711,6 +1718,5 @@ async fn role_update_notice<R: Ratchet + Send + Sync + 'static>(
         role_id: user
             .role_id_in(crate::WORKSPACE_ROOT_ID)
             .map(str::to_string),
-        new_role: user.role,
     })
 }

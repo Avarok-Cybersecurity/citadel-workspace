@@ -4,7 +4,6 @@
 
 use async_trait::async_trait;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::roles_protocol::MemberRole;
 use citadel_workspace_types::structs::{Permission, User};
 use citadel_workspace_types::UpdateOperation;
 
@@ -18,7 +17,7 @@ pub trait AsyncUserManagementOperations<R: Ratchet + Send + Sync + 'static>: Sen
         admin_id: &str,
         user_id_to_add: &str,
         domain_id: &str,
-        role: MemberRole,
+        role: String,
     ) -> Result<(), NetworkError>;
 
     /// Removes a user from a domain and revokes all associated permissions
@@ -34,7 +33,7 @@ pub trait AsyncUserManagementOperations<R: Ratchet + Send + Sync + 'static>: Sen
         &self,
         actor_user_id: &str,
         target_user_id: &str,
-        role: MemberRole,
+        role: String,
         metadata: Option<Vec<u8>>,
     ) -> Result<(), NetworkError>;
 

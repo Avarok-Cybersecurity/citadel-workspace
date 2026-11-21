@@ -5,8 +5,9 @@ use citadel_workspace_server_kernel::kernel::secure_links::target::{
     target_node_id, validate_target,
 };
 use citadel_workspace_types::secure_links::SecureLinksResponse;
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use common::member_test_utils::{member_holding, seed_role};
+use common::roles_fixture::{BANNED, GUEST_ROLE_ID, MEMBER_ROLE_ID};
 use common::secure_links_test_utils::{enrol, expires, links_kernel, members, try_create, HOUR_MS};
 
 const REFUSED: [&str; 17] = [
@@ -72,7 +73,7 @@ fn a_workspace_target_names_the_node_it_opens() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_bad_target_is_refused_when_the_link_is_made() {
     let kernel = links_kernel(50, 0).await;
-    enrol(&kernel, "alice", UserRole::Member).await;
+    enrol(&kernel, "alice", MEMBER_ROLE_ID).await;
     for target in REFUSED {
         let answer = try_create(
             &kernel,
@@ -103,9 +104,9 @@ async fn a_bad_target_is_refused_when_the_link_is_made() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn members_may_share_links_and_guests_may_not() {
     let kernel = links_kernel(50, 0).await;
-    enrol(&kernel, "alice", UserRole::Member).await;
-    enrol(&kernel, "gina", UserRole::Guest).await;
-    enrol(&kernel, "barred", UserRole::Banned).await;
+    enrol(&kernel, "alice", MEMBER_ROLE_ID).await;
+    enrol(&kernel, "gina", GUEST_ROLE_ID).await;
+    enrol(&kernel, "barred", BANNED).await;
     let make = |user: &'static str| {
         try_create(
             &kernel,

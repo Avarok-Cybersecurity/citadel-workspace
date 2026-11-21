@@ -10,7 +10,6 @@ use citadel_workspace_server_kernel::kernel::secure_links::quota::{FixedLinkQuot
 use citadel_workspace_types::secure_links::{
     LinkGrant, LinkLifetime, SecureLinkInfo, SecureLinksRequest, SecureLinksResponse,
 };
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use std::sync::Arc;
 
@@ -30,7 +29,7 @@ pub async fn links_kernel_with(quota: LinkQuota) -> Arc<GateKernel> {
 }
 
 /// `id`, a member of the workspace in `role`.
-pub async fn enrol(kernel: &GateKernel, id: &str, role: UserRole) {
+pub async fn enrol(kernel: &GateKernel, id: &str, role: &str) {
     insert_user_with_role(kernel, id, role).await;
     join_root(kernel, id).await;
 }

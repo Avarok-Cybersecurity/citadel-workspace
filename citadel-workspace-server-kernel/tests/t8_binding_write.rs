@@ -16,9 +16,10 @@ use citadel_workspace_server_kernel::kernel::profile_limits::check_profile_updat
 use citadel_workspace_server_kernel::kernel::profile_update::ProfileUpdate;
 use citadel_workspace_server_kernel::kernel::profile_visibility::{metadata_for_viewer, Viewer};
 use citadel_workspace_server_kernel::kernel::server_identity::hosted_identity;
-use citadel_workspace_types::structs::{MetadataValue, User, UserRole};
+use citadel_workspace_types::structs::{MetadataValue, User};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use common::identity_kat::{kat, seed, text};
+use common::roles_fixture::{with_role, MEMBER_ROLE_ID};
 use common::workspace_test_utils::create_configured_test_kernel;
 use std::sync::Arc;
 
@@ -148,7 +149,7 @@ async fn the_kernel_stores_a_verified_binding_and_a_stranger_reads_it() {
         .backend_tx_manager
         .insert_user(
             ALICE.into(),
-            User::new(ALICE.into(), "Alice".into(), UserRole::Member),
+            with_role(User::new(ALICE.into(), "Alice".into()), MEMBER_ROLE_ID),
         )
         .await
         .unwrap();

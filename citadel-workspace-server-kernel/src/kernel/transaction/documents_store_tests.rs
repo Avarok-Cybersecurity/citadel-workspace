@@ -14,7 +14,7 @@ use cdoc_crdt::{blank, ClientId};
 use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_types::documents::{DocumentsRequest, DocumentsResponse};
 use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, User, UserRole, Workspace,
+    DomainNode, DomainPermissions, NodeEntityType, User, Workspace,
 };
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use std::collections::HashMap;
@@ -70,7 +70,14 @@ async fn kernel() -> Kernel {
     };
     kernel.set_documents_relay(DocumentsRelay::new(limits).expect("limits"));
     let backend = &kernel.domain_operations.backend_tx_manager;
-    let admin = User::new("admin".to_string(), "Admin".to_string(), UserRole::Admin);
+    let admin = User {
+        workspace_roles: std::iter::once((
+            crate::WORKSPACE_ROOT_ID.to_string(),
+            citadel_workspace_types::roles::ADMIN_ROLE_ID.to_string(),
+        ))
+        .collect(),
+        ..User::new("admin".to_string(), "Admin".to_string())
+    };
     backend
         .insert_user("admin".to_string(), admin)
         .await

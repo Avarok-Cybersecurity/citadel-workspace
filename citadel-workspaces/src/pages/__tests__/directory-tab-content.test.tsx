@@ -14,7 +14,7 @@ import { DirectoryTabContent } from '../DirectoryTabContent';
 import type { MemberDisplay } from '../MemberListItem';
 
 const member = (id: string, isOnline: boolean): MemberDisplay =>
-  ({ id, displayName: `User ${id}`, isOnline, isSelf: false, isContact: false });
+  ({ id, displayName: `User ${id}`, banned: false, isOnline, isSelf: false, isContact: false });
 
 const noop: ReturnType<typeof vi.fn> = vi.fn();
 const handlers: Pick<ComponentProps<typeof DirectoryTabContent>, 'onSendMessage' | 'onInvite' | 'onSelect'> =

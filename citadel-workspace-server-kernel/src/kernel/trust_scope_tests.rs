@@ -3,7 +3,7 @@ use citadel_workspace_types::messaging_trust::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::messaging_trust::{
     MessagingTrustPolicy, DEFAULT_MESSAGING_TRUST_POLICY, MESSAGING_TRUST_POLICY_KEY,
 };
-use citadel_workspace_types::structs::{DomainNode, MetadataValue, User, UserRole};
+use citadel_workspace_types::structs::{DomainNode, MetadataValue, User};
 use citadel_workspace_types::structs::{DomainPermissions, NodeEntityType};
 use std::collections::HashMap;
 
@@ -42,8 +42,8 @@ fn tree() -> HashMap<String, DomainNode> {
     .collect()
 }
 
-fn user(id: &str, role: UserRole) -> User {
-    User::new(id.to_string(), id.to_string(), role)
+fn user(id: &str) -> User {
+    User::new(id.to_string(), id.to_string())
 }
 
 fn policy_on(id: &str) -> MessagingTrustPolicy {
@@ -84,7 +84,7 @@ fn a_missing_key_is_the_default_and_an_unreadable_one_is_strict() {
 
 #[test]
 fn a_personal_policy_round_trips_and_clears() {
-    let mut eve = user("eve", UserRole::Member);
+    let mut eve = user("eve");
     assert_eq!(personal_policy(&eve), None);
     set_personal_policy(&mut eve, Some(&policy_on("eng"))).expect("encodes");
     assert_eq!(personal_policy(&eve), Some(policy_on("eng")));
@@ -105,9 +105,9 @@ fn a_personal_policy_round_trips_and_clears() {
 #[test]
 fn trust_needs_both_inside_the_owners_effective_root() {
     let nodes = tree();
-    let eve = user("eve", UserRole::Member);
-    let bob = user("bob", UserRole::Member);
-    let sam = user("sam", UserRole::Member);
+    let eve = user("eve");
+    let bob = user("bob");
+    let sam = user("sam");
     let eng = policy_on("eng");
     assert!(trusts(&nodes, &eng, WORKSPACE_ROOT_ID, &[], &eve, &bob));
     assert!(!trusts(&nodes, &eng, WORKSPACE_ROOT_ID, &[], &eve, &sam));
@@ -119,8 +119,9 @@ fn a_banned_account_is_never_trusted() {
     let nodes = tree();
     let all = MessagingTrustPolicy::AllTrusted;
     let members = ["eve".to_string(), "mal".to_string()];
-    let eve = user("eve", UserRole::Member);
-    let mal = user("mal", UserRole::Banned);
+    let eve = user("eve");
+    let mut mal = user("mal");
+    mal.banned = true;
     assert!(!trusts(
         &nodes,
         &all,

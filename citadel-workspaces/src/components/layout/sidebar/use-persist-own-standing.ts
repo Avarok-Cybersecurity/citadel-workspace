@@ -34,7 +34,7 @@ export function useOwnStanding(): boolean {
   const { state } = useWorkspace();
   const manageRoles: UsePermissionResult = usePermission(WORKSPACE_ROOT_ID, 'ManageRoles');
   const administers: boolean = confirms(manageRoles);
-  const roleName: string | null = useRoleDisplay(state.currentUser?.roleId, state.currentUser?.role)?.name ?? null;
+  const roleName: string | null = useRoleDisplay({ roleId: state.currentUser?.roleId, role: state.currentUser?.role })?.name ?? null;
   // A known no is stored as false; a pending answer is not stored at all.
   usePersistOwnStanding(roleName, administers ? true : permits(manageRoles) ? null : false);
   return administers;

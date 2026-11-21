@@ -10,9 +10,8 @@
 // round apart.
 //
 // A role write is any of:
-//   - `assign_workspace_role(` with anything but `Assignment::Banned`
+//   - `assign_workspace_role(`
 //   - `workspace_roles.insert(` (rustfmt often puts `.insert(` on its own line)
-//   - the legacy `user.role = UserRole::Admin|Owner` / `= role`
 //
 // A gate is one of:
 //   - `is_bootstrap` / `root_exists`  — there is no workspace yet, so this
@@ -27,28 +26,19 @@
 //     default, which only `RoleChange::MakeDefault` sets, refused by
 //     `role_edits::update` unless the actor may assign it (or the seed, Member)
 //
-// A ban is not a promotion: `Assignment::Banned` only takes authority away.
-// Since roles are editable, Member or Guest can carry anything, so writing them
-// is a promotion like any other.
+// A ban is not a role write: `ban_record` only takes authority away. Since roles
+// are editable, Member or Guest can carry anything, so writing them is a
+// promotion like any other.
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
 const ROOT = 'citadel-workspace-server-kernel/src';
-// Two shapes, because the gate previously saw only the first and reported "all 3 promotions
-// are gated" while the door everyone actually walks through was the second. `user.role = role`
-// in write_user_role_locked is reached from add_user_to_domain and update_workspace_member_role;
-// a deleted `ensure_may_grant_role` above either of them left this check green.
-const LEGACY_PROMOTION = /\.role\s*=\s*(?:UserRole::(?:Admin|Owner)\b|\w*role\b)/;
 const ASSIGNS = /(?<!fn\s)\bassign_workspace_role\s*\(/;
 /// Whether line `i` writes a role. `assign_workspace_role`'s own body is not a site: every
 /// call to it is one, and is checked where it is made.
 function isRoleWrite(lines, i) {
   const code = lines[i].replace(/\/\/.*$/, '');
-  if (LEGACY_PROMOTION.test(code)) return true;
-  if (ASSIGNS.test(code)) {
-    const args = lines.slice(i, i + 4).join('\n');
-    return !/Assignment::Banned/.test(args);
-  }
+  if (ASSIGNS.test(code)) return true;
   const prev = (lines[i - 1] || '').replace(/\/\/.*$/, '');
   return /\.insert\s*\(/.test(code) && /workspace_roles\s*$|workspace_roles\s*\.insert/.test(
     /workspace_roles\s*\.insert/.test(code) ? code : prev,

@@ -1,4 +1,6 @@
 pub mod async_domain_server_ops;
+/// Banning and unbanning: a standing on the account record, not a role.
+pub mod bans;
 /// Past a direct grant: the role in the workspace, and a booking guest's live link.
 pub mod guest_access;
 /// The role an account joining on its own is given: the table's default.

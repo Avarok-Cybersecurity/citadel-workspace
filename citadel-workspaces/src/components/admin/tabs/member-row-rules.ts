@@ -5,11 +5,13 @@
  */
 import type { RoleDefinition, WorkspaceRoles } from 'citadel-workspace-client-ts';
 import {
-  assignableRoles, isOnlyManager, mayActOn, roleById,
+  assignableRoles, isOnlyManager, isOwnerRole, mayActOn, roleById,
 } from '@/lib/workspace-roles/role-ladder';
-import type { MemberRowRules } from './MemberRow';
+import { LAST_MANAGER_REASON, type MemberRowRules } from './MemberRow';
 
 export const NOT_BELOW_YOU_REASON: string = 'Their role is not below yours, so only someone above them can change it.';
+export const SELF_BAN_REASON: string = 'You cannot ban yourself.';
+export const OWNER_BAN_REASON: string = 'The Owner cannot be banned.';
 
 export interface RowLadder {
   table: WorkspaceRoles | null;
@@ -20,12 +22,17 @@ export interface RowLadder {
 
 export function memberRowRules(ladder: RowLadder, member: { roleId?: string }, isSelf: boolean): MemberRowRules {
   const { table, actor } = ladder;
-  if (table === null) return { roles: null, assignable: new Set(), isOnlyManager: false, actOnBlocked: null };
+  if (table === null) return { roles: null, assignable: new Set(), isOnlyManager: false, actOnBlocked: null, banBlocked: null };
   const target: RoleDefinition | null = roleById(table, member.roleId);
+  const onlyManager: boolean = ladder.memberRoleIds !== null && isOnlyManager(table, ladder.memberRoleIds, member.roleId);
+  const actOnBlocked: string | null = actor !== null && !mayActOn(actor, target, isSelf) ? NOT_BELOW_YOU_REASON : null;
   return {
     roles: table.roles,
     assignable: new Set(assignableRoles(table, actor, ladder.occupied).map((role: RoleDefinition): string => role.id)),
-    isOnlyManager: ladder.memberRoleIds !== null && isOnlyManager(table, ladder.memberRoleIds, member.roleId),
-    actOnBlocked: actor !== null && !mayActOn(actor, target, isSelf) ? NOT_BELOW_YOU_REASON : null,
+    isOnlyManager: onlyManager,
+    actOnBlocked,
+    banBlocked: isSelf ? SELF_BAN_REASON
+      : target !== null && isOwnerRole(target) ? OWNER_BAN_REASON
+        : actOnBlocked ?? (onlyManager ? LAST_MANAGER_REASON : null),
   };
 }

@@ -6,7 +6,7 @@
 use citadel_workspace_types::secure_links::{
     SecureLinksRequest, SecureLinksResponse, SECURE_LINK_MAX_TTL_MS,
 };
-use citadel_workspace_types::structs::UserRole;
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::secure_links_test_utils::{
     create, enrol, expires, links, links_kernel, members, now_ms, one_time, opened, resolve,
     try_create, HOUR_MS,
@@ -30,7 +30,7 @@ async fn make(
 async fn a_member_holds_their_own_allowance_and_no_more_without_a_pool() {
     for per_member in [5, 50] {
         let kernel = links_kernel(per_member, 0).await;
-        enrol(&kernel, "alice", UserRole::Member).await;
+        enrol(&kernel, "alice", MEMBER_ROLE_ID).await;
         for n in 0..per_member {
             assert!(
                 matches!(
@@ -54,7 +54,7 @@ async fn a_member_holds_their_own_allowance_and_no_more_without_a_pool() {
 async fn expired_and_spent_links_free_their_place() {
     let kernel = links_kernel(2, 0).await;
     for id in ["alice", "bob"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
     }
     let (_, spent) = create(
         &kernel,
@@ -80,7 +80,7 @@ async fn expired_and_spent_links_free_their_place() {
 async fn a_link_lives_at_most_thirty_days_however_it_is_extended() {
     let kernel = links_kernel(5, 0).await;
     for id in ["alice", "bob"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
     }
     let before = now_ms();
     let (info, _) = create(
@@ -133,7 +133,7 @@ async fn a_link_lives_at_most_thirty_days_however_it_is_extended() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_server_with_no_limit_makes_no_links() {
     let kernel = create_test_kernel().await;
-    enrol(&kernel, "alice", UserRole::Member).await;
+    enrol(&kernel, "alice", MEMBER_ROLE_ID).await;
     let answer = make(&kernel, "alice").await;
     assert!(
         matches!(&answer, Err(text) if text.contains("no secure-link limit")),

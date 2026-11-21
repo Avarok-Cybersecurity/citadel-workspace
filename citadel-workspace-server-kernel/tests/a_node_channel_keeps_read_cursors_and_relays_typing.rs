@@ -7,9 +7,9 @@
 use citadel_workspace_server_kernel::kernel::command_processor::group_read_cursors::READ_CURSOR_TOO_SOON;
 use citadel_workspace_server_kernel::kernel::command_processor::group_typing::TYPING_TOO_SOON;
 use citadel_workspace_types::group_chat::GroupReadCursor;
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use common::group_channel_test_utils::*;
+use common::roles_fixture::{GUEST_ROLE_ID, MEMBER_ROLE_ID};
 use common::workspace_test_utils::create_test_kernel;
 
 mod common {
@@ -36,9 +36,9 @@ fn typing() -> WorkspaceProtocolRequest {
 
 async fn room() -> (std::sync::Arc<Kernel>, String) {
     let kernel = create_test_kernel().await;
-    add_user_with_role(&kernel, MEMBER, UserRole::Member).await;
-    add_user_with_role(&kernel, GUEST, UserRole::Guest).await;
-    add_user_with_role(&kernel, OUTSIDER, UserRole::Member).await;
+    add_user_with_role(&kernel, MEMBER, MEMBER_ROLE_ID).await;
+    add_user_with_role(&kernel, GUEST, GUEST_ROLE_ID).await;
+    add_user_with_role(&kernel, OUTSIDER, MEMBER_ROLE_ID).await;
     add_room_with_chat(&kernel, &[MEMBER, GUEST]).await;
     let id = post(&kernel, MEMBER, MEMBER_CID).await;
     (kernel, id)

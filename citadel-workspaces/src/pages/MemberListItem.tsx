@@ -10,8 +10,8 @@ export interface MemberDisplay {
   displayName: string;
   avatarUrl?: string;
   email?: string;
-  /** The legacy role mirror, shown only when `roleId` is unknown. */
-  role?: string;
+  /** Banned from the workspace; shown in place of a role. */
+  banned: boolean;
   roleId?: string;
   /** Null: nobody has said. See lib/presence.ts. */
   isOnline: boolean | null;

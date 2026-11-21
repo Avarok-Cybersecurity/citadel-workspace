@@ -17,8 +17,7 @@
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_types::roles::{ADMIN_ROLE_ID, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID};
-use citadel_workspace_types::roles_protocol::MemberRole;
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::Permission;
 use common::member_test_utils::{
     insert_user_with_role, join_root, member_holding, role_id_of, seed_role, GateKernel as Kernel,
 };
@@ -51,15 +50,15 @@ async fn an_editor(kernel: &Kernel, id: &str) {
     member_holding(kernel, id, "editor").await;
 }
 
-fn id(role_id: &str) -> MemberRole {
-    MemberRole::Id(role_id.to_string())
+fn id(role_id: &str) -> String {
+    role_id.to_string()
 }
 
 async fn try_add_as(
     kernel: &Kernel,
     actor: &str,
     target: &str,
-    role: MemberRole,
+    role: String,
 ) -> Result<(), String> {
     kernel
         .domain_operations
@@ -72,7 +71,7 @@ async fn try_set_role_as(
     kernel: &Kernel,
     actor: &str,
     target: &str,
-    role: MemberRole,
+    role: String,
 ) -> Result<(), String> {
     kernel
         .domain_operations
@@ -104,7 +103,7 @@ async fn a_role_cannot_make_itself_an_admin() {
 async fn a_role_cannot_mint_an_admin_accomplice() {
     let kernel = create_test_kernel().await;
     an_editor(&kernel, "climber").await;
-    insert_user_with_role(&kernel, "accomplice", UserRole::Member).await;
+    insert_user_with_role(&kernel, "accomplice", MEMBER_ROLE_ID).await;
 
     assert!(
         try_add_as(&kernel, "climber", "accomplice", id(ADMIN_ROLE_ID))
@@ -113,7 +112,7 @@ async fn a_role_cannot_mint_an_admin_accomplice() {
         "granting Admin to someone else is the same escalation, one step longer",
     );
     assert!(
-        try_set_role_as(&kernel, "climber", "accomplice", UserRole::Admin.into())
+        try_set_role_as(&kernel, "climber", "accomplice", ADMIN_ROLE_ID.to_string())
             .await
             .is_err(),
         "nor through the legacy spelling of the role",
@@ -125,7 +124,7 @@ async fn a_role_cannot_mint_an_admin_accomplice() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_admin_cannot_appoint_a_peer() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    insert_user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
     let outcome = try_set_role_as(&kernel, TEST_ADMIN_USER_ID, "target", id(ADMIN_ROLE_ID)).await;
@@ -146,7 +145,7 @@ async fn position_without_the_permissions_does_not_assign_them() {
     let kernel = create_test_kernel().await;
     seed_role(&kernel, "steward", 400, EDITOR).await;
     member_holding(&kernel, "steward", "steward").await;
-    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    insert_user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
     let outcome = try_set_role_as(&kernel, "steward", "target", id(ADMIN_ROLE_ID)).await;
@@ -166,9 +165,9 @@ async fn position_without_the_permissions_does_not_assign_them() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_owner_may_grant_admin() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     join_root(&kernel, "owner").await;
-    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    insert_user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
     assert!(
@@ -188,7 +187,7 @@ async fn an_owner_may_grant_admin() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_admin_may_fill_a_vacant_owner_seat() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    insert_user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
     assert!(
@@ -196,7 +195,7 @@ async fn an_admin_may_fill_a_vacant_owner_seat() {
             &kernel,
             TEST_ADMIN_USER_ID,
             "target",
-            UserRole::Owner.into()
+            OWNER_ROLE_ID.to_string()
         )
         .await
         .is_ok(),
@@ -208,9 +207,9 @@ async fn an_admin_may_fill_a_vacant_owner_seat() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_admin_cannot_grant_owner_once_one_exists() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "founder", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "founder", OWNER_ROLE_ID).await;
     join_root(&kernel, "founder").await;
-    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    insert_user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
     assert!(
@@ -239,24 +238,13 @@ async fn a_lesser_role_cannot_fill_the_vacant_seat() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_role_that_is_not_in_the_table_is_refused() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    insert_user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
     assert!(
         try_set_role_as(&kernel, TEST_ADMIN_USER_ID, "target", id("role-nope"))
             .await
             .is_err()
-    );
-    assert!(
-        try_set_role_as(
-            &kernel,
-            TEST_ADMIN_USER_ID,
-            "target",
-            UserRole::Custom("editor".into(), 16).into()
-        )
-        .await
-        .is_err(),
-        "a legacy Custom role names nothing in the table and must not be guessed at",
     );
 }
 
@@ -265,7 +253,7 @@ async fn a_role_that_is_not_in_the_table_is_refused() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_admin_may_still_grant_the_roles_beneath_them() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    insert_user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
     let outcome = try_set_role_as(&kernel, TEST_ADMIN_USER_ID, "target", id(GUEST_ROLE_ID)).await;
@@ -279,12 +267,12 @@ async fn an_admin_may_still_grant_the_roles_beneath_them() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_owner_may_still_grant_the_roles_beneath_them() {
     let kernel = create_test_kernel().await;
-    insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
+    insert_user_with_role(&kernel, "owner", OWNER_ROLE_ID).await;
     join_root(&kernel, "owner").await;
-    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    insert_user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
-    let outcome = try_set_role_as(&kernel, "owner", "target", UserRole::Guest.into()).await;
+    let outcome = try_set_role_as(&kernel, "owner", "target", GUEST_ROLE_ID.to_string()).await;
     assert!(outcome.is_ok(), "{outcome:?}");
 }
 
@@ -294,7 +282,7 @@ async fn a_role_may_still_add_ordinary_members() {
     an_editor(&kernel, "climber").await;
 
     // A registered account: AddMember admits no other.
-    insert_user_with_role(&kernel, "newcomer", UserRole::Member).await;
+    insert_user_with_role(&kernel, "newcomer", MEMBER_ROLE_ID).await;
     let outcome = try_add_as(&kernel, "climber", "newcomer", id(MEMBER_ROLE_ID)).await;
     assert!(
         outcome.is_ok(),
@@ -313,7 +301,7 @@ async fn a_created_role_is_assigned_by_id() {
         &[Permission::ViewContent, Permission::EditMdx],
     )
     .await;
-    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    insert_user_with_role(&kernel, "target", MEMBER_ROLE_ID).await;
     join_root(&kernel, "target").await;
 
     let outcome = try_set_role_as(&kernel, TEST_ADMIN_USER_ID, "target", id("role-scribe")).await;

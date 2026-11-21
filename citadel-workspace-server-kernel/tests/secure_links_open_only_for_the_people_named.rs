@@ -7,7 +7,7 @@
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::roles::GUEST_ROLE_ID;
 use citadel_workspace_types::secure_links::{LinkGrant, SecureLinksResponse};
-use citadel_workspace_types::structs::UserRole;
+use common::roles_fixture::{BANNED, MEMBER_ROLE_ID};
 use common::secure_links_test_utils::{
     create, enrol, expires, links_kernel, members, one_time, opened, resolve, HOUR_MS,
 };
@@ -18,11 +18,11 @@ const TARGET: &str = "/workspace?nodeId=workspace-root";
 async fn each_kind_of_grant_admits_its_people_and_refuses_the_rest() {
     let kernel = links_kernel(50, 0).await;
     for (id, role) in [
-        ("alice", UserRole::Member),
-        ("bob", UserRole::Member),
-        ("carol", UserRole::Member),
-        ("gina", UserRole::Guest),
-        ("barred", UserRole::Banned),
+        ("alice", MEMBER_ROLE_ID),
+        ("bob", MEMBER_ROLE_ID),
+        ("carol", MEMBER_ROLE_ID),
+        ("gina", GUEST_ROLE_ID),
+        ("barred", BANNED),
     ] {
         enrol(&kernel, id, role).await;
     }
@@ -87,7 +87,7 @@ async fn each_kind_of_grant_admits_its_people_and_refuses_the_rest() {
 async fn a_one_time_link_is_spent_only_by_someone_it_admits() {
     let kernel = links_kernel(50, 0).await;
     for id in ["alice", "bob", "carol"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
     }
     let (_, token) = create(
         &kernel,
@@ -122,7 +122,7 @@ async fn a_one_time_link_is_spent_only_by_someone_it_admits() {
 async fn opened_at_once_a_one_time_link_opens_exactly_once() {
     let kernel = links_kernel(50, 0).await;
     for id in ["alice", "bob"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
     }
     for _ in 0..5 {
         let (_, token) = create(
@@ -153,7 +153,7 @@ async fn opened_at_once_a_one_time_link_opens_exactly_once() {
 async fn unknown_expired_spent_and_not_granted_are_one_answer() {
     let kernel = links_kernel(50, 0).await;
     for id in ["alice", "bob", "carol"] {
-        enrol(&kernel, id, UserRole::Member).await;
+        enrol(&kernel, id, MEMBER_ROLE_ID).await;
     }
     let (_, expired) = create(&kernel, "alice", TARGET, members(&["bob"]), expires(1)).await;
     let (_, spent) = create(

@@ -1,8 +1,9 @@
 use common::async_test_helpers::*;
+use common::roles_fixture::{with_role, MEMBER_ROLE_ID};
 use common::workspace_test_utils::*;
 
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{NodeEntityType, Permission, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, User};
 use citadel_workspace_types::{
     UpdateOperation, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
@@ -13,10 +14,9 @@ async fn test_permission_operations() {
     let root_workspace_id = WORKSPACE_ROOT_ID.to_string();
 
     // Create a regular user
-    let user = User::new(
-        "test_user".to_string(),
-        "Test User".to_string(),
-        UserRole::Member,
+    let user = with_role(
+        User::new("test_user".to_string(), "Test User".to_string()),
+        MEMBER_ROLE_ID,
     );
 
     kernel
@@ -49,7 +49,7 @@ async fn test_permission_operations() {
     let add_member_cmd = WorkspaceProtocolRequest::AddMember {
         user_id: "test_user".to_string(),
         domain_id: Some(office_id.clone()),
-        role: UserRole::Member.into(),
+        role: MEMBER_ROLE_ID.to_string(),
         metadata: Some("test_metadata".to_string().into_bytes()),
     };
 

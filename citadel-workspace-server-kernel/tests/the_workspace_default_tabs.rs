@@ -6,12 +6,13 @@
 
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission};
 use citadel_workspace_types::{
     UpdateOperation, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 use common::async_test_helpers::execute_command;
 use common::member_test_utils::create_test_user;
+use common::roles_fixture::MEMBER_ROLE_ID;
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_PASSWORD, TEST_ADMIN_USER_ID};
 use serde_json::{json, Value};
 
@@ -41,14 +42,14 @@ async fn member_of_an_office(
     kernel
         .domain_operations
         .backend_tx_manager
-        .insert_user(user.to_string(), create_test_user(user, UserRole::Member))
+        .insert_user(user.to_string(), create_test_user(user, MEMBER_ROLE_ID))
         .await
         .expect("insert user");
     for request in [
         WorkspaceProtocolRequest::AddMember {
             user_id: user.to_string(),
             domain_id: Some(office.id.clone()),
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         },
         WorkspaceProtocolRequest::UpdateMemberPermissions {

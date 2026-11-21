@@ -1,3 +1,4 @@
+use crate::roles_fixture::{roles_for, BANNED, MEMBER_ROLE_ID, OWNER_ROLE_ID};
 use citadel_internal_service::kernel::CitadelWorkspaceService;
 use citadel_internal_service_test_common::get_free_port;
 use citadel_internal_service_test_common::node_settings::TestNode;
@@ -8,7 +9,7 @@ use citadel_logging::info;
 use citadel_sdk::prelude::*;
 use citadel_workspace_server_kernel::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
 use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::structs::User;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
@@ -76,12 +77,12 @@ pub async fn new_internal_service_with_admin(
 /// - Specified user role
 /// - Empty permissions map (to be populated by tests)
 /// - Default metadata
-pub fn create_test_user(id: &str, role: UserRole) -> User {
+pub fn create_test_user(id: &str, role: &str) -> User {
     User {
         id: id.to_string(),
         name: format!("Test {}", id),
-        role,
-        workspace_roles: Default::default(),
+        banned: role == BANNED,
+        workspace_roles: roles_for(role),
         permissions: Default::default(),
         metadata: Default::default(),
     }
@@ -275,7 +276,7 @@ pub type GateKernel = AsyncWorkspaceServerKernel<citadel_sdk::prelude::MonoRatch
 /// Shared rather than copied: two gate-test files assert against the same
 /// fixture, and a fixture that drifts between them would let one file pass
 /// while the other tested something subtly different.
-pub async fn insert_user_with_role(kernel: &GateKernel, id: &str, role: UserRole) {
+pub async fn insert_user_with_role(kernel: &GateKernel, id: &str, role: &str) {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -328,7 +329,7 @@ pub async fn seed_role(
 
 /// A member of the root workspace holding table role `role_id`.
 pub async fn member_holding(kernel: &GateKernel, id: &str, role_id: &str) {
-    let mut user = create_test_user(id, UserRole::Member);
+    let mut user = create_test_user(id, MEMBER_ROLE_ID);
     user.workspace_roles.insert(
         citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
         role_id.to_string(),
@@ -358,6 +359,6 @@ pub async fn role_id_of(kernel: &GateKernel, id: &str) -> Option<String> {
 
 /// A member holding the Owner role, the only one above Admin: nobody else may act on an Admin.
 pub async fn an_owner(kernel: &GateKernel, id: &str) {
-    insert_user_with_role(kernel, id, UserRole::Owner).await;
+    insert_user_with_role(kernel, id, OWNER_ROLE_ID).await;
     join_root(kernel, id).await;
 }

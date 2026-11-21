@@ -14,11 +14,12 @@ use citadel_workspace_server_kernel::kernel::command_processor::async_process_co
 use citadel_workspace_server_kernel::kernel::documents::DocumentsRelay;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::documents::{DocumentsRequest, DocumentsResponse};
-use citadel_workspace_types::structs::{NodeEntityType, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, User};
 use citadel_workspace_types::WorkspaceProtocolRequest;
 use common::documents_test_utils::{
     documents, pulled, replayed, shipped_documents_config, Replica,
 };
+use common::roles_fixture::{with_role, ADMIN_ROLE_ID};
 use std::time::Duration;
 
 type Kernel = AsyncWorkspaceServerKernel<StackedRatchet>;
@@ -108,7 +109,10 @@ async fn the_log_and_its_snapshot_survive_a_restart() {
 
     let (kernel, task) = boot(&db).await;
     let backend = &kernel.domain_operations.backend_tx_manager;
-    let author = User::new(AUTHOR.to_string(), "Author".to_string(), UserRole::Admin);
+    let author = with_role(
+        User::new(AUTHOR.to_string(), "Author".to_string()),
+        ADMIN_ROLE_ID,
+    );
     backend
         .insert_user(AUTHOR.to_string(), author)
         .await

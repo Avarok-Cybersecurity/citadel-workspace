@@ -1,6 +1,7 @@
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
-use citadel_workspace_types::structs::{NodeEntityType, Permission, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, User};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use common::roles_fixture::{with_role, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID};
 
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
@@ -37,15 +38,14 @@ async fn test_permissions_inheritance() {
     let member_id = "member-user";
 
     // Create additional users (admin is already created by create_test_kernel)
-    let owner = User::new(
-        owner_id.to_string(),
-        "Owner User".to_string(),
-        UserRole::Owner,
+    let owner = with_role(
+        User::new(owner_id.to_string(), "Owner User".to_string()),
+        OWNER_ROLE_ID,
     );
-    let member = User::new(
-        member_id.to_string(),
-        "Member User".to_string(),
-        UserRole::Guest, // Start as guest, will be promoted to Member
+    // Starts as a Guest, and is promoted to Member.
+    let member = with_role(
+        User::new(member_id.to_string(), "Member User".to_string()),
+        GUEST_ROLE_ID,
     );
     kernel
         .domain_operations
@@ -66,7 +66,7 @@ async fn test_permissions_inheritance() {
         WorkspaceProtocolRequest::AddMember {
             user_id: owner_id.to_string(),
             domain_id: None,
-            role: UserRole::Owner.into(),
+            role: OWNER_ROLE_ID.to_string(),
             metadata: None,
         },
     )
@@ -79,7 +79,7 @@ async fn test_permissions_inheritance() {
         WorkspaceProtocolRequest::AddMember {
             user_id: member_id.to_string(),
             domain_id: None,
-            role: UserRole::Member.into(),
+            role: MEMBER_ROLE_ID.to_string(),
             metadata: None,
         },
     )

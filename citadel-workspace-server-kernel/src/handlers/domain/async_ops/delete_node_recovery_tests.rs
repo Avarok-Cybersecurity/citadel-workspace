@@ -22,7 +22,7 @@ use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainSer
 use crate::kernel::transaction::BackendTransactionManager;
 use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, User, UserRole, Workspace,
+    DomainNode, DomainPermissions, NodeEntityType, User, Workspace,
 };
 use citadel_workspace_types::{GroupMessage, GroupMessageType};
 use std::collections::HashMap;
@@ -32,8 +32,12 @@ fn admin() -> User {
     User {
         id: "admin".to_string(),
         name: "Admin".to_string(),
-        role: UserRole::Admin,
-        workspace_roles: Default::default(),
+        banned: false,
+        workspace_roles: std::iter::once((
+            crate::WORKSPACE_ROOT_ID.to_string(),
+            citadel_workspace_types::roles::ADMIN_ROLE_ID.to_string(),
+        ))
+        .collect(),
         permissions: HashMap::new(),
         metadata: HashMap::new(),
     }
