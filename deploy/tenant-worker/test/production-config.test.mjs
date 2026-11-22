@@ -3,11 +3,10 @@
  * (no stats: connections, row counts, entitlements, a claim-code fingerprint), tenants are reached
  * by subdomain only, and every host the routes send here reaches the Worker before any asset.
  */
-import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { dispatch } from "../control/dispatch.mjs";
 import { config } from "../control/http.mjs";
-import { createBody, freshSlug, outbound, post, production, productionEnv } from "./helpers.mjs";
+import { createBody, freshSlug, outbound, post, production, productionEnv, tenantObject } from "./helpers.mjs";
 import deployScript from "../deploy.sh?raw";
 
 const STATS_FIELDS = ["accepted", "connections", "stored", "entitlements", "master_password_sha256_prefix", "provisioned", "wasm_instance"];
@@ -80,7 +79,7 @@ describe("a tenant host under the production configuration", () => {
   });
   it("the object itself serves no stats, whatever the Worker's switch", async () => {
     const slug = await activeTenant();
-    const object = env.WORKSPACE.get(env.WORKSPACE.idFromName(slug));
+    const object = tenantObject(slug);
     await expectNothingSaid(await object.fetch(new Request(`https://${slug}.work.avarok.net/`)));
   });
 });

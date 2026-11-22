@@ -234,18 +234,45 @@ the directory. `--dry-run` builds without it, provisioning no first-party app.
 3. The D1 id is not the placeholder.
 4. The Stripe catalogue audit passes (read-only).
 5. `wrangler secret list` shows `TURNSTILE_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`.
-6. `wrangler d1 migrations apply citadel-control --remote`.
-7. `wrangler deploy`: the routes `work.avarok.net/*` and `*.work.avarok.net/*`, the assets, the
-   Durable Object migration `v1`.
-8. Smoke: `https://work.avarok.net/create` carries `citadel-control-plane=/api` and a CSP that
+6. `check-do-bindings.mjs`: no Durable Object class a migration deletes keeps a binding name the
+   live Worker binds to it (below), read-only against the API.
+7. `wrangler d1 migrations apply citadel-control --remote`.
+8. `wrangler deploy`: the routes `work.avarok.net/*` and `*.work.avarok.net/*`, the assets, the
+   Durable Object migrations not yet applied (`v1`; `v2`, the reset, below).
+9. Smoke: `https://work.avarok.net/create` carries `citadel-control-plane=/api` and a CSP that
    allows Turnstile; `https://smoke-probe.work.avarok.net/` answers `426`.
-9. Identity upgrade: waits, at most 20 minutes, until the registry holds no tenant still to be
+10. Identity upgrade: waits, at most 20 minutes, until the registry holds no tenant still to be
    upgraded to server identities (below), and fails naming any that remain. With none it passes at
    once.
 
 Then by hand: open `https://work.avarok.net/create`, create a free workspace (Turnstile renders
 and passes), then a paid one with Stripe's test card `4242 4242 4242 4242`; in the Stripe
 dashboard the webhook deliveries are `200`; `cfw tail citadel-tenant` shows the requests.
+
+## Deleting a Durable Object class
+
+Cloudflare's legacy migrations reference (developers.cloudflare.com/durable-objects/reference/
+durable-object-class-migrations-legacy): "Remove the binding for the class you wish to delete from
+the Wrangler configuration file", before a Delete migration runs. The API applies this by binding
+NAME against the live Worker: a deploy that deletes class C while keeping a binding of the name the
+live Worker binds to C is refused, `Cannot apply --delete-class migration to class 'C' without also
+removing the binding that references it. [code: 10061]`, even when the new config points that name
+at another class. `wrangler deploy --dry-run` does not see it; the upload does, after the build and
+the D1 migrations.
+
+So a class that replaces a deleted one takes a new binding name, in the same deploy as the delete:
+migration `v2` (the reset: every tenant object of `WorkspaceServer` deleted with its storage,
+tenants starting again on an empty `WorkspaceServerV2`) binds the new class as `WORKSPACE_V2`
+(`control/dispatch.mjs` `objectFor` is the one place it is read). One deploy applies it.
+Proven on 2026-11-21 on throwaway Workers and on `citadel-tenant-staging`: the shape with the name
+kept was refused with 10061; with `WORKSPACE_V2` it uploaded, `citadel-tenant-staging_WorkspaceServer`
+was gone and `citadel-tenant-staging_WorkspaceServerV2` existed, and a second deploy of the same
+config was a no-op. (Splitting it in two also works: one deploy adds the new class and moves the
+binding, a later tag deletes the old class; it costs a second production deploy.)
+
+`deploy.sh` reads the live Worker's bindings first (`check-do-bindings.mjs`, the rule in
+`do-binding-rule.mjs`, `test/do-binding-rule.test.mjs` with the refused shape as its control) and
+stops before touching D1 if the deploy would be refused.
 
 ## Rollback
 

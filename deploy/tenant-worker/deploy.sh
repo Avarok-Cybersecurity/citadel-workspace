@@ -16,7 +16,8 @@
 #                        A live key is refused by that script, so this deploys test mode only.
 #
 # Order: build (wasm, UI) -> local gates (vitest, stored-account compat, CSP parity) -> the D1 id
-# is real -> Stripe's catalogue matches -> every secret is set -> D1 migrations (remote) -> deploy
+# is real -> Stripe's catalogue matches -> every secret is set -> no deleted Durable Object class
+# keeps a live binding name -> D1 migrations (remote) -> deploy
 # -> smoke -> every tenant upgraded to server identities (by the Cron trigger; waited for here).
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -106,6 +107,11 @@ missing="$(printf '%s' "$SECRETS_JSON" | node -e '
   });' "${REQUIRED_SECRETS[@]}")"
 [ -z "$missing" ] || fail "secrets not set: $missing (wrangler secret put <NAME>; DEPLOY.md step 4)"
 echo "set: ${REQUIRED_SECRETS[*]}"
+
+say "Durable Objects: no deleted class keeps a live binding name"
+# The API refuses that (code 10061) only after the build and the D1 migrations, and the dry run
+# cannot see it, so ask the live Worker first (do-binding-rule.mjs; DEPLOY.md).
+CLOUDFLARE_API_TOKEN="$TOKEN" node "$HERE/check-do-bindings.mjs" ./wrangler.toml
 
 say "D1: migrations, remote"
 wr d1 migrations apply citadel-control --remote
