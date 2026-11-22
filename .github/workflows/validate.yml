@@ -63,8 +63,12 @@ jobs:
           fetch-depth: 0 # the agent-v* tags and the history between them
       - uses: ./.github/actions/no-nested-ui-repo
       - run: node --test scripts/lib/agent-release-decision.test.mjs
+      - run: node --test scripts/lib/released-versions.test.mjs scripts/lib/tag-action.test.mjs
       - run: node --test scripts/lib/lock-closure.test.mjs
-      - run: node scripts/agent-release-state.mjs --pr
+      # The published releases, not the tags, say what is released: read with the run's token.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/agent-release-state.mjs --pr
 
   fmt:
     name: Cargo Fmt - ${{ matrix.crate }}
@@ -322,6 +326,11 @@ jobs:
         with:
           submodules: recursive
       - uses: ./.github/actions/no-nested-ui-repo
+      # The certificate this leg compiles in (include_bytes!) must be valid now; the 30-day floor
+      # is for a build that is published (release-agent.yml), so a near-expiry certificate does
+      # not fail every PR, and an expired one does.
+      - name: The certificate compiled in is valid now
+        run: node scripts/verify-agent-certificate.mjs --floor-days 0
       # Dependencies only (rust-cache drops this workspace's own crates before saving), keyed on
       # the toolchain and every Cargo.lock/Cargo.toml. Most of this job's 40 minutes (run
       # 38056778313) is recompiling unchanged dependencies twice -- vendored OpenSSL among them,
@@ -384,6 +393,11 @@ jobs:
         with:
           submodules: recursive
       - uses: ./.github/actions/no-nested-ui-repo
+      # The certificate this leg compiles in (include_bytes!) must be valid now; the 30-day floor
+      # is for a build that is published (release-agent.yml), so a near-expiry certificate does
+      # not fail every PR, and an expired one does.
+      - name: The certificate compiled in is valid now
+        run: node scripts/verify-agent-certificate.mjs --floor-days 0
       - name: Add the target
         env:
           TARGET: ${{ matrix.target }}
@@ -462,8 +476,17 @@ jobs:
         run: node --test scripts/lib/publish-validation-decision.test.mjs
       - name: Preflight derives CI's gates, tiers a change, and plans merge previews correctly
         run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/changed-paths.test.mjs scripts/lib/merge-preview-planning.test.mjs
+      - name: A hook skips a gate only on a pass stamped over identical inputs
+        run: node --test scripts/lib/preflight-stamp.test.mjs scripts/lib/preflight-stamp-io.test.mjs
       - name: The flaky-spec report counts only attempts that failed
         run: node --test scripts/lib/retry-passes.test.mjs
+      - name: Every required check is produced, every release step has a PR twin, no dispatch is blind
+        # Reads the agent submodule's workflows too, which this job's recursive checkout provides.
+        run: node --test scripts/lib/workflow-graph.test.mjs scripts/lib/merge-blockers.test.mjs && node scripts/check-workflow-graph.mjs
+      - name: A workflow dispatch is verified by its run, never repeated after a POST that landed
+        run: node --test scripts/lib/dispatch-decision.test.mjs
+      - name: A certificate near expiry fails only a published build; an expired one fails every build
+        run: node --test scripts/lib/certificate-validity.test.mjs scripts/lib/certificate-coverage.test.mjs && node scripts/check-agent-certificate-is-verified.mjs
       - name: No shipped artefact carries a build machine's home directory
         run: node --test scripts/lib/home-paths.test.mjs && node scripts/check-no-home-paths-shipped.mjs
       - name: Every wasm-bindgen init call passes the single object the glue expects
@@ -1027,6 +1050,15 @@ jobs:
         run: node scripts/check-workspace-missing-parity.mjs
       - name: Check no shipped binary carries a test-only cargo feature
         run: node scripts/check-no-test-features-shipped.mjs
+      # Last in this job so a red here cannot hide the node gates above, and with its own
+      # toolchain: every other step of this job needs only node.
+      - uses: ./.github/actions/rust-toolchain
+      - name: Every tracked Cargo.lock resolves with --locked
+        # tools/telemetry-read and tools/coupon-admin reach the SDK through path deps, so a
+        # citadel_sdk re-pin elsewhere left their locks stale, and only their own build jobs said
+        # so (run 45010060046). This judges every tracked lock at once; ~35 s on an empty cargo
+        # cache, all of it crate downloads.
+        run: node --test scripts/lib/lockfile-completeness.test.mjs && node scripts/check-lockfiles-are-complete.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace

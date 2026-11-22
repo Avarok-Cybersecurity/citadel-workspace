@@ -23,6 +23,20 @@ test("a release that does not wait on the preflight is refused (the order of run
   assert.ok(problems.some((p) => p.includes("'plan' creates the release tag without waiting")), problems.join('\n'));
 });
 
+test('a tag made by the REST call, not the script, is still recognised and refused', () => {
+  const wf = workflow();
+  wf.jobs.plan.needs = undefined;
+  const step = wf.jobs.plan.steps.find((s) => typeof s.run === 'string' && s.run.includes('agent-release-tag.mjs'));
+  step.run = 'gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA"';
+  assert.ok(workflowProblems(wf).some((p) => p.includes("'plan' creates the release tag without waiting")));
+});
+
+test('a workflow whose tag step no rule recognises is refused, not passed', () => {
+  const wf = workflow();
+  for (const s of wf.jobs.plan.steps) if (typeof s.run === 'string') s.run = s.run.replace('scripts/agent-release-tag.mjs', 'scripts/place-tag.mjs');
+  assert.ok(workflowProblems(wf).some((p) => p.includes('no job creates the release tag')));
+});
+
 test('a deploy that runs after a failed preflight is refused', () => {
   const wf = workflow();
   wf.jobs.deploy.if = wf.jobs.deploy.if.replace("needs.site-preflight.result == 'success' && ", '');

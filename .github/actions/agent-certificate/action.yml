@@ -18,6 +18,13 @@ inputs:
   issue:
     description: "'true' for a real release (issue a fresh certificate); anything else builds with the committed one."
     required: true
+  floor-days:
+    description: >-
+      Days the certificate must still be valid: 30 for a build that will be published (the floor
+      smoke-agent.sh holds the packaged binary to), 0 ("valid now") for a dry run. An expired
+      certificate fails at every floor. A dry run (run 44941697947) failed the 30-day floor a month
+      before the committed certificate expired.
+    required: true
 runs:
   using: composite
   steps:
@@ -45,20 +52,12 @@ runs:
         dest=citadel-workspace-internal-service/tls
         cp "$live/fullchain.pem" "$dest/local.avarok.net.crt.pem"
         cp "$live/privkey.pem"   "$dest/local.avarok.net.key.pem"
+    # The name, the key pair, and the expiry against this build's floor (the script says why).
     - name: Verify what will be compiled in
       shell: bash
-      run: |
-        set -euo pipefail
-        dir=citadel-workspace-internal-service/tls
-        cert="$dir/local.avarok.net.crt.pem"; key="$dir/local.avarok.net.key.pem"
-        openssl x509 -in "$cert" -noout -ext subjectAltName | grep -q 'DNS:local.avarok.net'
-        # 30 days is the floor smoke-agent.sh enforces on the published binary.
-        openssl x509 -in "$cert" -noout -checkend $((30*86400)) \
-          || { echo "::error::the certificate expires within 30 days; renew it (renew-agent-tls.yml) or tag a release, which issues a fresh one."; exit 1; }
-        c="$(openssl x509 -in "$cert" -noout -pubkey | openssl md5)"
-        k="$(openssl pkey -in "$key" -pubout | openssl md5)"
-        [ "$c" = "$k" ] || { echo "::error::the certificate and key do not match."; exit 1; }
-        openssl x509 -in "$cert" -noout -enddate
+      env:
+        FLOOR_DAYS: ${{ inputs.floor-days }}
+      run: node scripts/verify-agent-certificate.mjs --floor-days "$FLOOR_DAYS"
     # The key is not a secret -- it ships inside the binary by design (see
     # BUILTIN_TLS_CERT in main.rs) -- so an artifact is the right carrier.
     - uses: actions/upload-artifact@v4

@@ -174,7 +174,7 @@ export function workflowEnv(text) {
   return blockPairs(lines.slice(start + 1, end < 0 ? undefined : end), 2);
 }
 
-/** Every job: its id, default directory, setup-node major, env, matrix rows and steps. */
+/** Every job: its id, name, job-level `uses:`, default directory, setup-node major, env, matrix rows and steps. */
 export function readJobs(text) {
   const lines = text.split('\n');
   const jobsAt = lines.findIndex((line) => /^jobs:\s*$/.test(line));
@@ -201,9 +201,12 @@ export function readJobs(text) {
     const envAt = header.findIndex((line) => /^ {4}env:\s*$/.test(line));
     const parsed = steps.map(readStep);
     const setup = parsed.find((s) => s.uses?.startsWith('actions/setup-node'));
+    const own = (key) => header.find((line) => line.startsWith(`    ${key}:`))?.slice(key.length + 5);
     const version = setup?.with['node-version'];
     return {
       id,
+      name: own('name') === undefined ? null : unquote(stripComment(own('name'))),
+      uses: own('uses') === undefined ? null : unquote(stripComment(own('uses'))),
       defaultWd: defaults ? unquote(defaults[1]) : null,
       nodeMajor: version ? Number.parseInt(version, 10) : null,
       env: envAt < 0 ? {} : blockPairs(header.slice(envAt + 1), 6),

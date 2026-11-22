@@ -72,6 +72,11 @@ permissions:
 # and the publish job alike, so they cannot disagree about whether this is a real release.
 env:
   RELEASE_REF: ${{ inputs.publish && format('refs/tags/{0}', inputs.tag) || github.ref }}
+  # Days the built-in certificate must outlive this build: 30 when it is published (the publish
+  # job's own condition), 0 -- valid now -- for a dry run, which publishes nothing. Read by the
+  # certificate job and by smoke-agent.sh in every leg. Run 44941697947, a dry run, failed the
+  # 30-day floor while the certificate still had a month to run.
+  MIN_CERT_DAYS: ${{ (startsWith(github.ref, 'refs/tags/agent-v') || inputs.publish) && '30' || '0' }}
 
 jobs:
   # The version every artefact is built as and checked against: Cargo.toml's, which a tag must
@@ -116,6 +121,7 @@ jobs:
         with:
           cloudflare-dns-api-token: ${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}
           issue: ${{ startsWith(env.RELEASE_REF, 'refs/tags/agent-v') }}
+          floor-days: ${{ env.MIN_CERT_DAYS }}
 
   build:
     needs: [certificate, version]

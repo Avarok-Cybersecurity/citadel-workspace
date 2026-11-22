@@ -40,7 +40,13 @@ function closure(jobs, name, seen = new Set()) {
 const steps = (job) => job.steps ?? [];
 const deployMode = (job) => steps(job).find((s) => s.uses === DEPLOY_ACTION)?.with?.mode;
 const publishes = (job) => typeof job.uses === 'string' && job.uses.includes('release-agent.yml');
-const tags = (job) => steps(job).some((s) => typeof s.run === 'string' && /git\/refs\b/.test(s.run));
+/**
+ * A step that creates or moves the agent's release tag: the REST call itself, or the script that
+ * makes it for deploy.yml's plan job. A tagging step neither matches is unchecked, so a workflow
+ * with no match at all is refused below rather than passed.
+ */
+export const TAGGERS = [/git\/refs\b/, /scripts\/agent-release-tag\.mjs\b/];
+const tags = (job) => steps(job).some((s) => typeof s.run === 'string' && TAGGERS.some((p) => p.test(s.run)));
 
 /** Problems with the workflow's job graph; none means the order holds. */
 export function workflowProblems(workflow) {
@@ -51,6 +57,7 @@ export function workflowProblems(workflow) {
   }
   const releases = Object.keys(jobs).filter((n) => publishes(jobs[n]));
   if (releases.length === 0) problems.push('no job publishes the agent (release-agent.yml); the rules below would check nothing');
+  if (!Object.keys(jobs).some((n) => tags(jobs[n]))) problems.push('no job creates the release tag (TAGGERS); the tag rule would check nothing');
   for (const name of Object.keys(jobs)) {
     const job = jobs[name];
     const upstream = closure(jobs, name);
