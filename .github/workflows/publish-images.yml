@@ -465,18 +465,36 @@ jobs:
           (needs.validate.result == 'success' ||
           (needs.validate.result == 'skipped' && needs.validation-gate.result == 'success' &&
            needs.validation-gate.outputs.validated == 'true')) }}
-    # One API call; this bounds a hang.
-    timeout-minutes: 5
+    # A few API calls and at most three one-minute windows of polling; this bounds a hang.
+    timeout-minutes: 10
     runs-on: ubuntu-24.04
     permissions:
-      actions: write # workflow_dispatch of deploy.yml, nothing else
+      actions: write # workflow_dispatch of deploy.yml, and listing its runs
+      contents: read # the sparse checkout of the dispatch script
     steps:
+      # When this job began, less a minute for the runner's clock against GitHub's: a "Deploy
+      # <sha>" run dispatched from then on is this job's (or its own earlier attempt's).
+      - id: since
+        run: echo "at=$(date -u -d '-1 minute' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      # The script, and deploy.yml for the run-name it finds the run by; nothing else.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/dispatch-workflow.mjs
+            scripts/lib/dispatch-decision.mjs
+            .github/workflows/deploy.yml
+          sparse-checkout-cone-mode: false
+      # Verified, not fire-and-forget: run 44966593936's `gh workflow run` died on an API i/o
+      # timeout and nobody could tell whether a deploy had started. The script looks before it
+      # dispatches and again after any failed POST, so a dispatch that landed is never repeated.
       - name: Dispatch Deploy for ${{ github.sha }}
         env:
           GH_TOKEN: ${{ github.token }}
+          SINCE: ${{ steps.since.outputs.at }}
         run: |
           set -euo pipefail
-          gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref master -f sha="$GITHUB_SHA"
+          node scripts/dispatch-workflow.mjs --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --ref master \
+            --since "$SINCE" --input sha="$GITHUB_SHA"
           echo "Deploy dispatched for $GITHUB_SHA; it refuses the commit if master has moved on."
 
   promote-latest:

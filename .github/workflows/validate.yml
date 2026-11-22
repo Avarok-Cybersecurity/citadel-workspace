@@ -464,6 +464,8 @@ jobs:
         run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/changed-paths.test.mjs scripts/lib/merge-preview-planning.test.mjs
       - name: The flaky-spec report counts only attempts that failed
         run: node --test scripts/lib/retry-passes.test.mjs
+      - name: A workflow dispatch is verified by its run, never repeated after a POST that landed
+        run: node --test scripts/lib/dispatch-decision.test.mjs
       - name: No shipped artefact carries a build machine's home directory
         run: node --test scripts/lib/home-paths.test.mjs && node scripts/check-no-home-paths-shipped.mjs
       - name: Every wasm-bindgen init call passes the single object the glue expects

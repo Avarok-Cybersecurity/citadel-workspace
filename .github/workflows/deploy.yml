@@ -20,6 +20,8 @@
 # no Docker, no GHCR). Publish Images' `deploy` job dispatches this with the validated commit as
 # soon as validation passes (or the gate proved the tree validated), in parallel with the publish.
 name: Deploy
+# The title scripts/dispatch-workflow.mjs finds a dispatch by: it renders this line from the inputs.
+run-name: Deploy ${{ inputs.sha || github.sha }}
 
 on:
   workflow_dispatch:
