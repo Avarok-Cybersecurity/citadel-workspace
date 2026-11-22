@@ -1027,6 +1027,15 @@ jobs:
         run: node scripts/check-workspace-missing-parity.mjs
       - name: Check no shipped binary carries a test-only cargo feature
         run: node scripts/check-no-test-features-shipped.mjs
+      # Last in this job so a red here cannot hide the node gates above, and with its own
+      # toolchain: every other step of this job needs only node.
+      - uses: ./.github/actions/rust-toolchain
+      - name: Every tracked Cargo.lock resolves with --locked
+        # tools/telemetry-read and tools/coupon-admin reach the SDK through path deps, so a
+        # citadel_sdk re-pin elsewhere left their locks stale, and only their own build jobs said
+        # so (run 45010060046). This judges every tracked lock at once; ~35 s on an empty cargo
+        # cache, all of it crate downloads.
+        run: node --test scripts/lib/lockfile-completeness.test.mjs && node scripts/check-lockfiles-are-complete.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace
