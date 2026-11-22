@@ -6,7 +6,7 @@
  */
 import { env, runInDurableObject, SELF } from "cloudflare:test";
 import { vi } from "vitest";
-import { ioFor } from "../control/dispatch.mjs";
+import { ioFor, objectFor } from "../control/dispatch.mjs";
 import { CUSTOMER_TERMS_VERSION } from "../control/customer-terms.mjs";
 import { config } from "../control/http.mjs";
 import { runMonitor } from "../control/monitor.mjs";
@@ -185,7 +185,7 @@ export const objectStats = async (slug) => (await SELF.fetch(`http://127.0.0.1/$
 
 export { sha256Hex } from "../control/secrets.mjs";
 
-export const tenantObject = (slug) => env.WORKSPACE.get(env.WORKSPACE.idFromName(slug));
+export const tenantObject = (slug) => objectFor(env, slug);
 
 /** A free tenant created through the control plane, and its object. */
 export async function freeTenant(stem) {

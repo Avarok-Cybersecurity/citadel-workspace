@@ -10,7 +10,13 @@ const migrations = await readD1Migrations("./control/migrations");
 // for the tests that hold production to its promises (test/production-config.test.mjs). The
 // bindings below override some of these vars for every other test; this copy is untouched.
 const production = unstable_readConfig({ config: "./wrangler.toml" });
-const PRODUCTION_CONFIG = JSON.stringify({ vars: production.vars, routes: production.routes, assets: production.assets });
+const PRODUCTION_CONFIG = JSON.stringify({
+  vars: production.vars,
+  routes: production.routes,
+  assets: production.assets,
+  durable_objects: production.durable_objects,
+  migrations: production.migrations,
+});
 // Batch 1116's frozen contract (lane C0): the /.well-known/citadel schema, its fixtures and the
 // server known answers, read where C0 publishes them, so the tests hold the Worker to that copy.
 const C0 = "../../docs/contracts/batch-1116";

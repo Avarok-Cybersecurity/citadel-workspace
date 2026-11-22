@@ -8,13 +8,24 @@
 const HOME = /(?:\/Users\/|\/home\/|\b[A-Za-z]:[\\/]Users[\\/])[A-Za-z0-9._-]+[\\/]/;
 const PATH = new RegExp(`${HOME.source}[^\\0\\s"']*`, 'g');
 
+/** The longest path a hit reports: enough to name the crate and file, bounded for a log line. */
+export const HIT_PATH_MAX = 200;
+
 /**
- * The distinct home prefixes found, skipping any whole path under one of `allowUnder`: a
- * directory the caller names because a C build compiled it in, which rustc's remapping cannot
- * reach (vendored OpenSSL's ENGINESDIR). Each allowance is the caller's to justify.
+ * Every home path found, in byte order, as `{ offset, path }`: the byte offset into the
+ * artefact and the whole embedded string (truncated to HIT_PATH_MAX), skipping any whole path
+ * under one of `allowUnder` -- a directory the caller names because a C build compiled it in,
+ * which rustc's remapping cannot reach (vendored OpenSSL's ENGINESDIR). Each allowance is the
+ * caller's to justify.
  */
-export function homePathsIn(bytes, { allowUnder = [] } = {}) {
+export function homePathHits(bytes, { allowUnder = [] } = {}) {
   const text = Buffer.from(bytes).toString('latin1');
-  const found = (text.match(PATH) ?? []).filter((p) => !allowUnder.some((dir) => p.startsWith(dir)));
-  return [...new Set(found.map((p) => p.match(HOME)[0]))].sort();
+  return [...text.matchAll(PATH)]
+    .filter((m) => !allowUnder.some((dir) => m[0].startsWith(dir)))
+    .map((m) => ({ offset: m.index, path: m[0].length > HIT_PATH_MAX ? `${m[0].slice(0, HIT_PATH_MAX)}...` : m[0] }));
+}
+
+/** The distinct home prefixes among homePathHits, sorted. */
+export function homePathsIn(bytes, options) {
+  return [...new Set(homePathHits(bytes, options).map((h) => h.path.match(HOME)[0]))].sort();
 }
