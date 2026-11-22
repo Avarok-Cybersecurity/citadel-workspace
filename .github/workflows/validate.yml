@@ -478,6 +478,9 @@ jobs:
         run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/changed-paths.test.mjs scripts/lib/merge-preview-planning.test.mjs
       - name: The flaky-spec report counts only attempts that failed
         run: node --test scripts/lib/retry-passes.test.mjs
+      - name: Every required check is produced, every release step has a PR twin, no dispatch is blind
+        # Reads the agent submodule's workflows too, which this job's recursive checkout provides.
+        run: node --test scripts/lib/workflow-graph.test.mjs scripts/lib/merge-blockers.test.mjs && node scripts/check-workflow-graph.mjs
       - name: A workflow dispatch is verified by its run, never repeated after a POST that landed
         run: node --test scripts/lib/dispatch-decision.test.mjs
       - name: A certificate near expiry fails only a published build; an expired one fails every build

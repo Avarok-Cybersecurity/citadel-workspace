@@ -1,0 +1,34 @@
+{
+  "about": "The status checks branch protection requires on master, per repository (read with `gh api repos/<repo>/branches/master/protection` on 2026-11-22), and what the release runs that no PR job does. scripts/check-workflow-graph.mjs fails CI when a required name is one no pull_request workflow produces; scripts/merge-blockability.mjs compares these with the live rule.",
+  "workflow_dirs": {
+    "Avarok-Cybersecurity/citadel-workspace": ".github/workflows",
+    "Avarok-Cybersecurity/citadel-internal-service": "citadel-internal-service/.github/workflows"
+  },
+  "required": {
+    "Avarok-Cybersecurity/citadel-workspace": ["GitGuardian Security Checks", "Validation passed"],
+    "Avarok-Cybersecurity/citadel-internal-service": [
+      "GitGuardian Security Checks",
+      "fmt",
+      "clippy",
+      "tests (macos-latest)",
+      "tests (windows-latest)",
+      "typescript-integration",
+      "tests (ubuntu-24.04)"
+    ]
+  },
+  "external": ["GitGuardian Security Checks"],
+  "release_workflows": [".github/workflows/release-agent.yml", ".github/workflows/deploy.yml"],
+  "release_twins": {
+    "build-agent": ["scripts/build-agent-unix.sh", "scripts/build-agent-windows.ps1"],
+    "agent-certificate": ["scripts/verify-agent-certificate.mjs"],
+    "release-sign-tool": ["tools/release-sign/Cargo.toml"]
+  },
+  "release_only_allowed": {
+    "macos-agent-app": "Joins the two macOS binaries into one universal app and signs and notarises it with the Developer ID secrets, which a PR (and a fork's PR) must not receive; the Release agent dry run (workflow_dispatch) exercises it end to end.",
+    "macos-agent-dmg": "Notarises and staples the disk image with Apple's notary service and the release's secrets; the dry run exercises it.",
+    "linux-agent-packages": "Packages the binary the release's linux-x64 leg already built and smoke-tested; unix-agents builds and gates that binary on every PR, and the dry run exercises the packaging.",
+    "windows-agent-msi": "Builds the installer from the release leg's Windows binary and signs it when the Azure signing secrets exist; windows-agent builds and gates that binary on every PR, and the dry run exercises the installer.",
+    "sign-agent-release": "Signs the assembled release assets with the release key; it needs every leg's artefacts, the signing tool is built and tested by validate.yml's release-sign job, and the dry run signs with a throwaway key.",
+    "publish-agent-release": "Creates the GitHub release and its attestations; nothing exists to publish on a PR, and the UI's contract test holds the asset list it checks."
+  }
+}
