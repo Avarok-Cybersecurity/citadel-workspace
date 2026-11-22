@@ -5,6 +5,7 @@
 #
 #   CITADEL_CF_TOKEN_FILE=~/cf-token.txt CITADEL_STRIPE_KEY_FILE=~/stripe.citadel.test.rk.txt ./deploy.sh
 #   ./deploy.sh --dry-run     # build, gates and a bundle; no token, nothing sent to Cloudflare
+#   ./deploy.sh --preflight   # with the token: every check that can refuse a deploy; changes nothing
 #
 # CITADEL_CF_TOKEN_FILE  a file holding the Cloudflare API token. Read here, handed to wrangler in
 #                        its environment only; never an argument, never printed.
@@ -17,18 +18,24 @@
 #
 # Order: build (wasm, UI) -> local gates (vitest, stored-account compat, CSP parity) -> the D1 id
 # is real -> Stripe's catalogue matches -> every secret is set -> no deleted Durable Object class
-# keeps a live binding name -> D1 migrations (remote) -> deploy
-# -> smoke -> every tenant upgraded to server identities (by the Cron trigger; waited for here).
+# keeps a live binding name -> wrangler's dry-run bundle -> the D1 migrations a deploy would apply
+# [--preflight stops here, having changed nothing] -> D1 migrations (remote) -> deploy -> smoke.
+#
+# Everything before the stop can refuse the deploy, and none of it changes anything, so the deploy
+# workflow runs it (--preflight) BEFORE the agent is released: a site upload Cloudflare refuses
+# must not leave a new agent released beside the old site (deploy.yml; a static check holds the
+# order, scripts/check-deploy-order.mjs).
 set -euo pipefail
 cd "$(dirname "$0")"
 HERE="$(pwd)"
 ROOT="$(cd ../.. && pwd)"
 
-DRY_RUN=0
+MODE=deploy
 case "${1:-}" in
   "") ;;
-  --dry-run) DRY_RUN=1 ;;
-  *) echo "usage: ./deploy.sh [--dry-run]" >&2; exit 2 ;;
+  --dry-run) MODE=dry-run ;;
+  --preflight) MODE=preflight ;;
+  *) echo "usage: ./deploy.sh [--dry-run|--preflight]" >&2; exit 2 ;;
 esac
 
 REQUIRED_SECRETS=(TURNSTILE_SECRET STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET CITADEL_SUPPORT_MLDSA_PUBLIC_KEY CONTROL_SERVER_KEY_SEED)
@@ -42,7 +49,7 @@ node -e 'const [maj] = process.versions.node.split("."); process.exit(Number(maj
 
 # The token: from the file the environment names, into this process only.
 TOKEN=""
-if [ "$DRY_RUN" = 0 ]; then
+if [ "$MODE" != dry-run ]; then
   [ -n "${CITADEL_CF_TOKEN_FILE:-}" ] || fail "set CITADEL_CF_TOKEN_FILE to the file holding the Cloudflare API token"
   [ -f "$CITADEL_CF_TOKEN_FILE" ] || fail "CITADEL_CF_TOKEN_FILE names no file"
   # GNU first: on Linux `stat -f` means filesystem status and SUCCEEDS with other output, so a
@@ -83,7 +90,7 @@ node "$ROOT/scripts/check-preview-csp-matches-production.mjs"
 # The configuration wrangler will deploy, as wrangler reads it.
 DB_ID="$(node -e 'import("wrangler").then((w) => console.log(w.unstable_readConfig({ config: "./wrangler.toml" }).d1_databases.find((d) => d.binding === "CONTROL_DB").database_id))')"
 
-if [ "$DRY_RUN" = 1 ]; then
+if [ "$MODE" = dry-run ]; then
   say "dry run: bundling without uploading"
   CI=1 npx --no-install wrangler deploy --dry-run --outdir "$HERE/.deploy-dry-run"
   [ "$DB_ID" != "00000000-0000-0000-0000-000000000000" ] || echo "NOTE: wrangler.toml's D1 database_id is still the placeholder; a real deploy refuses it."
@@ -112,6 +119,17 @@ say "Durable Objects: no deleted class keeps a live binding name"
 # The API refuses that (code 10061) only after the build and the D1 migrations, and the dry run
 # cannot see it, so ask the live Worker first (do-binding-rule.mjs; DEPLOY.md).
 CLOUDFLARE_API_TOKEN="$TOKEN" node "$HERE/check-do-bindings.mjs" ./wrangler.toml
+
+say "bundle: what wrangler would upload (dry run)"
+wr deploy --dry-run --outdir "$HERE/.deploy-dry-run"
+
+say "D1: the migrations a deploy would apply (remote, read-only)"
+wr d1 migrations list citadel-control --remote
+
+if [ "$MODE" = preflight ]; then
+  echo "preflight OK: every check passed; nothing was changed on Cloudflare"
+  exit 0
+fi
 
 say "D1: migrations, remote"
 wr d1 migrations apply citadel-control --remote
