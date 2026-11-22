@@ -5,10 +5,13 @@
 //   node scripts/agent-release-state.mjs            report only
 //   node scripts/agent-release-state.mjs --pr       fail on needs-bump (a PR must bump the version)
 //
-// Needs the agent-v* tags: CI checks out with fetch-depth 0 (tags included).
+// Needs the agent-v* tags (CI checks out with fetch-depth 0, tags included) and the published
+// releases, read with `gh api`: GH_TOKEN and GITHUB_REPOSITORY are required, so it runs in CI only.
+// "Released" is a tag WITH a published release (lib/released-versions.mjs says why a tag is not).
 import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import { decide } from "./lib/agent-release-decision.mjs";
+import { releasedVersions } from "./lib/released-versions.mjs";
 import { lockClosure } from "./lib/lock-closure.mjs";
 
 const MANIFEST = "citadel-workspace-internal-service/Cargo.toml";
@@ -56,10 +59,22 @@ function lockChanged(tag) {
   return closure(tag) !== closure("HEAD");
 }
 
+function publishedReleases() {
+  for (const name of ["GH_TOKEN", "GITHUB_REPOSITORY"]) {
+    if (!process.env[name]) throw new Error(`${name} is not set: the published releases decide what is released, and only the API knows them`);
+  }
+  const lines = execFileSync(
+    "gh",
+    ["api", "--paginate", `repos/${process.env.GITHUB_REPOSITORY}/releases?per_page=100`, "--jq", ".[] | {tag_name, draft, prerelease}"],
+    { encoding: "utf8", timeout: 60_000 },
+  );
+  return lines.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
+
 const version = crateVersion();
-const tags = git("tag", "-l", "agent-v*", "--sort=-v:refname").split("\n").filter(Boolean);
-const latestTag = tags[0] ?? null;
-const latestReleased = latestTag ? latestTag.slice("agent-v".length) : null;
+const tags = git("tag", "-l", "agent-v*").split("\n").filter(Boolean);
+const releases = publishedReleases();
+const { latestTag, latestReleased, orphans } = releasedVersions(tags, releases);
 let changedSinceLatest = true;
 if (latestTag) {
   try {
@@ -73,6 +88,7 @@ if (latestTag) {
 const d = decide({ version, latestReleased, changedSinceLatest });
 console.log(`agent: crate ${version}, latest release ${latestTag ?? "(none)"}, inputs changed since it: ${changedSinceLatest} (examined ${AGENT_INPUTS.length} paths)`);
 console.log(`agent: ${d.state} -- ${d.reason}`);
+console.log(`agent: ${tags.length} agent-v* tags, ${releases.length} releases; tags with no published release: ${orphans.join(", ") || "none"}`);
 if (process.env.GITHUB_OUTPUT) {
   appendFileSync(process.env.GITHUB_OUTPUT, `state=${d.state}\nversion=${version}\ntag=agent-v${version}\n`);
 }

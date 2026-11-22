@@ -78,7 +78,11 @@ jobs:
             exit 1
           fi
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      # Released = a tag with a published release, read from the API (a failed release leaves a
+      # tag behind); it also prints the tags that have none.
       - id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: node scripts/agent-release-state.mjs
       - name: A changed agent carries a new version
         if: steps.state.outputs.state == 'needs-bump'
@@ -91,16 +95,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.state.outputs.tag }}
           SHA: ${{ steps.sha.outputs.sha }}
-        run: |
-          set -euo pipefail
-          # Idempotent for a re-run: the tag may exist already, but only at this commit.
-          if existing="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null)"; then
-            [ "$existing" = "$SHA" ] || { echo "::error::$TAG already exists at $existing, not $SHA"; exit 1; }
-            echo "$TAG already at $SHA"
-          else
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$SHA" >/dev/null
-            echo "created $TAG at $SHA"
-          fi
+        # Kept on a re-run, created when absent, MOVED when a release that never published left it
+        # at another commit (agent-v0.14.0/0.14.1), refused when that tag is released.
+        run: node scripts/agent-release-tag.mjs
 
   release:
     name: Release the agent
