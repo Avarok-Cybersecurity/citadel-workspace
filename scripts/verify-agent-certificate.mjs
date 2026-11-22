@@ -12,19 +12,8 @@
  */
 import { X509Certificate, createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { HOST, compiledIn } from './lib/agent-certificate-files.mjs';
 import { judgeCertificate, parseFloorDays } from './lib/certificate-validity.mjs';
-
-const MAIN = 'citadel-workspace-internal-service/src/main.rs';
-/** The name a hosted page dials the user's own agent at. */
-const HOST = 'local.avarok.net';
-
-function compiledIn(constant) {
-  const source = readFileSync(MAIN, 'utf8');
-  const m = new RegExp(`const ${constant}: &\\[u8\\] = include_bytes!\\("([^"]+)"\\);`).exec(source);
-  if (!m) throw new Error(`${MAIN} no longer has \`const ${constant}: &[u8] = include_bytes!("...")\``);
-  return relative('.', join(dirname(MAIN), m[1]));
-}
 
 try {
   const at = process.argv.indexOf('--floor-days');

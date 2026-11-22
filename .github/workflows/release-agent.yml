@@ -77,6 +77,12 @@ env:
   # certificate job and by smoke-agent.sh in every leg. Run 44941697947, a dry run, failed the
   # 30-day floor while the certificate still had a month to run.
   MIN_CERT_DAYS: ${{ (startsWith(github.ref, 'refs/tags/agent-v') || inputs.publish) && '30' || '0' }}
+  # Days ABOVE that floor the committed certificate must have before a real release builds with it
+  # rather than issuing: 30 + 15 = 45, so a published binary leaves with well over the floor. The
+  # agent-certificate action reads it (no default there); renew-agent-tls.yml's RENEW_BELOW_DAYS
+  # must exceed floor + margin, which check-agent-certificate-is-verified.mjs holds, so a fresh
+  # committed certificate -- not a per-release issuance -- is the normal case.
+  CERT_REISSUE_MARGIN_DAYS: '15'
 
 jobs:
   # The version every artefact is built as and checked against: Cargo.toml's, which a tag must
@@ -111,7 +117,8 @@ jobs:
           publishes: ${{ steps.version.outputs.publishes }}
           mldsa-key: ${{ secrets.CITADEL_RELEASE_MLDSA_KEY }}
 
-  # This release's certificate, issued once for every leg: the action says why.
+  # The certificate every leg compiles in: the committed one, a cached one, or -- only when both
+  # are too old -- one issued here. The action says why issuing is a fallback.
   certificate:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -120,8 +127,9 @@ jobs:
       - uses: ./.github/actions/agent-certificate
         with:
           cloudflare-dns-api-token: ${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}
-          issue: ${{ startsWith(env.RELEASE_REF, 'refs/tags/agent-v') }}
+          real-release: ${{ startsWith(env.RELEASE_REF, 'refs/tags/agent-v') }}
           floor-days: ${{ env.MIN_CERT_DAYS }}
+          margin-days: ${{ env.CERT_REISSUE_MARGIN_DAYS }}
 
   build:
     needs: [certificate, version]

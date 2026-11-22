@@ -46,27 +46,49 @@
 # branch per run, tls-renewal/<run id>) sat open with only GitGuardian on them
 # while the committed certificate ran down towards 2026-12-06.
 #
-# WHY NOT AT RELEASE TIME
+# ISSUANCE BUDGET: Let's Encrypt allows 5 certificates per week for one name
 #
-# Let's Encrypt allows 5 duplicate certificates per week for an identical name
-# set. Issuing on every release would break the moment somebody cuts six in a
-# week -- and it would put an ACME round-trip, with DNS propagation, on the
-# critical path of every release. Renewal is its own scheduled job; the release
-# just consumes what is committed, and scripts/smoke-agent.sh refuses to publish
-# an agent whose built-in certificate has under 30 days left.
+# The release used to issue on every real release, and the week before
+# 2026-11-22 spent the allowance (8 deploy runs plus run 43869130576; the
+# agent-certificate action lists them), so deploy run 45073729582 was refused.
+# Now the release uses the committed certificate while it has the publish floor
+# plus CERT_REISSUE_MARGIN_DAYS (30 + 15 = 45, release-agent.yml), and issues
+# only as a fallback, once, cached for every later run. This workflow keeps the
+# committed one above that: it renews under RENEW_BELOW_DAYS (60), and while
+# bot/tls-renewal holds an unmerged certificate with 60 days or more it
+# re-proposes that one instead of issuing again (forced or not). The rule is
+# scripts/lib/certificate-issuance.mjs.
+#
+# Worst case per week, every failure at once:
+#   this workflow, scheduled  <= 1  a pending certificate blocks a second
+#                                   issuance until it is itself under 60 days,
+#                                   i.e. at most one per ~30 days
+#   this workflow, dispatched <= 1  per renewal PR MERGED that week (a forced
+#                                   run re-proposes an unmerged one)
+#   releases (fallback)       <= 1  only while committed < 45 days; the issued
+#                                   one is cached for 45 days, +1 if evicted
+#   total                     <= 3 of 5, and 0 in the normal case, where the
+#                                   scheduled renewal merges ~30 days into a
+#                                   90-day term and no release ever issues.
 name: Renew agent TLS certificate
 
 on:
   schedule:
-    # Weekly. The job itself decides whether renewal is due, so this only has to
-    # be often enough to catch the window, not to match the certificate's term.
-    - cron: '17 4 * * 1'
+    # Daily. The decision, not the schedule, bounds issuance (above), so checking
+    # often costs no certificates and re-arms a stuck PR within a day.
+    - cron: '17 4 * * *'
   workflow_dispatch:
     inputs:
       force:
-        description: 'Renew even if the committed certificate is not near expiry'
+        description: 'Renew even if the committed certificate is not near expiry (an unmerged renewal is re-proposed, not re-issued)'
         type: boolean
         default: false
+
+env:
+  # Renew once the committed certificate has fewer days than this. Must exceed
+  # release-agent.yml's publish floor + CERT_REISSUE_MARGIN_DAYS (45), or releases
+  # would routinely issue; check-agent-certificate-is-verified.mjs holds that.
+  RENEW_BELOW_DAYS: '60'
 
 # The branch and the PR are written with the types-sync App's token (see above);
 # the workflow's own token only reads.
@@ -89,29 +111,28 @@ jobs:
         with:
           persist-credentials: false
 
+      # The certificate an unmerged renewal already holds, if any: the branch is
+      # deleted when its PR merges (--delete-branch below), so a branch means a
+      # proposal not yet landed. Read anonymously; the repository is public.
       - name: Is renewal due?
         id: due
         shell: bash
+        env:
+          FORCE: ${{ inputs.force == true && 'true' || 'false' }}
         run: |
           set -euo pipefail
-          cert=citadel-workspace-internal-service/tls/local.avarok.net.crt.pem
-          [ -f "$cert" ] || { echo "::error::$cert is missing; include_bytes! would not compile."; exit 1; }
-          end="$(openssl x509 -in "$cert" -noout -enddate | cut -d= -f2)"
-          end_s="$(date -u -d "$end" +%s)"
-          days=$(( (end_s - $(date -u +%s)) / 86400 ))
-          echo "committed certificate expires in ${days} day(s)"
-          # 35 days: renews roughly two months into a 90-day term, which leaves
-          # a wide margin above the 30-day floor smoke-agent.sh enforces without
-          # issuing more often than the duplicate-certificate limit allows.
-          if [ "${{ inputs.force }}" = "true" ] || [ "$days" -lt 35 ]; then
-            echo "renew=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "renew=false" >> "$GITHUB_OUTPUT"
-            echo "Nothing to do."
+          pending=none
+          if [ -n "$(git ls-remote origin refs/heads/bot/tls-renewal)" ]; then
+            git fetch --quiet --depth=1 origin bot/tls-renewal
+            pending="$RUNNER_TEMP/pending.crt.pem"
+            git show FETCH_HEAD:citadel-workspace-internal-service/tls/local.avarok.net.crt.pem > "$pending"
+            echo "pending-end=$(openssl x509 -in "$pending" -noout -enddate | cut -d= -f2)" >> "$GITHUB_OUTPUT"
           fi
+          node scripts/agent-certificate-decision.mjs renew --renew-below-days "$RENEW_BELOW_DAYS" \
+            --force "$FORCE" --pending "$pending"
 
       - name: The types-sync App is configured
-        if: steps.due.outputs.renew == 'true'
+        if: steps.due.outputs.action != 'nothing'
         env:
           APP_ID: ${{ vars.TYPES_SYNC_APP_ID }}
           APP_KEY: ${{ secrets.TYPES_SYNC_APP_PRIVATE_KEY }}
@@ -124,7 +145,7 @@ jobs:
             exit 1
           fi
       - uses: actions/create-github-app-token@v1
-        if: steps.due.outputs.renew == 'true'
+        if: steps.due.outputs.action != 'nothing'
         id: app
         with:
           app-id: ${{ vars.TYPES_SYNC_APP_ID }}
@@ -133,7 +154,7 @@ jobs:
           repositories: citadel-workspace
 
       - name: Obtain a certificate (DNS-01)
-        if: steps.due.outputs.renew == 'true'
+        if: steps.due.outputs.action == 'renew'
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}
         shell: bash
@@ -166,7 +187,7 @@ jobs:
           rm -f "$RUNNER_TEMP/cf.ini"
 
       - name: Verify before committing
-        if: steps.due.outputs.renew == 'true'
+        if: steps.due.outputs.action == 'renew'
         shell: bash
         run: |
           set -euo pipefail
@@ -190,7 +211,7 @@ jobs:
       # losing the certificate with the runner.
       - name: Commit the certificate to bot/tls-renewal
         id: commit
-        if: steps.due.outputs.renew == 'true'
+        if: steps.due.outputs.action == 'renew'
         env:
           TOKEN: ${{ steps.app.outputs.token }}
           SLUG: ${{ steps.app.outputs.app-slug }}
@@ -234,10 +255,10 @@ jobs:
           { echo "changed=true"; echo "end=$end"; } >> "$GITHUB_OUTPUT"
 
       - name: Open or update the pull request
-        if: steps.commit.outputs.changed == 'true'
+        if: steps.commit.outputs.changed == 'true' || steps.due.outputs.action == 'propose-pending'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          END: ${{ steps.commit.outputs.end }}
+          END: ${{ steps.commit.outputs.end || steps.due.outputs.pending-end }}
         shell: bash
         run: |
           set -euo pipefail
@@ -268,7 +289,7 @@ jobs:
       # Auto-merge rather than merging here: it waits for the required status
       # checks instead of racing them. Its own step, so a refusal is named.
       - name: Merge it when the required checks pass
-        if: steps.commit.outputs.changed == 'true'
+        if: steps.commit.outputs.changed == 'true' || steps.due.outputs.action == 'propose-pending'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         shell: bash

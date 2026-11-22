@@ -12,7 +12,7 @@
   "release_workflows": [".github/workflows/release-agent.yml", ".github/workflows/deploy.yml"],
   "release_twins": {
     "build-agent": ["scripts/build-agent-unix.sh", "scripts/build-agent-windows.ps1"],
-    "agent-certificate": ["scripts/verify-agent-certificate.mjs"],
+    "agent-certificate": ["scripts/verify-agent-certificate.mjs", "scripts/agent-certificate-decision.mjs"],
     "release-sign-tool": ["tools/release-sign/Cargo.toml"]
   },
   "release_only_allowed": {

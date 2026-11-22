@@ -1,22 +1,39 @@
-# The certificate job of release-agent.yml: this release's certificate for local.avarok.net,
-# verified and handed to every build leg as the agent-tls artifact.
+# The certificate job of release-agent.yml: the certificate for local.avarok.net that every build
+# leg compiles in (include_bytes!), verified and handed to them as the agent-tls artifact.
 #
-# A fresh certificate for every release, issued ONCE here and handed to every
-# build leg. The certificate is compiled in (include_bytes!), so an agent
-# carries whatever tls/ held when it was built; issuing per release means no
-# published binary ever starts life with a certificate older than its release.
-# Per release rather than per leg: five legs would be five duplicate
-# certificates, and Let's Encrypt allows five a week for one name. Only a real
-# tag push issues -- a dry run (workflow_dispatch without a tag) builds with the
-# committed certificate, so repeated dry runs cannot spend that allowance.
+# ISSUING IS A FALLBACK, NOT A DEFAULT. Let's Encrypt issues at most five certificates a week for
+# one exact name, and this action used to issue on every real release: in the week before
+# 2026-11-22 deploy runs 44018601504, 44000280048, 44404950812, 44543719941, 44939018558,
+# 44958340345, 44968283960 and 45018182270 each spent one -- several were re-runs of releases
+# that had failed for unrelated reasons -- plus renew-agent-tls run 43869130576, and deploy run
+# 45073729582 was refused ("too many certificates (5) already issued") with nothing published.
+# Every one of those was a 90-day certificate, thrown away with its runner.
+#
+# So scripts/agent-certificate-decision.mjs decides (the rule is lib/certificate-issuance.mjs):
+#   use-committed  the committed certificate has floor + margin days (30 + 15 for a published
+#                  build): every release while renew-agent-tls.yml keeps it fresh
+#   use-cached     a certificate an earlier release issued in place of THIS committed one still
+#                  has floor + margin: a re-run, or the next release, reuses it from the cache
+#   issue          neither has: the renewal fell behind; issue ONE and cache it, keyed on the
+#                  committed certificate's hash, so later runs reuse it until the renewal lands
+#   refuse         a dry run whose committed certificate misses its floor; a dry run never issues
+# Worst case from releases: one issuance per committed certificate per 45 days (an issued one
+# serves 90 - 45 days), plus one if the cache entry is evicted (7 days unused). The weekly
+# budget across both workflows is in renew-agent-tls.yml.
+# Per release rather than per leg: five legs would be five duplicate certificates.
 name: Agent certificate
-description: Issues (on a tag push) and verifies the certificate compiled into every agent build.
+description: Chooses (committed, cached, or -- as a fallback -- freshly issued) and verifies the certificate compiled into every agent build.
 inputs:
   cloudflare-dns-api-token:
     description: CLOUDFLARE_DNS_API_TOKEN (Zone:DNS:Edit on avarok.net); read only when issuing.
     required: true
-  issue:
-    description: "'true' for a real release (issue a fresh certificate); anything else builds with the committed one."
+  real-release:
+    description: "'true' for a real release (may reuse or, as a fallback, issue); 'false' for a dry run, which only ever uses the committed one."
+    required: true
+  margin-days:
+    description: >-
+      Days above floor-days the committed certificate must have before a real release uses it
+      without issuing: release-agent.yml's CERT_REISSUE_MARGIN_DAYS. No default.
     required: true
   floor-days:
     description: >-
@@ -28,10 +45,42 @@ inputs:
 runs:
   using: composite
   steps:
+    # Keyed on the COMMITTED certificate: a cached one stands in for that one only, so once a
+    # renewal lands the key changes and the fresh committed certificate is used again. Only
+    # master and tag runs read these: a pull request's caches are scoped to the pull request.
+    - name: Restore a certificate an earlier release issued in place of the committed one
+      id: cached
+      if: inputs.real-release == 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/agent-tls-issued
+        key: agent-tls-issued-${{ hashFiles('citadel-workspace-internal-service/tls/local.avarok.net.crt.pem') }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: agent-tls-issued-${{ hashFiles('citadel-workspace-internal-service/tls/local.avarok.net.crt.pem') }}-
+    - name: Use the committed certificate, reuse a cached one, or issue
+      id: decide
+      shell: bash
+      env:
+        REAL_RELEASE: ${{ inputs.real-release }}
+        FLOOR_DAYS: ${{ inputs.floor-days }}
+        MARGIN_DAYS: ${{ inputs.margin-days }}
+        CACHED_DIR: ${{ runner.temp }}/agent-tls-issued
+      run: |
+        set -euo pipefail
+        cached=none
+        [ -f "$CACHED_DIR/local.avarok.net.crt.pem" ] && cached="$CACHED_DIR/local.avarok.net.crt.pem"
+        node scripts/agent-certificate-decision.mjs release --real-release "$REAL_RELEASE" \
+          --floor-days "$FLOOR_DAYS" --margin-days "$MARGIN_DAYS" --cached "$cached"
+    - name: Build with the cached certificate
+      if: steps.decide.outputs.action == 'use-cached'
+      shell: bash
+      env:
+        CACHED_DIR: ${{ runner.temp }}/agent-tls-issued
+      run: cp "$CACHED_DIR/local.avarok.net.crt.pem" "$CACHED_DIR/local.avarok.net.key.pem" citadel-workspace-internal-service/tls/
     - name: Obtain a certificate for local.avarok.net (DNS-01)
-      if: inputs.issue == 'true'
+      if: steps.decide.outputs.action == 'issue'
       env:
         CF_TOKEN: ${{ inputs.cloudflare-dns-api-token }}
+        CACHED_DIR: ${{ runner.temp }}/agent-tls-issued
       shell: bash
       run: |
         set -euo pipefail
@@ -52,6 +101,16 @@ runs:
         dest=citadel-workspace-internal-service/tls
         cp "$live/fullchain.pem" "$dest/local.avarok.net.crt.pem"
         cp "$live/privkey.pem"   "$dest/local.avarok.net.key.pem"
+        mkdir -p "$CACHED_DIR"
+        cp "$dest/local.avarok.net.crt.pem" "$dest/local.avarok.net.key.pem" "$CACHED_DIR/"
+    # Saved straight after issuing, before anything else can fail, so no later step's failure
+    # throws the certificate away. The key is not a secret (see below).
+    - name: Cache the issued certificate for re-runs and later releases
+      if: steps.decide.outputs.action == 'issue'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/agent-tls-issued
+        key: ${{ steps.cached.outputs.cache-primary-key }}
     # The name, the key pair, and the expiry against this build's floor (the script says why).
     - name: Verify what will be compiled in
       shell: bash
