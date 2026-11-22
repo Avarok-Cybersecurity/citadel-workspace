@@ -153,8 +153,17 @@ regenerated — deleting the volume to get past the message is not a recovery,
 it is the loss. Run the newer image again, or point
 `INTERNAL_SERVICE_DATA_DIR` at a different directory.
 
-A directory written before the stamp existed is adopted, not refused, so this
-check does not break any agent already running.
+A directory from an **earlier** format (or with no stamp, but with data) is
+refused too: under the alpha no-compat rule nothing migrates it. The packaged
+agents offer a way out instead of a terminal command
+(`citadel-workspace-internal-service/src/fresh_start`): the Mac menu-bar app, the
+Windows agent and a Linux desktop session (with zenity) ask **Start fresh** or
+**Quit** — Quit is the default and what Esc chooses — and Start fresh moves only
+that directory to the Trash or Recycle Bin, then starts the agent on a new one.
+The agent signals the Mac app by exiting with status 65 and a status file at
+`CITADEL_AGENT_STATUS_FILE`; a launcher that already asked passes
+`--start-fresh-from <the directory>`. Run from a terminal, it prints the refusal
+and the one-line command that does the same by hand.
 
 ## The guard you should not remove
 

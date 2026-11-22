@@ -82,6 +82,9 @@ export function BubbleFooter({ message, isOwn, onRetry }: BubbleFooterProps): JS
       {isOwn && message.status === 'pending' && awaitingAcceptFrom !== null && (
         <p className="text-xs mt-1" data-testid="message-held-note">{sendsWhenAcceptedCopy(awaitingAcceptFrom)}</p>
       )}
+      {isOwn && message.sendNote !== undefined && (
+        <p className={`text-xs mt-1 ${message.sendNote.failed ? 'text-destructive-emphasis' : ''}`} data-testid="message-send-note">{message.sendNote.text}</p>
+      )}
       {/* Error message for failed sends */}
       {isOwn && isFailed && message.error && (
         <p className="text-xs text-destructive-emphasis mt-1">{message.error}</p>

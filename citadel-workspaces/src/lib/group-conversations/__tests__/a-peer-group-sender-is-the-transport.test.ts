@@ -5,12 +5,15 @@
  * The body is written by the sending client. Trusting its `sender_cid` lets any
  * member attribute a message -- or a shared file, whose offer is then matched
  * against the wrong peer's P2P channel -- to anyone, including the reader
- * themselves, which renders it as "You".
+ * themselves, which renders it as "You". `peer_cid` is the sender the SDK
+ * verified the message's signature against.
  */
 import { describe, it, expect } from 'vitest';
 import { peerGroupMessageEvent, type PeerGroupMessageSummary } from '../peer-group-inbound';
 import { encodeGroupMessage } from '../group-message-codec';
 import { encodeGroupFileShare } from '../group-file-codec';
+import { encodeGroupControl } from '../group-control-codec';
+import { peerGroupControlEvent, type GroupControlEvent } from '../peer-group-control-inbound';
 
 const AUTHOR: bigint = 7n;
 const FORGED: bigint = 111n; // the reader's own cid: the most damaging forgery
@@ -40,6 +43,12 @@ describe('a peer-group sender comes from the transport', () => {
     expect(event?.senderId).toBe('7');
     expect(event?.senderName).toBe('ada');
     expect(event?.fileShare?.sender_cid).toBe(AUTHOR);
+  });
+
+  it('attributes a control message, whose sender decides what it may change, to peer_cid', () => {
+    const control: Uint8Array = encodeGroupControl({ group_id: '7:42', message_id: 'c-1', sender_cid: FORGED, timestamp: 1_000, control: { name: 'Renamed' } });
+    const event: GroupControlEvent | null = peerGroupControlEvent(notification(control, AUTHOR));
+    expect(event?.sender_cid).toBe(AUTHOR);
   });
 
   it('drops a message whose transport names no sender rather than falling back to the body', () => {

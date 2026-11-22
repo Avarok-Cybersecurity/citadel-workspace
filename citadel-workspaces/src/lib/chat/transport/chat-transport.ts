@@ -54,6 +54,8 @@ export interface ChatAuthor {
 export type PaneMessage = Omit<P2PMessage, 'sender_cid' | 'recipient_cid'> & Partial<Pick<P2PMessage, 'sender_cid' | 'recipient_cid'>> & {
   /** Who of a channel's members has seen the reader's own message; absent in a two-party chat. */
   readonly receipt?: ReadReceipt;
+  /** What the server said became of the reader's own peer-group message (group-send-outcome). */
+  readonly sendNote?: { readonly text: string; readonly failed: boolean };
 };
 
 export type ChatMessage = PaneMessage & {

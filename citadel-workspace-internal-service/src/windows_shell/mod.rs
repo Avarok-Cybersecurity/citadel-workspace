@@ -4,6 +4,7 @@
 
 mod login_item;
 mod native;
+mod start_fresh;
 mod streams;
 mod tray;
 
@@ -40,12 +41,22 @@ pub fn report_fatal(error: &(dyn std::error::Error + 'static)) {
         _ => None,
     };
     eprintln!("{error}");
-    if log.is_some() {
+    // They have just answered the start-fresh dialog with Quit: no second dialog repeats it.
+    let answered = error
+        .downcast_ref::<crate::fresh_start::Refused>()
+        .is_some_and(|refused| refused.answered);
+    if log.is_some() && !answered {
         native::alert(
             "Citadel Agent stopped",
             &shell_menu::failure_message(error, log),
         );
     }
+}
+
+/// The start-fresh dialog, for an agent with no console; one started from a terminal prints the
+/// refusal and its command instead (crate::fresh_start).
+pub fn start_fresh_prompt() -> Option<start_fresh::MessageBoxPrompt> {
+    matches!(OUTPUT.get(), Some(Output::LogFile(_))).then_some(start_fresh::MessageBoxPrompt)
 }
 
 /// Adds the notification-area icon. `allowed_origins` is the origin allowlist the agent runs with.

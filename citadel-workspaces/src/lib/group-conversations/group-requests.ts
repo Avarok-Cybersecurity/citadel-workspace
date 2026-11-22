@@ -9,6 +9,7 @@
  * group-conversation wire modules.
  */
 
+import { expectSendOutcome } from './group-send-outcomes';
 import { websocketService } from '@/lib/websocket-service';
 import { toInternalServiceRequest } from '@/hooks/use-group-conversations.types';
 import { groupIdToKey } from './group-key';
@@ -232,13 +233,11 @@ export async function sendPeerGroupBody(
   const messageId: string = crypto.randomUUID();
   const body: Uint8Array = encode(cid, messageId);
 
-  const request: { GroupMessage: { cid: bigint; message: number[]; group_key: MessageGroupKey; request_id: `${string}-${string}-${string}-${string}-${string}`; }; } = {
-    GroupMessage: {
-      cid,
-      message: Array.from(body),
-      group_key: groupKey,
-      request_id: crypto.randomUUID(),
-    },
+  // The agent names this request in the server's answer to the send (group-send-outcomes).
+  const request_id: string = crypto.randomUUID();
+  expectSendOutcome(request_id, groupId, messageId);
+  const request: { GroupMessage: { cid: bigint; message: number[]; group_key: MessageGroupKey; request_id: string } } = {
+    GroupMessage: { cid, message: Array.from(body), group_key: groupKey, request_id },
   };
   await sendGroupRequest(request);
   return messageId;

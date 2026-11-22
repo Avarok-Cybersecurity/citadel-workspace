@@ -7,9 +7,10 @@
  * peer-group message envelope, which the two ends define themselves -- so the
  * owner's messages now carry the group's name, and a member adopts it.
  *
- * Only the OWNER's. The group key names its owner (`<owner cid>:<mgid>`) and the
- * notification's `peer_cid` is the protocol's statement of who sent it, so a
- * member cannot rename the group for everyone by putting a name in their own
+ * Only the OWNER's, as the receiver's own record names it (group-owner): the
+ * group key names its creator, and the group passes to a member when the owner
+ * leaves. The notification's `peer_cid` is the signed sender, so a member
+ * cannot rename the group for everyone by putting a name in their own
  * envelope. The envelope's `sender_cid` is the sender's claim and is not used.
  */
 import { describe, it, expect } from 'vitest';
@@ -59,44 +60,43 @@ describe('the envelope', () => {
   });
 });
 
-describe('reading a name off an arriving message', () => {
-  const name = (from: bigint, body: PeerGroupMessage): string | undefined => {
+describe('a name on an arriving message', () => {
+  const arriving = (from: bigint, body: PeerGroupMessage): Parameters<typeof applyGroupMessage>[1] => {
     const summary: PeerGroupMessageSummary | null = peerGroupMessageEvent(notification(from, body), () => 'x');
-    return summary?.groupName;
+    if (summary === null) throw new Error('the message did not decode');
+    return { groupId: summary.groupId, senderId: summary.senderId, content: summary.content, messageId: crypto.randomUUID(), groupName: summary.groupName, viewing: false };
   };
+  const named = (held: GroupConversation, from: bigint, body: PeerGroupMessage): string =>
+    applyGroupMessage([held], arriving(from, body), 1, (cid: bigint): string => cid.toString())[0].name;
 
-  it("takes the owner's name", () => {
-    expect(name(OWNER, envelope({ group_name: 'Team 0924' }))).toBe('Team 0924');
+  it("is adopted from the owner", () => {
+    expect(named(group("alice's Group"), OWNER, envelope({ group_name: 'Team 0924' }))).toBe('Team 0924');
   });
 
-  it("ignores a member's, even one claiming to be the owner in its envelope", () => {
-    expect(name(MEMBER, envelope({ sender_cid: OWNER, group_name: 'Pwned' }))).toBeUndefined();
+  it("is ignored from a member, even one claiming to be the owner in its envelope", () => {
+    expect(named(group("alice's Group"), MEMBER, envelope({ sender_cid: OWNER, group_name: 'Pwned' }))).toBe("alice's Group");
   });
 
-  it('ignores a blank name', () => {
-    expect(name(OWNER, envelope({ group_name: '   ' }))).toBeUndefined();
-  });
-});
-
-describe('applying it', () => {
-  const arrival = (groupName?: string): Parameters<typeof applyGroupMessage>[1] => ({
-    groupId: GROUP_ID, senderId: OWNER.toString(), content: 'hi', messageId: crypto.randomUUID(), groupName, viewing: false,
+  it('is ignored when blank, or absent', () => {
+    expect(named(group("alice's Group"), OWNER, envelope({ group_name: '   ' }))).toBe("alice's Group");
+    expect(named(group("alice's Group"), OWNER, envelope())).toBe("alice's Group");
   });
 
-  it("renames the member's copy of the group", () => {
-    const [after] = applyGroupMessage([group("alice's Group")], arrival('Team 0924'), 1, (cid: bigint): string => cid.toString());
-    expect(after.name).toBe('Team 0924');
-  });
-
-  it('leaves the name alone when the message carries none', () => {
-    const [after] = applyGroupMessage([group("alice's Group")], arrival(), 1, (cid: bigint): string => cid.toString());
-    expect(after.name).toBe("alice's Group");
+  it("follows the group to its new owner: the key's creator no longer renames it", () => {
+    const passedOn: GroupConversation = group("alice's Group", MEMBER);
+    expect(named(passedOn, MEMBER, envelope({ sender_cid: MEMBER, group_name: 'New hands' }))).toBe('New hands');
+    expect(named(passedOn, OWNER, envelope({ group_name: 'Old hands' }))).toBe("alice's Group");
   });
 });
 
 describe('what an outgoing message announces', () => {
   it("is the group's name when this session owns the group", () => {
     expect(ownerAnnouncedName(group('Team 0924'), OWNER)).toBe('Team 0924');
+  });
+
+  it("is the group's name from its new owner, and nothing from the creator it left", () => {
+    expect(ownerAnnouncedName(group('Team 0924', MEMBER), MEMBER)).toBe('Team 0924');
+    expect(ownerAnnouncedName(group('Team 0924', MEMBER), OWNER)).toBeUndefined();
   });
 
   it("is nothing when it does not -- a member's local name is theirs alone", () => {

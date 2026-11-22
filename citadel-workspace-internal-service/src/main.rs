@@ -18,6 +18,7 @@ use structopt::StructOpt;
 
 mod app_net;
 mod apps_authority;
+mod fresh_start;
 mod identity_setup;
 mod log_setup;
 mod notice_token;
@@ -40,6 +41,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(windows)]
     if let Err(error) = &result {
         windows_shell::report_fatal(error.as_ref());
+    }
+    // An earlier agent's data, not started fresh: the status a launcher acts on (fresh_start).
+    if let Err(refused) = &result {
+        if refused.downcast_ref::<fresh_start::Refused>().is_some() {
+            #[cfg(not(windows))]
+            eprintln!("Error: {refused}");
+            std::process::exit(fresh_start::START_FRESH_EXIT_CODE);
+        }
     }
     result
 }
@@ -166,8 +175,35 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     // After the launch check, so an update still installs; the new agent then refuses an
     // earlier agent's data by name, saying where it is (citadel_internal_service::data_format).
+    // An earlier agent's directory is offered for a fresh start rather than only refused.
     if let BackendType::Filesystem(dir) = &backend_type {
-        citadel_internal_service::data_format::check_data_dir(std::path::Path::new(dir))?;
+        let consent = fresh_start::LauncherConsent {
+            dir: opts.start_fresh_from.clone(),
+        };
+        let status = fresh_start::StatusFile::from_env_value(
+            std::env::var(fresh_start::STATUS_FILE_ENV).ok().as_deref(),
+        );
+        #[cfg(windows)]
+        let shell = windows_shell::start_fresh_prompt();
+        #[cfg(windows)]
+        let native: &dyn fresh_start::Prompt = match &shell {
+            Some(shell) => shell,
+            None => &fresh_start::Nobody,
+        };
+        #[cfg(all(unix, not(target_os = "macos")))]
+        let native: &dyn fresh_start::Prompt = &fresh_start::Zenity;
+        #[cfg(target_os = "macos")]
+        let native: &dyn fresh_start::Prompt = &fresh_start::Nobody;
+        let prompt = fresh_start::FirstAnswer(vec![&consent, native]);
+        fresh_start::ensure_readable(
+            std::path::Path::new(dir),
+            &fresh_start::Ports {
+                prompt: &prompt,
+                disposer: &fresh_start::SystemDisposer,
+                status: status.as_ref(),
+                home: dirs2::home_dir(),
+            },
+        )?;
     }
 
     // TLS by default. See BUILTIN_TLS_CERT for why the key ships in the binary,
@@ -285,6 +321,11 @@ struct Options {
     /// version with its own command.
     #[structopt(long)]
     check_launch: bool,
+    /// The data directory the person agreed to start fresh from, in a launcher's dialog: when
+    /// this agent refuses it as an earlier agent's, it is moved to the Trash and a new one begun.
+    /// Any other directory, or a readable one, is left alone (fresh_start).
+    #[structopt(long, parse(from_os_str))]
+    start_fresh_from: Option<PathBuf>,
     /// Whole seconds the unsealed portable identity is kept after its last use. Required;
     /// INTERNAL_SERVICE_IDENTITY_UNLOCK_IDLE_SECS overrides it.
     #[structopt(long)]

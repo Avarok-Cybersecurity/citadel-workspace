@@ -5,7 +5,7 @@
  * `GroupChannelCreateSuccess` for a group whose key names ANOTHER owner is the
  * SDK re-opening a joined group's channel on (re)connect -- mapped to
  * `group:created`, it recorded this session as the owner of a group it had only
- * joined. The key says who owns it; the session in `cid` is only the member.
+ * joined. The key names its creator; who owns it now is the joined list's `owners`.
  */
 import { groupKeyToId, parseGroupKey, type MessageGroupKey } from './group-key';
 import type { GroupEvent, PeerNameResolver } from './group-events';
@@ -24,12 +24,22 @@ function listedInvites(listed: Record<string, unknown>, peerName: PeerNameResolv
   });
 }
 
+/** Each listed group's owner as the server last reported it, as `[groupId, owner]`; see group-owner. */
+function listedOwners(listed: Record<string, unknown>): [string, bigint][] {
+  if (!Array.isArray(listed.owners)) return [];
+  return listed.owners.flatMap((entry: unknown): [string, bigint][] => {
+    const { group_key, owner } = (entry ?? {}) as Record<string, unknown>;
+    const cid: bigint | null = toCid(owner);
+    return cid === null ? [] : [[groupKeyToId(parseGroupKey(group_key)), cid]];
+  });
+}
+
 export function joinedGroupEvents(message: Record<string, unknown>, peerName: PeerNameResolver): GroupEvent[] | null {
   const listed: Record<string, unknown> | undefined = variant(message, 'GroupListJoinedSuccess');
   if (listed) {
     if (!Array.isArray(listed.groups)) return [];
     return [
-      { name: 'group:joined-list-received', payload: { groupIds: listed.groups.map((key: unknown) => groupKeyToId(parseGroupKey(key))) } },
+      { name: 'group:joined-list-received', payload: { groupIds: listed.groups.map((key: unknown) => groupKeyToId(parseGroupKey(key))), owners: listedOwners(listed) } },
       ...listedInvites(listed, peerName),
     ];
   }

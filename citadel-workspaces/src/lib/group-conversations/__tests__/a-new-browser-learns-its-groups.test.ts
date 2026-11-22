@@ -23,13 +23,16 @@ const SELF: bigint = 100n;
 const OWNER: bigint = 7n;
 const peerName = (cid: bigint): string => `user${cid}`;
 
+/** A list that names no owner: the key's creator stands in until one is reported. */
+const NO_OWNERS: ReadonlyMap<string, bigint> = new Map<string, bigint>();
+
 describe('learning the groups a session is in', () => {
   it('maps GroupListJoinedSuccess to the joined list', () => {
     const events: GroupEvent[] = toGroupEvents(
       { GroupListJoinedSuccess: { cid: SELF, groups: [{ cid: OWNER, mgid: 42n }, { cid: SELF, mgid: 1n }], request_id: null } },
       SELF, 'self', peerName,
     );
-    expect(events).toEqual([{ name: 'group:joined-list-received', payload: { groupIds: ['7:42', '100:1'] } }]);
+    expect(events).toEqual([{ name: 'group:joined-list-received', payload: { groupIds: ['7:42', '100:1'], owners: [] } }]);
   });
 
   it("treats the SDK re-opening a joined group's channel as a joined group, not one this session created", () => {
@@ -38,15 +41,28 @@ describe('learning the groups a session is in', () => {
   });
 
   it('adds each unknown group, owned by the key, awaiting its state', () => {
-    const [group] = addJoinedGroups([], ['7:42'], SELF, 'self', peerName);
+    const [group] = addJoinedGroups([], ['7:42'], SELF, 'self', peerName, NO_OWNERS);
     expect(group).toMatchObject({ id: '7:42', ownerId: OWNER, awaitingState: true });
     expect(group.members.map((m) => m.cid)).toEqual([OWNER, SELF]);
   });
 
+  it("records the owner the server reports, not the key's creator, for a new group and a held one", () => {
+    const events: GroupEvent[] = toGroupEvents(
+      { GroupListJoinedSuccess: { cid: SELF, groups: [{ cid: OWNER, mgid: 42n }], owners: [{ group_key: { cid: OWNER, mgid: 42n }, owner: 9n }], request_id: null, pending_invites: [] } },
+      SELF, 'self', peerName,
+    );
+    expect(events[0].payload.owners).toEqual([['7:42', 9n]]);
+    const passedOn: ReadonlyMap<string, bigint> = new Map<string, bigint>([['7:42', 9n]]);
+    const [learnt] = addJoinedGroups([], ['7:42'], SELF, 'self', peerName, passedOn);
+    expect(learnt.ownerId).toBe(9n);
+    const held: GroupConversation[] = addJoinedGroups([], ['7:42'], SELF, 'self', peerName, NO_OWNERS);
+    expect(addJoinedGroups(held, ['7:42'], SELF, 'self', peerName, passedOn)[0].ownerId).toBe(9n);
+  });
+
   it('leaves groups it already holds, and hands back the same list when nothing is new', () => {
-    const known: GroupConversation[] = addJoinedGroups([], ['7:42'], SELF, 'self', peerName);
-    expect(addJoinedGroups(known, ['7:42'], SELF, 'self', peerName)).toBe(known);
-    expect(addJoinedGroups(known, ['not-a-key'], SELF, 'self', peerName)).toBe(known);
+    const known: GroupConversation[] = addJoinedGroups([], ['7:42'], SELF, 'self', peerName, NO_OWNERS);
+    expect(addJoinedGroups(known, ['7:42'], SELF, 'self', peerName, NO_OWNERS)).toBe(known);
+    expect(addJoinedGroups(known, ['not-a-key'], SELF, 'self', peerName, NO_OWNERS)).toBe(known);
   });
 });
 
@@ -69,8 +85,8 @@ describe('the state a learnt group asks for', () => {
   });
 
   it('adopts the first snapshot a member sends, roster included, and stops awaiting', () => {
-    const learnt: GroupConversation[] = addJoinedGroups([], ['7:42'], SELF, 'self', peerName);
-    const [after] = applyGroupControl(learnt, { groupId: '7:42', sender_cid: 9n, ownerCid: OWNER, control: groupControlSnapshot(full) }, peerName);
+    const learnt: GroupConversation[] = addJoinedGroups([], ['7:42'], SELF, 'self', peerName, NO_OWNERS);
+    const [after] = applyGroupControl(learnt, { groupId: '7:42', sender_cid: 9n, control: groupControlSnapshot(full) }, peerName);
     expect(after.name).toBe('Sweep Group');
     expect(after.members.map((m) => [m.cid, m.roleId])).toEqual(full.members.map((m) => [m.cid, m.roleId]));
     expect(after.settings).toEqual(full.settings);
@@ -80,7 +96,7 @@ describe('the state a learnt group asks for', () => {
   it('judges a snapshot for a group it already holds by the usual rules', () => {
     // 9n is a plain Member here, and a Member may not rename: adoption is for learnt groups only.
     const held: GroupConversation[] = [{ ...full, name: 'Kept', members: full.members.map((m) => (m.cid === 9n ? { ...m, roleId: full.settings.defaultRoleId } : m)) }];
-    const [after] = applyGroupControl(held, { groupId: '7:42', sender_cid: 9n, ownerCid: OWNER, control: { name: 'Renamed' } }, peerName);
+    const [after] = applyGroupControl(held, { groupId: '7:42', sender_cid: 9n, control: { name: 'Renamed' } }, peerName);
     expect(after.name).toBe('Kept');
   });
 

@@ -147,5 +147,7 @@ if args.count == 3 {
 }
 
 try? FileManager.default.removeItem(at: scratch)
+testStartFresh()
+testStartFreshAlert()
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

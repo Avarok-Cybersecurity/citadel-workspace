@@ -22,6 +22,7 @@ import type { GroupConversation } from '@/types/group';
 import { getGroups, updateGroups } from './group-store';
 import { isValidGroupId } from './group-key';
 import { memberGroupRecord, usernameFrom } from './member-group-record';
+import { withOwners } from './group-owner';
 import { announceGroupState, sendGroupControl } from './announce-group-state';
 import type { GroupControlEvent } from './peer-group-control-inbound';
 
@@ -32,6 +33,8 @@ export function addJoinedGroups(
   self: bigint | null,
   selfUsername: string | undefined,
   usernameFor: (cid: bigint) => string,
+  /** Each listed group's owner, as the server last reported it (group-owner). */
+  owners: ReadonlyMap<string, bigint>,
 ): GroupConversation[] {
   const held: Set<string> = new Set(groups.map((group: GroupConversation) => group.id));
   const learnt: GroupConversation[] = [...new Set(groupIds)]
@@ -40,7 +43,7 @@ export function addJoinedGroups(
       ...memberGroupRecord({ groupId, senderId: '', self, selfUsername, usernameFor }),
       awaitingState: true,
     }));
-  return learnt.length === 0 ? groups : [...groups, ...learnt];
+  return withOwners(learnt.length === 0 ? groups : [...groups, ...learnt], owners);
 }
 
 /**
@@ -65,9 +68,10 @@ function askForState(groupId: string): void {
 }
 
 export function bindJoinedGroups(): void {
-  eventEmitter.on('group:joined-list-received', (data: { groupIds: string[]; selfUsername?: string; memberUsernames?: Record<string, string> }) => {
+  eventEmitter.on('group:joined-list-received', (data: { groupIds: string[]; owners?: [string, bigint][]; selfUsername?: string; memberUsernames?: Record<string, string> }) => {
     const before: Set<string> = new Set(getGroups().map((group: GroupConversation) => group.id));
-    updateGroups((prev: GroupConversation[]) => addJoinedGroups(prev, data.groupIds, instanceManager.cid, data.selfUsername, usernameFrom(data.memberUsernames)));
+    const owners: Map<string, bigint> = new Map<string, bigint>(data.owners ?? []);
+    updateGroups((prev: GroupConversation[]) => addJoinedGroups(prev, data.groupIds, instanceManager.cid, data.selfUsername, usernameFrom(data.memberUsernames), owners));
     for (const id of new Set(data.groupIds)) {
       if (!before.has(id) && isValidGroupId(id)) askForState(id);
     }

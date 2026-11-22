@@ -31,6 +31,7 @@ import { useDomainMembers } from '@/hooks/use-domain-members';
 import { debugLog } from '@/lib/debug-config';
 import type { WorkspaceMember } from '@/types/workspace-entities';
 import { MembersSectionModals } from './MembersSectionModals';
+import { START_NEW_GROUP_EVENT } from '@/lib/group-conversations/group-removal-notice';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import type { RegisteredPeer } from '@/hooks/use-registered-peers';
 import type { DomainNode } from '@/components/layout/sidebar/tree-node-types';
@@ -55,6 +56,8 @@ export const MembersSection: () => JSX.Element = (): JSX.Element => {
   const [showPendingRequests, setShowPendingRequests] = useState(false);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  // A group that ended because its owner left offers to start a new one (group-removal-notice).
+  useEventListener(START_NEW_GROUP_EVENT, (): void => setShowCreateGroupDialog(true));
 
   const { groups: groupConversations, createGroup } = useGroupConversations();
   const { registeredPeers } = useRegisteredPeers();

@@ -36,11 +36,9 @@ describe('a group that is not in the list', () => {
     expect(groupGoneMessage('1:9')?.title).toBe('Group not found');
   });
 
-  it('says removal is possible, because the wire cannot tell them apart', () => {
-    // Deletion and being kicked both arrive as GroupDisconnectNotification and
-    // the mapping collapses them. Claiming "deleted" outright would be a guess.
+  it("says the owner's own end was theirs: anyone else's arrives announced, with its reason", () => {
     eventEmitter.emit('group:deleted', { groupId: '1:7' });
-    expect(groupGoneMessage('1:7')?.description).toMatch(/removed from it/);
+    expect(groupGoneMessage('1:7')?.description).toBe('You ended this group.');
   });
 
   it('stays quiet when the member was removed by someone else, which the removal notice already said', () => {

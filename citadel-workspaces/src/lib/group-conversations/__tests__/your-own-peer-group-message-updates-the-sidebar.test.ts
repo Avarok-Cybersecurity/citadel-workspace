@@ -83,14 +83,16 @@ describe('sending into a peer group', () => {
     // GroupCreate and GroupInvite carry no name, so the owner's messages are
     // how members learn it. A member's own local name is not announced.
     const { updateGroups }: typeof import('../group-store') = await import('../group-store');
-    const group = (id: string): import('@/types/group').GroupConversation => ({
-      id, name: 'Team 0924', ownerId: 0n, members: [], settings: { roles: [], defaultRoleId: '' }, unreadCount: 0,
+    // The owner is the store's record, not the key: 333:5 was created by 333 and passed to this session.
+    const group = (id: string, ownerId: bigint): import('@/types/group').GroupConversation => ({
+      id, name: 'Team 0924', ownerId, members: [], settings: { roles: [], defaultRoleId: '' }, unreadCount: 0,
     });
-    updateGroups((): import('@/types/group').GroupConversation[] => [group('111:5'), group('222:5')]);
+    updateGroups((): import('@/types/group').GroupConversation[] => [group('111:5', 111n), group('222:5', 222n), group('333:5', 111n)]);
 
     await sendGroupMessageAnywhere('111:5', 'hello');
     await sendGroupMessageAnywhere('222:5', 'hello');
+    await sendGroupMessageAnywhere('333:5', 'hello');
 
-    expect(sent.map((m) => m.groupName)).toEqual(['Team 0924', undefined]);
+    expect(sent.map((m) => m.groupName)).toEqual(['Team 0924', undefined, 'Team 0924']);
   });
 });

@@ -6,7 +6,8 @@
  * an admin. So the permission is looked up in the roles this device already
  * holds, for the cid the protocol says sent the message.
  *
- * The owner -- the cid the group key names -- is always permitted. Anyone else
+ * The owner -- the receiver's record of it (group-owner), not the key's
+ * creator -- is always permitted. Anyone else
  * also meets the hierarchy: no role at or above their own may be created,
  * edited, removed or handed out by them. Without that, `manageRoles` could
  * grant itself `deleteGroup`, and `assignRoles` could assign the Owner role.
@@ -20,10 +21,10 @@ export interface SenderStanding {
   role: GroupRole | undefined;
 }
 
-export function senderStanding(group: GroupConversation, sender_cid: bigint, ownerCid: bigint): SenderStanding {
+export function senderStanding(group: GroupConversation, sender_cid: bigint): SenderStanding {
   const roleId: string | undefined = group.members.find((m) => m.cid === sender_cid)?.roleId;
   return {
-    isOwner: sender_cid === ownerCid,
+    isOwner: sender_cid === group.ownerId,
     role: roleId === undefined ? undefined : group.settings.roles.find((r) => r.id === roleId),
   };
 }

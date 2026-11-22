@@ -74,6 +74,10 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
     IhttpFrameNotification: { cid: targetCid, peer_cid: sender_cid, frame: [0xa1, 1, 2], request_id: 'r11' },
     // The generated binding: { cid, group_key, refusal, request_id }; the agent never sets request_id.
     GroupMessageRefusedNotification: { cid: targetCid, group_key: { cid: sender_cid, mgid: 3n }, refusal: { RateLimited: { max_per_second: 2 } }, request_id: null },
+    // The generated bindings: a send's report names that send, which its success already answered.
+    GroupMessageResponse: { cid: targetCid, group_key: { cid: sender_cid, mgid: 3n }, delivery: { Relayed: { delivered: [], stored: [], not_delivered: [] } }, request_id: 'r12' },
+    GroupOwnershipTransferredNotification: { cid: targetCid, group_key: { cid: sender_cid, mgid: 3n }, owner: 4n, previous: 5n, request_id: null },
+    GroupRestoredNotification: { cid: targetCid, group_key: { cid: sender_cid, mgid: 3n }, source: 'Backup', request_id: null },
     // The generated binding: { cid, peer_cid, pinned_fingerprint, presented_fingerprint, request_id }.
     PeerIdentityKeyChangedNotification: { cid: targetCid, peer_cid: sender_cid, pinned_fingerprint: 'aaaa-bbbb-cccc-dddd', presented_fingerprint: 'eeee-ffff-gggg-hhhh', request_id: null },
   };
@@ -104,6 +108,9 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
         'FileTransferTickNotification',
         'GroupMessageNotification',
         'GroupMessageRefusedNotification',
+        'GroupMessageResponse',
+        'GroupOwnershipTransferredNotification',
+        'GroupRestoredNotification',
         'IhttpFrameNotification',
         'MediaFrameNotification',
         'MediaGapNotification',

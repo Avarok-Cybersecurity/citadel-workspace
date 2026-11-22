@@ -17,9 +17,11 @@
  *    The envelope is written by the sender; the key is the protocol's. A body
  *    naming another group would otherwise file the message into a conversation
  *    it was never sent to.
- *  - `peer_cid` decides who sent it, never the envelope's `sender_cid`. The SDK
- *    relays the author's cid unchanged through the server, so `peer_cid` is the
- *    author, not a relay; `sender_cid` is whatever the sending client wrote.
+ *  - `peer_cid` decides who sent it, never the envelope's `sender_cid`. It is the
+ *    sender the SDK verified the message's signature against (the server names the
+ *    sending session, and the member opens the message only under that sender's
+ *    leaf), so `peer_cid` is the author; `sender_cid` is whatever the sending
+ *    client wrote.
  */
 import { decodeGroupMessage, type PeerGroupMessage } from './group-message-codec';
 import { groupKeyToId, type MessageGroupKey } from './group-key';
@@ -38,28 +40,19 @@ export interface PeerGroupMessageSummary {
   content: string;
   timestamp: number;
   reply_to?: string;
-  /** The group's name, present only when its owner sent this. */
+  /** The group's name as the sender offered it; adopted only from the owner (applyGroupMessage). */
   groupName?: string;
   /** Present when this message announces a shared file; `content` then previews it. */
   fileShare?: GroupFileShare;
 }
 
 /**
- * The name to adopt from this message, if its sender may give the group one.
- *
- * The group key names the owner and `peer_cid` is the protocol's word for who
- * sent the message; the envelope's `sender_cid` is the sender's own claim, so
- * it is not what decides. A member cannot rename the group for everyone.
+ * The name this message offers for the group. Only the owner's is adopted, and the owner is the
+ * receiver's own record (applyGroupMessage, group-owner), not the key's creator or the body's claim.
  */
-function ownerGivenName(
-  notification: Record<string, unknown>,
-  key: MessageGroupKey,
-  decoded: PeerGroupMessage,
-): string | undefined {
+function offeredName(decoded: PeerGroupMessage): string | undefined {
   const name: string | undefined = decoded.group_name?.trim();
-  if (!name) return undefined;
-  const sender: bigint | null = toCid(notification.peer_cid);
-  return sender !== null && sender === toCid(key.cid) ? name : undefined;
+  return name ? name : undefined;
 }
 
 /** The `group:message-received` payload for this notification, or null. */
@@ -94,7 +87,7 @@ export function peerGroupMessageEvent(
     content: decoded.content,
     timestamp: decoded.timestamp,
     reply_to: decoded.reply_to,
-    groupName: ownerGivenName(notification, key, decoded),
+    groupName: offeredName(decoded),
   };
 }
 

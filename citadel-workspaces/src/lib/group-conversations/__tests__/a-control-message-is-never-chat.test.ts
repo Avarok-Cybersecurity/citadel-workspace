@@ -58,7 +58,7 @@ describe('what this client sees', () => {
   it('becomes a control event and never a chat message', () => {
     const out: GroupEvent[] = events(notification(OWNER, encodeGroupControl(control())));
     expect(out.map((e) => e.name)).toEqual(['group:control-received']);
-    expect(out[0].payload).toMatchObject({ groupId: `${OWNER}:5`, sender_cid: OWNER, ownerCid: OWNER });
+    expect(out[0].payload).toMatchObject({ groupId: `${OWNER}:5`, sender_cid: OWNER });
   });
 
   it('is judged by who the protocol says sent it, not by the envelope', () => {

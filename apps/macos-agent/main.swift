@@ -50,6 +50,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Only the agent this app started can be heard: it alone holds our token.
                 if state == .running, let token = agent?.noticeToken { notices.start(token: token) } else { notices.stop() }
             }
+            agent.onStartFresh = { [weak agent] offer in
+                switch StartFresh.action(for: offer, startFresh: AlertPrompt().ask(offer)) {
+                case .relaunch(let arguments): agent?.startFresh(with: arguments)
+                case .quit: NSApp.terminate(nil)
+                }
+            }
             model.perform = { [weak self, weak agent, weak notices] action in
                 if case .setMuted(let account, let muted) = action { notices?.setMuted(account.cid, muted); return }
                 if case .installUpdate = action {

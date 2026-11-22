@@ -158,6 +158,8 @@ describe('a topic is the install’s own group', () => {
     await w.port.TopicOpen({ name: 'pool' });
     await w.push({ GroupMessageRefusedNotification: { cid: 999n, group_key: { cid: 5n, mgid: 9n }, refusal: { RateLimited: { max_per_second: 2 } }, request_id: null } });
     await w.push({ GroupMessageRefusedNotification: { cid: ME, group_key: { cid: 5n, mgid: 1n }, refusal: { RateLimited: { max_per_second: 2 } }, request_id: null } });
+    // Not a member any more broke no cap: no limit event (control: it read as topic_bytes).
+    await w.push({ GroupMessageRefusedNotification: { cid: ME, group_key: { cid: 5n, mgid: 9n }, refusal: 'NotAMember', request_id: null } });
     expect(w.refusedSeen).toEqual([]);
     await w.push({ GroupMessageRefusedNotification: { cid: ME, group_key: { cid: 5n, mgid: 9n }, refusal: { RateLimited: { max_per_second: 2 } }, request_id: null } });
     expect(w.refusedSeen).toEqual(['pool topic_rate']);
