@@ -17,7 +17,7 @@ const BASE_ENV = { SKIP_WASM_BUILD: '1' };
  * in another repo -- the UI hook's gates run in the parent -- they silently point that gate at
  * the UI's index and object store. The hook's own git reads happen before this, in-process.
  */
-const REPO_LOCATORS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES'];
+export const REPO_LOCATORS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES'];
 const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !REPO_LOCATORS.includes(key)));
 
 function runOne({ cmd, args, cwd, env }) {
@@ -43,12 +43,16 @@ function runOne({ cmd, args, cwd, env }) {
 const parallelSafe = (check) => check.cmd === 'node';
 const seconds = (ms) => `${(ms / 1000).toFixed(1)}s`;
 
-/** Runs `checks`; returns the failures. Prints one line per check as it finishes. */
-export async function runChecks(checks) {
+/**
+ * Runs `checks`; returns the failures. Prints one line per check as it finishes.
+ * `onPass(check, ms)` hears each pass (preflight records stamps from it).
+ */
+export async function runChecks(checks, onPass = null) {
   const failed = [];
   const report = (check, result) => {
     console.log(`  ${check.name} … ${result.ok ? 'ok' : 'FAILED'} (${seconds(result.ms)})`);
     if (!result.ok) failed.push({ name: check.name, output: result.output });
+    else if (onPass) onPass(check, result.ms);
   };
   const pool = checks.filter(parallelSafe);
   const serial = checks.filter((c) => !parallelSafe(c));
