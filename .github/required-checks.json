@@ -6,15 +6,7 @@
   },
   "required": {
     "Avarok-Cybersecurity/citadel-workspace": ["GitGuardian Security Checks", "Validation passed"],
-    "Avarok-Cybersecurity/citadel-internal-service": [
-      "GitGuardian Security Checks",
-      "fmt",
-      "clippy",
-      "tests (macos-latest)",
-      "tests (windows-latest)",
-      "typescript-integration",
-      "tests (ubuntu-24.04)"
-    ]
+    "Avarok-Cybersecurity/citadel-internal-service": ["GitGuardian Security Checks", "All checks"]
   },
   "external": ["GitGuardian Security Checks"],
   "release_workflows": [".github/workflows/release-agent.yml", ".github/workflows/deploy.yml"],
