@@ -17,7 +17,7 @@
 
 const VALIDATE_PATH = '.github/workflows/validate.yml';
 const AGGREGATE_JOB = 'Validation passed';
-const SHA = /^[0-9a-f]{40}$/;
+export const SHA = /^[0-9a-f]{40}$/;
 
 const run = (reason) => ({ validated: false, reason });
 
@@ -48,19 +48,28 @@ export function candidateRuns(runs, pull, repo) {
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
 }
 
+/**
+ * Why a run's jobs do not make it proof, or null when every one succeeded and `requiredJob` is
+ * among them. A skipped, cancelled or unfinished job is not green. Shared with
+ * submodule-validation-decision.mjs.
+ */
+export function jobsDisqualifier(jobs, requiredJob) {
+  if (!Array.isArray(jobs) || jobs.length === 0) return 'it lists no jobs';
+  const notGreen = jobs.filter((j) => j.conclusion !== 'success');
+  if (notGreen.length > 0) {
+    return `not every job succeeded: ${notGreen.map((j) => `${j.name}=${j.conclusion}`).join(', ')}`;
+  }
+  if (!jobs.some((j) => j.name === requiredJob)) return `it has no "${requiredJob}" job`;
+  return null;
+}
+
 /** Why this run does not prove master's tree, or null when it does. */
 export function runDisqualifier(candidate, record, jobs, masterTree) {
   if (!record) return 'it recorded no validated tree';
   if (String(record.run_id) !== String(candidate.id)) return `its record names run ${record.run_id}`;
   if (record.event !== 'pull_request') return `its record is from a ${record.event} event`;
   if (record.tree !== masterTree) return `it validated tree ${record.tree}, master's is ${masterTree}`;
-  if (!Array.isArray(jobs) || jobs.length === 0) return 'it lists no jobs';
-  const notGreen = jobs.filter((j) => j.conclusion !== 'success');
-  if (notGreen.length > 0) {
-    return `not every job succeeded: ${notGreen.map((j) => `${j.name}=${j.conclusion}`).join(', ')}`;
-  }
-  if (!jobs.some((j) => j.name === AGGREGATE_JOB)) return `it has no "${AGGREGATE_JOB}" job`;
-  return null;
+  return jobsDisqualifier(jobs, AGGREGATE_JOB);
 }
 
 /**

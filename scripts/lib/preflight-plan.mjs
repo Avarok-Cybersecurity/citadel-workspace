@@ -20,6 +20,7 @@ export const NEEDS_MORE_THAN_A_CHECKOUT = new Map([
   ['scripts/check-production-image.mjs', 'drives a real browser against a built production Docker image'],
   ['scripts/lib/assert-pe-subsystem.mjs', 'inspects the Windows release binary, which only the cross-compile job produces'],
   ['scripts/agent-release-state.mjs', "reads the repository's published releases with the run's token (GH_TOKEN, GITHUB_REPOSITORY)"],
+  ['scripts/submodule-validation-gate.mjs', "decides whether a CI job runs, from the agent repository's runs and a job's GITHUB_OUTPUT; it judges no code"],
 ]);
 
 /**
@@ -39,6 +40,7 @@ export const MERGE_PREVIEW_CANNOT_JUDGE = new Map([
 export const NOT_ON_PRE_COMMIT = new Map([
   ['scripts/check-explicit-types.mjs', 'type-aware lint of all of src/: 18 s measured, alone over the budget'],
   ['scripts/check-submodule-work-is-committed.mjs', 'asks whether submodule edits are committed, which a commit in the submodule is in the middle of doing'],
+  ['scripts/check-lockfiles-are-complete.mjs', 'resolves all eleven cargo workspaces, fetching git deps and crates on a cold cache (~35 s); pre-push runs it on every push'],
 ]);
 
 export const PARENT_WORKFLOW = '.github/workflows/validate.yml';

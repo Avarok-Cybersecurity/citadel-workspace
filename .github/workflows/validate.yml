@@ -476,6 +476,8 @@ jobs:
         run: node --test scripts/lib/publish-validation-decision.test.mjs
       - name: Preflight derives CI's gates, tiers a change, and plans merge previews correctly
         run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/changed-paths.test.mjs scripts/lib/merge-preview-planning.test.mjs
+      - name: A hook skips a gate only on a pass stamped over identical inputs
+        run: node --test scripts/lib/preflight-stamp.test.mjs scripts/lib/preflight-stamp-io.test.mjs
       - name: The flaky-spec report counts only attempts that failed
         run: node --test scripts/lib/retry-passes.test.mjs
       - name: Every required check is produced, every release step has a PR twin, no dispatch is blind
@@ -1046,6 +1048,15 @@ jobs:
         run: node scripts/check-workspace-missing-parity.mjs
       - name: Check no shipped binary carries a test-only cargo feature
         run: node scripts/check-no-test-features-shipped.mjs
+      # Last in this job so a red here cannot hide the node gates above, and with its own
+      # toolchain: every other step of this job needs only node.
+      - uses: ./.github/actions/rust-toolchain
+      - name: Every tracked Cargo.lock resolves with --locked
+        # tools/telemetry-read and tools/coupon-admin reach the SDK through path deps, so a
+        # citadel_sdk re-pin elsewhere left their locks stale, and only their own build jobs said
+        # so (run 45010060046). This judges every tracked lock at once; ~35 s on an empty cargo
+        # cache, all of it crate downloads.
+        run: node --test scripts/lib/lockfile-completeness.test.mjs && node scripts/check-lockfiles-are-complete.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace
@@ -1082,6 +1093,13 @@ jobs:
     # CLAUDE.md has developers editing inside citadel-internal-service/ in this
     # worktree, so a main-repo PR carrying those changes passed with zero test
     # execution.
+    #
+    # Its own workflow also runs on a push to ITS master, and that run tests the commit itself.
+    # When the pointer's tree is one such a run passed with every job green, re-running the
+    # same suite here cost 35-45 min for nothing (run 45018083721 had already passed 88fcd598,
+    # whose tree is the pinned eed0b99's). The steps below then skip on that proof
+    # (scripts/submodule-validation-gate.mjs) and say which run gave it; the job itself stays,
+    # so the required check and `all-green` are unchanged. Anything short of proof runs it.
     name: Rust Tests - citadel-internal-service workspace
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
@@ -1097,11 +1115,20 @@ jobs:
         with:
           submodules: recursive
       - uses: ./.github/actions/no-nested-ui-repo
+      - name: Did the agent's own CI already pass this tree?
+        id: proof
+        run: node --test scripts/lib/submodule-validation-decision.test.mjs && node scripts/submodule-validation-gate.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Free Disk Space
+        if: steps.proof.outputs.validated != 'true'
         uses: ./.github/actions/free-runner-disk
-      - uses: ./.github/actions/rust-toolchain
-      - uses: taiki-e/install-action@nextest
+      - if: steps.proof.outputs.validated != 'true'
+        uses: ./.github/actions/rust-toolchain
+      - if: steps.proof.outputs.validated != 'true'
+        uses: taiki-e/install-action@nextest
       - name: Run Cargo Nextest
+        if: steps.proof.outputs.validated != 'true'
         # `--features websockets`: the origin-policy and handshake tests are
         # behind `#[cfg(feature = "websockets")]`, which is not a default. Without
         # it they are not skipped, they are not COMPILED -- the run is green with
