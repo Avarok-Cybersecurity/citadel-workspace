@@ -14,7 +14,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const AGENT = 'citadel-workspace-internal-service/src/main.rs';
+const AGENT = 'citadel-workspace-internal-service/src/startup_config.rs';
 const README = 'docs/AGENT_README.md';
 
 const agent = readFileSync(join(ROOT, AGENT), 'utf8');

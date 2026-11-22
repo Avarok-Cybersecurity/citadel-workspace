@@ -22,6 +22,13 @@ export const AGENT_INPUTS = [
   "apps/macos-agent",
   "packaging",
   "scripts/build-macos-agent-app.sh",
+  // The compile itself: the remapped source paths and the macOS version the binary declares.
+  "scripts/build-agent-unix.sh",
+  "scripts/build-agent-windows.ps1",
+  "scripts/remap-path-env.mjs",
+  "scripts/lib/remap-paths.mjs",
+  "scripts/macos-deployment-target-env.mjs",
+  "scripts/lib/macos-deployment-target.mjs",
   "scripts/package-linux-agent.sh",
   "scripts/release-version.sh",
   "scripts/lib/assert-agent-version.sh",
