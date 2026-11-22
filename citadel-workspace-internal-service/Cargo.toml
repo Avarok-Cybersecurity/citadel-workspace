@@ -1,6 +1,6 @@
 [package]
 name = "citadel-workspace-internal-service"
-version = "0.14.2"
+version = "0.14.3"
 edition = "2021"
 license.workspace = true
 
@@ -43,6 +43,8 @@ serde_json = { workspace = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
+# fresh_start/dispose.rs: an earlier agent's data goes to the Trash or Recycle Bin, not away.
+trash = "5.2.5"
 parking_lot = { workspace = true, optional = true }
 lazy_static = { workspace = true, optional = true }
 
@@ -73,6 +75,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Console",
     "Win32_System_Environment",
     "Win32_System_Registry",
+    "Win32_System_Threading",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
