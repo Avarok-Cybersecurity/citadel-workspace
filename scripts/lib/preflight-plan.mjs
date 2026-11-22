@@ -19,6 +19,7 @@ import { deriveGates, nodeRequirement } from './ci-gates.mjs';
 export const NEEDS_MORE_THAN_A_CHECKOUT = new Map([
   ['scripts/check-production-image.mjs', 'drives a real browser against a built production Docker image'],
   ['scripts/lib/assert-pe-subsystem.mjs', 'inspects the Windows release binary, which only the cross-compile job produces'],
+  ['scripts/submodule-validation-gate.mjs', "decides whether a CI job runs, from the agent repository's runs and a job's GITHUB_OUTPUT; it judges no code"],
 ]);
 
 /**

@@ -1072,6 +1072,13 @@ jobs:
     # CLAUDE.md has developers editing inside citadel-internal-service/ in this
     # worktree, so a main-repo PR carrying those changes passed with zero test
     # execution.
+    #
+    # Its own workflow also runs on a push to ITS master, and that run tests the commit itself.
+    # When the pointer's tree is one such a run passed with every job green, re-running the
+    # same suite here cost 35-45 min for nothing (run 45018083721 had already passed 88fcd598,
+    # whose tree is the pinned eed0b99's). The steps below then skip on that proof
+    # (scripts/submodule-validation-gate.mjs) and say which run gave it; the job itself stays,
+    # so the required check and `all-green` are unchanged. Anything short of proof runs it.
     name: Rust Tests - citadel-internal-service workspace
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
@@ -1087,11 +1094,20 @@ jobs:
         with:
           submodules: recursive
       - uses: ./.github/actions/no-nested-ui-repo
+      - name: Did the agent's own CI already pass this tree?
+        id: proof
+        run: node --test scripts/lib/submodule-validation-decision.test.mjs && node scripts/submodule-validation-gate.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Free Disk Space
+        if: steps.proof.outputs.validated != 'true'
         uses: ./.github/actions/free-runner-disk
-      - uses: ./.github/actions/rust-toolchain
-      - uses: taiki-e/install-action@nextest
+      - if: steps.proof.outputs.validated != 'true'
+        uses: ./.github/actions/rust-toolchain
+      - if: steps.proof.outputs.validated != 'true'
+        uses: taiki-e/install-action@nextest
       - name: Run Cargo Nextest
+        if: steps.proof.outputs.validated != 'true'
         # `--features websockets`: the origin-policy and handshake tests are
         # behind `#[cfg(feature = "websockets")]`, which is not a default. Without
         # it they are not skipped, they are not COMPILED -- the run is green with
