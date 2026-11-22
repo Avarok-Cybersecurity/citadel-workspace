@@ -2,12 +2,20 @@
 # sure the agent people download is the one that deployment expects, in that order:
 #
 #   master passes validation in Publish Images, whose `deploy` job then starts this run
+#     -> site-preflight: deploy.sh --preflight, every check that can refuse the site's deploy
+#                 (the secrets, the live Worker's Durable Object bindings, wrangler's dry run, the
+#                 D1 migration plan, the Stripe audit); it changes nothing
 #     -> plan:    still master's head? is the agent this commit builds already released?
 #                 (scripts/agent-release-state.mjs) If not, tag agent-vX.Y.Z here.
 #     -> release: publish that tag (release-agent.yml), notarised, attested, every asset the UI
 #                 links present
 #     -> deploy:  deploy/tenant-worker/deploy.sh (its own gates, D1 migrations, smoke)
 #     -> verify:  the latest release IS this commit's agent, its downloads resolve, the site answers
+#
+# The preflight comes first because the release cannot be taken back: run 44968283960 published
+# agent 0.14.2, then Cloudflare refused the site's upload (code 10061, a Durable Object binding),
+# leaving a new agent released beside the old site. Now a refusal the checks can see stops the
+# run before the tag exists. scripts/check-deploy-order.mjs holds this job graph.
 #
 # The site used to be deployed by hand from an integration branch while the agent download stayed
 # at whatever was last tagged: two days of agent fixes ran live on a locally built agent nobody
@@ -39,10 +47,31 @@ permissions:
   contents: read
 
 jobs:
+  # Everything that can refuse the site's deploy, before anything is tagged or published. Read-only
+  # on Cloudflare (deploy.sh --preflight); the deploy job runs the same checks again, then deploys.
+  site-preflight:
+    name: The site would deploy (preflight)
+    runs-on: ubuntu-24.04
+    # deploy's build and gates, without the upload and the smoke (deploy's budget is 65).
+    timeout-minutes: 45
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+          submodules: recursive
+      - uses: ./.github/actions/tenant-worker-deploy
+        with:
+          mode: preflight
+          cf-token: ${{ secrets.CITADEL_CF_DEPLOY_TOKEN }}
+          stripe-key: ${{ secrets.STRIPE_TEST_RESTRICTED_KEY }}
+          app-signing-seed: ${{ secrets.CITADEL_APP_SIGNING_SEED_HEX }}
+
   # The head check, the release decision and the tag, in one job: they were two runner
   # acquisitions in a row (~30 s of work behind ~10 min of queue in a saturated pool).
   plan:
     name: Plan (is the agent released?)
+    needs: site-preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -102,7 +131,7 @@ jobs:
 
   release:
     name: Release the agent
-    needs: plan
+    needs: [site-preflight, plan]
     if: needs.plan.outputs.state == 'needs-release'
     uses: ./.github/workflows/release-agent.yml
     with:
@@ -116,10 +145,11 @@ jobs:
 
   deploy:
     name: Deploy the site
-    needs: [plan, release]
-    # After the release, or with no release needed; never after a failed or skipped-by-failure one.
+    needs: [site-preflight, plan, release]
+    # After the release, or with no release needed; never after a failed or skipped-by-failure one,
+    # and never without a passed preflight.
     if: >-
-      always() && needs.plan.result == 'success' &&
+      always() && needs.site-preflight.result == 'success' && needs.plan.result == 'success' &&
       (needs.release.result == 'success' || (needs.release.result == 'skipped' && needs.plan.outputs.state == 'released'))
     runs-on: ubuntu-24.04
     # 45 for the build, gates and deploy, and 20 more for deploy.sh's last step: waiting for the
@@ -132,68 +162,12 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.sha }}
           submodules: recursive
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/tenant-worker-deploy
         with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            deploy/tenant-worker/package-lock.json
-      - name: Rust with the wasm32 target
-        run: rustup target add wasm32-unknown-unknown
-      # The release binary, checksum-pinned, instead of `cargo install` compiling it from source on
-      # every deploy (minutes of a 45-minute budget). Same version as before.
-      - name: wasm-pack
-        timeout-minutes: 5
-        env:
-          WASM_PACK_VERSION: 0.13.1
-          WASM_PACK_SHA256: c539d91ccab2591a7e975bcf82c82e1911b03335c80aa83d67ad25ed2ad06539
-        run: |
-          set -euo pipefail
-          name="wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl"
-          dir="$RUNNER_TEMP/wasm-pack"
-          mkdir -p "$dir"
-          curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 --max-time 120 \
-            -o "$dir/$name.tar.gz" \
-            "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/$name.tar.gz"
-          echo "$WASM_PACK_SHA256  $dir/$name.tar.gz" | sha256sum --check --strict
-          tar -xzf "$dir/$name.tar.gz" -C "$dir"
-          install -m 0755 "$dir/$name/wasm-pack" "$HOME/.cargo/bin/wasm-pack"
-          wasm-pack --version | grep -qx "wasm-pack $WASM_PACK_VERSION"
-      - name: UI dependencies
-        timeout-minutes: 15
-        run: npm ci --no-audit --no-fund
-      # The apps every workspace is provisioned with (the Calendar), signed with the first-party
-      # key: the one step the seed is in. Only the signer reads it, from its environment, and prints
-      # the key's fingerprint, never the key or the seed. The script refuses a key the kernel does
-      # not list as first-party. deploy.sh refuses to build without what this writes.
-      - name: Sign the provisioned first-party apps
-        timeout-minutes: 15
-        env:
-          CITADEL_APP_SIGNING_SEED_HEX: ${{ secrets.CITADEL_APP_SIGNING_SEED_HEX }}
-        run: |
-          set -euo pipefail
-          [ -n "$CITADEL_APP_SIGNING_SEED_HEX" ] || { echo "::error::the CITADEL_APP_SIGNING_SEED_HEX secret is not set"; exit 1; }
-          pin="$(sed -n 's/^channel = "\(.*\)"$/\1/p' apps/first-party/compute-pool/rust-toolchain.toml)"
-          test -n "$pin" || { echo "::error::no channel in apps/first-party/compute-pool/rust-toolchain.toml"; exit 1; }
-          rustup toolchain install "$pin" --profile minimal
-          node scripts/build-first-party-apps.mjs --sign "$RUNNER_TEMP/first-party-signed"
-          echo "CITADEL_FIRST_PARTY_SIGNED_DIR=$RUNNER_TEMP/first-party-signed" >> "$GITHUB_ENV"
-      - name: deploy.sh
-        env:
-          CF_TOKEN: ${{ secrets.CITADEL_CF_DEPLOY_TOKEN }}
-          STRIPE_KEY: ${{ secrets.STRIPE_TEST_RESTRICTED_KEY }}
-        run: |
-          set -euo pipefail
-          [ -n "$CF_TOKEN" ] || { echo "::error::the CITADEL_CF_DEPLOY_TOKEN secret is not set"; exit 1; }
-          [ -n "$STRIPE_KEY" ] || { echo "::error::the STRIPE_TEST_RESTRICTED_KEY secret is not set"; exit 1; }
-          umask 077
-          printf '%s' "$CF_TOKEN" > "$RUNNER_TEMP/cf-token"
-          # The file format scripts/stripe-catalogue.mjs reads: a STRIPE_SECRET_KEY= line, not the bare key.
-          printf 'STRIPE_SECRET_KEY=%s\n' "$STRIPE_KEY" > "$RUNNER_TEMP/stripe-key"
-          CITADEL_CF_TOKEN_FILE="$RUNNER_TEMP/cf-token" CITADEL_STRIPE_KEY_FILE="$RUNNER_TEMP/stripe-key" \
-            deploy/tenant-worker/deploy.sh
-          rm -f "$RUNNER_TEMP/cf-token" "$RUNNER_TEMP/stripe-key"
+          mode: deploy
+          cf-token: ${{ secrets.CITADEL_CF_DEPLOY_TOKEN }}
+          stripe-key: ${{ secrets.STRIPE_TEST_RESTRICTED_KEY }}
+          app-signing-seed: ${{ secrets.CITADEL_APP_SIGNING_SEED_HEX }}
 
   verify:
     name: The site and the download agree

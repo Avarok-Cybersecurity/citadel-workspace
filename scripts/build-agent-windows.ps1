@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 
 # rustc's flags, then the C and C++ compilers' (aws-lc's __FILE__ strings, which rustc cannot map).
 foreach ($mode in @($null, '--cflags', '--cxxflags')) {
-  $remap = if ($mode) { node scripts/remap-path-env.mjs $mode $Target } else { node scripts/remap-path-env.mjs $Target }
+  $remap = if ($mode) { node scripts/remap-path-env.mjs $mode $Target } else { node scripts/remap-path-env.mjs --toolchain-dir . $Target }
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   $name, $value = $remap -split '=', 2
   Set-Item -Path "env:$name" -Value $value

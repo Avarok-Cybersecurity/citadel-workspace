@@ -25,7 +25,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from '
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { remapFlags } from './lib/remap-paths.mjs';
+import { remapFlags, rustToolchain } from './lib/remap-paths.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURES = join(ROOT, 'apps', 'sdk-fixtures');
@@ -39,8 +39,6 @@ if (names.length < 10) {
   console.error(`build-app-fixtures: fixtures.json lists ${names.length} fixtures; there are at least 10.`);
   process.exit(1);
 }
-
-const remaps = remapFlags({ root: ROOT });
 
 function cargo(args, env, label) {
   const r = spawnSync('cargo', args, { cwd: FIXTURES, stdio: 'inherit', env: { ...process.env, ...env } });
@@ -56,6 +54,8 @@ const base = {};
 delete process.env.RUSTUP_TOOLCHAIN;
 delete process.env.RUSTFLAGS;
 delete process.env.CARGO_ENCODED_RUSTFLAGS;
+// After the deletions: the toolchain is the pinned one the builds below use.
+const remaps = remapFlags({ root: ROOT, toolchain: rustToolchain(FIXTURES) });
 const build = ['build', '--release', '--locked', '--target', TARGET];
 
 const mainTarget = join(ROOT, 'target', 'app-fixtures');

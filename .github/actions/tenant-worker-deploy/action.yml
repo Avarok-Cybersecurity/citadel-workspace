@@ -1,0 +1,100 @@
+# deploy/tenant-worker/deploy.sh with everything it reads, for deploy.yml's two jobs that run it:
+# `site-preflight` (--preflight: every check that can refuse the deploy, nothing sent) and
+# `deploy` (the deploy itself). One action, so the two cannot drift apart in how they build,
+# sign or authenticate: a preflight that built differently would vouch for a different deploy.
+# The caller checks out the commit being deployed first (with submodules).
+name: Deploy the tenant Worker
+description: Builds the tenant Worker and runs deploy.sh in one mode, preflight or deploy.
+inputs:
+  mode:
+    description: "'preflight' (deploy.sh --preflight; changes nothing) or 'deploy'."
+    required: true
+  cf-token:
+    description: CITADEL_CF_DEPLOY_TOKEN.
+    required: true
+  stripe-key:
+    description: STRIPE_TEST_RESTRICTED_KEY, for the read-only catalogue audit.
+    required: true
+  app-signing-seed:
+    description: CITADEL_APP_SIGNING_SEED_HEX, for the provisioned first-party apps.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: The mode is one deploy.sh has
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+      run: |
+        case "$MODE" in
+          preflight|deploy) ;;
+          *) echo "::error::mode '$MODE' is neither preflight nor deploy"; exit 1 ;;
+        esac
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: |
+          package-lock.json
+          deploy/tenant-worker/package-lock.json
+    - name: Rust with the wasm32 target
+      shell: bash
+      run: rustup target add wasm32-unknown-unknown
+    # The release binary, checksum-pinned, instead of `cargo install` compiling it from source on
+    # every deploy (minutes of a 45-minute budget). Same version as before.
+    - name: wasm-pack
+      shell: bash
+      env:
+        WASM_PACK_VERSION: 0.13.1
+        WASM_PACK_SHA256: c539d91ccab2591a7e975bcf82c82e1911b03335c80aa83d67ad25ed2ad06539
+      run: |
+        set -euo pipefail
+        name="wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl"
+        dir="$RUNNER_TEMP/wasm-pack"
+        mkdir -p "$dir"
+        curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 --max-time 120 \
+          -o "$dir/$name.tar.gz" \
+          "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/$name.tar.gz"
+        echo "$WASM_PACK_SHA256  $dir/$name.tar.gz" | sha256sum --check --strict
+        tar -xzf "$dir/$name.tar.gz" -C "$dir"
+        install -m 0755 "$dir/$name/wasm-pack" "$HOME/.cargo/bin/wasm-pack"
+        wasm-pack --version | grep -qx "wasm-pack $WASM_PACK_VERSION"
+    - name: UI dependencies
+      shell: bash
+      run: timeout 15m npm ci --no-audit --no-fund
+    # The apps every workspace is provisioned with (the Calendar), signed with the first-party
+    # key: the one step the seed is in. Only the signer reads it, from its environment, and prints
+    # the key's fingerprint, never the key or the seed. The script refuses a key the kernel does
+    # not list as first-party. deploy.sh refuses to build without what this writes.
+    - name: Sign the provisioned first-party apps
+      shell: bash
+      env:
+        CITADEL_APP_SIGNING_SEED_HEX: ${{ inputs.app-signing-seed }}
+      run: |
+        set -euo pipefail
+        [ -n "$CITADEL_APP_SIGNING_SEED_HEX" ] || { echo "::error::the CITADEL_APP_SIGNING_SEED_HEX secret is not set"; exit 1; }
+        pin="$(sed -n 's/^channel = "\(.*\)"$/\1/p' apps/first-party/compute-pool/rust-toolchain.toml)"
+        test -n "$pin" || { echo "::error::no channel in apps/first-party/compute-pool/rust-toolchain.toml"; exit 1; }
+        rustup toolchain install "$pin" --profile minimal
+        timeout 15m node scripts/build-first-party-apps.mjs --sign "$RUNNER_TEMP/first-party-signed"
+        echo "CITADEL_FIRST_PARTY_SIGNED_DIR=$RUNNER_TEMP/first-party-signed" >> "$GITHUB_ENV"
+    - name: deploy.sh (${{ inputs.mode }})
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        CF_TOKEN: ${{ inputs.cf-token }}
+        STRIPE_KEY: ${{ inputs.stripe-key }}
+      run: |
+        set -euo pipefail
+        [ -n "$CF_TOKEN" ] || { echo "::error::the CITADEL_CF_DEPLOY_TOKEN secret is not set"; exit 1; }
+        [ -n "$STRIPE_KEY" ] || { echo "::error::the STRIPE_TEST_RESTRICTED_KEY secret is not set"; exit 1; }
+        umask 077
+        printf '%s' "$CF_TOKEN" > "$RUNNER_TEMP/cf-token"
+        # The file format scripts/stripe-catalogue.mjs reads: a STRIPE_SECRET_KEY= line, not the bare key.
+        printf 'STRIPE_SECRET_KEY=%s\n' "$STRIPE_KEY" > "$RUNNER_TEMP/stripe-key"
+        flag=""; [ "$MODE" = deploy ] || flag="--$MODE"
+        status=0
+        CITADEL_CF_TOKEN_FILE="$RUNNER_TEMP/cf-token" CITADEL_STRIPE_KEY_FILE="$RUNNER_TEMP/stripe-key" \
+          deploy/tenant-worker/deploy.sh $flag || status=$?
+        rm -f "$RUNNER_TEMP/cf-token" "$RUNNER_TEMP/stripe-key"
+        exit "$status"

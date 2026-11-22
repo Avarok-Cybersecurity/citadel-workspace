@@ -905,6 +905,8 @@ jobs:
         run: node scripts/check-brand-kit-is-synced.mjs
       - name: A deploy's own environment beats its .env
         run: bash scripts/test-load-dotenv.sh
+      - name: A stack artifact that downloads short or altered stops its job, naming it
+        run: bash scripts/test-artifact-seal.sh
       - name: The agent README names the directory that holds the account
         run: node scripts/check-agent-readme-names-the-data-dir.mjs
       - name: Advice to publish the server names the port the app assumes
@@ -1189,6 +1191,9 @@ jobs:
         # workflow. It refuses to skip in that case -- deliberately -- so the
         # only correct home is a job that has run `npm ci`.
         run: node scripts/check-workflows-parse.mjs
+      - name: The site's deploy is refused before the agent is released, never after
+        # js-yaml, like the step above: this job has run `npm ci`.
+        run: node --test scripts/lib/deploy-order.test.mjs && node scripts/check-deploy-order.mjs
       - name: Build citadel-internal-service typescript-client
         # Build the WASM client's TypeScript wrapper first (innermost dependency)
         run: npm run build

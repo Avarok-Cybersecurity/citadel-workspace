@@ -58,7 +58,7 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 # Source paths mapped (the parent's scripts/lib/remap-paths.mjs, plus the checkout built from), so
 # the binaries carry no build machine's home directory; scripts/check-no-home-paths-shipped.mjs.
-REMAP_ENV="$(node "$UI/../scripts/remap-path-env.mjs" wasm32-unknown-unknown "$(cd "$DOCS" && pwd)=/citadel-docs")"
+REMAP_ENV="$(node "$UI/../scripts/remap-path-env.mjs" --toolchain-dir "$DOCS" wasm32-unknown-unknown "$(cd "$DOCS" && pwd)=/citadel-docs")"
 export "$REMAP_ENV"
 "$DOCS/scripts/build-wasm.sh" "$STAGE"
 

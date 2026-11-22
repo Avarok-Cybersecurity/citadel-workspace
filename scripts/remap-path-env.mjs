@@ -5,25 +5,33 @@
  * not node scripts (sync-wasm-clients.sh, the tenant worker's build.sh, the agent's release build,
  * build.rs, sync-cdoc-wasm.sh).
  *
- *   node scripts/remap-path-env.mjs [--cflags|--cxxflags] <target-triple> [<dir>=<label> ...]
+ *   node scripts/remap-path-env.mjs --toolchain-dir <dir> <target-triple> [<dir>=<label> ...]
+ *   node scripts/remap-path-env.mjs --cflags|--cxxflags <target-triple> [<dir>=<label> ...]
  *
- * Bare, it prints the rustc variable. --cflags and --cxxflags print the C and C++ compilers'
+ * The first prints the rustc variable. <dir> is where the build runs cargo: the toolchain that
+ * applies there (its rust-toolchain.toml, or RUSTUP_TOOLCHAIN) is the one whose std sources are
+ * mapped, so it is named, never assumed. --cflags and --cxxflags print the C and C++ compilers'
  * (CFLAGS_<triple>, CXXFLAGS_<triple>), mapping the same roots in the C code the `cc` and `cmake`
  * crates compile: a builder that compiles C exports all three.
  *
  * Each extra `<dir>=<label>` maps another source root the build compiles from (citadel-docs).
  * In bash, assign before exporting, so a failure here stops a `set -e` script:
- *   remap="$(node scripts/remap-path-env.mjs wasm32-unknown-unknown)"; export "$remap"
+ *   remap="$(node scripts/remap-path-env.mjs --toolchain-dir . wasm32-unknown-unknown)"; export "$remap"
  */
-import { cFlags, remapFlags, targetCompilerFlagsEnv, targetRustflagsEnv } from './lib/remap-paths.mjs';
+import { cFlags, remapFlags, rustToolchain, targetCompilerFlagsEnv, targetRustflagsEnv } from './lib/remap-paths.mjs';
 
 const COMPILER_VARIABLES = { '--cflags': 'CFLAGS', '--cxxflags': 'CXXFLAGS' };
+const USAGE =
+  'usage: remap-path-env.mjs --toolchain-dir <dir> <target-triple> [<dir>=<label> ...]\n' +
+  '       remap-path-env.mjs --cflags|--cxxflags <target-triple> [<dir>=<label> ...]';
 const args = process.argv.slice(2);
 const compilerVariable = COMPILER_VARIABLES[args[0]];
+let toolchainDir;
 if (compilerVariable) args.shift();
+else if (args[0] === '--toolchain-dir' && args[1]) toolchainDir = args.splice(0, 2)[1];
 const [triple, ...rest] = args;
-if (!triple || triple.startsWith('--')) {
-  console.error('usage: remap-path-env.mjs [--cflags|--cxxflags] <target-triple> [<dir>=<label> ...]');
+if (!triple || triple.startsWith('--') || (!compilerVariable && !toolchainDir)) {
+  console.error(USAGE);
   process.exit(1);
 }
 try {
@@ -34,7 +42,7 @@ try {
   });
   const { name, value } = compilerVariable
     ? targetCompilerFlagsEnv(compilerVariable, triple, cFlags(triple, { extra }))
-    : targetRustflagsEnv(triple, remapFlags({ extra }));
+    : targetRustflagsEnv(triple, remapFlags({ extra, toolchain: rustToolchain(toolchainDir) }));
   process.stdout.write(`${name}=${value}\n`);
 } catch (e) {
   console.error(e.message);
