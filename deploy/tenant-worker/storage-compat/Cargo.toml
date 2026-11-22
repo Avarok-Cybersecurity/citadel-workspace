@@ -9,10 +9,10 @@ description = "Native check that the auth-record census counts the accounts this
 # bundled C SQLite does not build for wasm32.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 citadel_sdk = { workspace = true, features = ["std", "filesystem"] }
-citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "898aee02", default-features = false }
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "e2b45fb1", default-features = false }
 tenant-auth-versions = { path = "../auth-versions" }
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
 
 # The SDK's account types, to build and serialize the records the census counts.
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "898aee02" }
+citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "e2b45fb1" }
