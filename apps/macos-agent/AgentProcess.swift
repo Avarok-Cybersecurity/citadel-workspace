@@ -26,7 +26,13 @@ final class AgentProcess {
     private(set) var noticeToken: String?
     private var quickExits = 0
     private var stopping = false
+    /// Where the agent leaves a start-fresh offer before exiting (StartFresh.swift).
+    private let statusFile: URL
+    /// Added to the next launch only: the person's Start fresh, for the directory the agent named.
+    private var onceArguments: [String] = []
     var onChange: ((State) -> Void)?
+    /// The agent refused an earlier agent's data and offers to start fresh; it is not restarted.
+    var onStartFresh: ((StartFreshOffer) -> Void)?
     private(set) var state: State = .starting { didSet { if state != oldValue { onChange?(state) } } }
 
     /// A run shorter than this counts as failing to start rather than as a crash after work.
@@ -38,6 +44,8 @@ final class AgentProcess {
         self.arguments = settings.arguments
         self.endpoint = (settings.bindHost, settings.bindPort)
         self.log = log
+        self.statusFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("citadel-agent-status-\(ProcessInfo.processInfo.processIdentifier).json")
     }
 
     func start() {
@@ -54,6 +62,12 @@ final class AgentProcess {
             return
         }
         launch()
+    }
+
+    /// The person chose Start fresh: the agent is started again with `arguments` added, once.
+    func startFresh(with arguments: [String]) {
+        onceArguments = arguments
+        restart()
     }
 
     /// After a failure the user has read about: the crash-loop count starts over.
@@ -88,10 +102,14 @@ final class AgentProcess {
         state = .starting
         let p = Process()
         p.executableURL = executable
-        p.arguments = arguments
+        p.arguments = arguments + onceArguments
+        onceArguments = []
+        // A file from an earlier run is never this run's offer.
+        try? FileManager.default.removeItem(at: statusFile)
         let token = AgentProcess.mintToken()
         var environment = ProcessInfo.processInfo.environment
         environment["CITADEL_NOTICE_TOKEN"] = token
+        environment[StartFresh.statusFileVariable] = statusFile.path
         p.environment = environment
         p.standardOutput = log.handle
         p.standardError = log.handle
@@ -139,6 +157,13 @@ final class AgentProcess {
         process = nil
         log.write("agent exited with status \(status) after \(Int(duration))s")
         guard !stopping else { return }
+        if let offer = StartFresh.offer(exitStatus: status, file: try? Data(contentsOf: statusFile)) {
+            log.write("the agent refused an earlier version's data at \(offer.dataDirectory); asking whether to start fresh")
+            try? FileManager.default.removeItem(at: statusFile)
+            state = .failed(offer.title)
+            onStartFresh?(offer)
+            return
+        }
         quickExits = duration < Self.quickExit ? quickExits + 1 : 0
         if quickExits >= Self.maxQuickExits {
             state = .failed("The agent keeps stopping as soon as it starts. The log says why.")
