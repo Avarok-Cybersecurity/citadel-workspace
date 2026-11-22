@@ -27,7 +27,7 @@ import { createHash } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withArtifact } from './lib/first-party-manifest.mjs';
-import { remapFlags } from './lib/remap-paths.mjs';
+import { remapFlags, rustToolchain } from './lib/remap-paths.mjs';
 import { PROVISIONED_APPS, signFirstPartyApps } from './lib/sign-first-party-apps.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -60,7 +60,6 @@ if (apps.length === 0) {
   process.exit(1);
 }
 
-const remaps = remapFlags({ root: ROOT });
 // The pin and each app's .cargo/config.toml win over the caller's environment.
 delete process.env.RUSTUP_TOOLCHAIN;
 delete process.env.RUSTFLAGS;
@@ -81,6 +80,8 @@ for (const app of apps) {
   const dir = join(APPS, app);
   const name = crateName(dir);
   const target = join(ROOT, 'target', 'first-party-apps', app);
+  // Each app pins its own compiler, so each maps its own toolchain's std sources.
+  const remaps = remapFlags({ root: ROOT, toolchain: rustToolchain(dir) });
   const flags = `target.${TARGET}.rustflags=${JSON.stringify(remaps)}`;
   const args = ['build', '--release', '--locked', '--target', TARGET, '-p', name, '--config', flags];
   const r = spawnSync('cargo', args, { cwd: dir, stdio: 'inherit', env: { ...process.env, CARGO_TARGET_DIR: target } });

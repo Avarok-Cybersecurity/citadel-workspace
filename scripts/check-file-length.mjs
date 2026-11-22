@@ -99,6 +99,14 @@ const SKIP = new Map([
   ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 434],
 ]);
 
+/**
+ * The agent's own crate, held to the same cap with no exemption, tests excluded as above
+ * (`tests.rs`, `*_tests.rs`). Its main.rs was the one Rust file nothing measured: at 673 lines it
+ * grew again in the release before it was split into run.rs and startup_config.rs; this keeps the
+ * split from growing back.
+ */
+const RUST_ROOTS = ['citadel-workspace-internal-service/src'];
+
 if (!statSync(SRC, { throwIfNoEntry: false })) {
   console.error('check-file-length: citadel-workspaces/src is missing, so nothing was checked.');
   process.exit(1);
@@ -116,6 +124,33 @@ function* walk(dir) {
       yield full;
     }
   }
+}
+
+function* rustSources(dir) {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) yield* rustSources(full);
+    else if (/\.rs$/.test(entry) && entry !== 'tests.rs' && !entry.endsWith('_tests.rs')) yield full;
+  }
+}
+
+const rustViolations = [];
+let rustChecked = 0;
+for (const root of RUST_ROOTS) {
+  if (!statSync(join(ROOT, root), { throwIfNoEntry: false })) {
+    console.error(`check-file-length: ${root} is missing, so its Rust was not checked.`);
+    process.exit(1);
+  }
+  for (const file of rustSources(join(ROOT, root))) {
+    rustChecked += 1;
+    const lines = readFileSync(file, 'utf8').split('\n').length - 1;
+    if (lines > LIMIT) rustViolations.push({ rel: relative(ROOT, file), lines });
+  }
+}
+if (rustViolations.length > 0) {
+  for (const { rel, lines } of rustViolations) console.error(`::error file=${rel}::${rel} has ${lines} lines (limit: ${LIMIT})`);
+  console.error(`\nFAIL: ${rustViolations.length} Rust file(s) of the agent's crate exceed the ${LIMIT}-line limit; move a cohesive unit into its own module.`);
+  process.exit(1);
 }
 
 const violations = [];
@@ -199,6 +234,6 @@ if (violations.length > 0) {
 }
 
 console.log(
-  `All ${checked} TypeScript files are within the ${LIMIT}-line limit ` +
+  `All ${checked} TypeScript files and ${rustChecked} of the agent's Rust files are within the ${LIMIT}-line limit ` +
     `(${SKIP.size} pre-existing files held at their current length).`,
 );

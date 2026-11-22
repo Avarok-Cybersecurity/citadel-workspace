@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HIT_PATH_MAX, homePathHits, homePathsIn } from './home-paths.mjs';
-import { cFlags, remapFlags, targetCompilerFlagsEnv, targetRustflagsEnv } from './remap-paths.mjs';
+import { cFlags, commitHashOf, remapFlags, rustToolchain, targetCompilerFlagsEnv, targetRustflagsEnv } from './remap-paths.mjs';
+import { deploymentTargetEnv, minimumSystemVersion, readInfoPlist } from './macos-deployment-target.mjs';
 
 const bytes = (s) => Buffer.from(s, 'latin1');
 
@@ -25,12 +26,48 @@ test('a path under an allowed directory is skipped, its siblings are not', () =>
   assert.deepEqual(homePathsIn(bytes('/home/runner/work/cw/target/build/openssl-sys/1/x'), { allowUnder: ['/home/runner/work/cw/target/build/openssl-sys/'] }), []);
 });
 
-test('the flags map the checkout and cargo home, in that order, then extras', () => {
-  assert.deepEqual(remapFlags({ root: '/r', home: '/h', extra: [['/d', '/citadel-docs']] }), [
+const HASH = '0ef1bc386059596dada8fb65b50425aab2ea637a';
+const TOOLCHAIN = { sysroot: '/s', commitHash: HASH };
+
+test("the flags map the checkout and cargo home, in that order, then extras, then std's sources", () => {
+  assert.deepEqual(remapFlags({ root: '/r', home: '/h', extra: [['/d', '/citadel-docs']], toolchain: TOOLCHAIN }), [
     '--remap-path-prefix=/r=/citadel-workspace',
     '--remap-path-prefix=/h=/cargo',
     '--remap-path-prefix=/d=/citadel-docs',
+    `--remap-path-prefix=/s/lib/rustlib/src/rust=/rustc/${HASH}`,
   ]);
+});
+
+test("rust-src's sysroot path, which the gate finds, is mapped to the prefix rustc writes without it", () => {
+  const sysroot = '/Users/nologik/.rustup/toolchains/stable-aarch64-apple-darwin';
+  const leaked = bytes(`\0${sysroot}/lib/rustlib/src/rust/library/core/src/iter/adapters/step_by.rs\0`);
+  assert.deepEqual(homePathsIn(leaked), ['/Users/nologik/']);
+  const flag = remapFlags({ root: '/r', home: '/h', toolchain: { sysroot, commitHash: HASH } }).at(-1);
+  assert.equal(flag, `--remap-path-prefix=${sysroot}/lib/rustlib/src/rust=/rustc/${HASH}`);
+});
+
+test('without the toolchain of the build, no flags are made', () => {
+  assert.throws(() => remapFlags({ root: '/r', home: '/h' }), /no toolchain sysroot/);
+  assert.throws(() => remapFlags({ root: '/r', home: '/h', toolchain: { sysroot: '/s', commitHash: 'abc' } }), /not a rustc commit hash/);
+});
+
+test("the commit hash is rustc -vV's, and a version without one is refused", () => {
+  assert.equal(commitHashOf(`rustc 1.100.0 (0ef1bc386 2026-11-09)\nbinary: rustc\ncommit-hash: ${HASH}\nhost: x\n`), HASH);
+  assert.throws(() => commitHashOf('rustc 1.100.0\ncommit-hash: unknown\n'), /names no commit-hash/);
+});
+
+test("the toolchain is the one rustc reports where the build runs", () => {
+  const { sysroot, commitHash } = rustToolchain(process.cwd());
+  assert.ok(sysroot.length > 1 && /^[0-9a-f]{40}$/.test(commitHash), `${sysroot} ${commitHash}`);
+});
+
+test("a macOS build targets the app bundle's minimum, and only a macOS build does", () => {
+  const plist = readInfoPlist();
+  assert.deepEqual(deploymentTargetEnv('aarch64-apple-darwin', plist), { name: 'MACOSX_DEPLOYMENT_TARGET', value: minimumSystemVersion(plist) });
+  assert.equal(deploymentTargetEnv('x86_64-apple-darwin', plist).value, minimumSystemVersion(plist));
+  assert.throws(() => deploymentTargetEnv('x86_64-unknown-linux-musl', plist), /not a macOS target/);
+  assert.throws(() => minimumSystemVersion('<dict></dict>'), /no LSMinimumSystemVersion/);
+  assert.throws(() => minimumSystemVersion('<key>LSMinimumSystemVersion</key><string>13</string>'), /major\.minor/);
 });
 
 test('the env variable is the per-target one cargo merges with config rustflags', () => {

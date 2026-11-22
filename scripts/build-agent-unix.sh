@@ -22,12 +22,24 @@ case "$(uname -s)" in
   *) echo "build-agent-unix.sh: unsupported host $(uname -s)" >&2; exit 1 ;;
 esac
 
-# Source paths mapped: agent-v0.13.0 carried 6,318 /Users/runner/.cargo/... strings. Each is
-# assigned before it is exported, so a failure stops the script.
-for mode in "" --cflags --cxxflags; do
+# Source paths mapped: agent-v0.13.0 carried 6,318 /Users/runner/.cargo/... strings. rustc's
+# flags name this directory's toolchain, whose std sources they map. Each is assigned before it
+# is exported, so a failure stops the script.
+remap="$(node scripts/remap-path-env.mjs --toolchain-dir . "$target")"
+export "${remap?}"
+for mode in --cflags --cxxflags; do
   remap="$(node scripts/remap-path-env.mjs $mode "$target")"
   export "${remap?}"
 done
+
+# One macOS version for rustc and every C compiler, the app bundle's minimum, whatever the
+# builder's shell exports (scripts/lib/macos-deployment-target.mjs says what a stray one cost).
+case "$target" in
+  *-apple-darwin)
+    deployment="$(node scripts/macos-deployment-target-env.mjs "$target")"
+    export "${deployment?}"
+    ;;
+esac
 
 cargo build --release --target "$target" -p citadel-workspace-internal-service \
   --bin citadel-workspace-internal-service --features "$features"

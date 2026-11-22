@@ -15,7 +15,7 @@ export function parseVersion(version) {
   return [Number(m[1]), Number(m[2]), Number(m[3])];
 }
 
-function compare(a, b) {
+export function compareVersions(a, b) {
   const [x, y] = [parseVersion(a), parseVersion(b)];
   for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
   return 0;
@@ -23,12 +23,13 @@ function compare(a, b) {
 
 /**
  * @param {{ version: string, latestReleased: string | null, changedSinceLatest: boolean }} input
- *   version: the crate's version; latestReleased: the newest agent-v* tag's version, null if none;
+ *   version: the crate's version; latestReleased: the newest PUBLISHED release's version (see
+ *   released-versions.mjs), null if none;
  *   changedSinceLatest: whether any agent input differs between that tag and this commit.
  */
 export function decide({ version, latestReleased, changedSinceLatest }) {
   if (latestReleased === null) return { state: "needs-release", reason: `no agent has been released; ${version} will be the first` };
-  const order = compare(version, latestReleased);
+  const order = compareVersions(version, latestReleased);
   if (order < 0) throw new Error(`the agent's version ${version} is older than the released ${latestReleased}`);
   if (order > 0) return { state: "needs-release", reason: `${version} is newer than the released ${latestReleased}` };
   return changedSinceLatest

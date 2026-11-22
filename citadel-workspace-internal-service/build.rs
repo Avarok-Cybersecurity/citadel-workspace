@@ -132,7 +132,7 @@ fn main() {
     // Source paths mapped, as every shipped artefact is (scripts/lib/remap-paths.mjs): the binary
     // otherwise carries this machine's home directory. Cargo merges this variable with the wasm
     // target's config rustflags, which RUSTFLAGS would replace.
-    let (remap_name, remap_value) = remap_path_env(workspace_root);
+    let (remap_name, remap_value) = remap_path_env(workspace_root, &wasm_client_dir);
 
     // Build the WASM client
     let output = Command::new("wasm-pack")
@@ -380,10 +380,13 @@ fn nested_target_dir(citadel_internal_service_root: &Path) -> std::path::PathBuf
     citadel_internal_service_root.join("target")
 }
 
-/// `scripts/remap-path-env.mjs`'s `NAME=VALUE` for the wasm target; exits when node cannot give it.
-fn remap_path_env(workspace_root: &Path) -> (String, String) {
+/// `scripts/remap-path-env.mjs`'s `NAME=VALUE` for the wasm target built in `build_dir` (whose
+/// toolchain's std sources it maps); exits when node cannot give it.
+fn remap_path_env(workspace_root: &Path, build_dir: &Path) -> (String, String) {
     let out = Command::new("node")
         .arg(workspace_root.join("scripts/remap-path-env.mjs"))
+        .arg("--toolchain-dir")
+        .arg(build_dir)
         .arg("wasm32-unknown-unknown")
         .output();
     let line = match out {

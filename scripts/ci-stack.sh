@@ -35,6 +35,9 @@ shopt -s inherit_errexit
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+# Tarballs are sealed when saved, verified when loaded; a leg uploads artifact ci-stack-<service>.
+# shellcheck source=scripts/lib/artifact-seal.sh
+. "$ROOT/scripts/lib/artifact-seal.sh"
 
 SERVICES=(sync-wasm-client server internal-service ui)
 BUILD_OVERRIDE="docker/ci/compose.stack-build.yml"
@@ -126,6 +129,7 @@ build() {
     docker compose -f docker-compose.yml -f "$BUILD_OVERRIDE" build "$svc"
   mkdir -p "$out"
   docker save "$(image_of "$svc")" | zstd -T0 -3 -q -o "$out/$svc.tar.zst"
+  seal_artifact "$out/$svc.tar.zst" "ci-stack-$svc"
   identity > "$out/$svc.source"
   ls -l "$out/$svc.tar.zst"
 }
@@ -145,6 +149,7 @@ sync_products() {
     -not -path 'citadel-workspaces/dist/*' | LC_ALL=C sort > "$list"
   [ -s "$list" ] || die "the sync wrote nothing; there is nothing to hand the integration jobs"
   tar -cf - -T "$list" | zstd -T0 -3 -q -o "$out/sync-products.tar.zst"
+  seal_artifact "$out/sync-products.tar.zst" ci-stack-sync-wasm-client
   tr '\n' '\0' < "$list" | xargs -0 sha256sum > "$out/sync-products.sha256"
   # Tracked files the sync deleted and did not recreate must be deleted in each job too.
   : > "$out/sync-products.deleted"
@@ -167,6 +172,7 @@ load() {
   echo "This checkout:"; identity | sed 's/^/  /'
   for svc in "${SERVICES[@]}"; do
     [ -f "$dir/$svc.tar.zst" ] || die "$svc was not built by this run (no $dir/$svc.tar.zst)"
+    verify_artifact "$dir/$svc.tar.zst" || die "$svc's image did not arrive whole"
     zstd -dc "$dir/$svc.tar.zst" | docker load
     rm -f "$dir/$svc.tar.zst"
     img="$(image_of "$svc")"
@@ -184,6 +190,7 @@ load() {
 
   cmp -s <(identity) "$dir/sync-products.source" \
     || die "the WASM sync products were produced from a different checkout"
+  verify_artifact "$dir/sync-products.tar.zst" || die "the WASM sync products did not arrive whole"
   zstd -dc "$dir/sync-products.tar.zst" | tar -xf - -C "$ROOT"
   while read -r path; do [ -z "$path" ] || rm -f -- "$path"; done < "$dir/sync-products.deleted"
   sha256sum --check --strict --quiet "$dir/sync-products.sha256"
@@ -227,6 +234,7 @@ reuse() {
   echo "reused $img (backend $want, revision $rev, built by run $built -> restamped for $GITHUB_RUN_ID)"
   mkdir -p "$out"
   docker save "$img" | zstd -T0 -3 -q -o "$out/$svc.tar.zst"
+  seal_artifact "$out/$svc.tar.zst" "ci-stack-$svc"
   identity > "$out/$svc.source"
   ls -l "$out/$svc.tar.zst"
 }
