@@ -30,7 +30,7 @@ import { serveSignIn, SIGN_IN_PREFIX } from "./sign-in-routes.mjs";
 /** Creation and portal bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
 
-export const objectFor = (env, slug) => env.WORKSPACE.get(env.WORKSPACE.idFromName(slug));
+export const objectFor = (env, slug) => env.WORKSPACE_V2.get(env.WORKSPACE_V2.idFromName(slug));
 
 /** The I/O the control plane performs, in one place. */
 export function ioFor(env) {
