@@ -39,17 +39,25 @@ export function remapFlags(roots = {}) {
 
 /**
  * The same roots for the C and C++ compilers the `cc` and `cmake` crates drive, which rustc's
- * flag never reaches: their `__FILE__` strings (aws-lc's error records, for one) carry the path
- * each source was compiled from. GCC and Clang take `-ffile-prefix-map`, mapped to the same
- * labels. MSVC's cl has no remapping flag, only `/d1trimfile`, which cuts the prefix off
- * `__FILE__`; aws-lc-sys maps its own directory for GCC and Clang and nothing for cl, which is how
- * the Windows agent alone shipped `C:\Users\<name>\.cargo\registry\...\aws-lc-sys-*` paths.
+ * flag never reaches: their `__FILE__` strings carry the path each source was compiled from.
+ *
+ * MSVC only. cl has no remapping flag, only `/d1trimfile`, which cuts the prefix off `__FILE__`;
+ * aws-lc-sys maps its own directory for GCC and Clang and nothing for cl, which is how the
+ * Windows agent alone shipped `C:\Users\<name>\.cargo\registry\...\aws-lc-sys-*` paths.
+ * openssl-src passes no cc flags to OpenSSL's build on MSVC, so nothing records these.
+ *
+ * Nothing for GCC and Clang, deliberately. There, openssl-src hands every cc flag (these
+ * variables included, and CC itself) to OpenSSL's Configure, which compiles them into the
+ * binary as the `compiler: ...` string of OpenSSL_version(OPENSSL_CFLAGS): a
+ * `-ffile-prefix-map=<home>/...` flag ships its own home path. Nor is one needed: OpenSSL
+ * compiles its sources by relative path, aws-lc-sys maps its own, and the Linux agent built with
+ * no C mapping at all held no C source path. The shipped-artefact gate is what keeps it so.
+ *
  * Only the agent's builders apply these: the WASM builds link no C, and the gate covers them.
  */
 export function cFlags(triple, roots = {}) {
   const pairs = remapPairs(roots);
-  if (triple.endsWith('-msvc')) return pairs.map(([dir]) => `/d1trimfile:${dir}`);
-  return pairs.map(([dir, label]) => `-ffile-prefix-map=${dir}=${label}`);
+  return triple.endsWith('-msvc') ? pairs.map(([dir]) => `/d1trimfile:${dir}`) : [];
 }
 
 /**

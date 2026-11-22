@@ -58,14 +58,22 @@ test('a long hit is truncated, so one string cannot flood the log', () => {
   assert.ok(hit.path.endsWith('...'));
 });
 
-test('C compilers map the same roots: GCC and Clang to the labels, cl by trimming', () => {
+test('cl trims the same roots; GCC and Clang take no C flags, which OpenSSL would record', () => {
   const roots = { root: '/r', home: '/h', extra: [['/d', '/citadel-docs']] };
-  assert.deepEqual(cFlags('x86_64-unknown-linux-musl', roots), [
-    '-ffile-prefix-map=/r=/citadel-workspace',
-    '-ffile-prefix-map=/h=/cargo',
-    '-ffile-prefix-map=/d=/citadel-docs',
-  ]);
   assert.deepEqual(cFlags('x86_64-pc-windows-msvc', roots), ['/d1trimfile:/r', '/d1trimfile:/h', '/d1trimfile:/d']);
+  for (const triple of ['x86_64-unknown-linux-musl', 'aarch64-apple-darwin', 'x86_64-apple-darwin']) {
+    assert.deepEqual(cFlags(triple, roots), [], triple);
+  }
+});
+
+test("a remap flag OpenSSL compiled into its 'compiler:' string is a home path the gate finds", () => {
+  const buildinf = bytes(
+    'compiler: x86_64-linux-musl-gcc -O2 -ffile-prefix-map=/home/runner/work/cw/cw=/citadel-workspace -ffile-prefix-map=/home/runner/.cargo=/cargo -DNDEBUG\0',
+  );
+  assert.deepEqual(homePathHits(buildinf), [
+    { offset: 54, path: '/home/runner/work/cw/cw=/citadel-workspace' },
+    { offset: 115, path: '/home/runner/.cargo=/cargo' },
+  ]);
 });
 
 test('the C variables are the per-target ones the cc crate reads', () => {
