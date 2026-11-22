@@ -326,6 +326,11 @@ jobs:
         with:
           submodules: recursive
       - uses: ./.github/actions/no-nested-ui-repo
+      # The certificate this leg compiles in (include_bytes!) must be valid now; the 30-day floor
+      # is for a build that is published (release-agent.yml), so a near-expiry certificate does
+      # not fail every PR, and an expired one does.
+      - name: The certificate compiled in is valid now
+        run: node scripts/verify-agent-certificate.mjs --floor-days 0
       # Dependencies only (rust-cache drops this workspace's own crates before saving), keyed on
       # the toolchain and every Cargo.lock/Cargo.toml. Most of this job's 40 minutes (run
       # 38056778313) is recompiling unchanged dependencies twice -- vendored OpenSSL among them,
@@ -388,6 +393,11 @@ jobs:
         with:
           submodules: recursive
       - uses: ./.github/actions/no-nested-ui-repo
+      # The certificate this leg compiles in (include_bytes!) must be valid now; the 30-day floor
+      # is for a build that is published (release-agent.yml), so a near-expiry certificate does
+      # not fail every PR, and an expired one does.
+      - name: The certificate compiled in is valid now
+        run: node scripts/verify-agent-certificate.mjs --floor-days 0
       - name: Add the target
         env:
           TARGET: ${{ matrix.target }}
@@ -470,6 +480,8 @@ jobs:
         run: node --test scripts/lib/retry-passes.test.mjs
       - name: A workflow dispatch is verified by its run, never repeated after a POST that landed
         run: node --test scripts/lib/dispatch-decision.test.mjs
+      - name: A certificate near expiry fails only a published build; an expired one fails every build
+        run: node --test scripts/lib/certificate-validity.test.mjs scripts/lib/certificate-coverage.test.mjs && node scripts/check-agent-certificate-is-verified.mjs
       - name: No shipped artefact carries a build machine's home directory
         run: node --test scripts/lib/home-paths.test.mjs && node scripts/check-no-home-paths-shipped.mjs
       - name: Every wasm-bindgen init call passes the single object the glue expects

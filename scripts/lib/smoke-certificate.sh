@@ -12,8 +12,11 @@
     #
     # 30 days is a floor, not a target. Let's Encrypt issues for 90, so a build
     # from a fresh certificate starts near 89; this fires only when one has been
-    # left unrenewed for two months.
-    MIN_CERT_DAYS="${MIN_CERT_DAYS:-30}"
+    # left unrenewed for two months. Required, with no default: release-agent.yml
+    # sets 30 for a build it publishes and 0 (valid now) for a dry run, so a dry
+    # run is not refused a month before expiry (run 44941697947) and an expired
+    # certificate is refused by both.
+    : "${MIN_CERT_DAYS:?MIN_CERT_DAYS is required: 30 for a published build, 0 for a dry run}"
     CERT_END="$(echo | openssl s_client -connect "127.0.0.1:$PORT" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
     if [ -n "$CERT_END" ]; then
       DAYS="$(CERT_END="$CERT_END" python3 -c '
