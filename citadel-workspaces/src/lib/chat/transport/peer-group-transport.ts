@@ -13,6 +13,7 @@ import { peerDisplayName } from '@/lib/peer-display';
 import type { GroupMember } from '@/types/group';
 import { chatFeatures } from './features';
 import { groupHistory, type GroupHistory } from './group-history';
+import { withSendNotes } from './peer-group-send-notes';
 import type { PeerGroupChatIO } from './peer-group-chat-io';
 import type { ChatSelf, ChatTransport, FileOpening, FilePort, FileSendReceipt, SendPort, TextSend } from './chat-transport';
 
@@ -54,6 +55,7 @@ function peerGroupFiles(io: PeerGroupChatIO, groupName: string): FilePort {
 }
 
 export function createPeerGroupTransport({ groupId, groupName, self, sendGate, io }: PeerGroupTransportParams): ChatTransport {
+  const memberName: (cid: bigint) => string = (cid: bigint): string => peerDisplayName({ cid, username: io.members().find((m: GroupMember): boolean => m.cid === cid)?.username });
   const history: GroupHistory = groupHistory({
     self, log: io.log, pages: { latest: io.restore, older: null }, pending: null, receipts: null,
     markRead: io.markRead, focus: io.focus,
@@ -70,12 +72,12 @@ export function createPeerGroupTransport({ groupId, groupName, self, sendGate, i
     counterpart: { name: groupName, username: null, greeting: `Start the conversation in ${groupName}. Messages are end-to-end encrypted.` },
     features: chatFeatures(ports, { markdown: false, readReceipts: false, securityLevel: false, retention: false, optimistic: false, namesSenders: true }),
     sendGate,
-    history: history.port,
+    history: withSendNotes(history.port, groupId, memberName),
     ...ports,
     // Named from the group's own member list, the way the avatars are, so a reactor reads the same here as in the sidebar.
     reactorName: (cid: bigint): string => {
       if (self !== null && cid === self.cid) return 'You';
-      return peerDisplayName({ cid, username: io.members().find((m: GroupMember): boolean => m.cid === cid)?.username });
+      return memberName(cid);
     },
   };
 }

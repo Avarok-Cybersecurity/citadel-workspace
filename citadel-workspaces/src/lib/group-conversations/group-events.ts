@@ -20,6 +20,8 @@ import { GROUP_FAILURE_VARIANTS } from './group-failure-variants';
 import { groupKeyToId, parseGroupKey } from './group-key';
 import { variant, toCid, memberCids } from './group-wire-variants';
 import { joinedGroupEvents } from './joined-group-events';
+import { groupProtocolEvents } from './group-protocol-events';
+import { readEndReason } from './group-protocol-reads';
 import { inviteReceived } from './invite-event';
 import { peerGroupBodyEvents } from './peer-group-body-events';
 
@@ -62,7 +64,9 @@ export interface GroupEvent {
      * the form cleared, the dialog shut, and the sidebar never gained the
      * group. Nothing was ever said.
      */
-    | 'group:failed';
+    | 'group:failed'
+    /** The server's answer to one of this session's sends, the group's new owner, a resumed group; see group-protocol-events. */
+    | 'group:send-outcome' | 'group:owner-changed' | 'group:restored';
   payload: Record<string, unknown>;
 }
 
@@ -84,7 +88,7 @@ export function toGroupEvents(
   selfUsername: string,
   peerName: PeerNameResolver,
 ): GroupEvent[] {
-  const joined: GroupEvent[] | null = joinedGroupEvents(message, peerName);
+  const joined: GroupEvent[] | null = joinedGroupEvents(message, peerName) ?? groupProtocolEvents(message, peerName);
   if (joined) return joined;
   const created: Record<string, unknown> | undefined = variant(message, 'GroupCreateSuccess') ?? variant(message, 'GroupChannelCreateSuccess');
   if (created) {
@@ -184,10 +188,8 @@ export function toGroupEvents(
 
   const ended: Record<string, unknown> | undefined = variant(message, 'GroupEndNotification');
   if (ended) {
-    // Gated on `success`. This ignored the field entirely, so a FAILED end
-    // still removed the group from the owner's sidebar — the group survived on
-    // the server while the only person who could delete it stopped seeing it.
-    if (ended.success === false) return [];
+    // A refused end (`success: false`) never reaches here: group-protocol-events reports it as
+    // `group:failed`, and the group stays in the owner's sidebar.
     return [{
       name: 'group:deleted',
       payload: { groupId: groupKeyToId(parseGroupKey(ended.group_key)) },
@@ -210,7 +212,7 @@ export function toGroupEvents(
     // `byOthers`: someone else ended it or removed you; the owner's own delete needs no notice.
     return [{
       name: 'group:deleted',
-      payload: { groupId: groupKeyToId(parseGroupKey(disconnected.group_key)), byOthers: true },
+      payload: { groupId: groupKeyToId(parseGroupKey(disconnected.group_key)), byOthers: true, reason: readEndReason(disconnected.reason) },
     }];
   }
 

@@ -25,8 +25,9 @@ export function groupGoneMessage(groupId: string): GoneMessage | null {
   if (wasAnnounced(groupId)) return null;
   return wasEnded(groupId)
     ? {
+        // Unannounced, it is the owner's own end: anyone else's arrives with its reason (group-removal-notice).
         title: 'Group ended',
-        description: 'This group was deleted, or you were removed from it.',
+        description: 'You ended this group.',
       }
     : {
         title: 'Group not found',

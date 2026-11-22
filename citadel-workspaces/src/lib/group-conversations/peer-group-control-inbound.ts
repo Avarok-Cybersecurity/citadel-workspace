@@ -3,9 +3,10 @@
  *
  * The sibling of peer-group-inbound, and the same two rules: the GROUP KEY
  * decides which group this is, and the protocol's `peer_cid` decides who sent
- * it. The envelope's own `group_id` and `sender_cid` are the sender's claims,
- * and permission is judged on who the protocol says spoke, never on who the
- * body says it is.
+ * it -- the sender the SDK verified the message's signature against. The
+ * envelope's own `group_id` and `sender_cid` are the sender's claims, and
+ * permission is judged on who the protocol says spoke, never on who the body
+ * says it is. Who owns the group is the receiver's own record (group-owner).
  */
 import { decodeGroupControl, type GroupControlBody, type PeerGroupControl } from './group-control-codec';
 import { groupKeyToId, parseGroupKey, type MessageGroupKey } from './group-key';
@@ -13,10 +14,8 @@ import { toCid } from './group-wire-variants';
 
 export interface GroupControlEvent {
   groupId: string;
-  /** Who the protocol says sent it. */
+  /** Who the protocol says sent it: the signer the SDK verified. */
   sender_cid: bigint;
-  /** Who the group key names as owner; always permitted. */
-  ownerCid: bigint;
   control: GroupControlBody;
   /** The assigned members' usernames, resolved by group-response-service. */
   memberUsernames?: Record<string, string>;
@@ -32,5 +31,5 @@ export function peerGroupControlEvent(notification: Record<string, unknown>): Gr
   if (sender_cid === null) return null;
   // Throws on a malformed key, like every other arm; group-response-service catches and logs.
   const key: MessageGroupKey = parseGroupKey(notification.group_key);
-  return { groupId: groupKeyToId(key), sender_cid, ownerCid: key.cid, control: decoded.control };
+  return { groupId: groupKeyToId(key), sender_cid, control: decoded.control };
 }

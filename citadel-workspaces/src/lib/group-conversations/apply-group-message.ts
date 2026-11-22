@@ -64,17 +64,17 @@ export function applyGroupMessage(
   // By CID or username; an office channel names the sender by username (see own-message).
   const fromSelf: boolean = isOwnGroupMessage(data.senderId, { cid: own, username: data.selfUsername });
   const withGroup: GroupConversation[] = known ? groups : [...groups, memberGroupRecord({
-    groupId: data.groupId, groupName: data.groupName, senderId: data.senderId, self: own, selfUsername: data.selfUsername, usernameFor,
+    groupId: data.groupId, senderId: data.senderId, self: own, selfUsername: data.selfUsername, usernameFor,
   })];
 
   return withGroup.map((group) => {
     if (group.id !== data.groupId) return group;
     return {
       ...group,
-      // Present only when the group's owner sent this message (see
-      // peer-group-inbound): the wire's one way of telling members the name
-      // the owner chose, which GroupCreate and GroupInvite cannot carry.
-      name: data.groupName ?? group.name,
+      // Adopted only from the group's owner, as this store records it (group-owner): the wire's
+      // one way of telling members the name the owner chose, which GroupCreate and GroupInvite
+      // cannot carry. A member's offer is theirs alone.
+      name: data.groupName !== undefined && data.senderId === String(group.ownerId) ? data.groupName : group.name,
       unreadCount: fromSelf || data.viewing ? group.unreadCount : group.unreadCount + 1,
       lastMessageTime: now,
       lastMessagePreview:

@@ -1,7 +1,7 @@
 /**
  * A control message changes only what its sender's role permits, judged on
- * the RECEIVER's copy of the roles. The owner (the cid the group key names) is
- * always permitted; everyone else also stays below their own role.
+ * the RECEIVER's copy of the roles. The owner (the receiver's record of it,
+ * not the key's creator: see group-owner) is always permitted; everyone else also stays below their own role.
  */
 import { describe, it, expect } from 'vitest';
 import { applyGroupControl } from '../apply-group-control';
@@ -32,7 +32,7 @@ function receiverCopy(): GroupConversation {
   };
 }
 
-const from = (sender: bigint, control: GroupControlBody): GroupControlEvent => ({ groupId: ID, sender_cid: sender, ownerCid: OWNER, control });
+const from = (sender: bigint, control: GroupControlBody): GroupControlEvent => ({ groupId: ID, sender_cid: sender, control });
 // These groups are all held, never learnt, so no member is ever added and no name is looked up;
 // throwing proves it rather than hiding a lookup behind a stand-in name.
 const noLookup = (cid: bigint): string => { throw new Error(`a held group looked up member ${cid}`); };
@@ -55,6 +55,15 @@ describe('renaming', () => {
 
   it('refuses someone who is not a member here at all', () => {
     expect(apply(receiverCopy(), from(STRANGER, { name: 'Pwned' })).name).toBe('Old');
+  });
+});
+
+describe('a group that passed to a new owner', () => {
+  // The owner alone, before any role reached this copy: the record, not a role, permits it.
+  const passedOn = (): GroupConversation => ({ ...receiverCopy(), ownerId: MEMBER });
+
+  it("takes the new owner's name, though the key still names the creator", () => {
+    expect(apply(passedOn(), from(MEMBER, { name: 'New' })).name).toBe('New');
   });
 });
 

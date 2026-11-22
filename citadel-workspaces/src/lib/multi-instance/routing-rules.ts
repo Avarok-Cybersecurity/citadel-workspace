@@ -80,9 +80,17 @@ export const CID_ROUTED_NOTIFICATIONS: Set<ResponseType> = new Set<ResponseType>
   // account's app would serve, or read the answers to, the other account's calls.
   'IhttpFrameNotification',
   // cid = the session whose app-topic message the server refused (too large, over the rate).
-  // The agent always sends it with request_id null (kernel/responses/group_refusal.rs), so
-  // routed by request_id it would reach no tab and the refusal would be lost.
+  // Its request_id is the refused send's, already answered by its GroupMessageSuccess
+  // (kernel/responses/group_answers.rs), so routed by request_id the refusal would be lost.
   'GroupMessageRefusedNotification',
+  // cid = the session whose group message the report answers; request_id is that send's, which
+  // its GroupMessageSuccess already answered and spent. Routed by request_id it would reach no tab
+  // (kernel/group_sends.rs pairs the report with the send).
+  'GroupMessageResponse',
+  // cid = the member told its group passed to a new owner, or resumed on this device. Both are
+  // unsolicited (request_id null): without cid routing no tab would hear of them.
+  'GroupOwnershipTransferredNotification',
+  'GroupRestoredNotification',
   // cid = the session whose peer signed a key exchange with a key other than the one pinned for
   // it. Unsolicited (request_id null): without cid routing no tab would raise the changed-key
   // screen, and the peer would stay refused with nobody told why.

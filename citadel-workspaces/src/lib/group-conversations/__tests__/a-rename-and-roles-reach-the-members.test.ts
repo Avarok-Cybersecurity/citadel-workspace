@@ -134,7 +134,7 @@ describe('an arriving control message', () => {
   it('reaches the store, and is not announced back', async () => {
     const g: GroupConversation = seed();
     h.cid = 22n;
-    eventEmitter.emit('group:control-received', { groupId: g.id, sender_cid: 11n, ownerCid: 11n, control: { name: 'From owner' } });
+    eventEmitter.emit('group:control-received', { groupId: g.id, sender_cid: 11n, control: { name: 'From owner' } });
     await flush();
     expect(getGroups().find((x) => x.id === g.id)?.name).toBe('From owner');
     expect(controlsSent()).toEqual([]);

@@ -31,8 +31,9 @@ export function usernameFrom(memberUsernames: Record<string, string> | undefined
  * The record for a group this member learnt from a message, before any unread
  * is counted (applyGroupMessage counts the message that brought it).
  *
- * The id says who owns it (`<owner cid>:<mgid>`); the members known so far are
- * the owner, this member and the sender. The name is the one the owner sent
+ * The id names its creator (`<creator cid>:<mgid>`), who stands as owner until
+ * the server reports one (group-owner: the joined list, an ownership transfer);
+ * the members known so far are that owner, this member and the sender. The name is the one the owner sent
  * with the message, or the same default an invitation gets.
  */
 export function memberGroupRecord(input: {

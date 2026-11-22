@@ -130,7 +130,16 @@ describe('being removed from a group', () => {
       SELF, 'alice', peerName,
     );
 
-    expect(events).toEqual([{ name: 'group:deleted', payload: { groupId: '7:42', byOthers: true } }]);
+    // An agent that names no reason: the notice falls back to naming both (group-protocol-notices).
+    expect(events).toEqual([{ name: 'group:deleted', payload: { groupId: '7:42', byOthers: true, reason: null } }]);
+  });
+
+  it('carries the reason the SDK gives', () => {
+    const events: GroupEvent[] = toGroupEvents(
+      { GroupDisconnectNotification: { cid: SELF, group_key: KEY, reason: 'HierarchyOwnerGone' } },
+      SELF, 'alice', peerName,
+    );
+    expect(events).toEqual([{ name: 'group:deleted', payload: { groupId: '7:42', byOthers: true, reason: 'HierarchyOwnerGone' } }]);
   });
 
   it('still removes it for the owner on a successful end', () => {
@@ -142,7 +151,7 @@ describe('being removed from a group', () => {
     expect(events).toEqual([{ name: 'group:deleted', payload: { groupId: '7:42' } }]);
   });
 
-  it('does NOT remove it when the end failed', () => {
+  it('does NOT remove it when the end failed, and tells the owner instead', () => {
     // Ignoring `success` meant a failed delete still cleared the group from the
     // sidebar of the only person who could delete it, while it lived on.
     const events: GroupEvent[] = toGroupEvents(
@@ -150,7 +159,7 @@ describe('being removed from a group', () => {
       SELF, 'alice', peerName,
     );
 
-    expect(events).toEqual([]);
+    expect(events).toEqual([{ name: 'group:failed', payload: { operation: 'End', message: '', requestId: undefined } }]);
   });
 });
 

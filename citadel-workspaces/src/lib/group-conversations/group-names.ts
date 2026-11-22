@@ -1,4 +1,4 @@
-import { groupIdToKey, isValidGroupId } from './group-key';
+import { isValidGroupId } from './group-key';
 import type { GroupConversation } from '@/types/group';
 
 /**
@@ -45,14 +45,14 @@ export function forgetChosenNames(): void {
 /**
  * The name an outgoing peer-group message tells the members, if any.
  *
- * Only the owner announces: the receiver honours a name only from the cid the
- * group key names as owner, and a member's local rename is theirs alone.
- * Decided by the key rather than `ownerId`, because the key is what the
- * receiving side checks.
+ * Only the owner announces: the receiver honours a name only from the member
+ * its own record names as owner (group-owner), and a member's local rename is
+ * theirs alone. The owner is `ownerId`, not the key, which names the creator
+ * and stays the same when the group passes to someone else.
  */
 export function ownerAnnouncedName(group: GroupConversation | undefined, selfCid: bigint): string | undefined {
   if (!group || !isValidGroupId(group.id)) return undefined;
-  if (groupIdToKey(group.id).cid !== selfCid) return undefined;
+  if (group.ownerId !== selfCid) return undefined;
   const name: string = group.name.trim();
   return name.length > 0 ? name : undefined;
 }

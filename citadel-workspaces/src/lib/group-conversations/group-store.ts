@@ -18,6 +18,7 @@
  * immediately as unread counts climbing by the number of mounted components).
  */
 
+import { bindGroupProtocolEvents } from './bind-group-protocol-events';
 import { eventEmitter } from '@/lib/event-emitter';
 import { notifyEach } from '@/lib/notify-listeners';
 import { bindMembershipEvents } from './group-membership-events';
@@ -163,6 +164,7 @@ export function startGroupEventBindings(selfUsername: () => string | undefined):
 
   bindGroupFailureToasts();
   bindGroupRemovalNotice((id: string): string | undefined => groups.find(g => g.id === id)?.name);
+  bindGroupProtocolEvents({ name: (id: string): string | undefined => groups.find(g => g.id === id)?.name, update: updateGroups });
   bindMembershipEvents();
 
   eventEmitter.on('group:created', (data: {

@@ -128,7 +128,9 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
     const refusal: Json | undefined = variantOf(m, 'GroupMessageRefusedNotification');
     if (refusal === undefined || refusal.cid !== d.cid) return;
     const topic: string | undefined = topicOf(groupKeyToId(parseGroupKey(refusal.group_key)));
-    if (topic !== undefined) d.refused(topic, variantOf(refusal.refusal, 'RateLimited') === undefined ? LIMIT_TOPIC_BYTES : LIMIT_TOPIC_RATE);
+    // A send from a session no longer in the topic's group broke no cap: it is not a limit event.
+    if (topic === undefined || refusal.refusal === 'NotAMember') return;
+    d.refused(topic, variantOf(refusal.refusal, 'RateLimited') === undefined ? LIMIT_TOPIC_BYTES : LIMIT_TOPIC_RATE);
   }));
 
   unlisten.push(d.agent.listen((m: unknown): void => {
