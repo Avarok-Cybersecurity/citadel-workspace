@@ -14,7 +14,7 @@
 build_wasm_pkg() {
     local crate="$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client"
     local remap
-    remap="$(node "$WORKSPACE_ROOT/scripts/remap-path-env.mjs" wasm32-unknown-unknown)" || return 1
+    remap="$(node "$WORKSPACE_ROOT/scripts/remap-path-env.mjs" --toolchain-dir "$crate" wasm32-unknown-unknown)" || return 1
     rm -rf "$crate/pkg"
     (cd "$crate" && export "$remap" && wasm-pack build --target web --out-dir pkg) || return 1
     [ -d "$crate/pkg" ] || { echo "ERROR: wasm-pack created no pkg directory" >&2; return 1; }

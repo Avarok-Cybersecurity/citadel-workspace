@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withArtifact } from './lib/first-party-manifest.mjs';
-import { remapFlags } from './lib/remap-paths.mjs';
+import { remapFlags, rustToolchain } from './lib/remap-paths.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const APP = join(ROOT, 'apps', 'first-party', 'calendar');
@@ -56,10 +56,10 @@ if (cliVersion !== bindgenVersion) {
   fail(`the wasm-bindgen CLI is ${cliVersion ?? 'not installed'}; the glue needs ${bindgenVersion}: cargo install wasm-bindgen-cli --locked --version ${bindgenVersion}`);
 }
 
-const remaps = remapFlags({ root: ROOT });
 delete process.env.RUSTUP_TOOLCHAIN;
 delete process.env.RUSTFLAGS;
 delete process.env.CARGO_ENCODED_RUSTFLAGS;
+const remaps = remapFlags({ root: ROOT, toolchain: rustToolchain(APP) });
 const target = join(ROOT, 'target', 'calendar-glue');
 const flags = `target.${TARGET}.rustflags=${JSON.stringify(remaps)}`;
 run('cargo', ['build', '--release', '--locked', '--target', TARGET, '-p', 'calendar-glue', '--config', flags], {

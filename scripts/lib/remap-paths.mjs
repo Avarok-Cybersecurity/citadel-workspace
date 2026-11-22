@@ -8,9 +8,16 @@
  * this checkout (the workspace's and the submodules' own crates) and cargo's home (every
  * registry and git dependency). Each builder passes extra roots it compiles from elsewhere.
  *
+ * A third is the toolchain's own: with the rust-src component installed, rustc writes std's
+ * sources by their place in the sysroot (`<sysroot>/lib/rustlib/src/rust/library/...`, under the
+ * build machine's home) where a toolchain without it writes `/rustc/<commit-hash>/library/...`.
+ * Mapped back to that, a build with rust-src is byte-identical to one without, which is what CI
+ * builds and what the committed artefacts are.
+ *
  * One list, read by every builder (scripts/remap-path-env.mjs for the shell and build.rs ones),
  * so no two of them can map differently. scripts/check-no-home-paths-shipped.mjs is the gate.
  */
+import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,11 +37,36 @@ function remapPairs({ root = ROOT, home = cargoHome(), extra = [] } = {}) {
 }
 
 /**
- * The flags, in a fixed order: the checkout, cargo's home, then each extra `[dir, label]`.
+ * The toolchain cargo uses in `dir`: rustup picks it from the rust-toolchain.toml that applies
+ * there (an app's own pin) or RUSTUP_TOOLCHAIN, so the question is asked where the build runs.
+ */
+export function rustToolchain(dir, env = process.env) {
+  const rustc = (args) => execFileSync('rustc', args, { cwd: dir, env, encoding: 'utf8' });
+  return { sysroot: rustc(['--print', 'sysroot']).trim(), commitHash: commitHashOf(rustc(['-vV'])) };
+}
+
+/** The `commit-hash:` line of `rustc -vV`, which names the `/rustc/<hash>` prefix rustc uses. */
+export function commitHashOf(verbose) {
+  const hash = /^commit-hash: ([0-9a-f]{40})$/m.exec(verbose)?.[1];
+  if (!hash) throw new Error('remap-paths: `rustc -vV` names no commit-hash');
+  return hash;
+}
+
+/** std's sources in the toolchain's sysroot, mapped to the prefix rustc writes without rust-src. */
+function toolchainPair({ sysroot, commitHash } = {}) {
+  if (!sysroot) throw new Error('remap-paths: no toolchain sysroot given (rustToolchain(<build dir>))');
+  if (!/^[0-9a-f]{40}$/.test(commitHash ?? '')) throw new Error(`remap-paths: '${commitHash}' is not a rustc commit hash`);
+  return [join(resolve(sysroot), 'lib', 'rustlib', 'src', 'rust'), `/rustc/${commitHash}`];
+}
+
+/**
+ * The flags, in a fixed order: the checkout, cargo's home, each extra `[dir, label]`, then the
+ * toolchain's std sources. `toolchain` is required: it is the toolchain of the build these flags
+ * are for, `rustToolchain(<the directory cargo runs in>)`.
  * The committed fixtures' bytes depend on this order (build-app-fixtures.mjs --check).
  */
-export function remapFlags(roots = {}) {
-  return remapPairs(roots).map(([dir, label]) => `--remap-path-prefix=${dir}=${label}`);
+export function remapFlags({ toolchain, ...roots } = {}) {
+  return [...remapPairs(roots), toolchainPair(toolchain)].map(([dir, label]) => `--remap-path-prefix=${dir}=${label}`);
 }
 
 /**
