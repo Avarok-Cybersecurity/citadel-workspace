@@ -8,6 +8,8 @@
  * a live session and are not under test) and the permission hook (its answer is the input here).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Installs not known: every stored tab shows (installed-tabs.ts); these are about the stored list.
+import { INSTALLS_UNKNOWN } from '@/lib/node-tabs/installed-tabs';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AppInstall } from 'citadel-workspace-client-ts';
@@ -58,7 +60,7 @@ const REFUSING: import('../use-node-tabs').NodeTabsWriter = {
 };
 
 function Pane({ zoneEnv }: { zoneEnv: AppZoneEnvironment }): JSX.Element {
-  const model: import('../use-node-tabs').NodeTabsModel = useNodeTabs({ nodeId: 'n1', chatEnabled: false, nodeMetadata: { app_tabs: [APP] }, workspaceMetadata: { default_app_tabs: [] }, writer: REFUSING });
+  const model: import('../use-node-tabs').NodeTabsModel = useNodeTabs({ nodeId: 'n1', chatEnabled: false, nodeMetadata: { app_tabs: [APP] }, workspaceMetadata: { default_app_tabs: [] }, here: INSTALLS_UNKNOWN, writer: REFUSING });
   return (
     <AppZoneContext.Provider value={zoneEnv}>
       <NodeTabs

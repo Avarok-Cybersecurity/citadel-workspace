@@ -100,4 +100,38 @@ const onlyTheSelectedPanelTakesTheHeight = async ({ page, url }) => {
   }
 };
 
-export const NODE_TAB_CHECKS = { theNodeTabRowFits, theTabViewFits, onlyTheSelectedPanelTakesTheHeight };
+/** Only the selected tab's panel is laid out, and it holds `testId`: the pane is not left blank. */
+async function onlyPanelHolds(page, testId) {
+  const laidOut = await page.locator('[role="tabpanel"]').evaluateAll((nodes) => nodes
+    .filter((n) => n.getClientRects().length > 0)
+    .map((n) => ({ height: n.getBoundingClientRect().height, holds: n.querySelector('[data-testid]')?.getAttribute('data-testid') ?? null })));
+  assert.equal(laidOut.length, 1, `${laidOut.length} panels are laid out: ${JSON.stringify(laidOut)}`);
+  assert.equal(laidOut[0].holds, testId, `the panel shown holds ${laidOut[0].holds}, not ${testId}`);
+  assert.ok(laidOut[0].height > 100, `the panel shown is ${laidOut[0].height}px tall`);
+}
+
+/**
+ * Uninstalled, the Calendar's tab leaves the row at once and the reader, who had it open, is put
+ * back on the page (its panel laid out, not a blank pane); installed again, the tab returns. The
+ * tab is first shown there and open, so its absence is not a locator that never matched.
+ */
+const anUninstalledAppsTabLeavesTheRow = async ({ page, url }) => {
+  await page.goto(url('node-tabs-uninstall'));
+  const list = page.getByRole('tablist', { name: 'Page tabs' });
+  const calendar = list.getByRole('tab', { name: 'Calendar', exact: true });
+  await calendar.waitFor({ state: 'visible' });
+  await calendar.click();
+  await page.waitForFunction(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent === 'Calendar');
+  await onlyPanelHolds(page, 'node-tabs-panel-net.avarok.calendar');
+
+  await page.getByTestId('harness-uninstall').click();
+  await calendar.waitFor({ state: 'detached' });
+  assert.deepEqual(await list.getByRole('tab').allTextContents(), ['Page', 'Chat'], 'the row after the uninstall');
+  assert.equal(await list.getByRole('tab', { selected: true }).textContent(), 'Page', 'the reader was not put back on the page');
+  await onlyPanelHolds(page, 'node-tabs-page');
+
+  await page.getByTestId('harness-reinstall').click();
+  await calendar.waitFor({ state: 'visible' });
+};
+
+export const NODE_TAB_CHECKS = { theNodeTabRowFits, theTabViewFits, onlyTheSelectedPanelTakesTheHeight, anUninstalledAppsTabLeavesTheRow };
