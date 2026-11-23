@@ -1,12 +1,15 @@
 /**
  * A file opens in the app registered for its extension, from the file browser and from a chat
- * attachment: a .md in Citadel Docs, an .ics in the Calendar. The .ics is reviewed before anything
- * is saved: Cancel adds nothing, Import adds its event to the member's own calendar.
+ * attachment, and a file no app here opens is downloaded and says so.
  *
- * The admin uploads both files to Server Storage and shares both into a fresh office's channel.
- * Each is opened from its menu ("Open in <app>"), never through a test hook; only what a person sees
- * is asserted: the menu entries, the opened document, the review's title and count, and the event
- * in the Calendar afterwards.
+ * The admin uploads a .md and an .ics to Server Storage and shares both into a fresh office's
+ * channel. The .md opens in Citadel Docs from each menu's "Open in <app>", never through a test hook.
+ *
+ * The .ics is the file with no app: this stack's server is built without the first-party signing key
+ * (citadel-workspace-server-kernel/build.rs), so it provisions no Calendar and nothing registers
+ * `ics`. Opening it downloads it and says why; its chat card offers Download and no Open. The
+ * Calendar's own handling of an opened .ics is covered where a Calendar exists: the component test
+ * an-opened-ics-is-reviewed-then-imported and the polish-harness check ics-import-review.
  */
 import { expect, type Locator, type Page } from '@playwright/test';
 import { adminMemberTest } from '../fixtures/multi-user.fixture.js';
@@ -16,18 +19,13 @@ const stamp: number = Date.now();
 const OFFICE: string = `Opens ${stamp}`;
 const MD: string = `minutes-${stamp}.md`;
 const ICS: string = `standup-${stamp}.ics`;
-const TITLE: string = `Standup ${stamp}`;
 /** The document's text: the spec's own data, stamped, so it can only be this upload's. */
 const BODY: string = `The boiler was serviced on run ${stamp}.`;
 const MD_BYTES: Buffer = Buffer.from(`# Minutes ${stamp}\n\n${BODY}\n`);
-/** An iCalendar UTC stamp (`20261201T090000Z`) for `ms`. */
-const icsStamp = (ms: number): string => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-/** Soon, so the event is on the Calendar's opening view (this month, or the agenda's first days). */
-const START: number = stamp + 10 * 60_000;
 const ICS_BYTES: Buffer = Buffer.from([
   'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//citadel//opens//EN',
-  'BEGIN:VEVENT', `UID:standup-${stamp}@example.com`, `DTSTAMP:${icsStamp(stamp)}`,
-  `DTSTART:${icsStamp(START)}`, `DTEND:${icsStamp(START + 15 * 60_000)}`, `SUMMARY:${TITLE}`, 'END:VEVENT',
+  'BEGIN:VEVENT', `UID:standup-${stamp}@example.com`, 'DTSTAMP:20261201T090000Z',
+  'DTSTART:20261201T090000Z', 'DTEND:20261201T091500Z', `SUMMARY:Standup ${stamp}`, 'END:VEVENT',
   'END:VCALENDAR', '',
 ].join('\r\n'));
 
@@ -64,35 +62,7 @@ async function openEntry(page: Page, name: string): Promise<Locator> {
   return entry!;
 }
 
-/**
- * The Calendar's review of the opened file. A member the Calendar still waits on (its one question:
- * may it use the workspace's group topics) is asked on the tab first; answering there starts it, and
- * the file it was handed is waiting for it.
- */
-async function theReview(page: Page): Promise<Locator> {
-  const review: Locator = page.getByTestId('ics-import-review');
-  const allow: Locator = page.getByTestId('app-zone-allow');
-  await expect(review.or(allow).first()).toBeVisible({ timeout: 60_000 });
-  if (!(await review.isVisible())) {
-    await expect(allow).toHaveText('Allow and start Calendar');
-    await allow.click();
-  }
-  await expect(review).toBeVisible({ timeout: 60_000 });
-  return review;
-}
-
-async function reviewsThenImports(page: Page): Promise<void> {
-  const review: Locator = await theReview(page);
-  await expect(review.getByRole('heading')).toHaveText(`Import ${ICS}`);
-  await expect(review.getByTestId('ics-import-count')).toHaveText('1 event to add to your own calendar.');
-  await expect(review.getByTestId('ics-import-event')).toContainText(TITLE);
-  await expect(review.getByTestId('ics-import-confirm')).toHaveText('Import 1 event');
-  await review.getByTestId('ics-import-confirm').click();
-  await expect(review).toHaveCount(0, { timeout: 30_000 });
-  await expect(page.getByTestId('calendar-pane').getByText(TITLE).first()).toBeVisible({ timeout: 30_000 });
-}
-
-adminMemberTest('a .md opens in Docs and an .ics in the Calendar, from the file browser and from chat', async ({ admin }) => {
+adminMemberTest('a .md opens in Docs from the file browser and from chat, and an .ics no app opens is downloaded', async ({ admin }) => {
   adminMemberTest.setTimeout(480_000);
   const page: Page = admin.page;
 
@@ -106,22 +76,15 @@ adminMemberTest('a .md opens in Docs and an .ics in the Calendar, from the file 
   await showsTheDocument(page.getByTestId('docs-file-screen'));
   await page.getByTestId('docs-file-back').click();
 
-  // Cancel is the control: the review writes nothing, so the event is not in the Calendar after it.
-  const ics: Locator = await openEntry(page, ICS);
-  await expect(ics).toHaveText('Open in Calendar');
-  await ics.click();
-  const review: Locator = await theReview(page);
-  await review.getByTestId('ics-import-cancel').click();
-  await expect(review).toHaveCount(0);
-  // The pane is shown first, so an absent title is the Calendar's answer, not a pane not yet drawn.
-  await expect(page.getByTestId('calendar-pane')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId('calendar-pane').getByText(TITLE)).toHaveCount(0);
+  // The notice is given only for a stored file that no app opens (file-openers.ts activateFile): a
+  // file still being stored downloads silently. So the notice is the proof, and the wait for it.
+  const notice: Locator = page.locator('[data-sonner-toast]').filter({ hasText: 'no app here opens .ics files' });
+  await expect(async (): Promise<void> => {
+    await fmItem(page, ICS).dblclick();
+    await expect(notice.first()).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 60_000 });
 
-  await page.goBack();
-  await (await openEntry(page, ICS)).click();
-  await reviewsThenImports(page);
-
-  // From a channel: both files shared into a fresh office's chat, each opened from its card's menu.
+  // From a channel: both files shared into a fresh office's chat, each reached from its card's menu.
   expect(await createOffice(page, admin.username, OFFICE), `the admin should create "${OFFICE}"`).toBe(true);
   expect(await navigateToOffice(page, admin.username, OFFICE)).toBe(true);
   expect(await switchToChatTab(page, admin.username)).toBe(true);
@@ -135,11 +98,12 @@ adminMemberTest('a .md opens in Docs and an .ics in the Calendar, from the file 
   await page.getByTestId('chat-file-open-in-app').click();
   await showsTheDocument(page.getByTestId('chat-file-opened'));
   await page.keyboard.press('Escape');
+  await expect(page.getByTestId('chat-file-opened')).toHaveCount(0);
 
+  // The same menu that offered Docs for the .md: Download is shown, so the menu is open and drawn,
+  // and it offers no app for the .ics.
   const icsCard: Locator = page.getByTestId('server-file').filter({ hasText: ICS });
   await icsCard.getByTestId('chat-file-menu').click();
-  await expect(page.getByTestId('chat-file-open-in-app')).toHaveText('Open in Calendar');
-  await page.getByTestId('chat-file-open-in-app').click();
-  // The review naming this file is what proves the chat card handed it to the Calendar.
-  await reviewsThenImports(page);
+  await expect(page.getByTestId('chat-file-download')).toBeVisible();
+  await expect(page.getByTestId('chat-file-open-in-app')).toHaveCount(0);
 });
