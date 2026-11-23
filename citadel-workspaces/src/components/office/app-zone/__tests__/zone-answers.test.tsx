@@ -50,6 +50,8 @@ function env(installs: AppInstall[], runtime: AppZoneRuntime, claims: Pick<AppZo
       installs: async () => ({ ok: true, value: installs }),
       setDisabledForMe: async (_id: string, d: boolean) => ({ ok: true, value: d }),
     },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: (): void => undefined, linkUrl: (): string => '', copyText: async (): Promise<void> => undefined, ...claims,
   };
 }

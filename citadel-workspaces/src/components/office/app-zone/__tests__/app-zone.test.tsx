@@ -35,6 +35,8 @@ function env(w: Partial<World> = {}): TestEnvironment {
       installs: async () => (world.installs === null ? { ok: false, refusal: 'ServerFeatureUnavailable' } : { ok: true, value: world.installs }),
       setDisabledForMe: async (_id: string, d: boolean) => ({ ok: true, value: d }),
     },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: (link: AppLink): void => { opened.push(link); },
     linkUrl: (link: AppLink): string => `https://work.example/workspace?app=${link.appId}`,
     copyText: async (t: string): Promise<void> => { copied.push(t); },
@@ -72,7 +74,7 @@ describe('an app zone', () => {
   it('a hidden app and a missing one read the same, with no icon of its own', async () => {
     zone(env({ listing: null }));
     const el: HTMLElement = await state('not-available');
-    expect(el.textContent).toBe('This zone needs “com.acme.kanban”, which is not available to you.');
+    expect(el.textContent).toBe('This zone needs “com.acme.kanban”, which is not available to you.Ask a workspace admin whether it can be installed for you.');
     expect(screen.getByTestId('app-icon-generic')).toBeTruthy();
   });
 

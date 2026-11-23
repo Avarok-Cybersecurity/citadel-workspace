@@ -30,8 +30,8 @@ describe('the close reason for what a zone shows next', () => {
     const cases: [ZoneView, CloseReason][] = [
       [{ kind: 'ready', app: KANBAN, install: RUNNING }, 'unmount'],
       [{ kind: 'ready', app: KANBAN, install: { ...RUNNING, manifest_sha256: '2'.repeat(64) } }, 'version_update'],
-      [{ kind: 'loading' }, 'unmount'], [{ kind: 'not-available' }, 'unmount'],
-      [{ kind: 'install', name: 'Kanban' }, 'uninstall'], [{ kind: 'ask-admin', name: 'Kanban' }, 'uninstall'],
+      [{ kind: 'loading' }, 'unmount'], [{ kind: 'failed' }, 'unmount'], [{ kind: 'not-available' }, 'unmount'],
+      [{ kind: 'install', name: 'Kanban', elsewhere: false }, 'uninstall'], [{ kind: 'ask-admin', name: 'Kanban', elsewhere: true }, 'uninstall'],
       [{ kind: 'disabled', name: 'Kanban', install: RUNNING }, 'access_revoked'], [{ kind: 'suspended', name: 'Kanban' }, 'access_revoked'],
       [{ kind: 'needs-consent', name: 'Kanban', version: '2.0.0' }, 'version_update'], [{ kind: 'outdated', name: 'Kanban', installed: '1.0.0' }, 'version_update'],
     ];
@@ -77,6 +77,8 @@ function env(installs: AppInstall[], runtime: AppZoneRuntime, claims: Pick<AppZo
       installs: async () => ({ ok: true, value: installs }),
       setDisabledForMe: async (_id: string, d: boolean) => ({ ok: true, value: d }),
     },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: (): void => undefined, linkUrl: (): string => '', copyText: async (): Promise<void> => undefined, ...claims,
   };
 }

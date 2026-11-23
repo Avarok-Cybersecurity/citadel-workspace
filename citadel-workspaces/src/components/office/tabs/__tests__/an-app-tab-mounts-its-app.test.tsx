@@ -50,6 +50,8 @@ function env(listing: ListedApp, runtime: AppZoneRuntime): AppZoneEnvironment {
   return {
     nodeId: 'n1', me: 'alice', ancestors: [], mayInstall: 'yes', runtime,
     data: { listing: async () => ({ ok: true, value: listing }), installs: async () => ({ ok: true, value: [INSTALL] }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }) },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: () => undefined, linkUrl: () => '', copyText: async () => undefined, ...zoneClaims(),
   };
 }

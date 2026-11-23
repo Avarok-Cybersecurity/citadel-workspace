@@ -19,6 +19,8 @@ function env(installs: AppInstall[], runtime: AppZoneRuntime): AppZoneEnvironmen
   return {
     nodeId: 'n-2', me: 'alice', ancestors: [], mayInstall: 'yes', runtime,
     data: { listing: async () => ({ ok: true, value: KANBAN }), installs: async () => ({ ok: true, value: installs }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }) },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: () => undefined, linkUrl: () => '', copyText: async () => undefined, ...zoneClaims(),
   };
 }

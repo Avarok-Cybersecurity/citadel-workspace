@@ -10,11 +10,13 @@
  * what is bound and `nodeId` is the workspace's root, where a workspace-wide install reaches.
  */
 import { useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { AppIcon } from 'citadel-workspace-client-ts';
 import { AppZonePage } from '@/components/office/app-zone/AppZonePage';
 import { AppZoneContext, type AppTabMount, type AppZoneEnvironment, type AppZoneRuntime } from '@/components/office/app-zone/app-zone-environment';
 import { pageZoneRuntime } from '@/components/office/app-zone/lazy-runtime';
 import { useGlueBinding, type GlueBinding } from '@/components/office/app-zone/use-glue-binding';
-import { usePlacedApp, type PlacedApp } from '@/components/office/app-zone/use-placed-app';
+import { usePlacedApp, type PlacedApp, type PlaceholderActions } from '@/components/office/app-zone/use-placed-app';
+import type { PlaceholderView } from '@/components/office/app-zone/AppZoneRequired';
 import { recordAppNoticeDelivery } from '@/lib/citadel-apps/app-notice-delivery';
 import { CALENDAR_APP_ID } from '@/lib/calendar/app-id';
 import { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
@@ -26,7 +28,13 @@ import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
 export type CalendarReach =
   | { readonly kind: 'waiting' }
-  /** No Calendar reaches this member here, or it cannot start: `why` says which, for a member to read. */
+  /**
+   * The Calendar does not reach this member yet, for the reason the zone view decided (not
+   * installed, not for them here, turned off, asking them first, not loaded...), with what they
+   * can do about it: the same view and actions an app tab's placeholder draws (AppZoneRequired).
+   */
+  | { readonly kind: 'placeholder'; readonly view: PlaceholderView; readonly actions: PlaceholderActions; readonly icon: AppIcon | null }
+  /** It reaches them but cannot start: `why` says why, for a member to read. */
   | { readonly kind: 'absent'; readonly why: string }
   | { readonly kind: 'ready'; readonly ports: CalendarPorts; readonly engine: CalendarEngine };
 
@@ -60,9 +68,12 @@ function Bound({ runtime, tab, children }: { runtime: AppZoneRuntime; tab: AppTa
 function Placed({ me, purpose, children }: WithCalendarProps): JSX.Element {
   const env: AppZoneEnvironment | null = useContext(AppZoneContext);
   if (env === null) throw new Error('WithCalendar renders its own zone environment');
-  const { view, waiting }: PlacedApp = usePlacedApp({ app: CALENDAR_APP_ID, zone: purpose, height: 0, floor: null }, env, 'tab');
+  const { view, waiting, actions, facts }: PlacedApp = usePlacedApp({ app: CALENDAR_APP_ID, zone: purpose, height: 0, floor: null }, env, 'tab');
   if (view.kind === 'loading' || waiting) return <>{children({ kind: 'waiting' })}</>;
-  if (view.kind !== 'ready') return <>{children({ kind: 'absent', why: 'The Calendar is not available to you in this workspace.' })}</>;
+  if (view.kind !== 'ready') {
+    const icon: AppIcon | null = typeof facts.listing === 'object' ? facts.listing.manifest.icon : null;
+    return <>{children({ kind: 'placeholder', view, actions, icon })}</>;
+  }
   if (env.runtime === null) return <>{children({ kind: 'absent', why: 'Apps cannot run on this page.' })}</>;
   return <Bound runtime={env.runtime} tab={{ install: view.install, manifest: view.app.manifest, tabId: purpose, nodeId: WORKSPACE_ROOT_ID, me }}>{children}</Bound>;
 }

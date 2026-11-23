@@ -2,11 +2,14 @@
 import { useEffect, useState } from 'react';
 import type { AppInstall } from 'citadel-workspace-client-ts';
 import type { ListedApp } from '@/lib/citadel-apps/listing-model';
-import type { AppsResult } from '@/lib/workspace-service/apps-operations';
+import type { AppsFailure, AppsResult } from '@/lib/workspace-service/apps-operations';
 import { useDisabledForMe } from '@/lib/citadel-apps/disabled-for-me';
 import { usePeerForMe } from '@/lib/citadel-apps/peer-for-me';
 import type { AppZoneEnvironment } from './app-zone-environment';
-import type { ZoneFacts } from './zone-state';
+import type { FactGap, ZoneFacts } from './zone-state';
+
+/** A request that was answered with a refusal is `unavailable`; one never answered, or unreadable, `failed`. */
+const gapOf = (r: { ok: false; refusal: AppsFailure }): FactGap => (r.refusal === 'NoAnswer' || r.refusal === 'Malformed' ? 'failed' : 'unavailable');
 
 export function useZoneFacts(env: AppZoneEnvironment, appId: string): ZoneFacts {
   const [listing, setListing] = useState<ZoneFacts['listing']>('loading');
@@ -16,8 +19,8 @@ export function useZoneFacts(env: AppZoneEnvironment, appId: string): ZoneFacts 
 
   useEffect(() => {
     let live: boolean = true;
-    void env.data.listing(appId).then((r: AppsResult<ListedApp>) => { if (live) setListing(r.ok ? r.value : 'unavailable'); });
-    void env.data.installs().then((r: AppsResult<AppInstall[]>) => { if (live) setInstalls(r.ok ? r.value : 'unavailable'); });
+    void env.data.listing(appId).then((r: AppsResult<ListedApp>) => { if (live) setListing(r.ok ? r.value : gapOf(r)); });
+    void env.data.installs().then((r: AppsResult<AppInstall[]>) => { if (live) setInstalls(r.ok ? r.value : gapOf(r)); });
     return (): void => { live = false; };
   }, [env.data, appId]);
 

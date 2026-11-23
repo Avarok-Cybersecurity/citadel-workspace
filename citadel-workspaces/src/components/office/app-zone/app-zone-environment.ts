@@ -97,6 +97,8 @@ export interface AppZoneEnvironment {
   /** Whether this person may install apps for themselves (`AppInstall`). */
   mayInstall: Tri;
   data: ZoneDataPort;
+  /** Ask for the page's apps data again (a placeholder's "Try again"), as an install change does. */
+  reload: () => void;
   runtime: AppZoneRuntime | null;
   /** Open the marketplace on an app, as its link would. */
   openLink: (link: AppLink) => void;

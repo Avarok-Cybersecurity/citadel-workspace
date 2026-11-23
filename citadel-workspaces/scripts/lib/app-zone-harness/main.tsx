@@ -132,6 +132,8 @@ async function start(): Promise<void> {
   const env: AppZoneEnvironment = {
     nodeId: 'n-1', me: 'alice', ancestors: [], mayInstall: 'yes', runtime,
     data: { listing: async () => ({ ok: true, value: listedApps([listing])[0] }), installs: async () => ({ ok: true, value: [install] }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }) },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: () => undefined, linkUrl: () => '', copyText: async () => undefined, ...zoneClaims(),
   };
   const root: HTMLElement | null = document.getElementById('root');

@@ -22,6 +22,7 @@ export interface PlaceholderActions {
   onEnable: () => void;
   onCopyLink: () => Promise<void>;
   onOpenApps: () => void;
+  onRetry: () => void;
 }
 
 export interface PlacedApp {
@@ -66,6 +67,7 @@ export function usePlacedApp(props: ZoneProps, env: AppZoneEnvironment, kind: Pl
     onEnable: (): void => { void enable(); },
     onCopyLink: (): Promise<void> => env.copyText(env.linkUrl(link)),
     onOpenApps: (): void => env.openLink(link),
+    onRetry: (): void => env.reload(),
   };
   return { facts, view, waiting, reasonFor, actions };
 }
