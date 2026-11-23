@@ -180,6 +180,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     ice_servers: crate::kernel::ice_servers::IceServerSourceHandle,
     /// Where the workspace's sign-in settings live: the host's store, or none.
     sign_in_settings: crate::kernel::sign_in::SignInSettingsHandle,
+    /// What opens the workspace's billing portal: the host's, or none (a self-hosted server).
+    billing_portal: crate::kernel::billing::BillingPortalHandle,
     /// Told when an admin changes the support grant: the host's mirror of it, or none.
     support_grants: crate::kernel::telemetry::SupportGrantObserverHandle,
     /// Where agents' TURN usage reports go: the host's relay quota, or none, which meters none.
@@ -249,6 +251,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             first_connect_admin: self.first_connect_admin,
             ice_servers: self.ice_servers.clone(),
             sign_in_settings: self.sign_in_settings.clone(),
+            billing_portal: self.billing_portal.clone(),
             support_grants: self.support_grants.clone(),
             turn_usage: self.turn_usage.clone(),
             link_quota: self.link_quota.clone(),
@@ -308,6 +311,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             first_connect_admin: false,
             ice_servers: None,
             sign_in_settings: None,
+            billing_portal: None,
             support_grants: None,
             turn_usage: None,
             link_quota: None,
@@ -454,6 +458,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     pub fn sign_in_settings(&self) -> &crate::kernel::sign_in::SignInSettingsHandle {
         &self.sign_in_settings
+    }
+
+    /// Set by a hosted server's bootstrap: the host that opens the billing portal, or none, in
+    /// which case `OpenBillingPortal` answers that this server has none.
+    pub fn set_billing_portal(&mut self, host: crate::kernel::billing::BillingPortalHandle) {
+        self.billing_portal = host;
+    }
+
+    pub fn billing_portal(&self) -> &crate::kernel::billing::BillingPortalHandle {
+        &self.billing_portal
     }
 
     /// Set by the server bootstrap from `[identity]` and the server key.

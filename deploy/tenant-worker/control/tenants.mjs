@@ -7,7 +7,7 @@ import { ADDONS, COUPONS, entitlements, isPaid, tierIds } from "./plans.mjs";
 import { noAddons } from "./addons.mjs";
 import { CLAIM_SEAL, digestsEqual, randomHex, RESERVATION_SEAL, seal, sha256Hex, unseal } from "./secrets.mjs";
 import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
-import { stripe } from "./stripe.mjs";
+import { PORTAL_REFUSALS, portalFor } from "./billing-portal.mjs";
 import { json, refuse } from "./http.mjs";
 import { readAcceptedTerms } from "./customer-terms.mjs";
 import { expireCheckout, openCheckout } from "./checkout.mjs";
@@ -202,8 +202,10 @@ export async function tenantStatus(io, cfg, slug, sessionId) {
   return json({ ...answer, claim_code: claim });
 }
 
+/** The claim-code path to the billing portal (billing-portal.mjs has the session path). */
 export async function openPortal(io, cfg, slug, body) {
-  if (!cfg.stripeKey) return refuse("billing-not-configured", "billing is not available yet", 503);
+  // Before the code is read, so a deployment without billing is no oracle for slugs or codes.
+  if (!cfg.stripeKey) return portalRefusal("billing-not-configured");
   if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
   const row = await io.store.holder(slug, io.now());
   const presented = typeof body.claim_code === "string" && /^[0-9a-f]{64}$/.test(body.claim_code) ? body.claim_code : null;
@@ -211,12 +213,11 @@ export async function openPortal(io, cfg, slug, body) {
   if (!row || !presented || !digestsEqual(await sha256Hex(presented), row.claim_hash)) {
     return refuse("not-owner", "that claim code does not own this workspace", 403);
   }
-  if (!row.stripe_customer) return refuse("no-subscription", "this workspace has no subscription to manage", 404);
-  if (!cfg.portalConfiguration) return refuse("portal-not-configured", "managing a subscription is not available yet", 503);
-  const session = await stripe(io, cfg.stripeKey, "POST", "/billing_portal/sessions", {
-    customer: row.stripe_customer,
-    configuration: cfg.portalConfiguration,
-    return_url: `${cfg.publicOrigin}/`,
-  });
-  return json({ portal_url: session.url });
+  const opened = await portalFor(io, cfg, row);
+  return opened.refused ? portalRefusal(opened.refused) : json({ portal_url: opened.portal_url });
+}
+
+function portalRefusal(code) {
+  const { status, detail } = PORTAL_REFUSALS[code];
+  return refuse(code, detail, status);
 }

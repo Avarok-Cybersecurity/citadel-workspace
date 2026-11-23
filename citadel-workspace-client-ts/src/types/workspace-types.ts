@@ -19,6 +19,7 @@ export type { AppsRequest } from './generated/AppsRequest.js';
 export type { AppsResponse } from './generated/AppsResponse.js';
 export type { ArtifactLocation } from './generated/ArtifactLocation.js';
 export type { ArtifactRef } from './generated/ArtifactRef.js';
+export type { BillingPortalAnswer } from './generated/BillingPortalAnswer.js';
 export type { Capability } from './generated/Capability.js';
 export type { CapabilityRequest } from './generated/CapabilityRequest.js';
 export type { ChatDocumentsRequest } from './generated/ChatDocumentsRequest.js';

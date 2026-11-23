@@ -71,6 +71,7 @@ async fn hosted_with(meter: Arc<dyn UsageMeter>) -> Slot {
         None,
         None,
         identity(&config),
+        None,
     )
     .await
     .expect("the hosted kernel builds");
@@ -127,6 +128,7 @@ async fn a_hosted_kernel_keeps_chat_files_only_as_large_as_its_config_says() {
             None,
             None,
             identity(&config),
+            None,
         )
         .await
     };

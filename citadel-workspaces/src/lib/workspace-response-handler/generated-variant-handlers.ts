@@ -179,6 +179,13 @@ export function handleGeneratedVariants(
     return true;
   }
 
+  if (isVariant(response, 'BillingPortal')) {
+    // An answer to one request (workspace-service/billing-portal.ts), never fanned out; its
+    // portal_url, a bearer link, is redacted from the debug line every response gets.
+    eventEmitter.emit('workspace:raw-response', response);
+    return true;
+  }
+
   if (isVariant(response, 'Telemetry')) {
     // Not logged here: its records are other people's diagnostic lines. The requests in
     // telemetry-operations.ts wait on the raw event.
