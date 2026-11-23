@@ -1,5 +1,6 @@
-import type { AgentReconnectEvent } from '@/types/agent-reconnect';
+import type { AgentReconnectEvent, ReconnectReason } from '@/types/agent-reconnect';
 import type { AdmissionReason } from '@/lib/admission/refusal';
+import { RECONNECT_ESCALATION_MS, type Escalation } from './outage';
 import { accountLinkPath } from '@/lib/onboarding/account-link';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 
@@ -11,6 +12,9 @@ import { createValueStore, type ValueStore } from '@/lib/value-store';
  * requests. While the agent retries, the tab says "Reconnecting to <server>…";
  * when it is back, the P2P links the drop took down are brought up again; when
  * the agent gives up, the user is sent to sign in to that same account.
+ *
+ * A wait that outlasts an ordinary drop, and a give-up on a server that never answered, are
+ * the service's failure and are shown as that, in place of the workspace (outage.ts).
  *
  * Only this tab's own session counts. The notifications are routed by cid, but a
  * leader tab also sees ones no live tab claims, and acting on those would put
@@ -38,6 +42,8 @@ export interface ServerReconnectIO {
   reloadWorkspace: (cid: bigint) => Promise<void>;
   /** Leave for sign-in at `path`, telling the user why in `message`. */
   signInAgain: (path: string, message: string) => void;
+  /** The full-page notice a long wait or an unreachable server becomes. */
+  outage: Escalation;
 }
 
 export function reconnectingMessage(server: string): string {
@@ -69,8 +75,14 @@ function admissionMessage(server: string, reasonCode: AdmissionReason): string {
   return `${why}. Sign in again and complete the check to continue.`;
 }
 
-function signInMessage(server: string, reason: string | null, reasonCode: AdmissionReason | null): string {
-  if (reasonCode !== null) return admissionMessage(server, reasonCode);
+/** The server answered, and refused what the session signed in with: nothing here retries that. */
+function refusedMessage(server: string): string {
+  return `${server} no longer accepts the sign-in this session used: its password or its sign-in method changed. Sign in again to continue.`;
+}
+
+function signInMessage(server: string, reason: string | null, reasonCode: ReconnectReason | null): string {
+  if (reasonCode === 'sign_in_refused') return refusedMessage(server);
+  if (reasonCode === 'admission_required' || reasonCode === 'admission_failed') return admissionMessage(server, reasonCode);
   const plain: string | null = plainReason(reason);
   const why: string = plain === null ? '' : ` (${plain})`;
   return `Couldn't reconnect to ${server}${why}. Sign in again to continue.`;
@@ -79,7 +91,7 @@ function signInMessage(server: string, reason: string | null, reasonCode: Admiss
 /** Where to send the user, and what to tell them, for a session that cannot come back. */
 export interface SignInAfterLoss { path: string; message: string }
 
-export function signInAfterLoss(username: string, server: string, reason: string | null, reasonCode: AdmissionReason | null): SignInAfterLoss {
+export function signInAfterLoss(username: string, server: string, reason: string | null, reasonCode: ReconnectReason | null): SignInAfterLoss {
   return { path: accountLinkPath({ username, server }), message: signInMessage(server, reason, reasonCode) };
 }
 
@@ -89,11 +101,13 @@ export async function handleServerReconnectEvent(event: AgentReconnectEvent, io:
 
   if (event.kind === 'lost' && event.reconnecting) {
     io.setReconnecting(own.server);
+    io.outage.begin({ kind: 'reconnect-slow', cid: own.cid, signIn: null }, RECONNECT_ESCALATION_MS);
     return;
   }
 
   io.setReconnecting(null);
   if (event.kind === 'reconnected') {
+    io.outage.end();
     // Side by side: neither waits on the other, and a failure of either reaches the caller.
     const settled: PromiseSettledResult<void>[] = await Promise.allSettled([io.reloadWorkspace(own.cid), io.resumePeers()]);
     for (const outcome of settled) if (outcome.status === 'rejected') throw outcome.reason;
@@ -103,7 +117,14 @@ export async function handleServerReconnectEvent(event: AgentReconnectEvent, io:
   // Failed, or lost with the agent not retrying at all: either way this
   // session is gone and only signing in again brings it back.
   const reason: string | null = event.kind === 'failed' ? event.reason : null;
-  const reasonCode: AdmissionReason | null = event.kind === 'failed' ? event.reasonCode : null;
+  const reasonCode: ReconnectReason | null = event.kind === 'failed' ? event.reasonCode : null;
   const signIn: SignInAfterLoss = signInAfterLoss(own.username, own.server, reason, reasonCode);
+  // The server never answered: that is not the user's to fix by typing a password, so the
+  // page says whose failure it is and Retry takes them to the sign-in.
+  if (reasonCode === 'server_unreachable') {
+    io.outage.now({ kind: 'server-unreachable', cid: own.cid, signIn });
+    return;
+  }
+  io.outage.end();
   io.signInAgain(signIn.path, signIn.message);
 }

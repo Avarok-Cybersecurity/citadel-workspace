@@ -23,6 +23,8 @@ const VIEWPORTS = [{ name: 'desktop', width: 1280, height: 900 }, { name: 'phone
 const WASM = '**/cdoc/cdoc_wasm_editor_bg.wasm';
 /** Sub-pixel: layout snaps to device pixels, and a control that moved has moved by whole pixels. */
 const STILL_PX = 0.5;
+/** How far under the page's top edge the Keys check presses: inside the sheet, above any fold. */
+const PRESS_INSET_PX = 96;
 /** Extra letter-spacing standing for a wider font than the dev machine's (CI's Linux face drew the status words ~12% wider). */
 const WIDER_FACE_EM = 0.08;
 
@@ -132,7 +134,11 @@ async function keysStayInTheEditor(browser, viewport) {
   const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
   const before = await state();
   const c = await box(canvas);
-  await page.mouse.click(c.x + c.width / 2, c.y + c.height / 2);
+  // Near the page's top: its centre is below the fold wherever the title bar and ribbon stand taller
+  // (CI's Linux face), and a press there reaches nothing.
+  const press = { x: c.x + c.width / 2, y: c.y + PRESS_INSET_PX };
+  check(press.y < viewport.height, `${viewport.name}: the press lands on screen (y ${press.y.toFixed(0)} of ${viewport.height})`);
+  await page.mouse.click(press.x, press.y);
   const focus = await page.evaluate(() => document.activeElement?.tagName ?? 'none');
   check(focus === 'TEXTAREA', `${viewport.name}: a press on the page gives the editor's input the keys (${focus})`);
   await page.keyboard.press(`${mod}+b`);

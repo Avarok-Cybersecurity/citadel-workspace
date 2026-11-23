@@ -59,6 +59,7 @@ const STUCK: LoaderInputs = {
   keptTree: false,
   keptTreeLocked: false,
   refused: false,
+  outage: null,
 };
 
 describe('a removed account', () => {
@@ -87,7 +88,7 @@ describe('a removed account', () => {
   });
 
   it('is shown the refusal instead of the spinner', () => {
-    expect(loaderView(STUCK)).toEqual({ kind: 'spinner', message: 'Workspace data is taking longer than expected...', showConnectButton: true });
+    expect(loaderView(STUCK)).toEqual({ kind: 'unavailable', outage: 'workspace-timeout' });
     expect(loaderView({ ...STUCK, refused: true })).toEqual({ kind: 'refused' });
   });
 });

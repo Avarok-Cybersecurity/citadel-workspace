@@ -50,6 +50,15 @@ export function nodeStorage(storage, entitlements) {
   };
 }
 
+/** The Argon2 cost the node hashes a legacy registration's password with: the three `ARGON_*` vars. */
+export function argonCost(wasm, env) {
+  return new wasm.ArgonCost(
+    Number(required(env, "ARGON_LANES")),
+    Number(required(env, "ARGON_MEM_KIB")),
+    Number(required(env, "ARGON_TIME_COST")),
+  );
+}
+
 /**
  * Starts the node in `wasm` (the object's own instance) with the object's capabilities: `ice`
  * mints relay credentials, `signIn` is the object's TenantSignIn, `grants` the support-grant
@@ -65,11 +74,7 @@ export function nodeStorage(storage, entitlements) {
  */
 export function startNode(wasm, env, { config, storage, ice, signIn, grants, plan, meter, onExit, identity, billingPortal }) {
   if (typeof billingPortal !== "function") throw new Error("startNode needs billingPortal(): the tenant's own billing portal");
-  const argon = new wasm.ArgonCost(
-    Number(required(env, "ARGON_LANES")),
-    Number(required(env, "ARGON_MEM_KIB")),
-    Number(required(env, "ARGON_TIME_COST")),
-  );
+  const argon = argonCost(wasm, env);
   const ksf = ksfParams(env);
   const pq = new wasm.PqSignIn(signIn.takeSeed(), ksf.memKib, ksf.iterations, ksf.lanes, securityKeyRpId(env));
   const links = linkQuotaHost(plan);

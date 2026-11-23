@@ -48,6 +48,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly verify_app_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => number;
     readonly close_connection: () => any;
     readonly get_version: () => [number, number];
     readonly init: (a: number, b: number) => any;
@@ -58,7 +59,6 @@ export interface InitOutput {
     readonly send_direct_to_internal_service: (a: any) => any;
     readonly send_media_frame: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
     readonly types_hash: () => [number, number];
-    readonly verify_app_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => number;
     readonly wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut__web_sys_5d094b1de2ee9013___features__gen_CloseEvent__CloseEvent____Output_______: (a: number, b: number) => void;
     readonly wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut__web_sys_5d094b1de2ee9013___features__gen_MessageEvent__MessageEvent____Output_______: (a: number, b: number) => void;
     readonly wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut__wasm_bindgen_dc0159de9c09e5bc___JsValue____Output_______: (a: number, b: number) => void;

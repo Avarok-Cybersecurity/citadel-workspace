@@ -31,6 +31,15 @@ const ICS_BYTES: Buffer = Buffer.from([
   'END:VCALENDAR', '',
 ].join('\r\n'));
 
+/**
+ * Docs draws a document's text on a canvas, which no locator reads. What the page says in words is
+ * asserted: the import report names this run's file, and one page was laid out from its bytes.
+ */
+async function showsTheDocument(where: Locator): Promise<void> {
+  await expect(where.getByTestId('docs-page-status')).toHaveText(/^Page 1 of 1$/, { timeout: 120_000 });
+  await expect(where.getByTestId('docs-import-report')).toContainText(`Opening ${MD}`);
+}
+
 async function upload(page: Page, name: string, mimeType: string, buffer: Buffer): Promise<void> {
   const chooser = page.waitForEvent('filechooser', { timeout: 15_000 });
   chooser.catch(() => undefined);
@@ -55,9 +64,25 @@ async function openEntry(page: Page, name: string): Promise<Locator> {
   return entry!;
 }
 
-async function reviewsThenImports(page: Page): Promise<void> {
+/**
+ * The Calendar's review of the opened file. A member the Calendar still waits on (its one question:
+ * may it use the workspace's group topics) is asked on the tab first; answering there starts it, and
+ * the file it was handed is waiting for it.
+ */
+async function theReview(page: Page): Promise<Locator> {
   const review: Locator = page.getByTestId('ics-import-review');
+  const allow: Locator = page.getByTestId('app-zone-allow');
+  await expect(review.or(allow).first()).toBeVisible({ timeout: 60_000 });
+  if (!(await review.isVisible())) {
+    await expect(allow).toHaveText('Allow and start Calendar');
+    await allow.click();
+  }
   await expect(review).toBeVisible({ timeout: 60_000 });
+  return review;
+}
+
+async function reviewsThenImports(page: Page): Promise<void> {
+  const review: Locator = await theReview(page);
   await expect(review.getByRole('heading')).toHaveText(`Import ${ICS}`);
   await expect(review.getByTestId('ics-import-count')).toHaveText('1 event to add to your own calendar.');
   await expect(review.getByTestId('ics-import-event')).toContainText(TITLE);
@@ -78,15 +103,14 @@ adminMemberTest('a .md opens in Docs and an .ics in the Calendar, from the file 
   const md: Locator = await openEntry(page, MD);
   await expect(md).toHaveText('Open in Citadel Docs');
   await md.click();
-  await expect(page.getByTestId('docs-file-screen').getByText(BODY)).toBeVisible({ timeout: 120_000 });
+  await showsTheDocument(page.getByTestId('docs-file-screen'));
   await page.getByTestId('docs-file-back').click();
 
   // Cancel is the control: the review writes nothing, so the event is not in the Calendar after it.
   const ics: Locator = await openEntry(page, ICS);
   await expect(ics).toHaveText('Open in Calendar');
   await ics.click();
-  const review: Locator = page.getByTestId('ics-import-review');
-  await expect(review).toBeVisible({ timeout: 60_000 });
+  const review: Locator = await theReview(page);
   await review.getByTestId('ics-import-cancel').click();
   await expect(review).toHaveCount(0);
   // The pane is shown first, so an absent title is the Calendar's answer, not a pane not yet drawn.
@@ -109,7 +133,7 @@ adminMemberTest('a .md opens in Docs and an .ics in the Calendar, from the file 
   await mdCard.getByTestId('chat-file-menu').click();
   await expect(page.getByTestId('chat-file-open-in-app')).toHaveText('Open in Citadel Docs');
   await page.getByTestId('chat-file-open-in-app').click();
-  await expect(page.getByTestId('chat-file-opened').getByText(BODY)).toBeVisible({ timeout: 120_000 });
+  await showsTheDocument(page.getByTestId('chat-file-opened'));
   await page.keyboard.press('Escape');
 
   const icsCard: Locator = page.getByTestId('server-file').filter({ hasText: ICS });

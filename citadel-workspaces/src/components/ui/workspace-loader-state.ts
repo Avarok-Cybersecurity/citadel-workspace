@@ -11,6 +11,7 @@
  * hold every document behind the spinner until the server answers.
  */
 import { reconnectingMessage } from '@/lib/reconnect/server-reconnect';
+import type { OutageKind } from '@/lib/reconnect/outage';
 
 /** Here, not with the rest of encryption at rest's words (at-rest-copy.ts): the loader is on the landing path. */
 export const LOCKED_TREE_NOTICE: string = 'The workspace tree kept on this device is locked, so the workspace opens once the server answers.';
@@ -29,12 +30,15 @@ export interface LoaderInputs {
   keptTreeLocked: boolean;
   /** The server refused this account the workspace (lib/membership-refusal.ts): no wait ends that. */
   refused: boolean;
+  /** The outage this tab is showing for its session's server link (lib/reconnect/outage.ts). */
+  outage: OutageKind | null;
 }
 
 export type LoaderView =
   | { kind: 'ready' }
   | { kind: 'held-elsewhere' }
   | { kind: 'refused' }
+  | { kind: 'unavailable'; outage: OutageKind }
   | { kind: 'spinner'; message: string; showConnectButton: boolean };
 
 export function shouldLeaveForConnect(inputs: LoaderInputs): boolean {
@@ -43,7 +47,8 @@ export function shouldLeaveForConnect(inputs: LoaderInputs): boolean {
     && inputs.isLoading
     && !inputs.isAutoClaiming
     && !inputs.heldElsewhere
-    && inputs.reconnectingTo === null;
+    && inputs.reconnectingTo === null
+    && inputs.outage === null;
 }
 
 function spinnerMessage(inputs: LoaderInputs): string {
@@ -57,9 +62,13 @@ function spinnerMessage(inputs: LoaderInputs): string {
 export function loaderView(inputs: LoaderInputs): LoaderView {
   if (inputs.refused) return { kind: 'refused' };
   if (inputs.isLoading && inputs.heldElsewhere) return { kind: 'held-elsewhere' };
+  // The service's failure is the whole page: neither a workspace under a strip nor a spinner.
+  if (inputs.outage !== null) return { kind: 'unavailable', outage: inputs.outage };
   if (!inputs.isLoading && !inputs.isAutoClaiming) return { kind: 'ready' };
   if (inputs.reconnectingTo !== null && inputs.keptTree && !inputs.isAutoClaiming) return { kind: 'ready' };
   const waitingOnTheAgent: boolean = inputs.reconnectingTo !== null;
+  // Connected, and the workspace never came: it said "taking longer than expected" for ever.
+  if (inputs.workspaceDataTimeout && !waitingOnTheAgent && !inputs.isAutoClaiming) return { kind: 'unavailable', outage: 'workspace-timeout' };
   return {
     kind: 'spinner',
     message: spinnerMessage(inputs),
