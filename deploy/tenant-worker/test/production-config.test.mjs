@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { dispatch } from "../control/dispatch.mjs";
 import { config } from "../control/http.mjs";
+import { argonCost, newInstance } from "../control/tenant-node.mjs";
 import { createBody, freshSlug, outbound, post, production, productionEnv, tenantObject } from "./helpers.mjs";
 import deployScript from "../deploy.sh?raw";
 
@@ -41,6 +42,12 @@ describe("wrangler.toml, as wrangler reads it", () => {
       { pattern: "*.work.avarok.net/*", zone_name: "avarok.net" },
     ]);
     expect(assets).toMatchObject({ binding: "ASSETS", run_worker_first: true, not_found_handling: "single-page-application" });
+  });
+  it("hashes a legacy registration's password at no less than the SDK's floor", () => {
+    const wasm = newInstance();
+    expect(argonCost(wasm, productionEnv()).meetsFloor()).toBe(true);
+    // The control: the cost production ran with, at which the node warned "suitable for tests only".
+    expect(argonCost(wasm, productionEnv({ ARGON_MEM_KIB: "4096", ARGON_TIME_COST: "1" })).meetsFloor()).toBe(false);
   });
   it("refuses a diagnostics switch that is neither on nor off", () => {
     expect(() => config(productionEnv({ TENANT_DIAGNOSTICS: "yes" }))).toThrow(/TENANT_DIAGNOSTICS/);
