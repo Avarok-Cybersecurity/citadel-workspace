@@ -69,6 +69,8 @@ struct Account: Identifiable, Equatable {
     /// registered with; today it keeps only the resolved address, which for a tenant is Cloudflare's.
     let workspaceHost: String?
     let connected: Bool
+    /// The dot the agent names for the row (SessionDot.swift); nil for none.
+    let dot: SessionDot?
 }
 
 enum PanelAction {
@@ -154,6 +156,8 @@ extension Color {
     static let panelHairline = Color(red: 0x33 / 255, green: 0x34 / 255, blue: 0x44 / 255)
     static let panelAccent = Color(red: 0x9B / 255, green: 0x87 / 255, blue: 0xF5 / 255)
     static let panelConnected = Color(red: 0x12 / 255, green: 0xB9 / 255, blue: 0x81 / 255)
+    /// An account that needs its user to sign in again (SessionDot.yellow).
+    static let panelAttention = Color(red: 0xF5 / 255, green: 0xB9 / 255, blue: 0x42 / 255)
     static let panelText = Color.white.opacity(0.92)
     static let panelSecondary = Color(red: 0xB5 / 255, green: 0xA6 / 255, blue: 0xC9 / 255)
 }

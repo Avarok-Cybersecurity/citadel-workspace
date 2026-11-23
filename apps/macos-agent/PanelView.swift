@@ -88,12 +88,9 @@ struct AccountRow: View {
                 NoticeControls(account: account, row: row, perform: perform)
             }
             if account.connected {
-                HStack(spacing: 6) {
-                    Circle().fill(Color.panelConnected).frame(width: 8, height: 8)
-                    Text("Connected").font(.system(size: 12, weight: .medium)).foregroundColor(.panelConnected)
-                }
-                .accessibilityElement(children: .combine)
+                SessionBadge(dot: account.dot ?? .green)
             } else {
+                if let dot = account.dot { Circle().fill(dot.colour).frame(width: 8, height: 8).accessibilityHidden(true) }
                 Button("Log in") { perform(.logIn(account)) }
                     .buttonStyle(.borderedProminent)
                     .tint(.panelAccent)
@@ -107,7 +104,7 @@ struct AccountRow: View {
         .contentShape(Rectangle())
         .onTapGesture { perform(account.connected ? .openAccount(account) : .logIn(account)) }
         .accessibilityAddTraits(.isButton)
-        .accessibilityLabel("\(account.username), \(subtitle), \(account.connected ? "connected" : "not logged in")")
+        .accessibilityLabel("\(account.username), \(subtitle), \(account.dot == .yellow ? "sign in needed" : account.connected ? "connected" : "not logged in")")
     }
 
     /// The workspace when the agent knows it; otherwise the person's full name, then the state.

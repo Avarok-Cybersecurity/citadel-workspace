@@ -17,6 +17,7 @@ import type { PreSharedKey } from '@avarok/citadel-protocol-types';
 import type { AgentRequestBody } from '@/types/agent-request';
 import { connectFactorFields } from '../sign-in/factors';
 import type { SignInFactors } from '../sign-in/types';
+import { loadResumeLifetime } from '../resume/lifetime';
 
 export interface AuthConfig {
   init: () => Promise<void>;
@@ -80,6 +81,8 @@ export class AuthOperations {
       server_address: serverAddress.trim(),
       // Which factors this window offers; the server's policy decides which it needs.
       ...connectFactorFields(factors),
+      // How long this device asks to stay signed in across dropped connections (lib/resume).
+      resume_lifetime_s: loadResumeLifetime(),
       connect_mode: { Standard: { force_login: true } },
       udp_mode: "Disabled",
       keep_alive_timeout: null,
@@ -133,6 +136,7 @@ export class AuthOperations {
       username,
       proposed_password: stringToBytes(password),
       connect_after_register: true,
+      resume_lifetime_s: loadResumeLifetime(),
       session_security_settings: {
         security_level: settings.security_level,
         secrecy_mode: settings.secrecy_mode,

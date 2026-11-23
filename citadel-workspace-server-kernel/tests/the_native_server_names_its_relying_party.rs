@@ -31,6 +31,8 @@ impl SiteVerify for Unreached {
 
 /// The relying party the shared test config names.
 const NAMED: &str = "security_key_rp_id = \"localhost\"\n";
+/// The resume maximum the shared test config names.
+const RESUME: &str = "resume_max_lifetime_secs = 604800\n";
 
 fn start(kernel_toml: &str) -> Result<HostedSignIn, String> {
     let mut sections: HashMap<String, NativeSignInConfig> =
@@ -51,6 +53,26 @@ fn the_relying_party_is_required() {
         refused.contains("security_key_rp_id is required"),
         "{refused}"
     );
+}
+
+/// Control: read `resume_max_lifetime_secs` with `unwrap_or`, and a server starts without it.
+#[test]
+fn the_resume_maximum_is_required_and_zero_turns_it_off() {
+    let config = sign_in_without_admission(&sign_in_dir());
+    let without = config.replace(RESUME, "");
+    assert_ne!(without, config, "the control did not remove the key");
+    let refused = start(&without).err().expect("started without a maximum");
+    assert!(
+        refused.contains("resume_max_lifetime_secs is required"),
+        "{refused}"
+    );
+    let maximum = |toml: &str| {
+        let settings = start(toml).expect("starts").pq_sign_in.expect("settings");
+        settings.resume().map(|policy| policy.max_lifetime_s())
+    };
+    assert_eq!(maximum(&config), Some(604_800));
+    let off = config.replace(RESUME, "resume_max_lifetime_secs = 0\n");
+    assert_eq!(maximum(&off), None);
 }
 
 #[test]

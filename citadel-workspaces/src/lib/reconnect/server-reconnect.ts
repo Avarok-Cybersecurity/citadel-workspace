@@ -2,6 +2,8 @@ import type { AgentReconnectEvent, ReconnectReason } from '@/types/agent-reconne
 import type { AdmissionReason } from '@/lib/admission/refusal';
 import { RECONNECT_ESCALATION_MS, type Escalation } from './outage';
 import { accountLinkPath } from '@/lib/onboarding/account-link';
+import { versionRefusalCopyOf } from '@/lib/connection/version-refusal-copy';
+import { RESUME_ENDED_COPY } from '@/lib/resume/copy';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 
 /**
@@ -81,6 +83,9 @@ function refusedMessage(server: string): string {
 }
 
 function signInMessage(server: string, reason: string | null, reasonCode: ReconnectReason | null): string {
+  const update: string | null = versionRefusalCopyOf(reasonCode, reason);
+  if (update !== null) return update;
+  if (reasonCode === 'resume_credential_expired' || reasonCode === 'resume_credential_revoked') return RESUME_ENDED_COPY[reasonCode](server);
   if (reasonCode === 'sign_in_refused') return refusedMessage(server);
   if (reasonCode === 'admission_required' || reasonCode === 'admission_failed') return admissionMessage(server, reasonCode);
   const plain: string | null = plainReason(reason);

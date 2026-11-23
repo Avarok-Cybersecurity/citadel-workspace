@@ -11,7 +11,7 @@ use citadel_sdk::prelude::async_trait;
 use citadel_workspace_server_kernel::kernel::sign_in::admission::{
     CHECK_UNAVAILABLE, RESUME_GRACE,
 };
-use citadel_workspace_server_kernel::kernel::sign_in::pq::pq_sign_in_settings;
+use citadel_workspace_server_kernel::kernel::sign_in::pq::{pq_sign_in_settings, ResumeMaxLifetime};
 use citadel_workspace_server_kernel::kernel::sign_in::{
     AdmissionChallenge, AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal,
     KsfParams, PqAuthServerSettings, SignInSettingsStore, SignInSettingsUnavailable,
@@ -39,7 +39,8 @@ extern "C" {
 
 /// Post-quantum sign-in for this tenant: its OPRF seed, the Argon2id cost clients stretch a
 /// password factor with, and the WebAuthn relying party its security keys are scoped to
-/// (`PQ_SECURITY_KEY_RP_ID`). The seed is copied in once and never leaves; nothing here prints it.
+/// (`PQ_SECURITY_KEY_RP_ID`), and the longest a resume credential may live
+/// (`PQ_RESUME_MAX_LIFETIME_SECS`, 0 for none). The seed is copied in once and never leaves; nothing here prints it.
 /// Built by the kernel's `pq_sign_in_settings`, the same builder a native server uses.
 #[wasm_bindgen]
 pub struct PqSignIn(PqAuthServerSettings);
@@ -53,13 +54,15 @@ impl PqSignIn {
         iterations: u32,
         lanes: u32,
         security_key_rp_id: &str,
+        resume_max_lifetime_secs: u32,
     ) -> Result<PqSignIn, JsError> {
         let ksf = KsfParams {
             mem_kib,
             iterations,
             lanes,
         };
-        pq_sign_in_settings(oprf_seed, ksf, security_key_rp_id)
+        let resume = ResumeMaxLifetime::from_secs(u64::from(resume_max_lifetime_secs));
+        pq_sign_in_settings(oprf_seed, ksf, security_key_rp_id, resume)
             .map(Self)
             .map_err(|e| JsError::new(&e))
     }

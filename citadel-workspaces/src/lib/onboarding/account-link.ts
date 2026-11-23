@@ -23,7 +23,7 @@
  */
 import { validateUsername } from '@/lib/credential-rules';
 import { isWorkspaceServerShape } from '@/lib/default-workspace-server';
-import { parseLinkTarget, type LinkTarget } from './link-target';
+import { parseLinkTarget, SIGN_IN_TARGET, type LinkTarget } from './link-target';
 
 export interface AccountLink {
   readonly username: string;
@@ -126,6 +126,8 @@ export function accountLinkPath(link: AccountLink): string {
   if (link.server !== undefined && link.server.length <= MAX_SERVER_LENGTH && isWorkspaceServerShape(link.server)) {
     params.set('server', link.server);
   }
+  // The one target a page builds a link for: every other is built by the native app.
+  if (link.open?.kind === 'sign-in') params.set('open', SIGN_IN_TARGET);
   return `/?${params.toString()}`;
 }
 

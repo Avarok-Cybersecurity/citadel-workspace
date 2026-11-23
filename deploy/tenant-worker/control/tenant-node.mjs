@@ -7,7 +7,7 @@ import wasm from "../server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
 import { required } from "./http.mjs";
 import { enforcedEntitlements, METERING } from "./plans.mjs";
 import { limitOf } from "./entitlement-limits.mjs";
-import { ksfParams, securityKeyRpId } from "./tenant-sign-in.mjs";
+import { ksfParams, resumeMaxLifetimeSecs, securityKeyRpId } from "./tenant-sign-in.mjs";
 import { linkQuotaHost } from "./tenant-links.mjs";
 import { pathPolicyOf } from "./path-policy.mjs";
 import { TURN_BYTES_PER_MEMBER_HOUR, TurnIntake } from "./turn-cap.mjs";
@@ -73,7 +73,7 @@ export function argonCost(wasm, env) {
 export function startNode(wasm, env, { config, storage, ice, signIn, grants, plan, meter, onExit, identity }) {
   const argon = argonCost(wasm, env);
   const ksf = ksfParams(env);
-  const pq = new wasm.PqSignIn(signIn.takeSeed(), ksf.memKib, ksf.iterations, ksf.lanes, securityKeyRpId(env));
+  const pq = new wasm.PqSignIn(signIn.takeSeed(), ksf.memKib, ksf.iterations, ksf.lanes, securityKeyRpId(env), resumeMaxLifetimeSecs(env));
   const links = linkQuotaHost(plan);
   const pathPolicy = JSON.stringify(pathPolicyOf(plan()));
   const turnUsage = new TurnIntake(meter, Date.now, TURN_BYTES_PER_MEMBER_HOUR);

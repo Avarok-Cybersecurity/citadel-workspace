@@ -17,7 +17,7 @@ import { resolvePendingRedirect } from '@/lib/share/resolve-here';
 import { loaderView, shouldLeaveForConnect, type LoaderInputs, type LoaderView } from './workspace-loader-state';
 import { loadKeptTree, useKeptTree, type KeptTree } from '@/hooks/use-kept-tree';
 import { outage, type Outage } from '@/lib/reconnect/outage';
-import { ServiceUnavailable } from '@/components/outage/ServiceUnavailable';
+import { OutageNotice } from '@/components/outage/OutageNotice';
 
 // The marketplace's host once a workspace is up (app links, zones, the account menu); the modal loads on first open.
 const AppsModalHost: React.LazyExoticComponent<() => JSX.Element | null> = lazy(() =>
@@ -157,7 +157,7 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({ children }) =>
   if (view.kind === 'spinner') {
     return <WorkspaceLoaderSpinner loadingMessage={view.message} showConnectButton={view.showConnectButton} />;
   }
-  const notice: JSX.Element | null = view.kind === 'unavailable' ? <ServiceUnavailable kind={view.outage} onRetry={retry} /> : null;
+  const notice: JSX.Element | null = view.kind === 'unavailable' ? <OutageNotice kind={view.outage} onRetry={retry} /> : null;
   // A workspace that was open stays mounted under the notice, out of reach: unmounting it
   // would drop unsaved editor text and a call in progress for a link that may be back in a minute.
   if (notice !== null && loaderView({ ...inputs, outage: null }).kind !== 'ready') return notice;

@@ -61,6 +61,9 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
     ServerConnectionLost: { cid: targetCid, reconnecting: true, request_id: null },
     ServerReconnected: { cid: targetCid, request_id: null },
     ServerReconnectFailed: { cid: targetCid, reason: 'The server did not accept the session', request_id: null },
+    // The session's resume credential ran out (lib/resume/expiry-notice.ts): it answers no
+    // request, so `cid` is the only way to the tab that must say so.
+    ResumeCredentialExpired: { cid: targetCid, valid_until_utc: 1_700_000_000_000n, request_id: null },
     // The connection supervisor's report (types/agent-supervisor.ts): unsolicited,
     // so `cid` is the only route to the tab that holds the session it names.
     SupervisorNotification: { cid: targetCid, peer_cid: sender_cid, state: 'Healing', request_id: null },
@@ -120,6 +123,7 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
         'PeerIdentityKeyChangedNotification',
         'PeerPathChangedNotification',
         'PeerRegisterNotification',
+        'ResumeCredentialExpired',
         'ServerConnectionLost',
         'ServerReconnectFailed',
         'ServerReconnected',

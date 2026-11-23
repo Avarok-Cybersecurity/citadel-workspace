@@ -46,6 +46,7 @@ async fn the_shipped_agent_signs_with_the_identity_and_marks_a_legacy_peer_unver
     let (sink, stream) = open(bob_agent).await;
     let request_id = Uuid::new_v4();
     let register = InternalServiceRequest::Register {
+        resume_lifetime_s: None,
         request_id,
         server_addr: server.clone(),
         full_name: "Legacy".to_string(),

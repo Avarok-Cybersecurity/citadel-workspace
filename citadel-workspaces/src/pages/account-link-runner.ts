@@ -31,7 +31,7 @@ export async function runAccountLink(
     return null;
   }
   // Taken by the workspace once it is open (NotificationCenter, TopBar).
-  if (link.open) stashLinkTarget(link.open);
+  if (link.open && link.open.kind !== 'sign-in') stashLinkTarget(link.open);
   return openAccountLink<OrphanSessionWithWorkspace>(link, {
     listSessions: async () => {
       await connectionManager.waitForReady();
@@ -53,6 +53,8 @@ export async function runAccountLink(
         // The landing page's own sign-in; the switch's notice has already said the session ended.
         signInAgain: (request: SignedOutSignIn) => deps.login(request.username, request.server),
       }),
+    endSession: (session: OrphanSessionWithWorkspace): Promise<void> =>
+      connectionManager.disconnect({ cid: session.cid, username: session.username, serverAddress: session.server_address }),
     login: deps.login,
   });
 }

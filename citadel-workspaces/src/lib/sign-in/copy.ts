@@ -65,11 +65,12 @@ export const POLICY_COPY: Record<SignInPolicy, { label: string; detail: string }
 };
 
 /**
- * Said where a policy that asks for a key is chosen. The agent brings a dropped session back
- * with the password alone; a key needs a touch it cannot make, so such a session signs in again.
+ * Said where a policy that asks for a key is chosen. The agent cannot touch a key, so it brings
+ * a dropped session back only for as long as the device stays signed in (lib/resume/lifetime.ts);
+ * after that, or on a workspace that does not allow it, such a session signs in again.
  */
 export const KEY_POLICY_RECONNECT_NOTE: string =
-  "If your connection to the workspace drops, Citadel can't touch your key for you, so it will ask you to sign in again.";
+  "If your connection to the workspace drops, Citadel signs you back in without your key for as long as this device stays signed in (Settings, Security). After that it will ask you to sign in again.";
 
 /** Whether signing in under `policy` needs a key touch. */
 export const asksForKey = (policy: SignInPolicy): boolean => policy !== 'Password';

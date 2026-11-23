@@ -43,6 +43,7 @@ function controlled(): Controlled {
       listSessions: () => answered,
       signInDeadline: () => deadline,
       switchTo: async (session: Session): Promise<void> => { switched.push(session); },
+      endSession: async (): Promise<void> => undefined,
       login: (username: string): void => { loginFor.push(username); },
     },
   };

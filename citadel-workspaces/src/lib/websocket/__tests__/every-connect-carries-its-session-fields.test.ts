@@ -40,7 +40,7 @@ describe('a Connect', () => {
   it('carries exactly these fields', async () => {
     expect(Object.keys(await connectPayload()).sort()).toEqual([
       'admission_token', 'connect_mode', 'keep_alive_timeout', 'password',
-      'request_id', 'security_key', 'server_address', 'server_password', 'session_security_settings', 'udp_mode', 'username',
+      'request_id', 'resume_lifetime_s', 'security_key', 'server_address', 'server_password', 'session_security_settings', 'udp_mode', 'username',
     ]);
   });
 

@@ -91,6 +91,12 @@ ksf = "owasp-floor"
 # resolves it there; a server whose UI is served from work.example.com names
 # "work.example.com".
 security_key_rp_id = "localhost"
+# The longest, in seconds, a device may sign in again without the account's
+# factors after a full sign-in (a resume credential: what lets a dropped
+# connection come back without a password or a security-key touch). Each device
+# asks for what its user chose, and is given no more than this. 604800 is seven
+# days. 0 never allows it: every dropped connection then signs in again.
+resume_max_lifetime_secs = 604800
 # "none": no human check, and the admin's "Require a human check" switch cannot
 # be turned on. "turnstile": the check runs whenever an admin turns it on; it
 # then needs every key below.

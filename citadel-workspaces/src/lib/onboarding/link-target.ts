@@ -11,7 +11,16 @@
 export type LinkTarget =
   | { readonly kind: 'conversation' | 'call'; readonly peerCid: bigint }
   | { readonly kind: 'requests' }
-  | { readonly kind: 'settings' };
+  | { readonly kind: 'settings' }
+  /**
+   * The account's sign-in itself, even while its session is live: what the agent's "sign in
+   * again" notice opens once a session's resume credential has run out. Acted on by the link
+   * (open-account-link.ts), never stashed: there is nothing in the workspace to open.
+   */
+  | { readonly kind: 'sign-in' };
+
+/** `?open=` for the account's sign-in. */
+export const SIGN_IN_TARGET: string = 'sign-in';
 
 const U64_MAX: bigint = 18446744073709551615n;
 const PEER_TARGET: RegExp = /^(conversation|call):([1-9][0-9]{0,19})$/;
@@ -20,6 +29,7 @@ const PEER_TARGET: RegExp = /^(conversation|call):([1-9][0-9]{0,19})$/;
 export function parseLinkTarget(raw: string): LinkTarget | null {
   if (raw === 'requests') return { kind: 'requests' };
   if (raw === 'settings:notifications') return { kind: 'settings' };
+  if (raw === SIGN_IN_TARGET) return { kind: 'sign-in' };
   const match: RegExpExecArray | null = PEER_TARGET.exec(raw);
   if (!match) return null;
   const peerCid: bigint = BigInt(match[2]);

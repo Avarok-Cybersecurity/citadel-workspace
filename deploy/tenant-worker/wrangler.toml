@@ -88,6 +88,11 @@ PQ_KSF_LANES = "1"
 # UI has always enrolled keys under on work.avarok.net and every <slug>.work.avarok.net
 # (citadel-workspaces/src/lib/passkey/rp-id.ts PRODUCTION_RP_ID; a UI test holds the two equal).
 PQ_SECURITY_KEY_RP_ID = "work.avarok.net"
+# The longest, in seconds, a device may sign in again without the account's factors after a full
+# sign-in (a resume credential): what lets a dropped connection come back without a password or a
+# security-key touch. Each device asks for what its user chose and is given no more than this.
+# Required, with no default: 604800 is seven days, and 0 issues none.
+PQ_RESUME_MAX_LIFETIME_SECS = "604800"
 LOG_FILTER = "citadel=warn"
 # The STUN servers each tenant's node learns its NAT mapping from (server-wasm `TenantServer`):
 # required, at least three distinct host:port endpoints, with no default list.

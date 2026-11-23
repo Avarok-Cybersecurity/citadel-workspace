@@ -142,6 +142,7 @@ async fn a_kernel_s_answer_verifies_the_pinned_server() {
 
     let request_id = Uuid::new_v4();
     let register = InternalServiceRequest::RegisterIdentity {
+        resume_lifetime_s: None,
         request_id,
         server_addr: server.clone(),
         handle: "alice".to_string(),
