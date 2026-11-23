@@ -6,14 +6,14 @@ use super::apps_gather::{gather, members, node_exists, snapshot};
 use super::apps_header::rewrite_mdx;
 use super::apps_offer::{commit_artifact, obtain_artifact, resolve_offer};
 use crate::kernel::apps::facts::{authority_node, ViewsNeeded};
-use crate::kernel::apps::install::{decide_install, InstallInput};
+use crate::kernel::apps::install::{decide_install, stores_module, InstallInput};
 use crate::kernel::apps::md_header::inject;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::transaction::apps_store::APPS_LOCK;
 use crate::WORKSPACE_ROOT_ID;
 use citadel_sdk::prelude::Ratchet;
 use citadel_workspace_types::apps::InstallScope;
-use citadel_workspace_types::apps_install::{AppInstall, AppsRefusal, InstallState, ListingSource};
+use citadel_workspace_types::apps_install::{AppInstall, AppsRefusal, InstallState};
 use citadel_workspace_types::apps_protocol::AppsRequest;
 use citadel_workspace_types::apps_responses::{AppsAuditEvent, AppsResponse};
 
@@ -78,10 +78,12 @@ async fn install_steps<R: Ratchet + Send + Sync + 'static>(
         scope_node_exists: node_exists(kernel, authority).await?,
         facts: &facts,
     })?;
-    // A first-party release's module is in the UI bundle (`first_party`): there is none to store.
-    let artifact = match offered.source {
-        ListingSource::FirstParty => None,
-        _ => Some(obtain_artifact(kernel, caller, &manifest.artifact).await?),
+    // A glue release's module is in the UI bundle: there is none to store. Any other release's
+    // is obtained and checked against its sha256, a first-party one's included.
+    let artifact = if stores_module(manifest) {
+        Some(obtain_artifact(kernel, caller, &manifest.artifact).await?)
+    } else {
+        None
     };
     let scope_key = scope.scope_key().ok_or(AppsRefusal::ScopeNotSupported)?;
 

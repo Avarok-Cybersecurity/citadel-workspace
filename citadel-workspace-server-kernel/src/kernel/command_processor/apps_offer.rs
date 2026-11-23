@@ -2,7 +2,8 @@
 //! holds, and the module from the store, the caller's upload or the host's fetcher. The
 //! signature is verified before anything is fetched, and the bytes against the digest after.
 //! A first-party release recorded at provisioning (`FirstPartyReleases`) is offered as its exact
-//! signed bytes, verified when it was recorded; the server carries no module for it.
+//! signed bytes, verified when it was recorded. Whether it brings a module is its ABI's to say
+//! (`install::stores_module`): a glue release's is in the UI bundle, any other's is obtained.
 
 use super::apps::{Caller, Step};
 use super::apps_gather::gather;
