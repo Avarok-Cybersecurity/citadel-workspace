@@ -13,7 +13,7 @@ import { encodeAppEvent } from '../../host/app-event';
 import { decodeCbor, type Decoded } from '../../host/cbor';
 import type { ToWorker } from '../../host/worker-protocol';
 import type { OpenedFile } from '../opened-files';
-import { FakeRuntimeKernel, hostOf, release, rig, slotsOf, tabOf, type Rig } from './runtime-rig';
+import { APP_ID, FakeRuntimeKernel, hostOf, release, rig, slotsOf, tabOf, type Rig } from './runtime-rig';
 
 const ICS: FileOpens = { extensions: ['ics'], surface: 'node_tab', max_bytes: 16n };
 const TAB: AppSurface[] = ['node_tab'];
@@ -60,14 +60,14 @@ describe('a file opened in an installed app', () => {
 
   it('reaches the running instance once, whether offered before it ran or while it runs', async () => {
     const { r } = await runningTab(ICS);
-    r.opened.offer('inst-1', invite);
+    r.opened.offer(APP_ID, invite);
     await settle();
     expect(openedEvents(r)).toEqual([{ open_file: { name: 'Team.ICS', mime: 'text/calendar', bytes: invite.bytes } }]);
 
     const kernel: FakeRuntimeKernel = new FakeRuntimeKernel(release(appModule(), [], { surfaces: TAB, opens: ICS }));
     const early: Rig = rig(kernel);
     rigs.push(early);
-    early.opened.offer('inst-1', invite);
+    early.opened.offer(APP_ID, invite);
     const host: HTMLDivElement = hostOf(320, 400);
     early.runtime.mountPane(slotsOf(host), tabOf(kernel.rel));
     await until(() => host.dataset.appState === 'running', 4000);
@@ -85,13 +85,13 @@ describe('a file opened in an installed app', () => {
     ];
     for (const [opens, surfaces, file, why] of cases) {
       const { r } = await runningTab(opens, surfaces);
-      r.opened.offer('inst-1', file);
+      r.opened.offer(APP_ID, file);
       await settle();
       expect(openedEvents(r), why).toEqual([]);
       expect(r.reports.join('\n'), why).toContain(why);
     }
     const { r } = await runningTab(ICS);
-    r.opened.offer('inst-1', { ...invite, bytes: new Uint8Array(16) });
+    r.opened.offer(APP_ID, { ...invite, bytes: new Uint8Array(16) });
     await settle();
     expect(openedEvents(r)).toHaveLength(1);
   });
@@ -99,11 +99,11 @@ describe('a file opened in an installed app', () => {
   it('waits for the next instance once the tab has closed', async () => {
     const { r, close } = await runningTab(ICS);
     await close();
-    r.opened.offer('inst-1', invite);
+    r.opened.offer(APP_ID, invite);
     await settle();
     expect(openedEvents(r)).toEqual([]);
     const taken: OpenedFile[] = [];
-    r.opened.take('inst-1', (file: OpenedFile): void => { taken.push(file); });
+    r.opened.take(APP_ID, (file: OpenedFile): void => { taken.push(file); });
     expect(taken).toEqual([invite]);
   });
 });

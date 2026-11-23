@@ -3,7 +3,8 @@
  * loaded for the page, its ports over the glue instance the tab was bound with, the member's
  * display zone (asked once, ZoneQuestion), and the store kept read from storage and refreshed on
  * StorageChanged (use-calendar-sources.ts), in CalendarPane. Its notices are under the member's
- * notification settings (notice-gate.ts); its reminders are the background's (background/).
+ * notification settings (notice-gate.ts); its reminders are the background's (background/). An
+ * .ics file the member opened in the Calendar is reviewed over the pane (OpenedIcs.tsx).
  */
 import { useEffect, useMemo, useState } from 'react';
 import type { GlueTabProps } from '@/lib/citadel-apps/first-party/registry';
@@ -18,6 +19,9 @@ import { displayZoneOf, type DisplayZoneChoice } from '@/lib/calendar/zones';
 import { CalendarPane } from './CalendarPane';
 import { useCalendarSettings, type SettingsState } from './use-calendar-settings';
 import { ZoneQuestion } from './ZoneQuestion';
+import { OpenedIcs } from './OpenedIcs';
+import { useOpenedFile, type OpenedFileState } from './use-opened-file';
+import { pageOpenedFiles } from '@/lib/citadel-apps/runtime/page-opened-files';
 
 type EngineState = { kind: 'loading' } | { kind: 'ready'; engine: CalendarEngine } | { kind: 'failed' };
 
@@ -25,7 +29,7 @@ function Status({ children, alert = false }: { children: React.ReactNode; alert?
   return <p role={alert ? 'alert' : 'status'} className={`m-[16px] text-sm ${alert ? 'text-destructive-emphasis' : 'text-muted-foreground'}`}>{children}</p>;
 }
 
-export function CalendarMount({ glue, nodeId, me, mayEditNode }: GlueTabProps): JSX.Element {
+export function CalendarMount({ glue, install, manifest, nodeId, me, mayEditNode }: GlueTabProps): JSX.Element {
   const ports: CalendarPorts = useMemo(() => withNoticePrefs(calendarPorts(glue), (system: boolean): void => recordAppNoticeDelivery(CALENDAR_APP_ID, system)), [glue]);
   const [loaded, setLoaded] = useState<EngineState>({ kind: 'loading' });
   useEffect(() => {
@@ -37,6 +41,7 @@ export function CalendarMount({ glue, nodeId, me, mayEditNode }: GlueTabProps): 
     return (): void => { live = false; };
   }, []);
   const settings: SettingsState = useCalendarSettings(ports);
+  const opened: OpenedFileState = useOpenedFile(pageOpenedFiles, install.app_id, manifest);
   const deviceZone: string = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   if (loaded.kind === 'failed') return <Status alert>The Calendar could not be loaded. Reload the page to try again.</Status>;
@@ -45,5 +50,11 @@ export function CalendarMount({ glue, nodeId, me, mayEditNode }: GlueTabProps): 
   if (settings.kind === 'absent') {
     return <ZoneQuestion deviceZone={deviceZone} saving={settings.saving} error={settings.error} onChoose={(choice: DisplayZoneChoice): void => settings.choose(choice)} />;
   }
-  return <CalendarPane ports={ports} engine={loaded.engine} nodeId={nodeId} me={me} displayZone={displayZoneOf(settings.settings.displayZone, deviceZone)} deviceZone={deviceZone} held={glue.held} mayEditNode={mayEditNode} />;
+  const displayZone: string = displayZoneOf(settings.settings.displayZone, deviceZone);
+  return (
+    <>
+      <CalendarPane ports={ports} engine={loaded.engine} nodeId={nodeId} me={me} displayZone={displayZone} deviceZone={deviceZone} held={glue.held} mayEditNode={mayEditNode} />
+      {opened.file !== null && <OpenedIcs file={opened.file} ports={ports} engine={loaded.engine} displayZone={displayZone} nodeId={nodeId} me={me} onDone={opened.done} />}
+    </>
+  );
 }

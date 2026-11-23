@@ -15,6 +15,7 @@
  * Account recovery's phrase, its check, the recover form and the recovery console fit a phone with 44px actions and pass axe.
  * Dev mode (Settings -> Advanced) hides the Leader/Follower badge until switched on, then shows it live.
  * A document's encryption lock says what the device stores, takes focus with its tooltip, and opens Settings at Security.
+ * A file's open entries (file manager menu and inspector, a chat file's keyboard-reached menu) name the app with its icon, 44px.
  * Serves the real components (see lib/polish-harness) and asserts bounding boxes, in Chromium and WebKit,
  * light and dark, at desktop and phone widths.
  */
@@ -40,5 +41,6 @@ import { BILLING_CHECKS } from './lib/polish-harness/checks-billing.mjs';
 import { APP_SETTINGS_CHECKS } from './lib/polish-harness/checks-app-settings.mjs';
 import { DEV_MODE_CHECKS } from './lib/polish-harness/checks-dev-mode.mjs';
 import { AT_REST_CHECKS } from './lib/polish-harness/checks-at-rest.mjs';
+import { FILE_OPENER_CHECKS } from './lib/polish-harness/checks-file-openers.mjs';
 
-process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS, ...DEV_MODE_CHECKS, ...AT_REST_CHECKS, ...APP_SETTINGS_CHECKS, ...BILLING_CHECKS }));
+process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...APP_SETTINGS_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS, ...BILLING_CHECKS, ...FILE_OPENER_CHECKS, ...DEV_MODE_CHECKS, ...AT_REST_CHECKS }));

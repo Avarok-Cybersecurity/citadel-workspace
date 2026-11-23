@@ -16,7 +16,12 @@ import type { FileManagerTarget } from '@/lib/file-manager-location';
 import type { StoragePeer } from './storage-peers';
 import { selectionPanel, type SelectionPanel } from './selection-panel';
 import { useTransfers, type Transfers } from './useTransfers';
-import { docsOpenAction } from './docs-file-open';
+import { toast } from 'sonner';
+import { activateFile, openersOfNode } from './file-openers';
+import type { FileOpener, Openers } from '@/lib/citadel-apps/openers/openers';
+import { extensionOf } from '@/lib/citadel-apps/openers/file-extension';
+import { openInInstalled } from '@/lib/citadel-apps/openers/open-installed';
+import { useFileOpeners, type FileOpeners } from '@/lib/citadel-apps/openers/file-openers-context';
 
 export interface FileManagerView {
   view: ContentView;
@@ -50,7 +55,21 @@ export function useFileManagerView(fm: UseFileManagerContentResult): FileManager
   const transfers: Transfers = useTransfers(useCallback((cid: string): string => nameOf(BigInt(cid)), [nameOf]));
 
   const { locate, openFolder, openFile, storage } = place;
-  const openInDocs: VFSItemActions['openInDocs'] = useCallback((node: RevfsNode): void => openFile(node.path), [openFile]);
+  const openers: FileOpeners = useFileOpeners();
+  const { available, lastChoices, installed } = openers;
+  const { fileReader } = fm;
+  // A page app opens the file at its own address, so Back returns to its folder; an installed app
+  // is handed it and shown in its tab.
+  const openIn: VFSItemActions['openIn'] = useCallback((app: FileOpener, node: RevfsNode): void => {
+    lastChoices.choose(extensionOf(node.name), app.id);
+    if (app.kind === 'page') { openFile(node.path); return; }
+    if (installed === null) return;
+    openInInstalled(app, { name: node.name, mime: '' }, (): Promise<Uint8Array> => fileReader.read(node), installed).then((why: string | null): void => {
+      if (why !== null) toast.error(`${node.name} was not opened: ${why}.`);
+    }, (error: unknown): void => {
+      toast.error(`${node.name} could not be read for ${app.name}: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }, [openFile, lastChoices, fileReader, installed]);
   // Peer storage belongs to a pair: a link to it opens, by default, for the other half.
   const peer: string | null = storage.kind === 'peer' ? registeredPeers.find((p: StoragePeer): boolean => p.cid === storage.cid)?.username ?? null : null;
   const subjectOf: (node: RevfsNode) => ShareSubject | null = useCallback((node: RevfsNode): ShareSubject | null => {
@@ -65,26 +84,30 @@ export function useFileManagerView(fm: UseFileManagerContentResult): FileManager
   const { handleDownload, handleInfo, handleDelete, handleDeleteMultiple, handleRename, handleCut, handleCutMultiple,
     handleCopy, handleCopyMultiple, handlePaste, handleNewFolder, handleUploadFile, handleSync, handleDrop } = fm;
 
-  const actions: VFSItemActions = useMemo((): VFSItemActions => ({
-    openFolder,
-    openFile: (node: RevfsNode): void => (docsOpenAction({ openInDocs }, node) ?? ((): void => handleDownload(node)))(),
-    openInDocs,
-    inspect: handleInfo,
-    download: handleDownload,
-    share,
-    moveTo: setMoving,
-    // Through the dialog, where a plain or a secure link is chosen and copied.
-    copyLink: (node: RevfsNode): void => share([node]),
-    remove: (nodes: RevfsNode[]): void => { void (nodes.length === 1 ? handleDelete(nodes[0]) : handleDeleteMultiple(nodes)); },
-    rename: handleRename,
-    cut: (nodes: RevfsNode[]): void => (nodes.length === 1 ? handleCut(nodes[0]) : handleCutMultiple(nodes)),
-    copy: (nodes: RevfsNode[]): void => (nodes.length === 1 ? handleCopy(nodes[0]) : handleCopyMultiple(nodes)),
-    paste: handlePaste,
-    newFolder: (parent: string): void => { void handleNewFolder(parent); },
-    upload: handleUploadFile,
-    refresh: (): void => { void handleSync(); },
-    drop: (target: string, files: FileList): void => { void handleDrop(target, files); },
-  }), [openFolder, openInDocs, handleDownload, handleInfo, share, handleDelete, handleDeleteMultiple, handleRename,
+  const actions: VFSItemActions = useMemo((): VFSItemActions => {
+    const openersOf = (node: RevfsNode): Openers | null => openersOfNode(node, available, lastChoices.of(extensionOf(node.name)));
+    return {
+      openFolder,
+      openFile: (node: RevfsNode): void => activateFile(node, { openersOf, openIn, download: handleDownload }, (notice: string): void => { toast.info(notice); }),
+      openersOf,
+      openIn,
+      inspect: handleInfo,
+      download: handleDownload,
+      share,
+      moveTo: setMoving,
+      // Through the dialog, where a plain or a secure link is chosen and copied.
+      copyLink: (node: RevfsNode): void => share([node]),
+      remove: (nodes: RevfsNode[]): void => { void (nodes.length === 1 ? handleDelete(nodes[0]) : handleDeleteMultiple(nodes)); },
+      rename: handleRename,
+      cut: (nodes: RevfsNode[]): void => (nodes.length === 1 ? handleCut(nodes[0]) : handleCutMultiple(nodes)),
+      copy: (nodes: RevfsNode[]): void => (nodes.length === 1 ? handleCopy(nodes[0]) : handleCopyMultiple(nodes)),
+      paste: handlePaste,
+      newFolder: (parent: string): void => { void handleNewFolder(parent); },
+      upload: handleUploadFile,
+      refresh: (): void => { void handleSync(); },
+      drop: (target: string, files: FileList): void => { void handleDrop(target, files); },
+    };
+  }, [available, lastChoices, openFolder, openIn, handleDownload, handleInfo, share, handleDelete, handleDeleteMultiple, handleRename,
     handleCut, handleCutMultiple, handleCopy, handleCopyMultiple, handlePaste, handleNewFolder, handleUploadFile, handleSync, handleDrop]);
 
   const panel: SelectionPanel = useMemo((): SelectionPanel => selectionPanel(fm.tree, fm.selectedPaths), [fm.tree, fm.selectedPaths]);

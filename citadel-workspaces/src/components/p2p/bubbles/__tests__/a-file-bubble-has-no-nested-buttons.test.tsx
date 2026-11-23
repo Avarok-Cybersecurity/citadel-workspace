@@ -42,10 +42,10 @@ function nestedButtons(container: HTMLElement): boolean {
 }
 
 describe('the file bubble', () => {
-  it('a finished download has one button that opens it, with nothing nested', () => {
+  it('a finished download has one button that opens it and its menu button beside it, with nothing nested', () => {
     const { container } = render(<FileTransferBubble message={message('complete', true)} isOwn={false} onOpen={(): void => {}} />);
     expect(nestedButtons(container)).toBe(false);
-    expect(screen.getAllByRole('button').map((b: HTMLElement) => b.textContent)).toEqual([expect.stringContaining('a.bin')]);
+    expect(screen.getAllByRole('button').map((b: HTMLElement) => b.textContent || b.getAttribute('aria-label'))).toEqual([expect.stringContaining('a.bin'), 'Actions for a.bin']);
   });
 
   it('a bubble with nothing to open or answer is not a button at all', () => {

@@ -1,19 +1,28 @@
 /**
  * A file shared in a node's chat, as its bubble shows it: the picture itself when its bytes are
- * one, otherwise the type's icon, then the name, size and where it is kept, and a Download that
- * saves the original bytes under the sender's name, sanitised.
+ * one, otherwise the type's icon, then the name, size and where it is kept, a Download that
+ * saves the original bytes under the sender's name, sanitised, and the file's menu (Open in the
+ * app that opens it, Download), which a right-click on the card opens too.
  */
+import { useMemo } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatBytes } from '@/lib/format-bytes';
 import { getFileIcon } from '@/components/p2p/bubbles/file-transfer-helpers';
 import type { SharedFile } from '@/lib/chat/attachments/shared-file';
 import { useSharedFile, type SharedFileView } from './use-shared-file';
+import { useChatFileOpening, type ChatFileOpening, type ChatFileSource } from './use-chat-file-opening';
+import { ChatFileMenu } from './ChatFileMenu';
+import { ChatFileOpened } from './ChatFileOpened';
 
 export function ServerFileCard({ file }: { file: SharedFile }): JSX.Element {
   const view: SharedFileView = useSharedFile(file);
+  const source: ChatFileSource = useMemo((): ChatFileSource => (
+    { name: file.name, mime: file.mime, fileId: `chat-file:${file.id}`, read: view.read, download: view.download }
+  ), [file, view.read, view.download]);
+  const opening: ChatFileOpening = useChatFileOpening(source);
   return (
-    <div data-testid="server-file" className="min-w-0">
+    <div data-testid="server-file" className="min-w-0" onContextMenu={opening.onContextMenu}>
       {view.pictureUrl !== null && (
         <img
           src={view.pictureUrl}
@@ -42,7 +51,9 @@ export function ServerFileCard({ file }: { file: SharedFile }): JSX.Element {
             {view.busy ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" /> : <Download className="h-4 w-4" />}
           </Button>
         )}
+        <ChatFileMenu name={file.name} opening={opening} download={view.download} />
       </div>
+      <ChatFileOpened source={source} opening={opening} />
       {view.failure !== null && <p role="alert" className="mt-1 text-xs text-destructive">{view.failure}</p>}
     </div>
   );

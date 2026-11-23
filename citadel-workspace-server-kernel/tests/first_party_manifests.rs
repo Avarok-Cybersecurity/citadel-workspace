@@ -1,9 +1,10 @@
 //! Every first-party app's committed manifest (apps/first-party/<app>/manifest.json) is one the
 //! kernel parses, and the Calendar's is what provisioning installs it as (Calendar design §3.2):
-//! the glue ABI, a node tab, installed once for the whole workspace.
+//! the glue ABI, a node tab, installed once for the whole workspace, opening .ics files.
 
 use citadel_workspace_types::apps::ScopeKind;
 use citadel_workspace_types::apps_manifest::{AppManifest, AppSurface, ABI_FIRST_PARTY_GLUE};
+use citadel_workspace_types::apps_opens::FileOpens;
 use std::path::{Path, PathBuf};
 
 fn first_party_dir() -> PathBuf {
@@ -38,4 +39,12 @@ fn the_calendar_is_a_glue_app_tab_installed_for_the_workspace() {
     assert_eq!(calendar.sdk.abi, ABI_FIRST_PARTY_GLUE);
     assert_eq!(calendar.surfaces, [AppSurface::NodeTab]);
     assert_eq!(calendar.scopes, [ScopeKind::Workspace]);
+    assert_eq!(
+        calendar.opens,
+        Some(FileOpens {
+            extensions: vec!["ics".into()],
+            surface: AppSurface::NodeTab,
+            max_bytes: 1024 * 1024,
+        })
+    );
 }

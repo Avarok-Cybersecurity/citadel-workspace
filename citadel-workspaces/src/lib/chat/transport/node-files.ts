@@ -37,5 +37,6 @@ export function nodeFiles(io: Pick<NodeChatIO, 'attachments' | 'shareFile' | 're
     // A node channel's files are read from the server (`read`), never held by this device's agent.
     open: async (): Promise<FileOpening> => ({ kind: 'unknown' }),
     read: (shared: SharedFile): Promise<Uint8Array> => readAttachment(io.attachments, nodeId, shared.id),
+    readTransfer: null,
   };
 }
