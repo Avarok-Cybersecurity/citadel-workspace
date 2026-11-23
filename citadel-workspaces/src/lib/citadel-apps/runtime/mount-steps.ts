@@ -5,7 +5,8 @@
  * it runs, suspend it while it or the page is out of sight (zone-presence.ts), tell it its new
  * size, and close it gracefully when it goes or the page does (zone-close.ts). The app's toolbar is
  * host buttons above the canvas (ui-port.ts); a press reaches the app as `ui_action` only while it
- * runs. Every dependency is passed in (SBIO); page-runtime.ts composes the page's.
+ * runs, and a file a member opens in the install reaches it as `open_file` (opened-files.ts).
+ * Every dependency is passed in (SBIO); page-runtime.ts composes the page's.
  */
 import type { AppInstall } from 'citadel-workspace-client-ts';
 import type { AppZoneHandle, ZoneHost } from '@/components/office/app-zone/app-zone-environment';
@@ -21,7 +22,8 @@ import type { CloseReason } from '../sdk/generated/CloseReason';
 import type { SuspendReason } from '../sdk/generated/SuspendReason';
 import { hostPortsFor, type BoundPorts, type PortWorld } from './host-ports';
 import type { InstallPlaneRegistry } from './install-plane-registry';
-import { placementId, runsOn, sizeIn, surfaceOf, type PlacedSize, type Placement } from './placement';
+import { openedFileProblem, type OpenedFile, type OpenedFiles } from './opened-files';
+import { placementId, runsOn, sizeIn, surfaceKind, surfaceOf, type PlacedSize, type Placement } from './placement';
 import { loadRelease, type LoadedRelease } from './release-loader';
 import { closeZone, type ZoneCloseDeps } from './zone-close';
 import { stoppedCopy, failureCopy } from './zone-copy';
@@ -53,6 +55,8 @@ export interface ZoneRuntimeDeps extends ZoneCloseDeps {
   readonly locale: () => string;
   readonly dpr: () => number;
   readonly theme: () => Readonly<Record<string, string>>;
+  /** Files members chose to open in an install; its running instance takes them (opened-files.ts). */
+  readonly opened: OpenedFiles;
 }
 
 /** One instance to mount: its install, where it is placed, and who it acts for. */
@@ -181,8 +185,16 @@ export function mountPlaced(slots: ZoneHost, placed: PlacedMount, deps: ZoneRunt
     running.onState((state: InstanceState): void => {
       if (state === 'running') {
         surface.show({ kind: 'running' });
-        if (running.start()) sync();
-        else deps.report(`[apps] ${name} could not be started`, running.lifecycle);
+        if (!running.start()) {
+          deps.report(`[apps] ${name} could not be started`, running.lifecycle);
+          return;
+        }
+        sync();
+        if (closing === null) watching.push(deps.opened.take(install.id, (file: OpenedFile): void => {
+          const why: string | null = openedFileProblem(loaded.manifest.opens, surfaceKind(placement.kind), file);
+          if (why === null) running.postEvent({ open_file: { ...file } });
+          else deps.report(`[apps] ${name} was not handed ${file.name}: ${why}`, file.name);
+        }));
         return;
       }
       stopInput();

@@ -22,6 +22,7 @@ import type { AgentLink } from '../agent-link';
 import type { ZoneAudit } from '../zone-close';
 import { createAppZoneRuntime } from '../zone-runtime';
 import type { ZoneRuntimeDeps } from '../mount-steps';
+import { OpenedFiles } from '../opened-files';
 import { fakeWatchers, type FakeWatchers } from './fake-watchers';
 import type { AppTabMount, AppZoneMount, AppZoneRuntime, ZoneHost } from '@/components/office/app-zone/app-zone-environment';
 
@@ -115,6 +116,8 @@ export interface Rig {
   reports: string[];
   /** A server push, as the page's transport delivers one, to every port listening. */
   push: (answer: unknown) => void;
+  /** The inbox files are offered to, as the file browser offers them. */
+  opened: OpenedFiles;
 }
 
 export function rig(kernel: FakeRuntimeKernel, over: Partial<ZoneRuntimeDeps> = {}, verifier: ArtifactVerifierPort = fakeVerifier): Rig {
@@ -126,6 +129,7 @@ export function rig(kernel: FakeRuntimeKernel, over: Partial<ZoneRuntimeDeps> = 
   const sent: ToWorker[] = [];
   const reports: string[] = [];
   const listeners: Set<(answer: unknown) => void> = new Set<(answer: unknown) => void>();
+  const opened: OpenedFiles = new OpenedFiles();
   const runtime: AppZoneRuntime = createAppZoneRuntime({
     watch, newInstanceId: (): string => `zone-${++instances}`,
     audit: (line: ZoneAudit): void => { audits.push(line); },
@@ -150,11 +154,11 @@ export function rig(kernel: FakeRuntimeKernel, over: Partial<ZoneRuntimeDeps> = 
       // agentSession is null, so the peer plane is absent; these are never asked.
       peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string): void => { reports.push(what); },
     }),
-    pageUrl: (): string => 'https://work.example/workspace', locale: (): string => 'en', dpr: (): number => 2, theme: () => ({}),
+    pageUrl: (): string => 'https://work.example/workspace', locale: (): string => 'en', dpr: (): number => 2, theme: () => ({}), opened,
     ...over,
   });
   const push = (answer: unknown): void => [...listeners].forEach((l: (answer: unknown) => void) => l(answer));
-  return { runtime, spawned: () => spawned, close: () => worker.close(), watch, terminated: () => worker.terminated(), sent, audits, reports, push };
+  return { runtime, spawned: () => spawned, close: () => worker.close(), watch, terminated: () => worker.terminated(), sent, audits, reports, push, opened };
 }
 
 export function zoneOf(r: Release): AppZoneMount {

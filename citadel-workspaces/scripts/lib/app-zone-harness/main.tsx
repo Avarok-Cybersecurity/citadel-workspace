@@ -34,6 +34,7 @@ import { InstanceSlots } from '@/lib/citadel-apps/host/instance-slots';
 import { STANDARD_HOST_POLICY } from '@/lib/citadel-apps/host/limits';
 import { spawnAppWorker } from '@/lib/citadel-apps/host/spawn-app-worker';
 import { createAppZoneRuntime } from '@/lib/citadel-apps/runtime/zone-runtime';
+import { OpenedFiles } from '@/lib/citadel-apps/runtime/opened-files';
 import { animationFrames, type FrameLoop } from '@/lib/citadel-apps/runtime/zone-input';
 import { pageZoneWatchers } from '@/lib/citadel-apps/runtime/zone-watchers';
 import type { ZoneAudit } from '@/lib/citadel-apps/runtime/zone-close';
@@ -128,6 +129,7 @@ async function start(): Promise<void> {
       peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string, detail: unknown): void => console.warn(what, detail),
     }),
     pageUrl: () => window.location.href, locale: () => 'en', dpr: () => window.devicePixelRatio, theme: () => ({}),
+    opened: new OpenedFiles(),
   });
   const env: AppZoneEnvironment = {
     nodeId: 'n-1', me: 'alice', ancestors: [], mayInstall: 'yes', runtime,
