@@ -51,7 +51,7 @@ export interface NodeTransportParams {
  * security level and a retention window are not properties it has.
  */
 export const NODE_FEATURES: StatedFeatures = {
-  markdown: true, readReceipts: true, securityLevel: false, retention: false, optimistic: true, namesSenders: true,
+  markdown: true, readReceipts: true, securityLevel: false, retention: false, optimistic: true, namesSenders: true, deliveryTicks: true,
 };
 
 /** `pending` holds the reader's unconfirmed copies; null sends and lets the server's copy appear. */

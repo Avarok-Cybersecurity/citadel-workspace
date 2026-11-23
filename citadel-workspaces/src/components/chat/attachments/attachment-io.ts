@@ -6,10 +6,18 @@
 import { createContext } from 'react';
 import type { SharedFile } from '@/lib/chat/attachments/shared-file';
 import type { DocumentFiles } from '@/lib/document-files';
+import type { FileMode } from '@/lib/chat/transport/chat-transport';
 
 export interface AttachmentIO {
   read(file: SharedFile): Promise<Uint8Array>;
   readonly files: Pick<DocumentFiles, 'save'>;
+  /** Where the conversation keeps its files, as the card says it ("on the workspace server"). */
+  readonly where: string;
+}
+
+/** Where files are kept, from how they leave (FilePort `modes`): this device, or the server. */
+export function keptWhere(modes: readonly FileMode[]): string {
+  return modes.includes('device') ? 'on this device' : 'on the workspace server';
 }
 
 export const AttachmentIOContext: React.Context<AttachmentIO | null> = createContext<AttachmentIO | null>(null);

@@ -4,11 +4,12 @@
  * Owner (2026-10-15): clicking someone you are not registered with opens the chat anyway, which
  * then offers the connect request. A conversation is addressed by CID and a member by username,
  * so the CID comes from the contact, else from the agent's listing of workspace peers. Someone
- * neither knows cannot be addressed yet; your own row opens nothing.
+ * neither knows cannot be addressed yet. Your own row opens your scratchpad (lib/scratchpad):
+ * the same chat, with yourself, which nothing is ever sent from.
  */
 import type { RegisteredPeer } from '@/hooks/use-registered-peers';
 
-export type MemberChatTarget = { kind: 'conversation'; cid: bigint } | { kind: 'unreachable' } | null;
+export type MemberChatTarget = { kind: 'conversation'; cid: bigint } | { kind: 'scratchpad' } | { kind: 'unreachable' } | null;
 
 export function memberChatTarget(
   username: string,
@@ -16,7 +17,7 @@ export function memberChatTarget(
   contacts: readonly RegisteredPeer[],
   listedCid: (username: string) => bigint | undefined,
 ): MemberChatTarget {
-  if (username === currentUsername) return null;
+  if (username === currentUsername) return { kind: 'scratchpad' };
   const contact: RegisteredPeer | undefined = contacts.find((p: RegisteredPeer): boolean => p.username === username);
   const cid: bigint | undefined = contact ? BigInt(contact.cid) : listedCid(username);
   return cid === undefined ? { kind: 'unreachable' } : { kind: 'conversation', cid };

@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { MessageBubble } from '@/components/p2p/bubbles';
 import { AwaitingAcceptContext } from '@/components/p2p/bubbles/awaiting-accept';
+import { DeliveryTicksContext } from '@/components/p2p/bubbles/delivery-ticks';
 import { reactionChips } from '@/lib/reactions/reaction-state';
 import type { ReactionBinding } from '@/components/chat/shared/reactions/reaction-binding';
 import type { ChatDocumentLink } from '@/components/p2p/hooks/useP2PTabs';
@@ -24,6 +25,8 @@ interface MessageListProps {
   greeting: string;
   /** Each message shows its sender's name and picture (a channel), not a two-party thread. */
   namesSenders: boolean;
+  /** The reader's own messages carry delivery ticks (the transport's `deliveryTicks`). */
+  deliveryTicks: boolean;
   /** The reader's cid, for which reactions are theirs; null before the session has one. */
   selfCid: bigint | null;
   /** A reactor's name; the reader is "You". */
@@ -60,7 +63,7 @@ const authorOf = (m: ChatMessage): string => m.author.name;
 export const MessageList: React.ForwardRefExoticComponent<MessageListProps & React.RefAttributes<HTMLDivElement>> = forwardRef<HTMLDivElement, MessageListProps>(
   function MessageList(
     {
-      messages, greeting, namesSenders, selfCid, reactorName,
+      messages, greeting, namesSenders, deliveryTicks, selfCid, reactorName,
       isLoadingMore, isLoadingHistory, hasMorePages, onLoadOlder, olderPagesError,
       onScroll, onRetryMessage, onOpenDocument,
       onAcceptTransfer, onDeclineTransfer, onCancelTransfer, onOpenFile,
@@ -86,6 +89,7 @@ export const MessageList: React.ForwardRefExoticComponent<MessageListProps & Rea
 
     return (
       <AwaitingAcceptContext.Provider value={awaitingAcceptFrom}>
+      <DeliveryTicksContext.Provider value={deliveryTicks}>
       <ScrollArea className="flex-1 p-4" ref={ref} onScroll={onScroll}>
         {/*
         role="log" carries an implicit aria-live="polite" and aria-relevant="additions", the pattern
@@ -152,6 +156,7 @@ export const MessageList: React.ForwardRefExoticComponent<MessageListProps & Rea
           ))}
         </div>
       </ScrollArea>
+      </DeliveryTicksContext.Provider>
       </AwaitingAcceptContext.Provider>
     );
   }

@@ -24,7 +24,7 @@ import type { ChatSelf, ChatTransport, DocumentInvitation, DocumentPort, FileOpe
 /** Kinds that change what the document shows: an awareness record or a hello does not light the tab. */
 const ACTIVITY_KINDS: ReadonlySet<string> = new Set<string>(['update', 'diff', 'rename']);
 
-function peerSend(messenger: P2PMessengerManager, peer: ChatPeer): SendPort {
+export function peerSend(messenger: P2PMessengerManager, peer: ChatPeer): SendPort {
   return {
     text: async ({ content, messageType, reply_to, onRecorded }: TextSend): Promise<void> => {
       await messenger.sendMessage(peer.cid, content, { messageType, reply_to: reply_to ?? undefined, onOptimisticAppend: onRecorded });
@@ -105,7 +105,7 @@ export function createPeerTransport({ peer, self, opening }: PeerTransportParams
     self,
     counterpart: { name: peer.name, username: peer.username, greeting: `Say hello to ${peer.name}. Messages are end-to-end encrypted.` },
     features: chatFeatures(ports, {
-      markdown: true, readReceipts: true, securityLevel: true, retention: true, optimistic: true, namesSenders: false,
+      markdown: true, readReceipts: true, securityLevel: true, retention: true, optimistic: true, namesSenders: false, deliveryTicks: true,
     }),
     // A direct chat has no roles: whoever is in it may write.
     sendGate: createValueStore<GroupRestriction>(`chat-send-gate:${peer.cid.toString()}`, 'allowed'),

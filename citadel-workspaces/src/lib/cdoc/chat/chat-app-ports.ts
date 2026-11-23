@@ -14,6 +14,7 @@ import type { PeerIdentity } from '../collab/ports';
 import type { ChatStoreBackend, ChatTransport } from './chat-ports';
 import { localDbChatStore, type LocalDbPort } from './chat-local-db';
 import type { ChatKeeperPorts } from './chat-replica-keeper';
+import { isSelfConversation } from '@/lib/scratchpad/self-conversation';
 
 /** The chat's other person: who the document is kept in step with, and how their caret is labelled. */
 export interface ChatPeer {
@@ -23,7 +24,7 @@ export interface ChatPeer {
   readonly username: string;
 }
 
-const agentLocalDb: LocalDbPort = {
+export const agentLocalDb: LocalDbPort = {
   get: (cid: bigint, key: string): Promise<{ readonly value: readonly number[] } | null> => websocketService.sendLocalDBGet(cid, key),
   set: (cid: bigint, key: string, value: number[]): Promise<void> => websocketService.sendLocalDBSet(cid, key, value),
 };
@@ -54,12 +55,27 @@ export function p2pChatTransport(selfCid: bigint, peerCid: bigint): ChatTranspor
   };
 }
 
+/**
+ * A scratchpad document's channel: nobody is at the other end (lib/scratchpad), so nothing it
+ * writes leaves this device and nothing arrives. It is kept in this account's LocalDB like any
+ * chat document, and is live only in the sense that each pause writes it back.
+ */
+export function localChatTransport(selfCid: bigint): ChatTransport {
+  return {
+    selfCid,
+    peerCid: selfCid,
+    send: async (): Promise<void> => undefined,
+    onMessage: (): (() => void) => (): void => undefined,
+    onConnected: (): (() => void) => (): void => undefined,
+  };
+}
+
 export function chatKeeperPorts(selfCid: bigint, peer: ChatPeer): ChatKeeperPorts {
   const color: HexColor = hexColor(usernameAvatarColor(peer.username));
   // Only the peer's records are ever heard here, so every caret is theirs.
   const identify: PeerIdentity = (): { readonly name: string; readonly color: HexColor } => ({ name: peer.name, color });
   return {
-    transport: p2pChatTransport(selfCid, peer.cid),
+    transport: isSelfConversation(selfCid, peer.cid) ? localChatTransport(selfCid) : p2pChatTransport(selfCid, peer.cid),
     clock: browserClock,
     wallClock: (): number => Date.now(),
     identify,

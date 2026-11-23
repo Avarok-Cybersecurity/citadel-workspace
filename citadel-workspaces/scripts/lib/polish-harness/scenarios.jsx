@@ -13,6 +13,7 @@ import { P2PChat } from '@/components/p2p/P2PChat';
 import { MessageList } from '@/components/chat/pane/MessageList';
 import { authored } from '@/lib/chat/transport/peer-history';
 import { NODE_CHAT_SCENARIOS } from './scenarios-node-chat.jsx';
+import { SCRATCHPAD_SCENARIOS } from './scenarios-scratchpad.jsx';
 import { PEOPLE_SCENARIOS } from './scenarios-people.jsx';
 import { OVERLAY_SCENARIOS } from './scenarios-overlays.jsx';
 import { SPACING_SCENARIOS } from './scenarios-spacing.jsx';
@@ -92,7 +93,7 @@ function P2PConversation() {
     <TooltipProvider>
       <div style={{ height: 640, display: 'flex', flexDirection: 'column' }}>
         <MessageList
-          messages={messages} greeting="Say hello to Ada." namesSenders={false} selfCid={ME}
+          messages={messages} greeting="Say hello to Ada." namesSenders={false} deliveryTicks selfCid={ME}
           reactorName={(cid) => (cid === ME ? 'You' : 'Ada')}
           isLoadingMore={false} isLoadingHistory={false} hasMorePages={false}
           onScroll={nothing} onRetryMessage={nothing} onOpenDocument={nothing}
@@ -141,4 +142,4 @@ function DropUnavailable({ state }) {
   );
 }
 
-export const SCENARIOS = { 'document-open': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: true, paused: false }} />, 'paused-drag': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: false, paused: true }} />, 'p2p-chat': WholeChat, 'sidebar-members': SidebarMembers, 'p2p-conversation': P2PConversation, ...PEOPLE_SCENARIOS, ...OVERLAY_SCENARIOS, ...SPACING_SCENARIOS, ...SCREEN_SCENARIOS, ...SIDEBAR_SCENARIOS, ...PERMISSION_SCENARIOS, ...FILE_MANAGER_SCENARIOS, ...SHARE_SCENARIOS, ...RIBBON_SCENARIOS, ...APP_TOOLBAR_SCENARIOS, ...PEER_CONSENT_SCENARIOS, ...NODE_TAB_SCENARIOS, ...CALENDAR_SCENARIOS, ...CALENDAR_CHANGE_SCENARIOS, ...CALENDAR_TEAM_SCENARIOS, ...NODE_CHAT_SCENARIOS, ...SERVER_FILE_SCENARIOS, ...CHAT_FILE_SCENARIOS, ...ACCOUNT_SWITCH_SCENARIOS, ...SIGN_IN_SCENARIOS, ...RECOVERY_SCENARIOS, ...PEER_IDENTITY_SCENARIOS };
+export const SCENARIOS = { 'document-open': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: true, paused: false }} />, 'paused-drag': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: false, paused: true }} />, 'p2p-chat': WholeChat, 'sidebar-members': SidebarMembers, 'p2p-conversation': P2PConversation, ...PEOPLE_SCENARIOS, ...OVERLAY_SCENARIOS, ...SPACING_SCENARIOS, ...SCREEN_SCENARIOS, ...SIDEBAR_SCENARIOS, ...PERMISSION_SCENARIOS, ...FILE_MANAGER_SCENARIOS, ...SHARE_SCENARIOS, ...RIBBON_SCENARIOS, ...APP_TOOLBAR_SCENARIOS, ...PEER_CONSENT_SCENARIOS, ...NODE_TAB_SCENARIOS, ...CALENDAR_SCENARIOS, ...CALENDAR_CHANGE_SCENARIOS, ...CALENDAR_TEAM_SCENARIOS, ...NODE_CHAT_SCENARIOS, ...SCRATCHPAD_SCENARIOS, ...SERVER_FILE_SCENARIOS, ...CHAT_FILE_SCENARIOS, ...ACCOUNT_SWITCH_SCENARIOS, ...SIGN_IN_SCENARIOS, ...RECOVERY_SCENARIOS, ...PEER_IDENTITY_SCENARIOS };

@@ -20,7 +20,7 @@ export function listProps(messages: ChatMessage[]): ListProps {
   return {
     messages,
     greeting: 'Say hello to alice. Messages are end-to-end encrypted.',
-    namesSenders: false,
+    namesSenders: false, deliveryTicks: true,
     selfCid: SELF.cid,
     reactorName: (cid: bigint): string => (cid === SELF.cid ? 'You' : ALICE.name),
     isLoadingMore: false,

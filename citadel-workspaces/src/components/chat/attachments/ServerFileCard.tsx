@@ -9,9 +9,12 @@ import { formatBytes } from '@/lib/format-bytes';
 import { getFileIcon } from '@/components/p2p/bubbles/file-transfer-helpers';
 import type { SharedFile } from '@/lib/chat/attachments/shared-file';
 import { useSharedFile, type SharedFileView } from './use-shared-file';
+import { AttachmentIOContext } from './attachment-io';
+import { useContext } from 'react';
 
 export function ServerFileCard({ file }: { file: SharedFile }): JSX.Element {
   const view: SharedFileView = useSharedFile(file);
+  const where: string | null = useContext(AttachmentIOContext)?.where ?? null;
   return (
     <div data-testid="server-file" className="min-w-0">
       {view.pictureUrl !== null && (
@@ -26,7 +29,7 @@ export function ServerFileCard({ file }: { file: SharedFile }): JSX.Element {
         {view.pictureUrl === null && <span aria-hidden="true" className="shrink-0">{getFileIcon(file.mime)}</span>}
         <div className="min-w-0 flex-1">
           <p className="font-medium break-all">{file.name}</p>
-          <p className="text-xs opacity-80">{formatBytes(file.size)} · on the workspace server</p>
+          <p className="text-xs opacity-80">{formatBytes(file.size)}{where !== null && ` · ${where}`}</p>
         </div>
         {view.download !== null && (
           <Button

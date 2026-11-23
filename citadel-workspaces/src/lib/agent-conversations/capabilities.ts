@@ -39,6 +39,8 @@ export interface AgentOffers {
   takesConsole: boolean;
   /** The agent answers Citadel apps' requests (`apps`: AppFetch, AppKv, IhttpSend). */
   servesApps: boolean;
+  /** The agent keeps the account's scratchpad and sends none of it (`notes_to_self`; lib/scratchpad). */
+  notesToSelf: boolean;
 }
 
 /** What the leader tells a follower: its agent's capabilities, and `noticesHeard` as it stands. */
@@ -86,7 +88,7 @@ export function watchGreeting(): Greeting {
     observe: (message: unknown): void => {
       const greeting: Record<string, unknown> | undefined = inner(message, 'ServiceConnectionAccepted');
       if (greeting) agentFacts.set(readGreetingFacts(greeting));
-      if (greeting) settle({ supervisesP2p: greetingSupervises(greeting), stagesUploads: greeting.stages_uploads === true, nativePicker: greeting.native_picker === true, takesConsole: greeting.browser_console === true, servesApps: greeting.apps === true });
+      if (greeting) settle({ supervisesP2p: greetingSupervises(greeting), stagesUploads: greeting.stages_uploads === true, nativePicker: greeting.native_picker === true, takesConsole: greeting.browser_console === true, servesApps: greeting.apps === true, notesToSelf: greeting.notes_to_self === true });
       // The socket's every message passes here; the agent's change of notifier is one.
       const heard: Record<string, unknown> | undefined = inner(message, 'NoticesHeardNotification');
       if (heard) noticesHeard.set(heard.heard === true);
@@ -172,7 +174,7 @@ export function registerCapabilityRoute(r: CapabilityRoute): void {
 export function agentCapabilities(): Promise<AgentOffers> {
   if (decided) return decided;
   // No websocket service in this context (a test, a page without one): no agent offers anything.
-  if (!route) return Promise.resolve({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false });
+  if (!route) return Promise.resolve({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false });
   // The leader's own socket has not declared yet: its answer is the one.
   if (route.isLeader()) return new Promise<AgentOffers>((resolve, reject) => { leaderWaiters.push((a) => a.then(resolve, reject)); });
   const asked: Promise<AgentOffers> = route.askLeader().then(
@@ -204,6 +206,11 @@ export function agentStagesUploads(): Promise<boolean> {
 /** Whether the agent can open a native file dialog; waits until the agent has said. */
 export function agentNativePicker(): Promise<boolean> {
   return agentCapabilities().then((c: AgentOffers): boolean => c.nativePicker);
+}
+
+/** Whether the agent keeps notes to self unsent, so the scratchpad may write; waits until it has said. */
+export function agentKeepsNotesToSelf(): Promise<boolean> {
+  return agentCapabilities().then((c: AgentOffers): boolean => c.notesToSelf);
 }
 
 /** The socket this answer was for is gone; the next socket declares again. */

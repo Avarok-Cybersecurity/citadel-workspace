@@ -70,7 +70,7 @@ export function createPeerGroupTransport({ groupId, groupName, self, sendGate, i
     conversationKey: `peer-group:${groupId}`,
     self,
     counterpart: { name: groupName, username: null, greeting: `Start the conversation in ${groupName}. Messages are end-to-end encrypted.` },
-    features: chatFeatures(ports, { markdown: false, readReceipts: false, securityLevel: false, retention: false, optimistic: false, namesSenders: true }),
+    features: chatFeatures(ports, { markdown: false, readReceipts: false, securityLevel: false, retention: false, optimistic: false, namesSenders: true, deliveryTicks: true }),
     sendGate,
     history: withSendNotes(history.port, groupId, memberName),
     ...ports,

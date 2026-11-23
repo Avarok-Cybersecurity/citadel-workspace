@@ -21,7 +21,7 @@ import type { GroupFileShare } from '@/types/group-file-share';
 import type { SharedFile } from '@/lib/chat/attachments/shared-file';
 import type { ReadReceipt } from './read-receipts';
 
-export type ChatKind = 'peer' | 'node' | 'peer-group';
+export type ChatKind = 'peer' | 'node' | 'peer-group' | 'scratchpad';
 
 export interface ChatSelf {
   readonly cid: bigint;
@@ -164,14 +164,14 @@ export interface StatusPort {
 }
 
 /** How a file can leave: to the peer directly (and their storage), to each member directly, or into the server's file store. */
-export type FileMode = 'peer' | 'their-storage' | 'members' | 'server';
+export type FileMode = 'peer' | 'their-storage' | 'members' | 'server' | 'device';
 
 export interface FileSendReceipt {
   /**
    * `held`: kept until the counterpart is online. `offered`: on its way to be offered, which its
-   * bubble follows. `shared`: already stored where the conversation keeps files, and shared.
+   * bubble follows. `shared`: stored where the conversation keeps files, and shared. `kept`: on this device; its note says so.
    */
-  readonly outcome: 'held' | 'offered' | 'shared';
+  readonly outcome: 'held' | 'offered' | 'shared' | 'kept';
 }
 
 /** How many of a file's bytes have reached where they are kept, as that place acknowledges them. */

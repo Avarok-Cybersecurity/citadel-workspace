@@ -77,6 +77,9 @@ function pageArrives(groupId: string, deadlineKey: string, request: () => Promis
 }
 
 /** `groupId` is the channel's id, `nodeId` the node it belongs to, whose documents its shares are. */
+/** A picked file's bytes, as the browser reads them: the one way a chat reads a file it keeps. */
+export const readBrowserFile = async (file: File): Promise<Uint8Array> => new Uint8Array(await file.arrayBuffer());
+
 export function nodeChatIO(groupId: string, nodeId: string): NodeChatIO {
   return {
     log: groupLog(groupId),
@@ -103,7 +106,7 @@ export function nodeChatIO(groupId: string, nodeId: string): NodeChatIO {
         eventEmitter.on(CHAT_ATTACHMENTS_EVENT, (answer: ChatAttachmentsResponse | undefined): void => { if (answer !== undefined) listener(answer); }),
       answerDeadlineMs: ATTACHMENT_ANSWER_DEADLINE_MS,
     },
-    readFile: async (file: File): Promise<Uint8Array> => new Uint8Array(await file.arrayBuffer()),
+    readFile: readBrowserFile,
     shareFile: ({ id, name, size, mime }: SharedFile): Promise<void> =>
       WorkspaceService.sendGroupMessage(groupId, name, { FileShare: { attachment_id: id, name, size_bytes: BigInt(size), mime } }),
     onDocumentActivity: (listener: (documentId: string) => void): (() => void) =>

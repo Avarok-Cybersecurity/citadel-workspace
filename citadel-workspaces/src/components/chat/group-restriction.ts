@@ -34,11 +34,15 @@
  * does not exist. Naming it separately keeps a data fault from reading as
  * policy, and lets a log say which of the two actually happened.
  */
+import { SCRATCHPAD_NEEDS_AGENT } from '@/lib/scratchpad/self-conversation';
+
 export type GroupRestriction =
   | 'allowed'
   | 'denied-by-role'
   | 'not-listed'
-  | 'role-missing';
+  | 'role-missing'
+  /** The scratchpad, on an agent that would send its notes: nothing may be written (lib/scratchpad). */
+  | 'needs-agent-update';
 
 /**
  * `hasRole` is required rather than defaulted: the two refusals it separates
@@ -65,5 +69,7 @@ export function restrictionText(restriction: GroupRestriction, action: string): 
       return `You are not listed as a member of this group yet, so you cannot ${action}.`;
     case 'role-missing':
       return `Your role in this group could not be found, so you cannot ${action}. Ask an admin to re-assign your role.`;
+    case 'needs-agent-update':
+      return SCRATCHPAD_NEEDS_AGENT;
   }
 }

@@ -14,6 +14,7 @@ import type { SendMessageOptions } from '../p2p/message-sender-types';
 import type { ChatSecurityLevel } from '../p2p/chat-advanced-settings';
 import { toggleReaction, type ReactionChange } from '../reactions/reaction-state';
 import { agentConversations, type Outgoing } from './requests';
+import { isSelfConversation, NotesNeedAgentUpdate } from '../scratchpad/self-conversation';
 
 export interface AgentActionDeps {
   ownCid: () => Promise<bigint | null>;
@@ -23,11 +24,19 @@ export interface AgentActionDeps {
   /** Every ConversationEvent this window receives, until the returned stop. */
   onEvent: (listener: (event: ConversationEvent) => void) => () => void;
   now: () => number;
+  /** Whether the agent keeps the scratchpad unsent (capabilities.ts `notesToSelf`). */
+  keepsNotesToSelf: () => Promise<boolean>;
 }
 
-async function own(deps: AgentActionDeps): Promise<bigint> {
+/**
+ * The account's cid, for an action in its conversation with `peerCid`. The scratchpad (the
+ * account's own cid) is asked of an agent only if it says it sends none of it: one that does not
+ * would queue a note for the account's own cid and retry it through the server.
+ */
+async function own(deps: AgentActionDeps, peerCid: bigint): Promise<bigint> {
   const cid: bigint | null = await deps.ownCid();
   if (cid === null) throw new Error('Not connected to server');
+  if (isSelfConversation(cid, peerCid) && !(await deps.keepsNotesToSelf())) throw new NotesNeedAgentUpdate();
   return cid;
 }
 
@@ -48,7 +57,7 @@ export async function sendThroughAgent(
   content: string,
   options?: SendMessageOptions,
 ): Promise<P2PMessage> {
-  const cid: bigint = await own(deps);
+  const cid: bigint = await own(deps, peerCid);
   const out: Outgoing = {
     content,
     message_type: options?.messageType ?? 'text',
@@ -81,20 +90,20 @@ export async function sendThroughAgent(
 }
 
 export async function resendThroughAgent(deps: AgentActionDeps, peerCid: bigint, messageId: string): Promise<void> {
-  await agentConversations.resend(await own(deps), peerCid, messageId);
+  await agentConversations.resend(await own(deps, peerCid), peerCid, messageId);
 }
 
 export async function editThroughAgent(deps: AgentActionDeps, peerCid: bigint, messageId: string, contents: string): Promise<void> {
-  await agentConversations.edit(await own(deps), peerCid, messageId, contents);
+  await agentConversations.edit(await own(deps, peerCid), peerCid, messageId, contents);
 }
 
 export async function deleteThroughAgent(deps: AgentActionDeps, peerCid: bigint, messageId: string): Promise<void> {
-  await agentConversations.remove(await own(deps), peerCid, messageId);
+  await agentConversations.remove(await own(deps, peerCid), peerCid, messageId);
 }
 
 /** Toggle our reaction: on if we have not reacted with `emoji`, off if we have. */
 export async function reactThroughAgent(deps: AgentActionDeps, peerCid: bigint, messageId: string, emoji: string): Promise<void> {
-  const cid: bigint = await own(deps);
+  const cid: bigint = await own(deps, peerCid);
   const held: P2PMessage | null = await deps.findMessage(peerCid, messageId);
   if (!held) throw new Error(`Cannot react to message ${messageId}: it is not in this conversation`);
   const change: ReactionChange = toggleReaction(held.reactions, emoji, cid, deps.now());
@@ -107,5 +116,5 @@ export async function reactThroughAgent(deps: AgentActionDeps, peerCid: bigint, 
  * receipts only if the user allows them (the preferences it was given).
  */
 export async function markReadThroughAgent(deps: AgentActionDeps, peerCid: bigint): Promise<void> {
-  await agentConversations.markRead(await own(deps), peerCid);
+  await agentConversations.markRead(await own(deps, peerCid), peerCid);
 }

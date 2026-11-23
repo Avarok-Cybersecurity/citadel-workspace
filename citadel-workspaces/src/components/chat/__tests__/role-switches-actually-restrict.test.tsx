@@ -57,7 +57,7 @@ function composer(restriction: GroupRestriction): JSX.Element {
   const { transport } = fakeTransport({
     kind: 'peer-group', self: { cid: SELF, username: 'self', displayName: 'self' }, counterpart: 'Design',
     latest: { messages: [], older: null },
-    stated: { markdown: false, readReceipts: false, securityLevel: false, retention: false, optimistic: false, namesSenders: true },
+    stated: { markdown: false, readReceipts: false, securityLevel: false, retention: false, optimistic: false, namesSenders: true, deliveryTicks: true },
     ports: { status: false, files: true, documents: false, settings: false, revise: false, reactions: true },
     sendGate: restriction, recordsOnSend: true,
   });

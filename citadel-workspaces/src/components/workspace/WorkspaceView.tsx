@@ -3,6 +3,8 @@ import { rosterDisplayName, selfDisplayName } from '@/lib/roster-display-name';
 import { useLocation } from 'react-router-dom';
 import { BaseOffice } from '../office/BaseOffice';
 import { P2PChat } from '../p2p/P2PChat';
+import { ScratchpadChat } from '../scratchpad/ScratchpadChat';
+import { isSelfConversation } from '@/lib/scratchpad/self-conversation';
 import { getDefaultNodeContent, getDefaultChildNodeContent, getWorkspaceHomeContent } from '@/lib/default-mdx-content';
 import { topLevelTrees } from '@/components/layout/sidebar/tree-node-utils';
 import type { TreeNode } from '@/components/layout/sidebar/tree-node-types';
@@ -103,6 +105,19 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ nodeId: nodeParam 
       );
     }
     const parsedCurrentUserCid: bigint | undefined = tryParseCid(currentUserCid);
+
+    // Your own cid is the scratchpad, never a direct chat: P2PChat would dial, register and send
+    // to a peer that does not exist (lib/scratchpad).
+    if (isSelfConversation(parsedCurrentUserCid, parsedPeerCid)) {
+      const ownUsername: string | undefined = me?.username ?? state.currentUser?.username;
+      return ownUsername === undefined
+        ? <BaseOffice title={entityTitle} getInitialContent={getInitialContent} nodeId={nodeId || undefined} />
+        : (
+          <div className="h-full bg-background">
+            <ScratchpadChat key={parsedPeerCid.toString()} cid={parsedPeerCid} username={ownUsername} displayName={currentUserName} />
+          </div>
+        );
+    }
 
     return (
       <div className="h-full bg-background">

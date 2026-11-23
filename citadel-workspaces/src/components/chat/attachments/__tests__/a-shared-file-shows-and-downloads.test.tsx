@@ -18,7 +18,7 @@ const SVG: Uint8Array = new TextEncoder().encode('<svg xmlns="http://www.w3.org/
 
 function io(bytes: Uint8Array): AttachmentIO & { saved: SavedFile[] } {
   const saved: SavedFile[] = [];
-  return { saved, read: async (): Promise<Uint8Array> => bytes, files: { save: (file: SavedFile): void => { saved.push(file); } } };
+  return { saved, read: async (): Promise<Uint8Array> => bytes, files: { save: (file: SavedFile): void => { saved.push(file); } }, where: 'on the workspace server' };
 }
 
 function card(file: SharedFile, value: AttachmentIO | null): void {
@@ -38,7 +38,7 @@ describe('a shared file in a node channel', () => {
 
   it('does not draw an SVG that calls itself a PNG', async () => {
     const reads: Mock<() => Promise<Uint8Array>> = vi.fn(async (): Promise<Uint8Array> => SVG);
-    card({ ...picture, size: SVG.length }, { read: reads, files: { save: vi.fn() } });
+    card({ ...picture, size: SVG.length }, { read: reads, files: { save: vi.fn() }, where: 'on the workspace server' });
     await waitFor((): void => expect(reads).toHaveBeenCalled());
     await Promise.resolve();
     expect(screen.queryByTestId('server-file-picture')).toBeNull();
@@ -54,7 +54,7 @@ describe('a shared file in a node channel', () => {
   });
 
   it('says why a download failed', async () => {
-    card(picture, { read: async (): Promise<Uint8Array> => { throw new Error('You cannot share or open files in this channel.'); }, files: { save: vi.fn() } });
+    card(picture, { read: async (): Promise<Uint8Array> => { throw new Error('You cannot share or open files in this channel.'); }, files: { save: vi.fn() }, where: 'on the workspace server' });
     fireEvent.click(screen.getByTestId('server-file-download'));
     expect(await screen.findByRole('alert')).toHaveTextContent('You cannot share or open files in this channel.');
   });
