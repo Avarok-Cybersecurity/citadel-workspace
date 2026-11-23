@@ -29,7 +29,7 @@ export function DocsFileScreen({ node, folderName, onBack, onDownload, reader, l
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="docs-file-screen">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-[8px] border-b border-border px-[8px]">
-        <button type="button" className={BAR_BUTTON} onClick={onBack}>
+        <button type="button" className={BAR_BUTTON} onClick={onBack} data-testid="docs-file-back">
           <ArrowLeft className="h-[16px] w-[16px]" aria-hidden="true" />Back to {folderName}
         </button>
         <button type="button" className={BAR_BUTTON} onClick={onDownload}>

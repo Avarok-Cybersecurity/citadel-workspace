@@ -71,7 +71,7 @@ export function IcsImportReview({ fileName, reading, floatingZone, engine, onImp
         )}
         <p aria-live="polite" role="status" className="text-sm text-foreground">{said}</p>
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" className="h-[44px]" disabled={busy} onClick={(): void => onClose(0)}>Cancel</Button>
+          <Button type="button" variant="outline" className="h-[44px]" disabled={busy} onClick={(): void => onClose(0)} data-testid="ics-import-cancel">Cancel</Button>
           {drafts.length > 0 && (
             <Button type="button" className="h-[44px]" disabled={busy} onClick={(): void => { void run(); }} data-testid="ics-import-confirm">
               {busy ? 'Importing…' : `Import ${plural(drafts.length, 'event')}`}
