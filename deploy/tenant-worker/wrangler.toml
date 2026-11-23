@@ -64,14 +64,19 @@ tag = "v2"
 new_sqlite_classes = ["WorkspaceServerV2"]
 deleted_classes = ["WorkspaceServer"]
 
-# Argon2 cost of the server's password hashing (see server-wasm `ArgonCost`). The release default
-# is 64 MiB x 10 passes x 8 lanes, sized for a server box; a Worker isolate has 128 MB in all and
-# meters CPU per event. A tenant's master password is NOT here: the control plane generates one
-# per tenant and hands it to that tenant's object (control/provisioning.mjs).
+# Argon2 cost of the server's own password hashing (see server-wasm `ArgonCost`). The release
+# default is 64 MiB x 10 passes x 8 lanes, sized for a server box; a Worker isolate has 128 MB in
+# all and meters CPU per event, so this is the SDK's floor for a stored hash (OWASP's minimum:
+# 19 MiB x 2 passes x 1 lane), the same cost clients stretch a password factor with below.
+# Post-quantum accounts never reach it. It is what a legacy registration's password is hashed
+# with, and the node still accepts one; below the floor the node logs "suitable for tests only"
+# at every start (test/production-config.test.mjs holds it at the floor). A tenant's master
+# password is NOT here: the control plane generates one per tenant and hands it to that tenant's
+# object (control/provisioning.mjs).
 [vars]
 ARGON_LANES = "1"
-ARGON_MEM_KIB = "4096"
-ARGON_TIME_COST = "1"
+ARGON_MEM_KIB = "19456"
+ARGON_TIME_COST = "2"
 # Post-quantum sign-in: the Argon2id cost CLIENTS stretch a password factor with (the server never
 # runs it). OWASP's minimum, the SDK's floor (KsfParams::FLOOR): the browser's WASM client runs it
 # when no agent is present. Raising it later applies to new password factors only.

@@ -21,6 +21,7 @@ mod traffic;
 mod turn;
 mod usage;
 
+use citadel_crypt::argon::argon_container::ArgonSettings;
 use citadel_sdk::prelude::{
     ArgonDefaultServerSettings, BackendType, MaxSecurityLevel, SecurityLevel, StunServers,
     WasmConnectionInjector, WasmIO, WasmListener, WasmStream, WasmWebSocketStream,
@@ -53,6 +54,25 @@ impl ArgonCost {
             lanes,
             mem_cost_kib,
             time_cost,
+        }
+    }
+
+    /// Whether a password hashed at this cost meets the SDK's floor for a stored hash (OWASP's
+    /// minimum). Post-quantum accounts never reach it (their clients stretch the password),
+    /// but the node still accepts a legacy registration, whose password it hashes at this cost.
+    #[wasm_bindgen(js_name = meetsFloor)]
+    pub fn meets_floor(&self) -> bool {
+        ArgonSettings::from(self.settings()).meets_floor()
+    }
+}
+
+impl ArgonCost {
+    fn settings(&self) -> ArgonDefaultServerSettings {
+        ArgonDefaultServerSettings {
+            lanes: self.lanes,
+            mem_cost: self.mem_cost_kib,
+            time_cost: self.time_cost,
+            ..ArgonDefaultServerSettings::default()
         }
     }
 }
@@ -110,12 +130,7 @@ impl TenantServer {
         tenant_console_log::init(log_filter);
         let config: ServerConfig = toml::from_str(config_toml)
             .map_err(|e| JsError::new(&format!("invalid kernel config: {e}")))?;
-        let argon = ArgonDefaultServerSettings {
-            lanes: argon.lanes,
-            mem_cost: argon.mem_cost_kib,
-            time_cost: argon.time_cost,
-            ..ArgonDefaultServerSettings::default()
-        };
+        let argon = argon.settings();
         // The host's STUN list (wrangler.toml STUN_SERVERS) and the plan's path policy, read
         // once at start: both required, with no default.
         let path_policy: PathPolicyConfig = serde_json::from_str(path_policy_json)

@@ -10,6 +10,7 @@ import {
   type OwnSession,
   type ServerReconnectIO,
 } from '@/lib/reconnect/server-reconnect';
+import { linkOutage } from '@/lib/reconnect/link-outage';
 import { debugLog } from '@/lib/debug-config';
 import { postAuthSetup } from '@/lib/post-auth-setup';
 import { supervisedByAgent } from '@/lib/agent-supervisor/supervised';
@@ -44,6 +45,7 @@ export function ServerReconnectWatcher(): null {
       signInAgain: (path: string, message: string): void => {
         leave(path, message).catch((error: unknown): void => { debugLog('ServerReconnect', 'Leaving failed', error); });
       },
+      outage: linkOutage,
     };
 
     // One at a time and in arrival order: each first awaits this tab's session,
@@ -60,6 +62,7 @@ export function ServerReconnectWatcher(): null {
     return (): void => {
       eventEmitter.off('websocket-message', onMessage);
       reconnectingTo.set(null);
+      linkOutage.end();
     };
   }, [leave]);
 

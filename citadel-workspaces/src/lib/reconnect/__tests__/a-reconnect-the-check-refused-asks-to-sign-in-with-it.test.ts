@@ -20,6 +20,7 @@ async function signInsFor(wire: unknown): Promise<Array<[string, string]>> {
     resumePeers: async (): Promise<void> => {},
     reloadWorkspace: async (): Promise<void> => {},
     signInAgain: (path: string, message: string): void => { signIns.push([path, message]); },
+    outage: { begin: (): void => {}, now: (): void => {}, end: (): void => {} },
   };
   const event: AgentReconnectEvent | null = readAgentReconnectEvent(wire);
   expect(event).not.toBeNull();

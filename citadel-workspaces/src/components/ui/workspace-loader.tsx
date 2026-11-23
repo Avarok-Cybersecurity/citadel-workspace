@@ -16,6 +16,8 @@ import { reconnectingTo, signInAfterLoss, type SignInAfterLoss } from '@/lib/rec
 import { resolvePendingRedirect } from '@/lib/share/resolve-here';
 import { loaderView, shouldLeaveForConnect, type LoaderInputs, type LoaderView } from './workspace-loader-state';
 import { loadKeptTree, useKeptTree, type KeptTree } from '@/hooks/use-kept-tree';
+import { outage, type Outage } from '@/lib/reconnect/outage';
+import { ServiceUnavailable } from '@/components/outage/ServiceUnavailable';
 
 // The marketplace's host once a workspace is up (app links, zones, the account menu); the modal loads on first open.
 const AppsModalHost: React.LazyExoticComponent<() => JSX.Element | null> = lazy(() =>
@@ -51,6 +53,15 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({ children }) =>
   // The agent's own word that it is bringing this session's server link back.
   const reconnectingServer: string | null = useSyncExternalStore(reconnectingTo.subscribe, reconnectingTo.get);
   const kept: KeptTree = useKeptTree(loadKeptTree, reconnectingServer !== null);
+  // The link's wait outlasted an ordinary drop, or the agent gave up on a server that never answered.
+  const shownOutage: Outage | null = useSyncExternalStore(outage.subscribe, outage.get);
+  // A gone session's Retry is its sign-in (unsaved editor text asked about first); otherwise the page again.
+  const retry: () => void = useCallback((): void => {
+    const signIn: Outage['signIn'] = outage.get()?.signIn ?? null;
+    if (signIn === null) return window.location.reload();
+    outage.set(null);
+    leave(signIn.path, signIn.message).catch((e: unknown): void => debugLog('WorkspaceLoader', 'Leaving failed', e));
+  }, [leave]);
 
   // Sign-in for that account, not /connect's server picker: the session is gone and
   // nothing else here can bring it back.
@@ -120,6 +131,7 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({ children }) =>
     keptTree: kept.kind === 'kept',
     keptTreeLocked: kept.kind === 'locked',
     refused: state.membershipRefused,
+    outage: shownOutage?.kind ?? null,
   };
   const leaveForConnect: boolean = shouldLeaveForConnect(inputs);
 
@@ -145,8 +157,18 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({ children }) =>
   if (view.kind === 'spinner') {
     return <WorkspaceLoaderSpinner loadingMessage={view.message} showConnectButton={view.showConnectButton} />;
   }
+  const notice: JSX.Element | null = view.kind === 'unavailable' ? <ServiceUnavailable kind={view.outage} onRetry={retry} /> : null;
+  // A workspace that was open stays mounted under the notice, out of reach: unmounting it
+  // would drop unsaved editor text and a call in progress for a link that may be back in a minute.
+  if (notice !== null && loaderView({ ...inputs, outage: null }).kind !== 'ready') return notice;
 
-  return <>{children}<Suspense fallback={null}><AppsModalHost /></Suspense></>;
+  return (
+    <>
+      <div style={{ display: 'contents' }} {...(notice === null ? {} : { inert: '' })} data-testid="workspace-under-loader">{children}</div>
+      <Suspense fallback={null}><AppsModalHost /></Suspense>
+      {notice}
+    </>
+  );
 }
 
 export default WorkspaceLoader;

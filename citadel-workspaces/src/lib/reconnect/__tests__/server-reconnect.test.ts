@@ -8,15 +8,19 @@ import { describe, it, expect } from 'vitest';
 import { handleServerReconnectEvent, signInAfterLoss, type OwnSession, type ServerReconnectIO } from '../server-reconnect';
 import { readAgentReconnectEvent, type AgentReconnectEvent } from '@/types/agent-reconnect';
 import { parseAccountLink } from '@/lib/onboarding/account-link';
+import { RECONNECT_ESCALATION_MS, type Outage } from '../outage';
 
 const OWN: OwnSession = { cid: 42n, username: 'alice', server: 'bench.work.avarok.net' };
 
-interface Recorder { io: ServerReconnectIO; banner: Array<string | null>; resumed: () => number; reloaded: bigint[]; signIns: Array<[string, string]> }
+/** What the handler asked of the full-page notice, in order. */
+type OutageCall = ['begin', Outage, number] | ['now', Outage] | ['end'];
+interface Recorder { io: ServerReconnectIO; banner: Array<string | null>; resumed: () => number; reloaded: bigint[]; signIns: Array<[string, string]>; outage: OutageCall[] }
 
 function recorder(own: OwnSession | null = OWN): Recorder {
   const banner: Array<string | null> = [];
   const signIns: Array<[string, string]> = [];
   const reloaded: bigint[] = [];
+  const outage: OutageCall[] = [];
   let resumed: number = 0;
   return {
     io: {
@@ -25,7 +29,13 @@ function recorder(own: OwnSession | null = OWN): Recorder {
       resumePeers: async (): Promise<void> => { resumed += 1; },
       reloadWorkspace: async (cid: bigint): Promise<void> => { reloaded.push(cid); },
       signInAgain: (path: string, message: string): void => { signIns.push([path, message]); },
+      outage: {
+        begin: (next: Outage, ms: number): void => { outage.push(['begin', next, ms]); },
+        now: (next: Outage): void => { outage.push(['now', next]); },
+        end: (): void => { outage.push(['end']); },
+      },
     },
+    outage,
     banner,
     resumed: (): number => resumed,
     reloaded,
@@ -93,6 +103,52 @@ describe('the agent reports on this tab session', () => {
   });
 });
 
+describe('a wait that is the service\'s failure becomes the whole page', () => {
+  it('starts as the strip, and is the whole page only once it outlasts an ordinary drop', async () => {
+    const r: Recorder = recorder();
+    await handleServerReconnectEvent({ kind: 'lost', cid: 42n, reconnecting: true }, r.io);
+    expect(r.banner).toEqual(['bench.work.avarok.net']);
+    expect(r.outage).toEqual([['begin', { kind: 'reconnect-slow', cid: 42n, signIn: null }, RECONNECT_ESCALATION_MS]]);
+  });
+
+  it('is over the moment the link is back', async () => {
+    const r: Recorder = recorder();
+    await handleServerReconnectEvent({ kind: 'reconnected', cid: 42n }, r.io);
+    expect(r.outage).toEqual([['end']]);
+  });
+
+  it('is the whole page at once when the agent gives up on a server that never answered, with the way back', async () => {
+    const r: Recorder = recorder();
+    await handleServerReconnectEvent({ kind: 'failed', cid: 42n, reason: 'no answer from the server in 600s: Connection refused', reasonCode: 'server_unreachable' }, r.io);
+    expect(r.signIns).toEqual([]);
+    expect(r.outage).toHaveLength(1);
+    const [call, shown] = r.outage[0] as ['now', Outage];
+    expect(call).toBe('now');
+    expect(shown.kind).toBe('server-unreachable');
+    expect(shown.cid).toBe(42n);
+    expect(parseAccountLink(new URLSearchParams((shown.signIn?.path ?? '').slice(2)))).toEqual({ username: 'alice', server: 'bench.work.avarok.net' });
+  });
+
+  // The control for the test above: a server that ANSWERED, and refused, is not the service's
+  // failure. The user goes straight to the sign-in, as the agent's reason says they must.
+  it('goes straight to the sign-in, with no notice, when the server refused the sign-in the session kept', async () => {
+    const r: Recorder = recorder();
+    await handleServerReconnectEvent({ kind: 'failed', cid: 42n, reason: 'Authentication failed', reasonCode: 'sign_in_refused' }, r.io);
+    expect(r.outage).toEqual([['end']]);
+    expect(r.signIns).toHaveLength(1);
+    const [, message]: [string, string] = r.signIns[0];
+    expect(message).toContain('no longer accepts the sign-in this session used');
+    expect(message).not.toContain('Authentication failed');
+  });
+
+  it('reads both reasons off the wire, and no other as one of them', () => {
+    const failed = (reason_code: unknown): unknown => ({ ServerReconnectFailed: { cid: 1n, reason: 'r', request_id: undefined, reason_code } });
+    expect(readAgentReconnectEvent(failed('sign_in_refused'))).toEqual({ kind: 'failed', cid: 1n, reason: 'r', reasonCode: 'sign_in_refused' });
+    expect(readAgentReconnectEvent(failed('server_unreachable'))).toEqual({ kind: 'failed', cid: 1n, reason: 'r', reasonCode: 'server_unreachable' });
+    expect(readAgentReconnectEvent(failed('unknown'))).toEqual({ kind: 'failed', cid: 1n, reason: 'r', reasonCode: null });
+  });
+});
+
 describe('a report about some other session', () => {
   it('changes nothing on this tab', async () => {
     for (const event of [
@@ -106,6 +162,7 @@ describe('a report about some other session', () => {
       expect(r.resumed()).toBe(0);
       expect(r.reloaded).toEqual([]);
       expect(r.signIns).toEqual([]);
+      expect(r.outage).toEqual([]);
     }
   });
 

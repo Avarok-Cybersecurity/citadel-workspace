@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 citadel_sdk = { workspace = true }
+citadel_crypt = { workspace = true }
 citadel-workspace-server-kernel = { workspace = true }
 citadel-workspace-types = { workspace = true }
 serde = { version = "1", features = ["derive"] }
