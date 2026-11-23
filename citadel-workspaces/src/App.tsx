@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { AppRoutes, ROUTER_FUTURE } from "./app-routes";
+import { FileOpenersProvider } from "@/components/file-openers/FileOpenersProvider";
 import WorkspaceApp from "./components/WorkspaceApp";
 import { DocumentTitle } from './components/DocumentTitle';
 import { useSendFailureToasts } from '@/hooks/use-send-failure-toasts';
@@ -93,7 +94,7 @@ const App: () => JSX.Element = (): JSX.Element => {
                   so its useNavigate() threw on every render and took the whole
                   app down to the error boundary. */}
               <OngoingCallBar />
-              <AppRoutes />
+              <FileOpenersProvider><AppRoutes /></FileOpenersProvider>
             </BrowserRouter>
             </CallLayer>
           </WorkspaceApp>

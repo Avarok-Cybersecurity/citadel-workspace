@@ -16,10 +16,14 @@ import type { CdocRuntime } from '@/lib/cdoc/runtime';
 import { recordingDocumentFiles } from '@/test-utils/recording-document-files';
 import { RevfsFileState, type RevfsNode } from '@/types/revfs-types';
 import { DocsFileScreen } from '../DocsFileScreen';
-import { agentFileReader, opensInDocs, type WorkspaceFileReader } from '../docs-file-open';
+import { agentFileReader, type WorkspaceFileReader } from '../docs-file-open';
+import { openersOfNode } from '../file-openers';
+import { BUILT_IN_OPENERS } from '@/lib/citadel-apps/openers/built-in-openers';
+import type { FileOpener } from '@/lib/citadel-apps/openers/openers';
 import type { PulledFileIO } from '../pulled-file-reader';
 import type { PulledChunk } from '@/types/revfs-intents';
 
+const opensInDocs = (node: RevfsNode): boolean => openersOfNode(node, BUILT_IN_OPENERS, null)?.apps.some((app: FileOpener): boolean => app.id === 'docs') ?? false;
 const file = (name: string, fileState: RevfsFileState = RevfsFileState.Remote): RevfsNode => ({ name, path: `/Reports/${name}`, type: 'file', fileState, createdAt: 0, updatedAt: 0 });
 /** An agent that has the fixture file on its disk once pulled, answering reads from it. */
 function agentServing(bytes: Uint8Array): PulledFileIO & { pulls: number } {

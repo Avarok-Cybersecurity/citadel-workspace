@@ -1,3 +1,4 @@
+import { useContext, useMemo } from 'react';
 import { X, Check } from 'lucide-react';
 import { getBubbleStyles, BUBBLE_MAX_WIDTH , type FileTransferBubbleProps } from './types';
 import { BubbleFooter } from './BubbleFooter';
@@ -10,6 +11,10 @@ import type { TransferView } from '@/lib/file-transfer/transfer-view';
 import { safeThumbnail } from '@/lib/received-files/image-preview';
 import { TransferPicture } from './TransferPicture';
 import { ResendLostFile } from './ResendLostFile';
+import { TransferReaderContext, type TransferReader } from '@/components/chat/attachments/attachment-io';
+import { useChatFileOpening, type ChatFileOpening, type ChatFileSource } from '@/components/chat/attachments/use-chat-file-opening';
+import { ChatFileMenu } from '@/components/chat/attachments/ChatFileMenu';
+import { ChatFileOpened } from '@/components/chat/attachments/ChatFileOpened';
 
 /**
  * FileTransferBubble - Displays file transfer messages with state-dependent UI
@@ -27,7 +32,8 @@ import { ResendLostFile } from './ResendLostFile';
  * States (receiver view):
  * - pending: Accept/Decline buttons
  * - transferring: "Downloading..." + progress bar
- * - complete: "Downloaded" (clickable: the browser downloads the original)
+ * - complete: "Downloaded" (clickable: opens in the app that opens it, else the browser downloads
+ *   the original; its menu, on a button and on right-click, offers both)
  * - declined: "You declined this file"
  * - cancelled: "Sender cancelled transfer"
  */
@@ -63,13 +69,18 @@ export function FileTransferBubble({
   // The offer's thumbnail is the sender's string: drawn only when it is an inline raster picture.
   const thumbnail: string | null = safeThumbnail(message.file_thumbnail);
 
-  const handleClick = (): void => {
-    // By transfer, not by path: a direct P2P transfer has no virtual_path, so the
-    // click required one and did nothing while the hint said it would open.
-    if (status.clickable && onOpen && message.transfer_id) {
-      onOpen(message.transfer_id);
-    }
-  };
+  // By transfer, not by path: a direct P2P transfer has no virtual_path, so the
+  // click required one and did nothing while the hint said it would open.
+  const transferId: string | undefined = status.clickable ? message.transfer_id : undefined;
+  const readTransfer: TransferReader | null = useContext(TransferReaderContext);
+  const download: (() => void) | null = useMemo((): (() => void) | null => (transferId && onOpen ? (): void => onOpen(transferId) : null), [transferId, onOpen]);
+  const read: (() => Promise<Uint8Array>) | null = useMemo((): (() => Promise<Uint8Array>) | null => (
+    transferId && readTransfer ? (): Promise<Uint8Array> => readTransfer(transferId) : null
+  ), [transferId, readTransfer]);
+  const source: ChatFileSource = useMemo((): ChatFileSource => (
+    { name: fileName, mime: fileType, fileId: `chat-transfer:${transferId ?? ''}`, read, download }
+  ), [fileName, fileType, transferId, read, download]);
+  const opening: ChatFileOpening = useChatFileOpening(source);
 
   const handleAccept = (e: React.MouseEvent): void => {
     e.stopPropagation();
@@ -130,9 +141,12 @@ export function FileTransferBubble({
             used to be a role="button" in every state, around the Accept/Decline/Cancel buttons
             (a button inside a button, and a focus stop that did nothing). */}
         {status.clickable ? (
-          <button type="button" onClick={handleClick} data-testid="file-transfer-open" className="w-full text-left cursor-pointer hover:opacity-90 transition-opacity">
-            {header}
-          </button>
+          <div className="flex items-start gap-1" onContextMenu={opening.onContextMenu}>
+            <button type="button" onClick={opening.activate} data-testid="file-transfer-open" className="min-w-0 flex-1 text-left cursor-pointer hover:opacity-90 transition-opacity">
+              {header}
+            </button>
+            <ChatFileMenu name={fileName} opening={opening} download={download} />
+          </div>
         ) : header}
 
         {/* Status section */}
@@ -190,8 +204,9 @@ export function FileTransferBubble({
 
         {/* Click hint for completed downloads */}
         {status.clickable && (
-          <p className="text-xs mt-1">Click to download</p>
+          <p className="text-xs mt-1">{opening.menu.open === null ? 'Click to download' : `Click to open in ${opening.menu.open.name}`}</p>
         )}
+        <ChatFileOpened source={source} opening={opening} />
       </div>
 
       <BubbleFooter message={message} isOwn={isOwn} onRetry={onRetry} />

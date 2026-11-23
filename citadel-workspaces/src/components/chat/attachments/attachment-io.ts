@@ -13,3 +13,11 @@ export interface AttachmentIO {
 }
 
 export const AttachmentIOContext: React.Context<AttachmentIO | null> = createContext<AttachmentIO | null>(null);
+
+/**
+ * The bytes of a file a transfer brought to this device (FilePort.readTransfer), for an app that
+ * opens a transfer's file; null where the conversation keeps no transfers here.
+ */
+export type TransferReader = (transferId: string) => Promise<Uint8Array>;
+
+export const TransferReaderContext: React.Context<TransferReader | null> = createContext<TransferReader | null>(null);

@@ -4,6 +4,8 @@
  * list, grid, one item inspected, several selected, transfers open, an empty folder, a deep path.
  * The services behind FileManagerContent are not here; nothing here replaces a component.
  */
+import { openersOfNode } from '@/components/file-manager/file-openers';
+import { BUILT_IN_OPENERS } from '@/lib/citadel-apps/openers/built-in-openers';
 import { FileManagerTopBar } from '@/components/file-manager/FileManagerTopBar';
 import { FileManagerAddressBar } from '@/components/file-manager/FileManagerAddressBar';
 import { FileManagerBrowser } from '@/components/file-manager/FileManagerBrowser';
@@ -21,7 +23,8 @@ const NOTHING = () => {};
 export const NO_ACTIONS = {
   openFolder: NOTHING, openFile: NOTHING, inspect: NOTHING, download: NOTHING, share: NOTHING, moveTo: NOTHING,
   copyLink: NOTHING, remove: NOTHING, rename: async () => {}, cut: NOTHING, copy: NOTHING, paste: async () => {},
-  newFolder: NOTHING, upload: NOTHING, refresh: NOTHING, drop: NOTHING, openInDocs: NOTHING,
+  newFolder: NOTHING, upload: NOTHING, refresh: NOTHING, drop: NOTHING,
+  openersOf: (node) => openersOfNode(node, BUILT_IN_OPENERS, null), openIn: NOTHING,
 };
 
 const ME = 1n;
