@@ -4,6 +4,7 @@
  * installed in the workspace, but by no install that reaches this person here, says so. Pure.
  */
 import { describe, expect, it } from 'vitest';
+import type { AppInstall } from 'citadel-workspace-client-ts';
 import { zoneView, type ZoneFacts, type ZoneProps } from '../zone-state';
 import { listedApps, type ListedApp } from '@/lib/citadel-apps/listing-model';
 import { installOf, listingOf } from '@/test/app-manifests';
@@ -22,7 +23,7 @@ describe('why an app does not reach you', () => {
   });
 
   it('installed for someone else only: elsewhere (control: installed for no one is not)', () => {
-    const bobs = installOf('com.acme.kanban', { SelfOnly: 'bob' });
+    const bobs: AppInstall = installOf('com.acme.kanban', { SelfOnly: 'bob' });
     expect(zoneView(PROPS, facts({ installs: [bobs] }), 'tab')).toEqual({ kind: 'install', name: 'Kanban', elsewhere: true });
     expect(zoneView(PROPS, facts({ installs: [bobs], mayInstall: 'no' }), 'tab')).toEqual({ kind: 'ask-admin', name: 'Kanban', elsewhere: true });
     expect(zoneView(PROPS, facts({ installs: [] }), 'tab')).toEqual({ kind: 'install', name: 'Kanban', elsewhere: false });
