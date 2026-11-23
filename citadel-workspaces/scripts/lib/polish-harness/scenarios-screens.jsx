@@ -11,6 +11,8 @@ import { ConfirmDialogProvider } from '@/components/shared/confirm-dialog';
 import { Toaster } from '@/components/ui/sonner';
 import { GroupChatHeader } from '@/components/chat/GroupChatHeader';
 import { SettingsModal } from '@/components/SettingsModal';
+import { DevModeOnly } from '@/components/DevModeOnly';
+import { LeaderIndicator } from '@/components/ui/leader-indicator';
 import { OfficeLayout } from '@/components/office/OfficeLayout';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import Landing from '@/pages/Landing';
@@ -69,6 +71,13 @@ function OfficeHeader() {
 }
 
 const settingsTab = (tab) => () => <Shell><SettingsModal open onOpenChange={NOTHING} tab={tab} /></Shell>;
+/** Advanced, beside the top bar's Dev mode gate as TopBar mounts it, so a check sees the badge come and go. */
+const AdvancedSettings = () => (
+  <Shell>
+    <div data-testid="dev-mode-internals" className="fixed left-2 top-2"><DevModeOnly><LeaderIndicator /></DevModeOnly></div>
+    <SettingsModal open onOpenChange={NOTHING} tab="advanced" />
+  </Shell>
+);
 const SignIn = () => <Shell><Landing /></Shell>;
 
-export const SCREEN_SCENARIOS = { settings: settingsTab('general'), 'settings-connections': settingsTab('connections'), 'settings-appearance': settingsTab('appearance'), 'settings-privacy': settingsTab('privacy'), 'settings-notifications': settingsTab('notifications'), landing: SignIn, 'office-header': OfficeHeader };
+export const SCREEN_SCENARIOS = { settings: settingsTab('general'), 'settings-connections': settingsTab('connections'), 'settings-appearance': settingsTab('appearance'), 'settings-privacy': settingsTab('privacy'), 'settings-notifications': settingsTab('notifications'), 'settings-advanced': AdvancedSettings, landing: SignIn, 'office-header': OfficeHeader };

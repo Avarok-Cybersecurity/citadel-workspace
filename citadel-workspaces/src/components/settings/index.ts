@@ -5,3 +5,4 @@ export { PrivacySettingsTab } from './PrivacySettingsTab';
 export { PermissionsSettingsTab } from './PermissionsSettingsTab';
 export { SecuritySettingsTab } from './SecuritySettingsTab';
 export { NotificationsSettingsTab } from './NotificationsSettingsTab';
+export { AdvancedSettingsTab } from './AdvancedSettingsTab';

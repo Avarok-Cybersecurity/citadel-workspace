@@ -24,7 +24,7 @@ import { takeLinkTarget } from "@/lib/onboarding/link-target";
 import { openAppsModal } from "@/lib/citadel-apps/apps-modal-store";
 import { getUserInitials } from "@/lib/workspace-metadata-service";
 import { LeaderIndicator } from "@/components/ui/leader-indicator";
-import { isDiagnosticsUiEnabled } from "@/lib/debug-config";
+import { DevModeOnly } from "@/components/DevModeOnly";
 import { useSelfName, type SelfName } from "@/hooks/use-self-name";
 import { useState, useEffect } from "react";
 import { ExitConfirmModal } from "@/components/ExitConfirmModal";
@@ -122,8 +122,8 @@ export const TopBar = ({ currentWorkspace }: TopBarProps): JSX.Element => {
       {/* shrink-0: these controls are the way out of the app and must never be
           what gives way when space runs short. */}
       <div className="flex items-center space-x-2 flex-shrink-0">
-        {/* Internal multi-tab state — hidden from end users; see isDiagnosticsUiEnabled. */}
-        {isDiagnosticsUiEnabled() && <LeaderIndicator />}
+        {/* Internal multi-tab state: shown only with Settings -> Advanced -> Dev mode on. */}
+        <DevModeOnly><LeaderIndicator /></DevModeOnly>
         <NotificationCenter />
 
 
