@@ -487,6 +487,11 @@ jobs:
         run: node --test scripts/lib/dispatch-decision.test.mjs
       - name: A certificate near expiry fails only a published build; an expired one fails every build
         run: node --test scripts/lib/certificate-validity.test.mjs scripts/lib/certificate-coverage.test.mjs && node scripts/check-agent-certificate-is-verified.mjs
+      # The release's issuance decision, as the agent-certificate action runs it, on the committed
+      # certificate: a dry run (it never issues, and ignores the margin, so 0 here). And the gate
+      # that keeps every certbot step behind that decision (Let's Encrypt allows five a week).
+      - name: The agent certificate is issued only when the committed one is too old
+        run: node --test scripts/lib/certificate-issuance.test.mjs scripts/lib/certificate-issuance-coverage.test.mjs && node scripts/agent-certificate-decision.mjs release --real-release false --floor-days 0 --margin-days 0 --cached none
       - name: No shipped artefact carries a build machine's home directory
         run: node --test scripts/lib/home-paths.test.mjs && node scripts/check-no-home-paths-shipped.mjs
       - name: Every wasm-bindgen init call passes the single object the glue expects

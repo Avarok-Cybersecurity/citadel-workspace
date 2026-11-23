@@ -16,6 +16,12 @@
 
 const DAY_MS = 86_400_000;
 
+/** Whole days from now until notAfter, rounded down; negative once it has expired. */
+export function daysLeft(notAfterMs, nowMs) {
+  if (!Number.isFinite(notAfterMs) || !Number.isFinite(nowMs)) throw new Error('the expiry or the clock is not a time');
+  return Math.floor((notAfterMs - nowMs) / DAY_MS);
+}
+
 /** A required whole number of days, 0 or more: "0" is valid now, "30" a published build. */
 export function parseFloorDays(text) {
   if (typeof text !== 'string' || !/^\d+$/.test(text.trim())) {
@@ -29,21 +35,20 @@ export function parseFloorDays(text) {
  *   keyMatches: boolean, host: string }} facts
  */
 export function judgeCertificate({ notAfterMs, nowMs, floorDays, coversHost, keyMatches, host }) {
-  if (!Number.isFinite(notAfterMs) || !Number.isFinite(nowMs)) throw new Error('the expiry or the clock is not a time');
   if (!Number.isInteger(floorDays) || floorDays < 0) throw new Error(`floor ${floorDays} is not a whole number of days`);
-  const daysLeft = Math.floor((notAfterMs - nowMs) / DAY_MS);
+  const left = daysLeft(notAfterMs, nowMs);
   const until = new Date(notAfterMs).toISOString();
-  if (!coversHost) return { ok: false, daysLeft, reason: `the certificate does not name ${host}` };
-  if (!keyMatches) return { ok: false, daysLeft, reason: 'the certificate and key do not match' };
+  if (!coversHost) return { ok: false, daysLeft: left, reason: `the certificate does not name ${host}` };
+  if (!keyMatches) return { ok: false, daysLeft: left, reason: 'the certificate and key do not match' };
   if (notAfterMs <= nowMs) {
-    return { ok: false, daysLeft, reason: `the certificate EXPIRED at ${until}; renew it (renew-agent-tls.yml merges the renewal)` };
+    return { ok: false, daysLeft: left, reason: `the certificate EXPIRED at ${until}; renew it (renew-agent-tls.yml merges the renewal)` };
   }
   if (notAfterMs - nowMs < floorDays * DAY_MS) {
     return {
       ok: false,
-      daysLeft,
-      reason: `the certificate expires at ${until}, within the ${floorDays}-day floor for a published build; renew it (renew-agent-tls.yml) or tag a release, which issues a fresh one`,
+      daysLeft: left,
+      reason: `the certificate expires at ${until}, within the ${floorDays}-day floor for a published build; renew it (renew-agent-tls.yml merges the renewal)`,
     };
   }
-  return { ok: true, daysLeft, reason: `valid until ${until} (${daysLeft} days), floor ${floorDays} days` };
+  return { ok: true, daysLeft: left, reason: `valid until ${until} (${left} days), floor ${floorDays} days` };
 }
