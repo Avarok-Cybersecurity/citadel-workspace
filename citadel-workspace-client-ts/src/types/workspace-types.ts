@@ -5,6 +5,7 @@
 export type { AppAudience } from './generated/AppAudience.js';
 export type { AppCategory } from './generated/AppCategory.js';
 export type { AppIcon } from './generated/AppIcon.js';
+export type { FileOpens } from './generated/FileOpens.js';
 export type { AppInstall } from './generated/AppInstall.js';
 export type { AppLimits } from './generated/AppLimits.js';
 export type { AppListing } from './generated/AppListing.js';

@@ -2973,6 +2973,357 @@
      }
     }
    ]
+  },
+  {
+   "name": "an app that opens .ics files on a surface it paints",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "ics"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens with no extensions",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens an empty extension",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       ""
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens an extension with a leading dot",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       ".ics"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens an upper-case extension",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "ICS"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens an extension twice",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "ics",
+       "ics"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens an extension of 17 characters",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "aaaaaaaaaaaaaaaaa"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens an extension holding a path",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "a/b"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens a multi-part extension",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "tar.gz"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens a non-ASCII extension",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "icsé"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens 65 extensions",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "x0",
+       "x1",
+       "x2",
+       "x3",
+       "x4",
+       "x5",
+       "x6",
+       "x7",
+       "x8",
+       "x9",
+       "x10",
+       "x11",
+       "x12",
+       "x13",
+       "x14",
+       "x15",
+       "x16",
+       "x17",
+       "x18",
+       "x19",
+       "x20",
+       "x21",
+       "x22",
+       "x23",
+       "x24",
+       "x25",
+       "x26",
+       "x27",
+       "x28",
+       "x29",
+       "x30",
+       "x31",
+       "x32",
+       "x33",
+       "x34",
+       "x35",
+       "x36",
+       "x37",
+       "x38",
+       "x39",
+       "x40",
+       "x41",
+       "x42",
+       "x43",
+       "x44",
+       "x45",
+       "x46",
+       "x47",
+       "x48",
+       "x49",
+       "x50",
+       "x51",
+       "x52",
+       "x53",
+       "x54",
+       "x55",
+       "x56",
+       "x57",
+       "x58",
+       "x59",
+       "x60",
+       "x61",
+       "x62",
+       "x63",
+       "x64"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens files on a surface the app does not paint",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "ics"
+      ],
+      "surface": "node_tab",
+      "max_bytes": 1048576
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens files of at most 0 bytes",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "ics"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 0
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens files larger than the platform ceiling",
+   "expect": "Opens",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "ics"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 268435457
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens with an unknown field",
+   "expect": "Json",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "ics"
+      ],
+      "surface": "canvas_pane",
+      "max_bytes": 1048576,
+      "extra": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "opens without max_bytes",
+   "expect": "Json",
+   "set": [
+    {
+     "path": [
+      "opens"
+     ],
+     "value": {
+      "extensions": [
+       "ics"
+      ],
+      "surface": "canvas_pane"
+     }
+    }
+   ]
   }
  ]
 }

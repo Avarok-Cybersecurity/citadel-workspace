@@ -77,5 +77,5 @@ export function hasManifestShape(v: unknown): boolean {
       topics: (t: unknown) => fields(t, { max_msg_bytes: isU32, max_msgs_per_s: isU32 }),
     }),
     artifact: (x: unknown) => fields(x, { sha256: isString, bytes: isU32, locations: (l: unknown) => listOf(l, locationShape) }),
-  }, { previous_versions: strings });
+  }, { previous_versions: strings, opens: (x: unknown) => fields(x, { extensions: strings, surface: oneOf(SURFACES), max_bytes: isU64 }) });
 }

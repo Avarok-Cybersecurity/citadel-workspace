@@ -6,6 +6,7 @@ import type { AppLimits } from "./AppLimits";
 import type { AppSurface } from "./AppSurface";
 import type { ArtifactRef } from "./ArtifactRef";
 import type { CapabilityRequest } from "./CapabilityRequest";
+import type { FileOpens } from "./FileOpens";
 import type { Publisher } from "./Publisher";
 import type { ScopeKind } from "./ScopeKind";
 import type { SdkRequirement } from "./SdkRequirement";
@@ -39,6 +40,10 @@ surfaces: Array<AppSurface>,
  * Which kinds of install scope the app supports.
  */
 scopes: Array<ScopeKind>, capabilities: Array<CapabilityRequest>, limits: AppLimits, artifact: ArtifactRef, 
+/**
+ * The files the app opens; absent for an app that opens none.
+ */
+opens?: FileOpens, 
 /**
  * Optional and informational: earlier versions, each lower than `version`.
  */

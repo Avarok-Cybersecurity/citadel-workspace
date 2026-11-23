@@ -12,6 +12,8 @@ pub mod apps_manifest_check_parts;
 pub mod apps_manifest_check_peer;
 /// A document's hidden required-apps header.
 pub mod apps_md_header;
+/// The files an app opens, and how that declaration is checked.
+pub mod apps_opens;
 /// A member's own peer-to-peer and topic settings, and `AuthorizePeer`'s question.
 pub mod apps_peer;
 /// The apps requests.
