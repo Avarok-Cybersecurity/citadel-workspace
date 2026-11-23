@@ -13,7 +13,7 @@ use crate::kernel::transaction::apps_store::APPS_LOCK;
 use crate::WORKSPACE_ROOT_ID;
 use citadel_sdk::prelude::Ratchet;
 use citadel_workspace_types::apps::InstallScope;
-use citadel_workspace_types::apps_install::{AppInstall, AppsRefusal, InstallState};
+use citadel_workspace_types::apps_install::{AppInstall, AppsRefusal, InstallState, ListingSource};
 use citadel_workspace_types::apps_protocol::AppsRequest;
 use citadel_workspace_types::apps_responses::{AppsAuditEvent, AppsResponse};
 
@@ -78,7 +78,11 @@ async fn install_steps<R: Ratchet + Send + Sync + 'static>(
         scope_node_exists: node_exists(kernel, authority).await?,
         facts: &facts,
     })?;
-    let artifact = obtain_artifact(kernel, caller, &manifest.artifact).await?;
+    // A first-party release's module is in the UI bundle (`first_party`): there is none to store.
+    let artifact = match offered.source {
+        ListingSource::FirstParty => None,
+        _ => Some(obtain_artifact(kernel, caller, &manifest.artifact).await?),
+    };
     let scope_key = scope.scope_key().ok_or(AppsRefusal::ScopeNotSupported)?;
 
     let backend = &kernel.domain_operations.backend_tx_manager;
@@ -93,7 +97,9 @@ async fn install_steps<R: Ratchet + Send + Sync + 'static>(
             }
         }
     }
-    commit_artifact(kernel, caller, &manifest.artifact.sha256, artifact).await?;
+    if let Some(artifact) = artifact {
+        commit_artifact(kernel, caller, &manifest.artifact.sha256, artifact).await?;
+    }
     backend
         .save_app_release(&offered.manifest_sha256, &offered.release)
         .await?;

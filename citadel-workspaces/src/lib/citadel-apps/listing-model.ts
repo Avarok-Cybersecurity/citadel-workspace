@@ -1,7 +1,8 @@
 /**
  * The marketplace's listings: the global catalogue served with the UI (/apps/catalogue.json) and
- * what the kernel answers `ListCatalogue` with (global entries, and this workspace's registry
- * entries whose audience admits the caller; it filters, the UI never sees the rest), each read from
+ * what the kernel answers `ListCatalogue` with (the first-party releases the workspace was
+ * provisioned with, and this workspace's registry entries whose audience admits the caller; it
+ * filters, the UI never sees the rest), each read from
  * its exact manifest bytes with the kernel's rules. A listing that does not read is left out.
  */
 import type { AppListing, AppManifest } from 'citadel-workspace-client-ts';
@@ -44,7 +45,13 @@ export async function loadGlobalCatalogue(fetchText: FetchText): Promise<GlobalC
   };
 }
 
-const originOf = (listing: AppListing): ListingOrigin => (typeof listing.source === 'object' && 'Global' in listing.source ? 'global' : 'workspace');
+/**
+ * Global: the catalogue's listings, and the first-party releases every workspace is provisioned
+ * with, which the kernel lists so one an admin uninstalled can be installed again. Workspace: its
+ * registry's entries.
+ */
+const originOf = (listing: AppListing): ListingOrigin =>
+  listing.source === 'FirstParty' || (typeof listing.source === 'object' && 'Global' in listing.source) ? 'global' : 'workspace';
 
 const newer = (a: AppManifest, b: AppManifest): boolean => {
   const va: AppVersion | null = parseAppVersion(a.version);

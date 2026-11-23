@@ -189,6 +189,17 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         self.backend_delete(&release_key(manifest_sha256)).await
     }
 
+    pub(crate) async fn first_party_releases(&self) -> Result<FirstPartyReleases, NetworkError> {
+        Ok(self.backend_get(FIRST_PARTY_KEY).await?.unwrap_or_default())
+    }
+
+    pub(crate) async fn save_first_party_releases(
+        &self,
+        releases: &FirstPartyReleases,
+    ) -> Result<(), NetworkError> {
+        self.backend_save(FIRST_PARTY_KEY, releases).await
+    }
+
     /// Oldest first.
     pub(crate) async fn apps_audit(&self) -> Result<Vec<AppsAuditEntry>, NetworkError> {
         Ok(self.backend_get(AUDIT_KEY).await?.unwrap_or_default())
