@@ -7,7 +7,8 @@
  * it; the real one needs a WASM client), the agent's LocalDB (a Map), and the websocket service's
  * byte send, whose spy is the evidence that a scratchpad document sends nothing.
  */
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi, type MockInstance } from 'vitest';
+import type { SharedFile } from '@/lib/chat/attachments/shared-file';
 import { createScratchpadTransport, notesHistory, scratchpadGate } from '../scratchpad-transport';
 import { scratchpadBlobs } from '@/lib/scratchpad/scratchpad-blobs';
 import { sha256Hex } from '@/lib/chat/attachments/attachment-wire';
@@ -26,12 +27,12 @@ interface Sent { to: bigint; content: string; options: SendMessageOptions | unde
 
 function world(): { transport: ChatTransport; sent: Sent[] } {
   const sent: Sent[] = [];
-  const messenger = {
+  const messenger: P2PMessengerManager = {
     sendMessage: async (to: bigint, content: string, options?: SendMessageOptions) => { sent.push({ to, content, options }); options?.onOptimisticAppend?.(); },
   } as unknown as P2PMessengerManager;
   const rows: Map<string, number[]> = new Map();
   const db: LocalDbPort = {
-    get: async (_c: bigint, k: string) => { const v = rows.get(k); if (v === undefined) throw new Error(`Key not found: ${k}`); return { value: v }; },
+    get: async (_c: bigint, k: string) => { const v: number[] | undefined = rows.get(k); if (v === undefined) throw new Error(`Key not found: ${k}`); return { value: v }; },
     set: async (_c: bigint, k: string, v: number[]) => { rows.set(k, v); },
   };
   const transport: ChatTransport = createScratchpadTransport({
@@ -70,7 +71,7 @@ describe('the scratchpad transport', () => {
     const { transport, sent } = world();
     const file: File = new File([new Uint8Array([1, 2, 3])], 'list.txt', { type: 'text/plain' });
     await expect(transport.files?.send(file, () => undefined)).resolves.toEqual({ outcome: 'kept' });
-    const kept = sent[0].options?.attachments?.[0];
+    const kept: NonNullable<SendMessageOptions['attachments']>[number] | undefined = sent[0].options?.attachments?.[0];
     expect(sent[0].to).toBe(ME);
     expect(kept).toMatchObject({ file_name: 'list.txt', file_size: 3, file_type: 'text/plain' });
     const bytes: Uint8Array | undefined = await transport.files?.read?.({ id: kept?.file_id ?? '', name: 'list.txt', size: 3, mime: 'text/plain' });
@@ -79,14 +80,14 @@ describe('the scratchpad transport', () => {
   });
 
   it('shows a noted file on its card', async () => {
-    const note = { id: 'm1', content: 'list.txt', attachments: [{ file_id: 'f'.repeat(64), file_name: 'list.txt', file_size: 3, file_type: 'text/plain' }] } as unknown as ChatMessage;
+    const note: ChatMessage = { id: 'm1', content: 'list.txt', attachments: [{ file_id: 'f'.repeat(64), file_name: 'list.txt', file_size: 3, file_type: 'text/plain' }] } as unknown as ChatMessage;
     const events: HistoryEvent[] = [];
     let push: (e: HistoryEvent) => void = () => undefined;
-    const inner = { cached: () => [note], subscribe: (l: (e: HistoryEvent) => void) => { push = l; return () => undefined; } } as unknown as HistoryPort;
+    const inner: HistoryPort = { cached: (): ChatMessage[] => [note], subscribe: (l: (e: HistoryEvent) => void): (() => void) => { push = l; return () => undefined; } } as unknown as HistoryPort;
     const history: HistoryPort = notesHistory(inner);
     history.subscribe((e: HistoryEvent) => events.push(e));
     push({ kind: 'arrived', message: note, incoming: false } as HistoryEvent);
-    const card = { id: 'f'.repeat(64), name: 'list.txt', size: 3, mime: 'text/plain' };
+    const card: SharedFile = { id: 'f'.repeat(64), name: 'list.txt', size: 3, mime: 'text/plain' };
     expect(history.cached()[0].attachment).toEqual(card);
     expect((events[0] as { message: ChatMessage }).message.attachment).toEqual(card);
   });
@@ -94,7 +95,7 @@ describe('the scratchpad transport', () => {
 
 describe('a scratchpad document', () => {
   it('sends nothing, where a direct chat\'s document sends to its peer', async () => {
-    const bytes = vi.spyOn(websocketService, 'sendP2PMessageBytes').mockResolvedValue(undefined);
+    const bytes: MockInstance<typeof websocketService.sendP2PMessageBytes> = vi.spyOn(websocketService, 'sendP2PMessageBytes').mockResolvedValue(undefined);
     await chatKeeperPorts(ME, { cid: ME, name: 'Scratchpad', username: 'me' }).transport.send(new Uint8Array([1]));
     expect(bytes).not.toHaveBeenCalled();
     await chatKeeperPorts(ME, { cid: BOB, name: 'Bob', username: 'bob' }).transport.send(new Uint8Array([1]));

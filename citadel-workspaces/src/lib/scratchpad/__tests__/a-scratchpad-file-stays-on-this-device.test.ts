@@ -13,17 +13,19 @@ import type { LocalDbPort } from '@/lib/cdoc/chat/chat-local-db';
 const ME: bigint = 31n;
 const OTHER: bigint = 32n;
 
-function agentDb(): LocalDbPort & { rows: Map<string, number[]> } {
+type AgentDb = LocalDbPort & { rows: Map<string, number[]> };
+
+function agentDb(): AgentDb {
   const rows: Map<string, number[]> = new Map();
   const at = (cid: bigint, key: string): string => `${cid.toString()}|${key}`;
   return {
     rows,
-    get: async (cid: bigint, key: string) => {
+    get: async (cid: bigint, key: string): Promise<{ value: number[] }> => {
       const value: number[] | undefined = rows.get(at(cid, key));
       if (value === undefined) throw new Error(`Key not found: ${key}`);
       return { value };
     },
-    set: async (cid: bigint, key: string, value: number[]) => { rows.set(at(cid, key), value); },
+    set: async (cid: bigint, key: string, value: number[]): Promise<void> => { rows.set(at(cid, key), value); },
   };
 }
 
@@ -32,7 +34,7 @@ const bytes: Uint8Array = Uint8Array.from({ length: 300 * 1024 }, (_: unknown, i
 
 describe('a file kept in the scratchpad', () => {
   it('reads back whole, under the sha-256 of its bytes', async () => {
-    const db = agentDb();
+    const db: AgentDb = agentDb();
     const id: string = await scratchpadBlobs(ME, db, sha256Hex).keep(bytes);
     expect(id).toBe(await sha256Hex(bytes));
     expect(await scratchpadBlobs(ME, db, sha256Hex).read(id)).toEqual(bytes);
@@ -40,7 +42,7 @@ describe('a file kept in the scratchpad', () => {
   });
 
   it('is refused, not handed over, when a chunk was damaged', async () => {
-    const db = agentDb();
+    const db: AgentDb = agentDb();
     const id: string = await scratchpadBlobs(ME, db, sha256Hex).keep(bytes);
     const key: string = `${ME.toString()}|scratchpad:${ME.toString()}:file:${id}#1`;
     const chunk: number[] = [...(db.rows.get(key) ?? [])];
@@ -50,7 +52,7 @@ describe('a file kept in the scratchpad', () => {
   });
 
   it('is not there for another account on the same agent', async () => {
-    const db = agentDb();
+    const db: AgentDb = agentDb();
     const id: string = await scratchpadBlobs(ME, db, sha256Hex).keep(bytes);
     await expect(scratchpadBlobs(OTHER, db, sha256Hex).read(id)).rejects.toThrow('not kept on this device');
   });
@@ -62,9 +64,9 @@ describe('a file kept in the scratchpad', () => {
   });
 
   it('does not take a transport failure for an absent file', async () => {
-    const db = agentDb();
+    const db: AgentDb = agentDb();
     const id: string = await scratchpadBlobs(ME, db, sha256Hex).keep(bytes);
-    db.get = async () => { throw new Error('request timed out after 5s'); };
+    db.get = async (): Promise<never> => { throw new Error('request timed out after 5s'); };
     await expect(scratchpadBlobs(ME, db, sha256Hex).read(id)).rejects.toThrow('timed out');
   });
 });

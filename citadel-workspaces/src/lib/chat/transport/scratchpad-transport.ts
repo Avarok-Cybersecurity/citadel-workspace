@@ -26,7 +26,7 @@ const NO_OFFERS: string = 'A scratchpad file is kept on this device, so there is
 
 /** The file a note keeps, as its card shows it; absent for a note without one. */
 function noteFile(message: Pick<P2PMessage, 'attachments'>): SharedFile | undefined {
-  const kept = message.attachments?.[0];
+  const kept: NonNullable<P2PMessage['attachments']>[number] | undefined = message.attachments?.[0];
   return kept === undefined ? undefined : { id: kept.file_id, name: kept.file_name, size: kept.file_size, mime: kept.file_type };
 }
 

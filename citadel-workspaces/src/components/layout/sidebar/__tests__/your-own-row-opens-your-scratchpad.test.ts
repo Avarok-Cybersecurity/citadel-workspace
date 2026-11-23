@@ -12,8 +12,8 @@ import type { WorkspaceMember } from '@/types/workspace-entities';
 
 const opened: Array<[string, string]> = [];
 const tab: { cid: bigint | undefined } = { cid: 77n };
-vi.mock('../use-open-conversation', () => ({ useOpenConversation: () => async (cid: string, username: string) => { opened.push([cid, username]); } }));
-vi.mock('@/hooks/use-tab-identity', () => ({ useTabIdentity: () => (tab.cid === undefined ? null : { cid: tab.cid, username: 'me' }) }));
+vi.mock('../use-open-conversation', () => ({ useOpenConversation: (): ((cid: string, username: string) => Promise<void>) => async (cid: string, username: string): Promise<void> => { opened.push([cid, username]); } }));
+vi.mock('@/hooks/use-tab-identity', () => ({ useTabIdentity: (): { cid: bigint; username: string } | null => (tab.cid === undefined ? null : { cid: tab.cid, username: 'me' }) }));
 
 const { useMemberChatOpener } = await import('../use-member-chat-opener');
 
