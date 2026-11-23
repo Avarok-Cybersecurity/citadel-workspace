@@ -1,6 +1,6 @@
 /**
  * The account's "Encrypt on this device" setting as the page shows it, one store per account so
- * the title bar's switch and the Settings entry agree. The setting itself is the device record
+ * Settings' switch and the document's lock agree. The setting itself is the device record
  * the seam keeps (lib/document-replica-cache.ts), loaded with the first read or change.
  */
 import { createValueStore, type ValueStore } from '@/lib/value-store';

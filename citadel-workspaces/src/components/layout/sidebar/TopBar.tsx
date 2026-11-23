@@ -20,13 +20,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import NotificationCenter from "@/components/notification/NotificationCenter";
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { SettingsModal, type SettingsTab } from "@/components/SettingsModal";
-import { takeLinkTarget } from "@/lib/onboarding/link-target";
+import { useSettingsRequests } from "@/hooks/use-settings-requests";
 import { openAppsModal } from "@/lib/citadel-apps/apps-modal-store";
 import { getUserInitials } from "@/lib/workspace-metadata-service";
 import { LeaderIndicator } from "@/components/ui/leader-indicator";
 import { DevModeOnly } from "@/components/DevModeOnly";
 import { useSelfName, type SelfName } from "@/hooks/use-self-name";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ExitConfirmModal } from "@/components/ExitConfirmModal";
 import { ProfileModal } from "@/components/settings/ProfileModal";
 import { DisconnectLoadingModal } from "@/components/LoadingModal";
@@ -50,11 +50,9 @@ export const TopBar = ({ currentWorkspace }: TopBarProps): JSX.Element => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  // A native notice's "settings" link (lib/onboarding/link-target.ts) opens them at Privacy.
+  // A native notice's "settings" link opens them at Privacy; requestSettings(tab) at that tab.
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
-  useEffect(() => {
-    if (takeLinkTarget(['settings'])) { setSettingsTab('privacy'); setShowSettingsModal(true); }
-  }, []);
+  useSettingsRequests((tab: SettingsTab): void => { setSettingsTab(tab); setShowSettingsModal(true); });
   const {
     showDisconnectModal, disconnectStatus, disconnectError, handleRetrySignOut,
     handleExit, handleSignOut, handleDisconnectComplete,

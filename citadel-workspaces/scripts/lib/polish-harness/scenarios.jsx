@@ -18,6 +18,7 @@ import { OVERLAY_SCENARIOS } from './scenarios-overlays.jsx';
 import { SPACING_SCENARIOS } from './scenarios-spacing.jsx';
 import { SCREEN_SCENARIOS } from './scenarios-screens.jsx';
 import { SIDEBAR_SCENARIOS } from './scenarios-sidebar.jsx';
+import { AT_REST_SCENARIOS } from './scenarios-at-rest.jsx';
 import { PERMISSION_SCENARIOS } from './scenarios-permissions.jsx';
 import { FILE_MANAGER_SCENARIOS } from './scenarios-file-manager.jsx';
 import { SHARE_SCENARIOS } from './scenarios-share.jsx';
@@ -143,4 +144,4 @@ function DropUnavailable({ state }) {
   );
 }
 
-export const SCENARIOS = { 'document-open': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: true, paused: false }} />, 'paused-drag': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: false, paused: true }} />, 'p2p-chat': WholeChat, 'sidebar-members': SidebarMembers, 'p2p-conversation': P2PConversation, ...PEOPLE_SCENARIOS, ...OVERLAY_SCENARIOS, ...SPACING_SCENARIOS, ...SCREEN_SCENARIOS, ...SIDEBAR_SCENARIOS, ...PERMISSION_SCENARIOS, ...FILE_MANAGER_SCENARIOS, ...SHARE_SCENARIOS, ...RIBBON_SCENARIOS, ...APP_TOOLBAR_SCENARIOS, ...PEER_CONSENT_SCENARIOS, ...NODE_TAB_SCENARIOS, ...CALENDAR_SCENARIOS, ...CALENDAR_CHANGE_SCENARIOS, ...CALENDAR_TEAM_SCENARIOS, ...APP_SETTINGS_SCENARIOS, ...NODE_CHAT_SCENARIOS, ...SERVER_FILE_SCENARIOS, ...CHAT_FILE_SCENARIOS, ...ACCOUNT_SWITCH_SCENARIOS, ...SIGN_IN_SCENARIOS, ...RECOVERY_SCENARIOS, ...PEER_IDENTITY_SCENARIOS, ...BILLING_SCENARIOS };
+export const SCENARIOS = { 'document-open': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: true, paused: false }} />, 'paused-drag': () => <DropUnavailable state={{ carriesFiles: true, viewingDocument: false, paused: true }} />, 'p2p-chat': WholeChat, 'sidebar-members': SidebarMembers, 'p2p-conversation': P2PConversation, ...PEOPLE_SCENARIOS, ...OVERLAY_SCENARIOS, ...SPACING_SCENARIOS, ...SCREEN_SCENARIOS, ...SIDEBAR_SCENARIOS, ...PERMISSION_SCENARIOS, ...FILE_MANAGER_SCENARIOS, ...SHARE_SCENARIOS, ...RIBBON_SCENARIOS, ...APP_TOOLBAR_SCENARIOS, ...PEER_CONSENT_SCENARIOS, ...NODE_TAB_SCENARIOS, ...CALENDAR_SCENARIOS, ...CALENDAR_CHANGE_SCENARIOS, ...CALENDAR_TEAM_SCENARIOS, ...NODE_CHAT_SCENARIOS, ...SERVER_FILE_SCENARIOS, ...CHAT_FILE_SCENARIOS, ...ACCOUNT_SWITCH_SCENARIOS, ...SIGN_IN_SCENARIOS, ...RECOVERY_SCENARIOS, ...PEER_IDENTITY_SCENARIOS, ...AT_REST_SCENARIOS, ...APP_SETTINGS_SCENARIOS, ...BILLING_SCENARIOS };
