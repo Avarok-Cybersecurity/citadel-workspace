@@ -22,7 +22,7 @@ import type { CloseReason } from '../sdk/generated/CloseReason';
 import type { SuspendReason } from '../sdk/generated/SuspendReason';
 import { hostPortsFor, type BoundPorts, type PortWorld } from './host-ports';
 import type { InstallPlaneRegistry } from './install-plane-registry';
-import { openedFileProblem, type OpenedFile, type OpenedFiles } from './opened-files';
+import { takeDeclared, type OpenedFile, type OpenedFiles } from './opened-files';
 import { placementId, runsOn, sizeIn, surfaceKind, surfaceOf, type PlacedSize, type Placement } from './placement';
 import { loadRelease, type LoadedRelease } from './release-loader';
 import { closeZone, type ZoneCloseDeps } from './zone-close';
@@ -55,7 +55,7 @@ export interface ZoneRuntimeDeps extends ZoneCloseDeps {
   readonly locale: () => string;
   readonly dpr: () => number;
   readonly theme: () => Readonly<Record<string, string>>;
-  /** Files members chose to open in an install; its running instance takes them (opened-files.ts). */
+  /** Files the member chose to open in an app; its running instance takes them (opened-files.ts). */
   readonly opened: OpenedFiles;
 }
 
@@ -190,11 +190,11 @@ export function mountPlaced(slots: ZoneHost, placed: PlacedMount, deps: ZoneRunt
           return;
         }
         sync();
-        if (closing === null) watching.push(deps.opened.take(install.id, (file: OpenedFile): void => {
-          const why: string | null = openedFileProblem(loaded.manifest.opens, surfaceKind(placement.kind), file);
-          if (why === null) running.postEvent({ open_file: { ...file } });
-          else deps.report(`[apps] ${name} was not handed ${file.name}: ${why}`, file.name);
-        }));
+        if (closing === null) {
+          watching.push(takeDeclared(deps.opened, install.app_id, loaded.manifest.opens, surfaceKind(placement.kind),
+            (file: OpenedFile): void => running.postEvent({ open_file: { ...file } }),
+            (file: OpenedFile, why: string): void => deps.report(`[apps] ${name} was not handed ${file.name}: ${why}`, file.name)));
+        }
         return;
       }
       stopInput();

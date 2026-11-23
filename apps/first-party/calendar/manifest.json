@@ -28,6 +28,13 @@
   "surfaces": [
     "node_tab"
   ],
+  "opens": {
+    "extensions": [
+      "ics"
+    ],
+    "surface": "node_tab",
+    "max_bytes": 1048576
+  },
   "scopes": [
     "workspace"
   ],
