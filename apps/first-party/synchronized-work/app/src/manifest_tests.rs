@@ -36,6 +36,11 @@ fn the_manifest_names_the_id_server_host_and_session_limits_sw_app_runs_with() {
         session["max_msgs_per_s"],
         json!(config::SESSION.max_msgs_per_s)
     );
+    // The app paces its own host calls below this rate (sw-app's pacing test).
+    assert_eq!(
+        m["limits"]["max_call_rate_per_s"],
+        json!(config::MAX_CALL_RATE_PER_S)
+    );
 }
 
 #[test]

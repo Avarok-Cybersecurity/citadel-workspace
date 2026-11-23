@@ -97,3 +97,29 @@ describe("Avarok support's public key", () => {
     expect(() => config(productionEnv({ CITADEL_SUPPORT_MLDSA_PUBLIC_KEY: "ab".repeat(100) }))).toThrow(/CITADEL_SUPPORT_MLDSA_PUBLIC_KEY/);
   });
 });
+
+// Without both, the server builds with no synchronized.work in its catalogue (kernel build.rs
+// lists an app-ABI app only with its stored module), and every new workspace lacks it.
+describe("deploy.sh and the signed synchronized.work app", () => {
+  const lines = deployScript.split("\n");
+  const lineWith = (needle) => lines.find((line) => line.includes(needle)) ?? "";
+  const at = (needle) => deployScript.indexOf(needle);
+  const SIG = '"$CITADEL_FIRST_PARTY_SIGNED_DIR/synchronized-work/app.mldsa.sig"';
+  const MODULE = '"$CITADEL_FIRST_PARTY_SIGNED_DIR/synchronized-work/module.wasm"';
+
+  it("refuses a deploy whose signed apps hold no synchronized-work signature, naming the app", () => {
+    expect(lineWith(SIG)).toMatch(/^\s*\[ -f "\$CITADEL_FIRST_PARTY_SIGNED_DIR\/synchronized-work\/app\.mldsa\.sig" \] \|\| fail "[^"]*synchronized-work[^"]*"$/);
+  });
+  it("refuses one whose synchronized-work module is missing or empty, naming the app", () => {
+    expect(lineWith(MODULE)).toMatch(/^\s*\[ -s "\$CITADEL_FIRST_PARTY_SIGNED_DIR\/synchronized-work\/module\.wasm" \] \|\| fail "[^"]*synchronized-work[^"]*"$/);
+  });
+  it("checks both before any build or network step", () => {
+    const checks = [at(SIG), at(MODULE)];
+    const steps = ["\nnpm ci --no-audit --no-fund\n", "\n./build.sh\n", "\n./build-ui.sh\n", "\nnpx --no-install vitest run\n", "\nwr deploy", "curl "];
+    for (const check of checks) expect(check).toBeGreaterThan(0);
+    for (const step of steps) {
+      expect(at(step), step).toBeGreaterThan(0);
+      for (const check of checks) expect(check, `${step.trim()} runs before a synchronized-work check`).toBeLessThan(at(step));
+    }
+  });
+});

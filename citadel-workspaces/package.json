@@ -33,6 +33,7 @@
     "check:docs-crispness": "node scripts/check-docs-crispness.mjs",
     "check:docs-pane-states": "node scripts/check-docs-pane-states.mjs",
     "check:app-zone": "node scripts/check-app-zone-geometry.mjs",
+    "check:app-page": "node scripts/check-app-page.mjs",
     "check:calendar-grid": "node scripts/check-calendar-grid-keyboard.mjs",
     "check:ui-sweep": "node scripts/check-ui-sweep-geometry.mjs",
     "check:people-avatars": "node scripts/check-people-are-drawn-by-member-avatar.mjs",

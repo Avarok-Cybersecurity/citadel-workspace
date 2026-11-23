@@ -17,7 +17,7 @@ publish = false
 # Through sdk/'s symlinks, for the reason apps/sdk-fixtures/Cargo.toml gives: a path inside the
 # workspace root keeps the bytes independent of where the repository is checked out.
 citadel-app-sdk = { path = "sdk/citadel-app-sdk" }
-sw-app = { git = "https://github.com/Avarok-Cybersecurity/synchronized.work", rev = "2856279cb45c2709bd6787384aa67d85a0cbb0c7" }
+sw-app = { git = "https://github.com/Avarok-Cybersecurity/synchronized.work", rev = "ddb647fca00d09f05c1ab6c06d3bb641e8417383" }
 
 # sw-app names the SDK by git revision; this makes it the sdk/ copy, so exactly one SDK (the one
 # the host and the kernel are built with) is linked into the module.
