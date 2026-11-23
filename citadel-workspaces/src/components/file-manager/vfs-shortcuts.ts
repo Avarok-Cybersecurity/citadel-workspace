@@ -7,6 +7,8 @@
  * advertise a key the handler does not answer.
  */
 
+import { isEditableTarget } from '@/lib/global-shortcut';
+
 export interface VfsShortcut {
   /** `KeyboardEvent.key` values that trigger it. */
   keys: readonly string[];
@@ -62,12 +64,12 @@ export function ariaShortcut(s: VfsShortcut, apple: boolean): string {
 /**
  * Whether a keydown belongs to something else on the page.
  *
- * Inputs were already excluded. Dialogs and menus were not: with the delete
+ * Whatever takes text was already excluded (now by the page-wide rule, global-shortcut.ts). Dialogs and menus were not: with the delete
  * confirmation or the properties dialog open, Delete or Backspace reached this
  * handler through the dialog and asked to delete the selection behind it again.
  */
 export function isForeignKeyTarget(target: EventTarget | null): boolean {
+  if (isEditableTarget(target)) return true;
   if (!(target instanceof HTMLElement)) return false;
-  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable) return true;
   return target.closest('[role="dialog"], [role="alertdialog"], [role="menu"]') !== null;
 }

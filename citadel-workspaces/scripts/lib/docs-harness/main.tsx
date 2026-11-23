@@ -8,11 +8,15 @@
  *   document (check-cdoc-scroll-perf.mjs).
  * - `?offset=<css px>` shifts the host right by that much (fractional values included),
  *   standing in for whatever the app's sidebar and header widths add.
+ * - `?sidebar=1`: the host inside the app's SidebarProvider, whose state is printed in
+ *   `[data-testid="harness-sidebar-state"]`, so a check can press the sidebar's shortcut
+ *   with the real editor focused (check-docs-pane-states.mjs).
  * - `?save=controls`: the title bar's save controls over a control no session binds;
  *   `window.docsHarnessSaveInputs(inputs)` sets where the edits are, for the geometry check
  *   (check-docs-pane-states.mjs) to step the status through every state.
  */
 import { createRoot, type Root } from 'react-dom/client';
+import { SidebarProvider, useSidebar } from '@/components/ui/sidebar';
 import '@/index.css';
 import '@/styles/brand-tokens.css';
 import { DocumentHost } from '@/components/documents/DocumentHost';
@@ -67,7 +71,12 @@ const save: BindableSaveControl | null = params.get('save') === 'controls' ? sav
 if (save !== null) window.docsHarnessSaveInputs = (inputs: SaveInputs): void => save.inputs.set(inputs);
 const EDITING: DocumentEditing = { kind: 'replica', keep: doc === null ? keepBlankReplica : keepFile(doc), save, pictures: null };
 const app: Root = createRoot(root);
-app.render(
+function SidebarState(): JSX.Element {
+  const { isMobile, openMobile, state } = useSidebar();
+  // A phone's sidebar is a sheet, opened and closed; a wider screen's is expanded or collapsed.
+  return <output data-testid="harness-sidebar-state" className="sr-only">{isMobile ? (openMobile ? 'open' : 'closed') : state}</output>;
+}
+const host: JSX.Element = (
   // min-h-0: #root is a flex column (index.css), and a flex item does not shrink below its
   // content without it, so the page view would grow to the document's height instead of scrolling.
   <div className="h-screen min-h-0" style={{ paddingLeft: offset }}>
@@ -76,5 +85,6 @@ app.render(
       documentSource={{ kind: 'blank' }} loadCdocRuntime={loadCdocRuntime} commentAuthor="Harness"
       files={browserDocumentFiles} original={null} editing={EDITING}
     />
-  </div>,
+  </div>
 );
+app.render(params.get('sidebar') === '1' ? <SidebarProvider><SidebarState />{host}</SidebarProvider> : host);
