@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button';
 import { versionFloorLabel, type AppVersion } from '@/lib/citadel-apps/app-identity';
 import { AppIconImage } from '@/components/citadel-apps/marketplace/AppIconImage';
 import type { ZoneView } from './zone-state';
+import type { Placement } from '@/lib/citadel-apps/runtime/placement';
 
 export type PlaceholderView = Exclude<ZoneView, { kind: 'ready' }> | { kind: 'ready-unmounted'; name: string };
 
 interface AppZoneRequiredProps {
-  /** Where the app would run: a zone in a page, or a tab of the node's pane. */
-  placement: 'zone' | 'tab';
+  /** Where the app would run: a zone in a page, a tab of the node's pane, or the node's page itself. */
+  placement: Placement['kind'];
   appId: string;
   floor: AppVersion | null;
   height: number;
@@ -25,20 +26,31 @@ interface AppZoneRequiredProps {
   onOpenApps: () => void;
 }
 
+/** How each placement is named: "This zone", "This tab", "This page"; "cannot be shown in a page zone". */
+const NOUN: Readonly<Record<Placement['kind'], string>> = { zone: 'zone', tab: 'tab', page: 'page' };
+const GROUP_LABEL: Readonly<Record<Placement['kind'], string>> = { zone: 'App zone', tab: 'App tab', page: 'App page' };
+const RUNS: Readonly<Record<Placement['kind'], string>> = { zone: 'on pages', tab: 'in tabs', page: 'as pages' };
+
+function wrongSurface(placement: Placement['kind'], name: string): [string, string] {
+  if (placement === 'page') return [`${name} can no longer be shown as a page.`, 'The release installed here does not offer a page. A workspace admin can install one that does, or move this node’s content elsewhere.'];
+  return [`${name} cannot be shown in a ${placement === 'zone' ? 'page zone' : 'tab'}.`, 'Its developer did not make it for this place.'];
+}
+
 const needs = (placement: string, name: string, floor: AppVersion | null): string => `This ${placement} requires ${name}${floor === null ? '' : ` ${versionFloorLabel(floor)}`}`;
 
-export function AppZoneRequired({ placement, appId, floor, height, view, icon, onInstall, onEnable, onCopyLink, onOpenApps }: AppZoneRequiredProps): JSX.Element {
+export function AppZoneRequired({ placement: where, appId, floor, height, view, icon, onInstall, onEnable, onCopyLink, onOpenApps }: AppZoneRequiredProps): JSX.Element {
   const [copied, setCopied] = useState<'no' | 'yes' | 'failed'>('no');
   const button = (label: string, onClick: () => void, testId: string): JSX.Element => (
     <Button variant="outline" className="min-h-[44px] self-start" onClick={onClick} data-testid={testId}>{label}</Button>
   );
+  const placement: string = NOUN[where];
   let title: string;
   let detail: string | null = null;
   let action: JSX.Element | null = null;
   switch (view.kind) {
     case 'loading': title = `Loading this ${placement}’s app…`; break;
     case 'not-available': title = `This ${placement} needs “${appId}”, which is not available to you.`; break;
-    case 'wrong-surface': title = `${view.name} cannot be shown in a ${placement === 'zone' ? 'page zone' : 'tab'}.`; detail = 'Its developer did not make it for this place.'; break;
+    case 'wrong-surface': [title, detail] = wrongSurface(where, view.name); break;
     case 'install': title = needs(placement, view.name, floor); action = button(`Install ${view.name}`, onInstall, 'app-zone-install'); break;
     case 'ask-admin':
       title = needs(placement, view.name, floor);
@@ -50,12 +62,12 @@ export function AppZoneRequired({ placement, appId, floor, height, view, icon, o
     case 'suspended': title = `${view.name} has been turned off by an admin.`; break;
     case 'outdated': title = needs(placement, view.name, floor); detail = `You have ${view.installed}.`; action = button('Open in Apps', onOpenApps, 'app-zone-open-apps'); break;
     case 'needs-answer': title = `${view.name} asks you first.`; detail = 'Answer what it asks in Apps → Installed, and it starts here.'; action = button('Open in Apps', onOpenApps, 'app-zone-answer'); break;
-    case 'ready-unmounted': title = `${view.name} is installed.`; detail = `It will run here once apps can run ${placement === 'zone' ? 'on pages' : 'in tabs'}.`; break;
+    case 'ready-unmounted': title = `${view.name} is installed.`; detail = `It will run here once apps can run ${RUNS[where]}.`; break;
   }
   return (
     <div
       role="group"
-      aria-label={placement === 'zone' ? 'App zone' : 'App tab'}
+      aria-label={GROUP_LABEL[where]}
       data-testid="app-zone-required"
       data-zone-state={view.kind}
       className="not-prose my-4 flex flex-col justify-center gap-[8px] rounded-lg border border-dashed border-border bg-muted/50 p-[16px]"

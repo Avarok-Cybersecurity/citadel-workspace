@@ -10,10 +10,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getEntityMetadata } from '@/lib/entity-type-registry';
 import type { CitadelAppId } from '@/lib/citadel-apps/registry';
 import { describeFailure } from '@/lib/failure-message';
-import { ChoiceList, type Choice } from './ChoiceList';
+import { ChoiceList } from './ChoiceList';
+import { levelChoices } from './level-choices';
 import { CitadelAppPicker } from './CitadelAppPicker';
 import type { DocumentPlacement } from './document-placement';
 
@@ -28,13 +28,6 @@ interface NewDocumentDialogProps {
   placement: DocumentPlacement;
   onCreate: (input: NewDocumentInput) => Promise<void>;
   onClose: () => void;
-}
-
-function levelChoices(types: readonly string[]): Choice[] {
-  return types.map((type: string): Choice => {
-    const meta: ReturnType<typeof getEntityMetadata> = getEntityMetadata(type);
-    return { value: type, label: meta.label, detail: `Created as a ${meta.label.toLowerCase()}`, icon: meta.icon, unavailable: null };
-  });
 }
 
 export function NewDocumentDialog({ parentName, placement, onCreate, onClose }: NewDocumentDialogProps): JSX.Element {

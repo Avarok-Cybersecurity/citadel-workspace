@@ -19,6 +19,7 @@ fn request(cap: Capability, optional: bool) -> CapabilityRequest {
         routes: None,
         targets: None,
         topics: None,
+        servers: None,
     }
 }
 
@@ -209,7 +210,7 @@ fn an_owner_may_grant_everything_and_a_member_seed_only_the_intrinsic_capabiliti
 /// to an apps permission an installer can hold, and only `storage.files` reaching the file store.
 #[test]
 fn every_sdk_capability_has_an_installer_permission() {
-    assert_eq!(Capability::ALL.len(), 33);
+    assert_eq!(Capability::ALL.len(), 34);
     for cap in Capability::ALL.iter().copied() {
         let needed = required_installer_permission(cap);
         assert!(
@@ -221,6 +222,10 @@ fn every_sdk_capability_has_an_installer_permission() {
     assert_eq!(
         required_installer_permission(Capability::StorageFiles),
         Permission::AppInstallAllowFiles
+    );
+    assert_eq!(
+        required_installer_permission(Capability::CitadelSession),
+        Permission::AppInstallAllowHostNetwork
     );
     assert_eq!(
         acting_user_requirement(Capability::StorageFiles),

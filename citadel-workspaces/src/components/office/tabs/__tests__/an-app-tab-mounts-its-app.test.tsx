@@ -16,7 +16,7 @@ import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
 import { forgetAllTabs } from '@/lib/node-tabs/tab-memory';
 import { installOf, listingOf } from '@/test/app-manifests';
 import { AppZoneContext, zoneClaims, type AppTabMount, type AppZoneEnvironment, type AppZoneHandle, type AppZoneRuntime } from '../../app-zone/app-zone-environment';
-import { NO_GLUE } from '../../app-zone/__tests__/doubles/no-tabs';
+import { NO_GLUE, NO_PAGES } from '../../app-zone/__tests__/doubles/no-tabs';
 
 vi.mock('../../NodeChat', () => ({ NodeChat: (): JSX.Element => <div data-testid="chat-view" /> }));
 vi.mock('@/components/call/GroupCallControls', () => ({ GroupCallControls: (): JSX.Element => <div /> }));
@@ -40,6 +40,7 @@ function recordingRuntime(rec: Recording): AppZoneRuntime {
   return {
     mount: (): AppZoneHandle => { rec.zones++; return handle(); },
     mountPane: (_host, tab: AppTabMount): AppZoneHandle => { rec.panes.push(tab); return handle(); },
+    mountPage: NO_PAGES,
     bindGlue: NO_GLUE,
   };
 }

@@ -57,6 +57,9 @@ function surfaceOf(canvas: OffscreenCanvas, dpr: number): CanvasSurface | null {
     moveTo: (x: number, y: number): void => ctx.moveTo(x, y),
     lineTo: (x: number, y: number): void => ctx.lineTo(x, y),
     stroke: (): void => ctx.stroke(),
+    fill: (): void => ctx.fill(),
+    closePath: (): void => ctx.closePath(),
+    arc: (x: number, y: number, r: number, start: number, end: number, ccw: boolean): void => ctx.arc(x, y, r, start, end, ccw),
     fillText: (text: string, x: number, y: number): void => ctx.fillText(text, x, y),
     measureText: (text: string): { readonly width: number } => ({ width: ctx.measureText(text).width }),
   };

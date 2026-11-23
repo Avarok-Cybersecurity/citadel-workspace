@@ -1,5 +1,5 @@
 /**
- * Which Citadel App a document node opens in, kept in the node's `metadata` bytes.
+ * Which Citadel App a node opens in, kept in the node's `metadata` bytes.
  *
  * Node metadata follows the workspace metadata convention (lib/workspace-metadata): one JSON
  * object whose top-level keys belong to independent features, merged into and never assigned
@@ -8,71 +8,52 @@
  * reader can tell "no app" from "an app this client cannot read".
  *
  * JSON, not CBOR: the server checks and merges the document as JSON, and the envelope holds
- * only short strings and a small integer, so nothing in it needs CBOR's BigInt support.
+ * only short strings and a small integer, so nothing in it needs CBOR's BigInt support. The
+ * envelope's own rules (v1 documents, v2 installed pages) are node-app-envelope.ts.
  */
 import type { MetadataEnvelope } from '@/types/workspace-metadata';
 import { metadataDocument, type MetadataSource } from '@/lib/workspace-metadata/metadata-document';
-import { isCitadelAppId, type CitadelAppId } from './registry';
+import type { CitadelAppId } from './registry';
+import {
+  NODE_APP_DOCUMENT_VERSION, NODE_APP_KIND, NODE_APP_PAGE_VERSION, readNodeAppEnvelope,
+  type NodeAppBinding, type NodeAppPage, type ReadBinding,
+} from './node-app-envelope';
+
+export type { NodeAppBinding, NodeAppPage };
 
 export const NODE_APP_METADATA_KEY: 'citadel_app' = 'citadel_app';
-export const NODE_APP_METADATA_VERSION: 1 = 1;
-const KIND: 'citadel-app' = 'citadel-app';
 
-type NodeAppEnvelope = MetadataEnvelope<typeof KIND, { app: CitadelAppId }>;
+type NodeAppEnvelope = MetadataEnvelope<typeof NODE_APP_KIND, { app: CitadelAppId }>;
+type NodePageEnvelope = MetadataEnvelope<typeof NODE_APP_KIND, { app: string; install_id: string }>;
 
-/** The node names an app, but not in a form this client reads. */
-export class NodeAppMetadataError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NodeAppMetadataError';
-  }
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-/**
- * `existing` with the app id set, every other key kept. An unreadable or absent document
- * contributes no keys, the same rule the server applies when it merges metadata.
- */
-export function encodeNodeApp(existing: MetadataSource, app: CitadelAppId): Uint8Array {
-  const envelope: NodeAppEnvelope = { v: NODE_APP_METADATA_VERSION, kind: KIND, payload: { app } };
+/** `existing` with `envelope` under the app key, every other key kept (unreadable or absent: no keys, as the server merges). */
+function mergedWith(existing: MetadataSource, envelope: NodeAppEnvelope | NodePageEnvelope): Uint8Array {
   const document: Record<string, unknown> = { ...(metadataDocument(existing) ?? {}), [NODE_APP_METADATA_KEY]: envelope };
   return new TextEncoder().encode(JSON.stringify(document));
 }
 
-/**
- * The app a node opens in, or null when it names none. Throws `NodeAppMetadataError` when it
- * names one this client cannot read: a newer envelope version, a foreign kind, an unknown app.
- */
-export function decodeNodeApp(metadata: MetadataSource): CitadelAppId | null {
-  const document: Record<string, unknown> | null = metadataDocument(metadata);
-  if (!document || !(NODE_APP_METADATA_KEY in document)) return null;
-  const envelope: unknown = document[NODE_APP_METADATA_KEY];
-  if (!isRecord(envelope)) throw new NodeAppMetadataError('The document\'s app record is not an object.');
-  if (envelope.v !== NODE_APP_METADATA_VERSION) {
-    throw new NodeAppMetadataError(
-      `The document's app record is version ${String(envelope.v)}; this version of Citadel reads version ${NODE_APP_METADATA_VERSION}.`,
-    );
-  }
-  if (envelope.kind !== KIND) throw new NodeAppMetadataError(`The document's app record has kind ${String(envelope.kind)}.`);
-  const app: unknown = isRecord(envelope.payload) ? envelope.payload.app : undefined;
-  if (!isCitadelAppId(app)) throw new NodeAppMetadataError(`The document names an app this version of Citadel does not know: ${String(app)}.`);
-  return app;
+/** `existing` with the document app set (envelope v1), every other key kept. */
+export function encodeNodeApp(existing: MetadataSource, app: CitadelAppId): Uint8Array {
+  return mergedWith(existing, { v: NODE_APP_DOCUMENT_VERSION, kind: NODE_APP_KIND, payload: { app } });
 }
 
-/** What a render path needs: decoding without throwing, the failure kept as a reason to show. */
-export type NodeAppState =
-  | { kind: 'none' }
-  | { kind: 'app'; app: CitadelAppId }
-  | { kind: 'unreadable'; reason: string };
+/**
+ * `existing` with the node bound to an installed app's page (envelope v2), every other key kept.
+ * Throws for a page this client would itself refuse to read: nothing unreadable is ever written.
+ */
+export function encodeNodeAppPage(existing: MetadataSource, page: NodeAppPage): Uint8Array {
+  const envelope: NodePageEnvelope = { v: NODE_APP_PAGE_VERSION, kind: NODE_APP_KIND, payload: { app: page.app, install_id: page.installId } };
+  const read: ReadBinding = readNodeAppEnvelope(envelope);
+  if (read.kind !== 'installed') throw new Error(read.kind === 'unreadable' ? read.reason : `${page.app} is not an installed app.`);
+  return mergedWith(existing, envelope);
+}
 
-export function nodeAppState(metadata: MetadataSource): NodeAppState {
-  try {
-    const app: CitadelAppId | null = decodeNodeApp(metadata);
-    return app === null ? { kind: 'none' } : { kind: 'app', app };
-  } catch (error) {
-    if (error instanceof NodeAppMetadataError) return { kind: 'unreadable', reason: error.message };
-    throw error;
-  }
+/**
+ * What a node opens in (node-page-abi.md §2): nothing (`none`, never a default app), a document
+ * app (v1), an installed app's page (v2), or a record this client cannot read, with the reason.
+ */
+export function decodeNodeApp(metadata: MetadataSource): NodeAppBinding {
+  const document: Record<string, unknown> | null = metadataDocument(metadata);
+  if (!document || !(NODE_APP_METADATA_KEY in document)) return { kind: 'none' };
+  return readNodeAppEnvelope(document[NODE_APP_METADATA_KEY]);
 }

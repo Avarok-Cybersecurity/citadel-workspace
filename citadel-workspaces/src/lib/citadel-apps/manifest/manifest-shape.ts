@@ -7,7 +7,9 @@ import type { AppCategory, AppSurface, ScopeKind } from 'citadel-workspace-clien
 import { CAPABILITIES } from '../host/capabilities';
 
 export const CATEGORIES: readonly AppCategory[] = ['planning', 'productivity', 'communication', 'documents', 'files', 'developer', 'design', 'data', 'integrations', 'utilities'];
-export const SURFACES: readonly AppSurface[] = ['canvas_pane', 'md_zone', 'node_tab'];
+export const SURFACES: readonly AppSurface[] = ['canvas_pane', 'md_zone', 'node_tab', 'node_page'];
+/** The surfaces seen by everyone on a node, which need a scope that reaches one (node-page-abi §1). */
+export const NODE_SURFACES: readonly AppSurface[] = ['node_tab', 'node_page'];
 export const SCOPE_KINDS: readonly ScopeKind[] = ['workspace', 'node', 'node_tree', 'users', 'self'];
 /** The scopes whose install everyone on some node sees, which a node tab needs (`ScopeKind::reaches_a_node` in Rust). */
 export const NODE_REACHING_SCOPES: readonly ScopeKind[] = ['workspace', 'node', 'node_tree'];
@@ -56,7 +58,7 @@ function locationShape(v: unknown): boolean {
 
 const strings = (x: unknown): boolean => listOf(x, isString);
 const capabilityShape = (v: unknown): boolean =>
-  fields(v, { cap: oneOf(CAPABILITIES), why: isString, optional: isBool }, { hosts: strings, routes: strings, targets: strings, topics: strings });
+  fields(v, { cap: oneOf(CAPABILITIES), why: isString, optional: isBool }, { hosts: strings, routes: strings, targets: strings, topics: strings, servers: strings });
 
 /** Whether `v` has the manifest's shape. */
 export function hasManifestShape(v: unknown): boolean {
@@ -75,6 +77,7 @@ export function hasManifestShape(v: unknown): boolean {
       storage_node_authored_bytes: isU32,
       p2p: (p: unknown) => fields(p, { max_fanout_concurrency: isU32, max_fanout_bytes: isU32, max_fanout_ms: isU32, max_response_bytes: isU32 }),
       topics: (t: unknown) => fields(t, { max_msg_bytes: isU32, max_msgs_per_s: isU32 }),
+      session: (t: unknown) => fields(t, { max_msg_bytes: isU32, max_msgs_per_s: isU32 }),
     }),
     artifact: (x: unknown) => fields(x, { sha256: isString, bytes: isU32, locations: (l: unknown) => listOf(l, locationShape) }),
   }, { previous_versions: strings });

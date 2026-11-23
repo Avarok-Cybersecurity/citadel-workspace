@@ -84,6 +84,9 @@ export const OP_ARGS: { readonly [N in OpName]: Schema<OpArgs[N]> } = {
   TopicOpen: s<OpArgs['TopicOpen']>({ name: str }),
   TopicPublish: s<OpArgs['TopicPublish']>({ name: str, body: bytes }),
   TopicClose: s<OpArgs['TopicClose']>({ name: str }),
+  SessionOpen: s<OpArgs['SessionOpen']>({ server: str }),
+  SessionSend: s<OpArgs['SessionSend']>({ session: u32, body: bytes }),
+  SessionClose: s<OpArgs['SessionClose']>({ session: u32 }),
   LogWrite: s<OpArgs['LogWrite']>({ level: literal('debug', 'info', 'warn', 'error'), message: str }),
 };
 

@@ -1,5 +1,5 @@
 /**
- * A node's ⋯ menu: Edit, Admin Settings, Add Child, New document, Move…, Share…, Set as Default, Delete.
+ * A node's ⋯ menu: Edit, Admin Settings, Add Child, New document, New app page…, Move…, Share…, Set as Default, Delete.
  *
  * Lifted verbatim out of the recursive TreeNodeItem when the sidebar became a
  * focused tree, so the items, their order and their testids are the ones every
@@ -14,6 +14,7 @@ import {
   FolderInput,
   Share2,
   FileText,
+  Blocks,
 } from 'lucide-react';
 import { documentPlacement, type DocumentPlacement } from '@/components/documents/document-placement';
 import { getEntityTypeString } from '@/lib/entity-type-registry';
@@ -38,6 +39,8 @@ export interface NodeActions {
   onMoveNode?: (node: DomainNode) => void;
   /** Open "New document" under this node. */
   onNewDocument?: (parentId: string) => void;
+  /** Open "New app page" under this node: a child whose page is an installed app. */
+  onNewAppPage?: (parentId: string) => void;
 }
 
 interface NodeActionsMenuProps extends NodeActions {
@@ -53,6 +56,7 @@ export function NodeActionsMenu({
   onSetDefault,
   onMoveNode,
   onNewDocument,
+  onNewAppPage,
 }: NodeActionsMenuProps): JSX.Element {
   const typeName: string = getEntityTypeString(node.entity_type);
   const placement: DocumentPlacement = documentPlacement(node.allowed_child_types ?? [], node.name);
@@ -108,6 +112,16 @@ export function NodeActionsMenu({
             >
               <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
               {placement.kind === 'blocked' ? `New document: ${placement.reason}` : 'New document'}
+            </DropdownMenuItem>
+          )}
+          {onNewAppPage && (
+            <DropdownMenuItem
+              disabled={placement.kind === 'blocked'}
+              onClick={() => onNewAppPage(node.id)}
+              data-testid={`new-app-page-${node.id}`}
+            >
+              <Blocks className="h-4 w-4 mr-2" aria-hidden="true" />
+              {placement.kind === 'blocked' ? `New app page: ${placement.reason}` : 'New app page…'}
             </DropdownMenuItem>
           )}
           {onMoveNode && (

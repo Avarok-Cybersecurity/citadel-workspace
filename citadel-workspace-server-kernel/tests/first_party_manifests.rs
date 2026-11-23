@@ -25,7 +25,7 @@ fn every_committed_first_party_manifest_parses() {
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();
     apps.sort();
-    assert_eq!(apps, ["calendar", "compute-pool"]);
+    assert_eq!(apps, ["calendar", "compute-pool", "synchronized-work"]);
     for app in &apps {
         manifest(app);
     }

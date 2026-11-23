@@ -10,6 +10,8 @@ import { getEntityTypeString } from '@/lib/entity-type-registry';
 import { ChildTypePicker } from './ChildTypePicker';
 import { NewDocumentDialog } from '@/components/documents/NewDocumentDialog';
 import type { NewDocumentFlow } from './use-new-document';
+import { NewAppPageDialog } from '@/components/documents/NewAppPageDialog';
+import type { NewAppPageFlow } from './use-new-app-page';
 import type { DomainNode } from './TreeNodesSection';
 
 interface HierarchySidebarModalsProps {
@@ -25,6 +27,7 @@ interface HierarchySidebarModalsProps {
   onCloseEdit: () => void;
   onCloseAdmin: () => void;
   newDocument: NewDocumentFlow;
+  newAppPage: NewAppPageFlow;
 }
 
 export function HierarchySidebarModals({
@@ -39,6 +42,7 @@ export function HierarchySidebarModals({
   onCloseEdit,
   onCloseAdmin,
   newDocument,
+  newAppPage,
 }: HierarchySidebarModalsProps): JSX.Element {
   const adminEntityType: string = adminNode
     ? getEntityTypeString(adminNode.entity_type).toLowerCase()
@@ -69,6 +73,17 @@ export function HierarchySidebarModals({
           placement={newDocument.target.placement}
           onCreate={newDocument.create}
           onClose={newDocument.close}
+        />
+      )}
+
+      {newAppPage.target && (
+        <NewAppPageDialog
+          parentName={newAppPage.target.parentName}
+          placement={newAppPage.target.placement}
+          candidates={newAppPage.candidates}
+          onCreate={newAppPage.create}
+          onOpenApps={newAppPage.openApps}
+          onClose={newAppPage.close}
         />
       )}
 

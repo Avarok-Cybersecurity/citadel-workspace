@@ -10,6 +10,8 @@ pub mod apps_manifest_check;
 pub mod apps_manifest_check_parts;
 /// The manifest rules of the peer-to-peer and topic capabilities and their limits.
 pub mod apps_manifest_check_peer;
+/// `SessionLimits`, and the manifest rules of `citadel.session`.
+pub mod apps_manifest_session;
 /// A document's hidden required-apps header.
 pub mod apps_md_header;
 /// A member's own peer-to-peer and topic settings, and `AuthorizePeer`'s question.

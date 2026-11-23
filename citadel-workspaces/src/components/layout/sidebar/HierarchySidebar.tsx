@@ -17,6 +17,7 @@ import { usePermission } from '@/hooks/use-permission';
 import { createBlockedReason } from './AddNodeButton';
 import { childTypeChoice, type ChildTypeChoice } from './child-type-choice';
 import { useNewDocument, type NewDocumentFlow } from './use-new-document';
+import { sessionCandidates, useNewAppPage, type NewAppPageFlow } from './use-new-app-page';
 import type { NavigateFunction } from 'react-router';
 
 /**
@@ -52,6 +53,7 @@ export function HierarchySidebar(): JSX.Element {
   // node is on screen without opening it -- which nobody asked for.
   const revealUnder: (parentId: string) => void = useCallback((parentId: string): void => { void handleNodeSelect(parentId); }, [handleNodeSelect]);
   const newDocument: NewDocumentFlow = useNewDocument(revealUnder);
+  const newAppPage: NewAppPageFlow = useNewAppPage(revealUnder, sessionCandidates);
 
   const handleNodeEdit: (node: DomainNode) => void = useCallback((node: DomainNode): void => {
     setEditNode(node);
@@ -189,6 +191,7 @@ export function HierarchySidebar(): JSX.Element {
         onNodeDelete={handleNodeDelete}
         onNodeCreate={handleNodeCreate}
         onNewDocument={newDocument.open}
+        onNewAppPage={newAppPage.open}
         onAdminSettings={handleAdminSettings}
         onSetDefault={handleSetDefault}
         onMoveNode={setMoveNode}
@@ -217,6 +220,7 @@ export function HierarchySidebar(): JSX.Element {
         onCloseCreate={() => setCreateModal(null)}
         onCreated={revealUnder}
         newDocument={newDocument}
+        newAppPage={newAppPage}
         onCloseEdit={() => setEditNode(null)}
         onCloseAdmin={() => setAdminNode(null)}
       />

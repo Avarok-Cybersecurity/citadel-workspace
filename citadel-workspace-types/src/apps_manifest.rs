@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use crate::apps_manifest_check::ManifestRefusal;
+pub use crate::apps_manifest_session::SessionLimits;
 
 /// The only manifest format there is.
 pub const MANIFEST_FORMAT: u32 = 1;
@@ -115,6 +116,8 @@ pub enum AppSurface {
     /// A tab of a node's pane, beside its page and chat. Everyone on the node sees it, so an app
     /// listing it must support a scope that reaches a node (`workspace`, `node` or `node_tree`).
     NodeTab,
+    /// A node's whole page, in place of a document (node-page-abi §1); a node scope, as `NodeTab`.
+    NodePage,
 }
 
 /// One capability the app asks for, and why. `hosts` is present exactly for `net.host` and
@@ -147,6 +150,10 @@ pub struct CapabilityRequest {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub topics: Option<Vec<String>>,
+    /// Present exactly for `citadel.session`: 1 to `MAX_SESSION_SERVERS` canonical domains.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub servers: Option<Vec<String>>,
 }
 
 /// What the app asks the host for; each is clamped by host policy whatever it says.
@@ -178,6 +185,10 @@ pub struct AppLimits {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub topics: Option<TopicLimits>,
+    /// Present exactly when the manifest asks for `citadel.session`.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session: Option<SessionLimits>,
 }
 
 /// What the app's peer-to-peer calls may take: the host clamps a fan-out to these, and a served

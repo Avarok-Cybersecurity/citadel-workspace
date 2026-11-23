@@ -60,7 +60,7 @@ function Bound({ runtime, tab, children }: { runtime: AppZoneRuntime; tab: AppTa
 function Placed({ me, purpose, children }: WithCalendarProps): JSX.Element {
   const env: AppZoneEnvironment | null = useContext(AppZoneContext);
   if (env === null) throw new Error('WithCalendar renders its own zone environment');
-  const { view, waiting }: PlacedApp = usePlacedApp({ app: CALENDAR_APP_ID, zone: purpose, height: 0, floor: null }, env, 'tab');
+  const { view, waiting }: PlacedApp = usePlacedApp({ app: CALENDAR_APP_ID, zone: purpose, height: 0, floor: null }, env, 'tab', null);
   if (view.kind === 'loading' || waiting) return <>{children({ kind: 'waiting' })}</>;
   if (view.kind !== 'ready') return <>{children({ kind: 'absent', why: 'The Calendar is not available to you in this workspace.' })}</>;
   if (env.runtime === null) return <>{children({ kind: 'absent', why: 'Apps cannot run on this page.' })}</>;

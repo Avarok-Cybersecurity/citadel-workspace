@@ -36,6 +36,14 @@ export interface AppTabMount {
   me: string;
 }
 
+/** A node's own page the runtime is asked to run (node-page-abi.md §3): it fills the pane, resized in both dimensions. */
+export interface AppPageMount {
+  install: AppInstall;
+  manifest: AppManifest;
+  nodeId: string;
+  me: string;
+}
+
 /** What a first-party glue app's own ports read in the page (nodes-port.ts, first-party-ports.ts). */
 export interface FirstPartyWorld {
   readonly tree: TreeRead;
@@ -69,8 +77,8 @@ export interface ZoneHost {
 }
 
 /**
- * The runtime's seam (design 2.3, 2.4): mount the app for `zone` (`mount`) or for an app tab
- * (`mountPane`) into `host` and return its handle.
+ * The runtime's seam (design 2.3, 2.4): mount the app for `zone` (`mount`), for an app tab
+ * (`mountPane`) or as a node's page (`mountPage`) into `host` and return its handle.
  * The app paints only its own canvas: never page DOM, never HTML from the app; its toolbar is
  * the host's buttons with the app's plain-text labels. A page passes lazy-runtime.ts; null
  * (tests) shows the placeholder and executes nothing.
@@ -78,6 +86,7 @@ export interface ZoneHost {
 export interface AppZoneRuntime {
   mount: (host: ZoneHost, zone: AppZoneMount) => AppZoneHandle;
   mountPane: (host: ZoneHost, tab: AppTabMount) => AppZoneHandle;
+  mountPage: (host: ZoneHost, page: AppPageMount) => AppZoneHandle;
   /** Binds a first-party glue app's ports for a tab (runtime/glue-steps.ts); nothing is drawn. */
   bindGlue: (tab: GlueTabMount) => GlueHandle;
 }

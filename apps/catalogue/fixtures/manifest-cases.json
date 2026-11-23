@@ -2973,6 +2973,786 @@
      }
     }
    ]
+  },
+  {
+   "name": "a node page",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_page"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a node page from a self-only app",
+   "expect": "Scopes",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_page"
+     ]
+    },
+    {
+     "path": [
+      "scopes"
+     ],
+     "value": [
+      "self"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a node page from an app for named members",
+   "expect": "Scopes",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_page"
+     ]
+    },
+    {
+     "path": [
+      "scopes"
+     ],
+     "value": [
+      "users",
+      "self"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "control: a node page and tab installed at one node",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_page",
+      "node_tab"
+     ]
+    },
+    {
+     "path": [
+      "scopes"
+     ],
+     "value": [
+      "node",
+      "self"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a repeated node page",
+   "expect": "Surfaces",
+   "set": [
+    {
+     "path": [
+      "surfaces"
+     ],
+     "value": [
+      "node_page",
+      "node_page"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "citadel.session to ['synchronized.work'], and limits.session",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "synchronized.work"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "control: citadel.session to two servers, one with a port and a path",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "a.example:8443",
+       "shared.example/tenant-a"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers []",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": []
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers: three",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "a.example",
+       "b.example",
+       "c.example"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers ['a.example', 'a.example']",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "a.example",
+       "a.example"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers ['https://synchronized.work']",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "https://synchronized.work"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers ['Synchronized.work']",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "Synchronized.work"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers ['synchronized.work:443']",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "synchronized.work:443"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers ['synchronized.work/']",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "synchronized.work/"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers ['[0:0::1]']",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "[0:0::1]"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "control: servers ['[::1]:8443']",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "[::1]:8443"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "citadel.session without servers",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers on net.server",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      3,
+      "servers"
+     ],
+     "value": [
+      "api.acme.com"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "citadel.session without limits.session",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "synchronized.work"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.session without citadel.session",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.session.max_msg_bytes 1048577",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "synchronized.work"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 1048577,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "control: limits.session at both ceilings",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "synchronized.work"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 1048576,
+      "max_msgs_per_s": 64
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.session.max_msgs_per_s 65",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "synchronized.work"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 65
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.session.max_msg_bytes 0",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "synchronized.work"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 0,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.session.max_msgs_per_s 0",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "synchronized.work"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 0
+     }
+    }
+   ]
+  },
+  {
+   "name": "limits.session shape with an unknown field",
+   "expect": "Json",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "synchronized.work"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 1,
+      "max_msgs_per_s": 1,
+      "burst": 2
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers shape [1]",
+   "expect": "Json",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       1
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 1,
+      "max_msgs_per_s": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "control: servers ['[::ffff:1.2.3.4]'], an IPv4-mapped address as Ipv6Addr prints it",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "[::ffff:1.2.3.4]"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
+  },
+  {
+   "name": "servers ['[::ffff:102:304]'], the same address not as Ipv6Addr prints it",
+   "expect": "Capabilities",
+   "set": [
+    {
+     "path": [
+      "capabilities",
+      5
+     ],
+     "value": {
+      "cap": "citadel.session",
+      "why": "x",
+      "optional": false,
+      "servers": [
+       "[::ffff:102:304]"
+      ]
+     }
+    },
+    {
+     "path": [
+      "limits",
+      "session"
+     ],
+     "value": {
+      "max_msg_bytes": 65536,
+      "max_msgs_per_s": 16
+     }
+    }
+   ]
   }
  ]
 }

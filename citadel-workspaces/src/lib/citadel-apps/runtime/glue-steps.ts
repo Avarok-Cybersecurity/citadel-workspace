@@ -50,7 +50,7 @@ export function bindGlue(tab: GlueTabMount, deps: GlueDeps, planes: InstallPlane
     const world: PortWorld = { ...(await deps.portWorld()), policy: deps.policy };
     const scopeKey: string = await scopeKeyOf(install.scope, world.sha256Hex);
     if (closed) return stopped(`${name} was closed before it started.`);
-    bound = hostPortsFor(install, manifest.limits, deps.newInstanceId(), scopeKey, null, planes.attach(install.id, install.app_id), world);
+    bound = hostPortsFor(install, manifest.limits, deps.newInstanceId(), scopeKey, null, planes.attach(install.id, install.app_id), world, null);
     const ports: HostPorts = {
       ...bound.ports,
       nodes: treeNodesPort(install.scope, firstParty.tree),

@@ -18,8 +18,9 @@ import { nodeInView } from '@/lib/workspace-navigation';
 import type { CurrentConnectionInfo } from '@/lib/connection/types';
 import type { DomainNode } from '@/components/layout/sidebar/tree-node-types';
 import { useP2PChannelParam } from './use-p2p-channel-param';
-import { nodeAppState, type NodeAppState } from '@/lib/citadel-apps/node-app-metadata';
+import { decodeNodeApp, type NodeAppBinding } from '@/lib/citadel-apps/node-app-metadata';
 import { DocumentView } from '../documents/DocumentView';
+import { AppNodePage } from './AppNodePage';
 import { OfflineKeptNode } from './OfflineKeptNode';
 import { reconnectingTo } from '@/lib/reconnect/server-reconnect';
 import { loadKeptTree, useKeptTree, type KeptTree } from '@/hooks/use-kept-tree';
@@ -131,9 +132,10 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({ nodeId: nodeParam 
     return <NodeNotFound nodeId={nodeId} />;
   }
 
-  // A document node opens in its app, not as a page; see lib/citadel-apps.
-  const app: NodeAppState = node ? nodeAppState(node.metadata) : { kind: 'none' };
-  if (node && app.kind !== 'none') return <DocumentView key={node.id} node={node} app={app} />;
+  // A document node opens in its app, an installed app's page fills the pane; see lib/citadel-apps.
+  const app: NodeAppBinding = node ? decodeNodeApp(node.metadata) : { kind: 'none' };
+  if (node && app.kind === 'installed') return <AppNodePage key={node.id} node={node} page={app} />;
+  if (node && (app.kind === 'document' || app.kind === 'unreadable')) return <DocumentView key={node.id} node={node} app={app} />;
 
   // Otherwise show the normal workspace content
   return (

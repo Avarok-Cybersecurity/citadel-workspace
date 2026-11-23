@@ -86,6 +86,7 @@ export type { SecureLinkInfo } from './generated/SecureLinkInfo.js';
 export type { SecureLinksRequest } from './generated/SecureLinksRequest.js';
 export type { SecureLinksResponse } from './generated/SecureLinksResponse.js';
 export type { ServerFeatureRefusal } from './generated/ServerFeatureRefusal.js';
+export type { SessionLimits } from './generated/SessionLimits.js';
 export type { SignInSettings } from './generated/SignInSettings.js';
 export type { SupportAccess } from './generated/SupportAccess.js';
 export type { TelemetryAccessLogEntry } from './generated/TelemetryAccessLogEntry.js';

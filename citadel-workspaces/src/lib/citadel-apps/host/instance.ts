@@ -13,6 +13,7 @@ import type { CloseReason } from '../sdk/generated/CloseReason';
 import type { SuspendReason } from '../sdk/generated/SuspendReason';
 import { INIT_RESULT } from './abi';
 import { encodeAppContext, encodeAppEvent } from './app-event';
+import { readRegionList, type CanvasRegion } from './canvas-limits';
 import { IhttpInbox } from './ihttp-inbox';
 import { PendingClose, type CloseEnding, type CloseOutcome } from './instance-close';
 import type { LaunchOptions } from './instance-options';
@@ -43,6 +44,7 @@ export class AppInstance {
   private current: InstanceState = 'loading';
   private readonly life: Lifecycle = new Lifecycle();
   private readonly listeners: Set<(state: InstanceState) => void> = new Set<(state: InstanceState) => void>();
+  private readonly regionListeners: Set<(regions: readonly CanvasRegion[]) => void> = new Set<(regions: readonly CanvasRegion[]) => void>();
   private readonly watchdog: Watchdog;
   private nextSeq: number = 0;
   private readonly inbox: IhttpInbox;
@@ -82,6 +84,14 @@ export class AppInstance {
     this.listeners.add(listener);
     return (): void => {
       this.listeners.delete(listener);
+    };
+  }
+
+  /** Each painted frame's `Region`s, in draw order, whenever they change (an empty list clears them). */
+  onRegions(listener: (regions: readonly CanvasRegion[]) => void): () => void {
+    this.regionListeners.add(listener);
+    return (): void => {
+      this.regionListeners.delete(listener);
     };
   }
 
@@ -179,6 +189,11 @@ export class AppInstance {
       case 'settled':
         if (this.life.step('settled')) this.stop('closed', 'settled');
         return;
+      case 'regions': {
+        const regions: readonly CanvasRegion[] | null = readRegionList(message.regions);
+        if (regions !== null) for (const listener of [...this.regionListeners]) listener(regions);
+        return;
+      }
     }
   }
 

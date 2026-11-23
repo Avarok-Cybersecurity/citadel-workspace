@@ -62,5 +62,6 @@ pub fn context(granted: &[Capability], close_grace_ms: u32) -> citadel_app_sdk_t
         acting_username: "alice".into(),
         node_id: "root".into(),
         close_grace_ms,
+        sdk_abi_minor: 0,
     }
 }

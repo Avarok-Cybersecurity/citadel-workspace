@@ -115,7 +115,8 @@ pub(crate) fn check_capabilities(
     if has(Capability::NetHostPrivate) && !has(Capability::NetHost) {
         return refuse("net.host.private without net.host".to_string());
     }
-    check_peer_capabilities(requests)
+    check_peer_capabilities(requests)?;
+    crate::apps_manifest_session::check_session_capabilities(requests)
 }
 
 pub(crate) fn check_limits(
@@ -123,6 +124,7 @@ pub(crate) fn check_limits(
     requests: &[CapabilityRequest],
 ) -> Result<(), ManifestRefusal> {
     check_peer_limits(limits, requests)?;
+    crate::apps_manifest_session::check_session_limits(limits, requests)?;
     let within = |value: u32, max: u32| (1..=max).contains(&value);
     let checks = [
         (

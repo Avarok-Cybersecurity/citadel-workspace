@@ -50,7 +50,7 @@ export interface ZoneFacts {
 export type ZoneView =
   | { kind: 'loading' }
   | { kind: 'not-available' }
-  /** The app's manifest does not list the surface it is placed on (`md_zone` for a zone, `node_tab` for a tab). */
+  /** The app's manifest does not list the surface it is placed on (`md_zone` for a zone, `node_tab` for a tab, `node_page` for a page). */
   | { kind: 'wrong-surface'; name: string }
   | { kind: 'install'; name: string }
   | { kind: 'ask-admin'; name: string }
@@ -61,6 +61,16 @@ export type ZoneView =
   /** Granted P2P or topics this person has not answered: the app starts once they have, holding what they allowed. */
   | { kind: 'needs-answer'; name: string }
   | { kind: 'ready'; app: ListedApp; install: AppInstall };
+
+/**
+ * The facts as a placement bound to one install sees them (a node's page names its install,
+ * node-page-abi.md §2): only that install may run there, never another install of the same app.
+ * Null: any install of the app that covers this person here (a zone, a tab).
+ */
+export function boundTo(f: ZoneFacts, installId: string | null): ZoneFacts {
+  if (installId === null || typeof f.installs === 'string') return f;
+  return { ...f, installs: f.installs.filter((i: AppInstall): boolean => i.id === installId) };
+}
 
 export function zoneView(props: ZoneProps, f: ZoneFacts, placed: Placement['kind']): ZoneView {
   if (f.listing === 'unavailable' || f.installs === 'unavailable') return { kind: 'not-available' };

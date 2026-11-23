@@ -239,6 +239,14 @@ jobs:
           cargo fmt --all --check
           cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
           cargo test --locked -p compute-pool-core
+      # synchronized.work: the app is sw-app at a pinned commit; natively, the module crate is
+      # the test that the manifest's id, servers, hosts and limits.session are sw-app's own.
+      - name: First-party synchronized.work - fmt, clippy for wasm32, and the manifest against sw-app
+        working-directory: apps/first-party/synchronized-work
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
+          cargo test --locked -p synchronized-work
       # The Calendar (Calendar design 3.2): its core is pure and runs natively for its tests,
       # including the sweep over every IANA zone's transitions, and builds for the page's wasm32.
       - name: First-party Calendar - fmt, clippy native and wasm32, and its core's tests

@@ -14,6 +14,7 @@ import { decodeCbor, encodeCbor } from '../../host/cbor';
 import { STANDARD_HOST_POLICY } from '../../host/limits';
 import { InstanceSlots } from '../../host/instance-slots';
 import type { HostChannel, ToWorker } from '../../host/worker-protocol';
+import type { SurfaceOf } from '../../host/worker-host';
 import type { ArtifactVerifierPort } from '../../host/verify-artifact';
 import { appModule, callGroup, type AppModuleOptions } from '../../host/__tests__/app-fixtures';
 import { fakeSign, fakeVerifier, sha256Hex } from '../../host/__tests__/fake-verifier';
@@ -23,7 +24,7 @@ import type { ZoneAudit } from '../zone-close';
 import { createAppZoneRuntime } from '../zone-runtime';
 import type { ZoneRuntimeDeps } from '../mount-steps';
 import { fakeWatchers, type FakeWatchers } from './fake-watchers';
-import type { AppTabMount, AppZoneMount, AppZoneRuntime, ZoneHost } from '@/components/office/app-zone/app-zone-environment';
+import type { AppPageMount, AppTabMount, AppZoneMount, AppZoneRuntime, ZoneHost } from '@/components/office/app-zone/app-zone-environment';
 
 export const APP_ID: string = 'com.acme.kanban';
 const KV_ARGS: Uint8Array = encodeCbor({ backend: 'user', key: 'k' });
@@ -117,8 +118,9 @@ export interface Rig {
   push: (answer: unknown) => void;
 }
 
-export function rig(kernel: FakeRuntimeKernel, over: Partial<ZoneRuntimeDeps> = {}, verifier: ArtifactVerifierPort = fakeVerifier): Rig {
-  const worker: InProcess = inProcess();
+/** `surfaceOf`: what the in-process worker paints on; nothing, unless a test is about painting. */
+export function rig(kernel: FakeRuntimeKernel, over: Partial<ZoneRuntimeDeps> = {}, verifier: ArtifactVerifierPort = fakeVerifier, surfaceOf: SurfaceOf = () => null): Rig {
+  const worker: InProcess = inProcess(surfaceOf);
   let spawned: number = 0;
   let instances: number = 0;
   const watch: FakeWatchers = fakeWatchers();
@@ -167,6 +169,12 @@ export function zoneOf(r: Release): AppZoneMount {
 export function tabOf(r: Release): AppTabMount {
   const { install, manifest, nodeId, me } = zoneOf(r);
   return { install, manifest, tabId: 'calendar', nodeId, me };
+}
+
+/** The release as node n-1's page, for alice. */
+export function pageOf(r: Release): AppPageMount {
+  const { install, manifest, nodeId, me } = zoneOf(r);
+  return { install, manifest, nodeId, me };
 }
 
 /**

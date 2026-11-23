@@ -14,6 +14,7 @@ import type { HostReply } from '../sdk/generated/HostReply';
 import type { IhttpFrame } from '../sdk/generated/IhttpFrame';
 import type { Refused } from '../sdk/generated/Refused';
 import type { TopicEvent } from '../sdk/generated/TopicEvent';
+import type { SessionEvent } from '../sdk/generated/SessionEvent';
 import type { OpName } from './op-args';
 
 export type { Refused, HostReply };
@@ -62,6 +63,21 @@ export interface TopicArrival {
   readonly event: TopicEvent;
 }
 
+/**
+ * `citadel.session`: a C2S session to an external Citadel server, held by the member's agent
+ * (runtime/agent-session-port.ts; the rules are host/session-rules.ts).
+ */
+export type SessionPort = Port<'SessionOpen' | 'SessionSend' | 'SessionClose'> & {
+  /** Events on the sessions this instance opened; returns the unsubscribe. */
+  readonly onEvent: (listener: (event: SessionArrival) => void) => () => void;
+};
+
+/** One session event for the app (AppEvent `{session: {session, event}}`). */
+export interface SessionArrival {
+  readonly session: number;
+  readonly event: SessionEvent;
+}
+
 /** Internal links only: the dispatcher classifies the href first and hands over a router path. */
 export interface NavigatePort {
   readonly currentUrl: () => string;
@@ -105,6 +121,7 @@ export interface HostPorts {
   readonly notify?: NotifyPort;
   readonly documents?: DocumentsPort;
   readonly topic?: TopicPort;
+  readonly session?: SessionPort;
   readonly log?: LogPort;
 }
 

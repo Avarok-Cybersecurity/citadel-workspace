@@ -145,7 +145,10 @@ impl AppManifest {
         if self.scopes.is_empty() || !distinct(&self.scopes) {
             return Err(ManifestRefusal::Scopes);
         }
-        if self.surfaces.contains(&AppSurface::NodeTab)
+        if self
+            .surfaces
+            .iter()
+            .any(|s| matches!(s, AppSurface::NodeTab | AppSurface::NodePage))
             && !self.scopes.iter().any(|kind| kind.reaches_a_node())
         {
             return Err(ManifestRefusal::Scopes);

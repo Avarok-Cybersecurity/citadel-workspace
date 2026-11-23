@@ -6,7 +6,7 @@
  */
 import type { AppInstall, AppManifest, Capability, CapabilityRequest, PeerConsent } from 'citadel-workspace-client-ts';
 import { PERMISSION_LABELS } from '@/lib/permissions-service/types';
-import { CAPABILITY_COPY, FIRST_PARTY_ONLY, MEMBER_CONSENT_COPY, NETWORK_CAPABILITIES, PEER_METADATA_DISCLOSURE, type Risk } from './capability-copy';
+import { CAPABILITY_COPY, FIRST_PARTY_ONLY, MEMBER_CONSENT_COPY, NETWORK_CAPABILITIES, PEER_METADATA_DISCLOSURE, sessionLabel, type Risk } from './capability-copy';
 import type { ConsentChoice, ConsentPlane } from './member-consent-types';
 import type { Authority } from './scope-options';
 
@@ -42,7 +42,7 @@ export function consentRows(manifest: AppManifest, turnedOff: ReadonlySet<Capabi
       : held === 'no' ? `You need “${PERMISSION_LABELS[copy.installerNeeds]}” to allow this.`
       : held === 'unknown' ? 'Checking your permissions…' : null;
     return {
-      cap: r.cap, label: copy.label, why: r.why, risk: copy.risk, optional: r.optional,
+      cap: r.cap, label: r.servers === undefined ? copy.label : sessionLabel(r.servers), why: r.why, risk: copy.risk, optional: r.optional,
       on: !r.optional || (!turnedOff.has(r.cap) && blocked === null), blocked, hosts: r.hosts ?? [], memberNote: memberNoteFor(r.cap),
     };
   });
