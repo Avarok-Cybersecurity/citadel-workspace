@@ -1,11 +1,13 @@
 /**
  * "Manage subscription" for a hosted workspace: which workspaces offer it, and
- * what each refusal from the control plane says.
+ * what each answer -- the session's (`OpenBillingPortal`) or the control
+ * plane's to a claim code -- says.
  *
- * No I/O here. The request is the control-plane client's (`openPortal`); the
- * new tab is the caller's (`PortalTab`). What is left is the decision logic,
- * testable without a browser or a network.
+ * No I/O here. The requests are the workspace service's and the control-plane
+ * client's (`openPortal`); the new tab is the caller's (`PortalTab`). What is
+ * left is the decision logic, testable without a browser or a network.
  */
+import type { BillingPortalAnswer } from 'citadel-workspace-client-ts';
 import { dialledHost } from '@/lib/sessions/same-server';
 import { isTenantHost } from '@/lib/workspace-address';
 import { ControlPlaneError } from './control-plane-client';
@@ -75,4 +77,20 @@ export function describePortalRefusal(error: unknown): PortalRefusal {
     case 'billing-not-configured': return NOT_AVAILABLE;
     default: return error.status === 0 ? UNREACHABLE : UNKNOWN;
   }
+}
+
+/** What the session's answer means for the dialog: a portal to open, or what to say instead. */
+export type SessionPortalOutcome =
+  | { readonly kind: 'opened'; readonly portalUrl: string }
+  | { readonly kind: 'refused'; readonly refusal: PortalRefusal };
+
+/**
+ * The server's answer to `OpenBillingPortal`, for a member it admitted. (A member it did not admit
+ * gets an Error answer instead, and the dialog offers the claim code.)
+ */
+export function sessionPortalOutcome(answer: BillingPortalAnswer): SessionPortalOutcome {
+  if (answer === 'NoSubscription') return { kind: 'refused', refusal: FREE_PLAN };
+  if (answer === 'NotConfigured') return { kind: 'refused', refusal: NOT_AVAILABLE };
+  if ('Opened' in answer) return { kind: 'opened', portalUrl: answer.Opened.portal_url };
+  return { kind: 'refused', refusal: UNKNOWN };
 }
