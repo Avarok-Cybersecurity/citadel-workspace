@@ -15,6 +15,7 @@ import type { OpeningPorts } from '@/components/p2p/chat-document/chat-document-
 import { createValueStore } from '@/lib/value-store';
 import type { GroupRestriction } from '@/components/chat/group-restriction';
 import { chatFeatures } from './features';
+import { NO_MESSAGES_YET } from './chat-counterpart';
 import { peerHistory } from './peer-history';
 import { peerStatus } from './peer-status';
 import { openReceivedFile, type ReceivedFileRead } from '@/lib/received-files/received-file';
@@ -103,7 +104,7 @@ export function createPeerTransport({ peer, self, opening }: PeerTransportParams
     kind: 'peer',
     conversationKey: peer.cid.toString(),
     self,
-    counterpart: { name: peer.name, username: peer.username, greeting: `Say hello to ${peer.name}. Messages are end-to-end encrypted.` },
+    counterpart: { name: peer.name, username: peer.username, greeting: `Say hello to ${peer.name}. Messages are end-to-end encrypted.`, emptyHeading: NO_MESSAGES_YET },
     features: chatFeatures(ports, {
       markdown: true, readReceipts: true, securityLevel: true, retention: true, optimistic: true, namesSenders: false, deliveryTicks: true,
     }),

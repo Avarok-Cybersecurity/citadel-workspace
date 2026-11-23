@@ -23,6 +23,8 @@ interface MessageListProps {
   messages: ChatMessage[];
   /** The empty transcript's sentence, as the transport words it. */
   greeting: string;
+  /** Above the greeting in an empty transcript; null shows the greeting alone. */
+  emptyHeading: string | null;
   /** Each message shows its sender's name and picture (a channel), not a two-party thread. */
   namesSenders: boolean;
   /** The reader's own messages carry delivery ticks (the transport's `deliveryTicks`). */
@@ -63,7 +65,7 @@ const authorOf = (m: ChatMessage): string => m.author.name;
 export const MessageList: React.ForwardRefExoticComponent<MessageListProps & React.RefAttributes<HTMLDivElement>> = forwardRef<HTMLDivElement, MessageListProps>(
   function MessageList(
     {
-      messages, greeting, namesSenders, deliveryTicks, selfCid, reactorName,
+      messages, greeting, emptyHeading, namesSenders, deliveryTicks, selfCid, reactorName,
       isLoadingMore, isLoadingHistory, hasMorePages, onLoadOlder, olderPagesError,
       onScroll, onRetryMessage, onOpenDocument,
       onAcceptTransfer, onDeclineTransfer, onCancelTransfer, onOpenFile,
@@ -116,7 +118,7 @@ export const MessageList: React.ForwardRefExoticComponent<MessageListProps & Rea
           {messages.length === 0 && !isLoadingMore && !isLoadingHistory && (
             // A blank void reads as a screen that failed to load.
             <div className="flex flex-col items-center justify-center gap-1 py-16 text-center">
-              <p className="text-sm text-foreground">No messages yet</p>
+              {emptyHeading !== null && <p className="text-sm text-foreground" data-testid="chat-empty-heading">{emptyHeading}</p>}
               <p className="text-xs text-muted-foreground">{greeting}</p>
             </div>
           )}

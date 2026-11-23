@@ -1,7 +1,8 @@
 /**
  * The scratchpad, measured: the header says what it is, whole, inside the pane, at both widths;
  * nothing a direct chat has because someone is at the other end is drawn (a call control, a
- * presence or typing line, a delivery tick); the empty transcript says it too; text is readable.
+ * presence or typing line, a delivery tick); the empty transcript is the scratchpad line alone, with no
+ * heading above it; text is readable.
  */
 import { strict as assert } from 'node:assert';
 import { AxeBuilder } from '@axe-core/playwright';
@@ -49,6 +50,11 @@ async function theEmptyScratchpadSaysWhatItIsFor({ page, url }) {
   const empty = page.getByTestId('scratchpad-chat-view').getByText(LINE, { exact: true });
   await empty.waitFor({ state: 'visible', timeout: 10_000 });
   assert.ok(inside(await empty.boundingBox(), log), 'the empty line is not inside the transcript');
+  // Counted after the line is visible, so the transcript's empty state is drawn; the control that gives
+  // the scratchpad the shared heading turns these red, so the locators do match when it is there.
+  const transcript = page.getByTestId('scratchpad-chat-view');
+  assert.equal(await transcript.getByTestId('chat-empty-heading').count(), 0, 'the empty scratchpad shows a heading above its line');
+  assert.equal(await transcript.getByText('No messages yet').count(), 0, 'the empty scratchpad says "No messages yet"');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(overflow <= 0, `the page scrolls sideways by ${overflow}px`);
 }

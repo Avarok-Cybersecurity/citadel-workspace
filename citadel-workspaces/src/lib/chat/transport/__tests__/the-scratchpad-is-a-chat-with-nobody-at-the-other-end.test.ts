@@ -53,7 +53,7 @@ describe('the scratchpad transport', () => {
   it('is titled as a scratchpad and has no presence, typing, settings, read receipts or ticks', () => {
     const { transport } = world();
     expect(transport.kind).toBe('scratchpad');
-    expect(transport.counterpart).toEqual({ name: 'Scratchpad', username: null, greeting: 'Your private scratchpad — notes, drafts and documents only you can see.' });
+    expect(transport.counterpart).toEqual({ name: 'Scratchpad', username: null, greeting: 'Your private scratchpad — notes, drafts and documents only you can see.', emptyHeading: null });
     expect([transport.status, transport.settings]).toEqual([null, null]);
     expect(transport.features).toMatchObject({ typing: false, presence: false, settings: false, readReceipts: false, deliveryTicks: false, securityLevel: false });
     expect(transport.features).toMatchObject({ markdown: true, revise: true, reactions: true, files: true, documents: true });

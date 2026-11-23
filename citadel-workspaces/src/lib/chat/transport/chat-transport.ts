@@ -29,15 +29,8 @@ export interface ChatSelf {
   readonly displayName: string;
 }
 
-/** Who the conversation is with: one peer, or a channel's readers. */
-export interface ChatCounterpart {
-  /** What the pane calls them in a sentence ("Say hello to …", "Shared live with …"). */
-  readonly name: string;
-  /** The roster key behind a single peer's picture; null for a channel. */
-  readonly username: string | null;
-  /** The empty transcript's sentence: who to greet, and how the messages travel. */
-  readonly greeting: string;
-}
+import type { ChatCounterpart } from './chat-counterpart';
+export type { ChatCounterpart };
 
 /** Who wrote one message, decided by the adapter that knows the transport's identities. */
 export interface ChatAuthor {

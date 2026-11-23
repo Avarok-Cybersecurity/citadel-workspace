@@ -93,7 +93,7 @@ function P2PConversation() {
     <TooltipProvider>
       <div style={{ height: 640, display: 'flex', flexDirection: 'column' }}>
         <MessageList
-          messages={messages} greeting="Say hello to Ada." namesSenders={false} deliveryTicks selfCid={ME}
+          messages={messages} greeting="Say hello to Ada." emptyHeading="No messages yet" namesSenders={false} deliveryTicks selfCid={ME}
           reactorName={(cid) => (cid === ME ? 'You' : 'Ada')}
           isLoadingMore={false} isLoadingHistory={false} hasMorePages={false}
           onScroll={nothing} onRetryMessage={nothing} onOpenDocument={nothing}

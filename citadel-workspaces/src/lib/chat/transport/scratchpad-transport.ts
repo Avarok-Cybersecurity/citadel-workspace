@@ -121,7 +121,7 @@ export function createScratchpadTransport({ messenger, self, opening, blobs, rea
     kind: 'scratchpad',
     conversationKey: `scratchpad:${self.cid.toString()}`,
     self,
-    counterpart: { name: SCRATCHPAD_TITLE, username: null, greeting: SCRATCHPAD_LINE },
+    counterpart: { name: SCRATCHPAD_TITLE, username: null, greeting: SCRATCHPAD_LINE, emptyHeading: null },
     features: chatFeatures(ports, {
       markdown: true, readReceipts: false, securityLevel: false, retention: false, optimistic: true, namesSenders: false, deliveryTicks: false,
     }),

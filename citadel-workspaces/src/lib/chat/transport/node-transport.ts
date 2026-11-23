@@ -18,6 +18,7 @@ import { debugLog } from '@/lib/debug-config';
 import { describeFailure } from '@/lib/failure-message';
 import { peerDisplayName } from '@/lib/peer-display';
 import { chatFeatures, type StatedFeatures } from './features';
+import { NO_MESSAGES_YET } from './chat-counterpart';
 import { groupHistory, type GroupHistory } from './group-history';
 import { pendingGroupSends, type PendingSends } from './pending-group-sends';
 import type { NodeChatIO } from './node-chat-io';
@@ -129,7 +130,7 @@ export function createNodeTransport(params: NodeTransportParams): ChatTransport 
     kind: 'node',
     conversationKey: `node:${channelId}`,
     self,
-    counterpart: { name: channelName, username: null, greeting: `Start the conversation in ${channelName}. Messages are kept on the workspace server.` },
+    counterpart: { name: channelName, username: null, greeting: `Start the conversation in ${channelName}. Messages are kept on the workspace server.`, emptyHeading: NO_MESSAGES_YET },
     features: chatFeatures(ports, NODE_FEATURES),
     sendGate: params.sendGate,
     history: history.port,
