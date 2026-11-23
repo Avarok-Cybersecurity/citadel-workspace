@@ -32,6 +32,10 @@ describe('what sign-out removes', () => {
     ]);
   });
 
+  it('takes the retired diagnostics opt-in, which nothing reads any more', () => {
+    expect(residueKeys(['citadel:diagnostics'])).toEqual(['citadel:diagnostics']);
+  });
+
   it('leaves the settings the user chose', () => {
     // Residue the user cannot see goes; state the user chose stays. A rule that
     // cleared everything would satisfy "no residue" and lose that distinction.
@@ -40,7 +44,6 @@ describe('what sign-out removes', () => {
         'citadel:appearance-settings',
         'citadel:privacy-settings',
         'citadel_recent_servers',
-        'citadel:diagnostics',
       ]),
     ).toEqual([]);
   });

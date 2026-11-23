@@ -2,9 +2,9 @@
  * The Leader/Follower badge shows only while Dev mode is on, and turning Dev mode on in
  * Settings -> Advanced shows it at once, without a reload.
  *
- * It used to be gated by isDiagnosticsUiEnabled(): on in every development build and in any
- * build that had once been opened with ?diagnostics=1 or the localStorage opt-in -- internals
- * that mean nothing to a person using the product, with no way for them to turn it off.
+ * It used to show in every development build and in any build once opened with a diagnostics
+ * opt-in -- internals that mean nothing to a person using the product, with no way for them to
+ * turn it off.
  *
  * Real: the Advanced tab, the Dev mode store and its device binding, DevModeOnly and the
  * LeaderIndicator. Double: the browser's store (storage-utils), the I/O edge; jsdom has no
