@@ -16,7 +16,7 @@ import { instanceLimits, type HostPolicy } from '../host/limits';
 import type { InstanceSlots } from '../host/instance-slots';
 import type { HostPorts } from '../host/ports';
 import type { AppEvent } from '../sdk/generated/AppEvent';
-import { badgedNotifyPort, rosterMembersPort } from './first-party-ports';
+import { rosterMembersPort } from './first-party-ports';
 import { hostPortsFor, type BoundPorts, type PortWorld } from './host-ports';
 import type { InstallPlaneRegistry } from './install-plane-registry';
 import { treeNodesPort } from './nodes-port';
@@ -50,12 +50,11 @@ export function bindGlue(tab: GlueTabMount, deps: GlueDeps, planes: InstallPlane
     const world: PortWorld = { ...(await deps.portWorld()), policy: deps.policy };
     const scopeKey: string = await scopeKeyOf(install.scope, world.sha256Hex);
     if (closed) return stopped(`${name} was closed before it started.`);
-    bound = hostPortsFor(install, manifest.limits, deps.newInstanceId(), scopeKey, null, planes.attach(install.id, install.app_id), world, null);
+    bound = hostPortsFor(install, manifest.limits, deps.newInstanceId(), scopeKey, null, planes.attach(install.id, install.app_id), world, null, { id: manifest.id, name, nodeId: tab.nodeId });
     const ports: HostPorts = {
       ...bound.ports,
       nodes: treeNodesPort(install.scope, firstParty.tree),
       members: rosterMembersPort(firstParty.roster),
-      notify: badgedNotifyPort({ id: manifest.id, name }, firstParty.notices),
     };
     const changes = (listener: (change: StorageChange) => void): (() => void) =>
       onStorageChanged(world.pushes, install.id, (event: AppEvent): void => {

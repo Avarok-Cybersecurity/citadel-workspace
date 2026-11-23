@@ -49,6 +49,8 @@ function mounted(agent: FakeAgent): { r: Rig; host: HTMLDivElement } {
       nowMs: (): number => Date.now(), every: () => (): void => undefined,
       // Nothing here asks the peer planes: the app neither serves, calls nor opens a topic.
       peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (): void => undefined,
+      // The app raises no notification, and is not granted `notifications`.
+      notices: (): void => undefined,
     }),
   });
   rigs.push(r);

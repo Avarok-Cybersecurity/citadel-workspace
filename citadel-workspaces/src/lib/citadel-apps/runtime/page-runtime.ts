@@ -31,6 +31,7 @@ import { markTopicGroup, markTopicRequest } from '@/lib/group-conversations/app-
 import { p2pRegistrationService } from '@/lib/p2p-registration-service';
 import { pageZoneWatchers } from './zone-watchers';
 import { pageOpenedFiles } from './page-opened-files';
+import { pageAppNotices } from '../app-notices';
 
 const policy: HostPolicy = validateHostPolicy(STANDARD_HOST_POLICY);
 const verifier: ArtifactVerifierPort = pageArtifactVerifier(crypto.subtle, wasmAppSignatureCheck(loadWasmModule));
@@ -101,7 +102,7 @@ export const pageAppZoneRuntime: AppZoneRuntime = createAppZoneRuntime({
   report: (what: string, detail: unknown): void => console.error(what, detail),
   offscreen: (canvas: HTMLCanvasElement): OffscreenCanvas => canvas.transferControlToOffscreen(),
   portWorld: async (): Promise<Omit<PortWorld, 'policy'>> => ({
-    transport: sessionAppsTransport, agent, agentSession: await agentSession(), log,
+    transport: sessionAppsTransport, agent, agentSession: await agentSession(), log, notices: pageAppNotices,
     pushes: (listener: (answer: unknown) => void): (() => void) => eventEmitter.on('workspace:apps', (event: { answer: unknown } | undefined): void => {
       if (event !== undefined) listener(event.answer);
     }),

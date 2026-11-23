@@ -164,7 +164,9 @@ export function mountPlaced(slots: ZoneHost, placed: PlacedMount, deps: ZoneRunt
     const world: PortWorld = { ...(await deps.portWorld()), policy: deps.policy };
     const scopeKey: string = await scopeKeyOf(install.scope, world.sha256Hex);
     if (closing !== null) return;
-    bound = hostPortsFor(install, loaded.manifest.limits, deps.newInstanceId(), scopeKey, { events: input.port, ui: zoneUiPort(toolbar) }, planes.attach(install.id, install.app_id), world, sessionBindingOf(loaded.manifest, placed.me));
+    bound = hostPortsFor(install, loaded.manifest.limits, deps.newInstanceId(), scopeKey, { events: input.port, ui: zoneUiPort(toolbar) }, planes.attach(install.id, install.app_id), world, sessionBindingOf(loaded.manifest, placed.me), {
+      id: loaded.manifest.id, name: loaded.manifest.name, nodeId: placed.nodeId,
+    });
     const closeGraceMs: number = loaded.manifest.limits.close_grace_ms;
     const launch: Launch = launchAppInstance({
       appId: install.app_id, module: loaded.module, granted: bound.held, memory: loaded.memory, closeGraceMs,

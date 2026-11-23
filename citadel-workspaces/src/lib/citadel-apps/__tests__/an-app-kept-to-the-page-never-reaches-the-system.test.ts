@@ -30,7 +30,7 @@ afterEach(() => { vi.restoreAllMocks(); delivered.splice(0); });
 describe("an app's notices", () => {
   it('reach the bell but never the system when the member keeps them to the page', async () => {
     recordAppNoticeDelivery('net.avarok.calendar', false);
-    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', title: 'Quiet standup', body: 'Starts at 9:00' });
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Quiet standup', body: 'Starts at 9:00' });
     await settle();
     expect(raised('Quiet standup')).toHaveLength(1);
     expect(delivered.map((n) => n.title)).not.toContain('Quiet standup');
@@ -39,9 +39,9 @@ describe("an app's notices", () => {
   it('reach the system too when the member allows it, and another app is untouched by the choice', async () => {
     recordAppNoticeDelivery('net.avarok.calendar', false);
     recordAppNoticeDelivery('net.avarok.calendar', true);
-    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', title: 'Loud standup', body: 'Starts at 9:00' });
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Loud standup', body: 'Starts at 9:00' });
     recordAppNoticeDelivery('com.acme.board', false);
-    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', title: 'Still loud', body: 'Starts at 10:00' });
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Still loud', body: 'Starts at 10:00' });
     await settle();
     expect(delivered.map((n) => n.title)).toEqual(['Loud standup', 'Still loud']);
   });
