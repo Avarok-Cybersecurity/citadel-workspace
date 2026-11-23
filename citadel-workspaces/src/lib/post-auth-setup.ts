@@ -8,6 +8,7 @@
  * should use this function instead of manually orchestrating these steps.
  */
 
+import { linkOutage } from '@/lib/reconnect/link-outage';
 import WorkspaceService from '@/lib/workspace-service';
 import { instanceManager } from '@/lib/multi-instance';
 import { debugLog, errorLog } from '@/lib/debug-config';
@@ -27,6 +28,8 @@ export async function postAuthSetup(
   options?: { skipTreeSchema?: boolean }
 ): Promise<void> {
   debugLog('PostAuthSetup', 'Starting workspace setup for CID:', cid.toString());
+  // A session is being set up, so no earlier session's outage notice stands (lib/reconnect/outage.ts).
+  linkOutage.end();
 
   // Step 0: Anchor the multi-instance manager to this CID. This must happen
   // before any P2P notification can arrive — the inbound router's CID-based

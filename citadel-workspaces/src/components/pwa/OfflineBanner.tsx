@@ -5,6 +5,7 @@ import { useServiceHealth } from '@/hooks/use-service-health';
 import { useServerShutdown } from '@/hooks/use-server-shutdown';
 import { useAgentRequired } from '@/lib/onboarding/agent-optional';
 import { reconnectingMessage, reconnectingTo } from '@/lib/reconnect/server-reconnect';
+import { outage } from '@/lib/reconnect/outage';
 import { DeployBanner, useDeployNotice } from './DeployBanner';
 import type { DeployNotice } from '@/lib/pwa/deploy-notice';
 
@@ -34,8 +35,11 @@ export function OfflineBanner(): JSX.Element | null {
   // The agent's own word that it is re-establishing this session's server link
   // (ServerReconnectWatcher). After a planned restart, the more specific of
   // the two, so it outranks the shutdown notice.
-  const reconnectingServer: string | null = useSyncExternalStore(reconnectingTo.subscribe, reconnectingTo.get);
-  const restarting: string | null = reconnectingServer ? reconnectingMessage(reconnectingServer) : shutdown;
+  // Until the wait becomes the whole page (lib/reconnect/outage.ts), which then says it alone.
+  const escalated: boolean = useSyncExternalStore(outage.subscribe, outage.get) !== null;
+  const linkServer: string | null = useSyncExternalStore(reconnectingTo.subscribe, reconnectingTo.get);
+  const reconnectingServer: string | null = escalated ? null : linkServer;
+  const restarting: string | null = escalated ? null : reconnectingServer ? reconnectingMessage(reconnectingServer) : shutdown;
   // A new build: its own row in the same stack, so the two never overlap.
   const deploy: DeployNotice | null = useDeployNotice();
   const ref: RefObject<HTMLDivElement> = useRef<HTMLDivElement>(null);

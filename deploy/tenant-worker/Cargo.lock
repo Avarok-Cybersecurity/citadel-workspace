@@ -796,6 +796,7 @@ dependencies = [
  "citadel-support-signature",
  "citadel-workspace-server-kernel",
  "citadel-workspace-types",
+ "citadel_crypt",
  "citadel_sdk",
  "js-sys",
  "serde",

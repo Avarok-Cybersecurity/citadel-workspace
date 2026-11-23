@@ -60,6 +60,7 @@ describe('the role table after a reconnect or a claim', () => {
       resumePeers: async (): Promise<void> => undefined,
       reloadWorkspace: (cid: bigint): Promise<void> => postAuthSetup(cid),
       signInAgain: (): void => undefined,
+      outage: { begin: (): void => undefined, now: (): void => undefined, end: (): void => undefined },
     };
     await handleServerReconnectEvent({ kind: 'reconnected', cid: CID }, io);
     expect(getRolesState()).toEqual({ status: 'loaded', table: EDITED_OFFLINE });
