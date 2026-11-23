@@ -1,7 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
-export const verify_app_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => number;
 export const close_connection: () => any;
 export const get_version: () => [number, number];
 export const init: (a: number, b: number) => any;
@@ -12,6 +11,7 @@ export const restart: (a: number, b: number) => any;
 export const send_direct_to_internal_service: (a: any) => any;
 export const send_media_frame: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
 export const types_hash: () => [number, number];
+export const verify_app_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => number;
 export const wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut__web_sys_5d094b1de2ee9013___features__gen_CloseEvent__CloseEvent____Output_______: (a: number, b: number) => void;
 export const wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut__web_sys_5d094b1de2ee9013___features__gen_MessageEvent__MessageEvent____Output_______: (a: number, b: number) => void;
 export const wasm_bindgen_dc0159de9c09e5bc___closure__destroy___dyn_core_d941ad8722425d2e___ops__function__FnMut__wasm_bindgen_dc0159de9c09e5bc___JsValue____Output_______: (a: number, b: number) => void;

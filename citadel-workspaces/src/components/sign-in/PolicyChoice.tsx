@@ -1,6 +1,6 @@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { POLICY_COPY } from '@/lib/sign-in/copy';
+import { asksForKey, KEY_POLICY_RECONNECT_NOTE, POLICY_COPY } from '@/lib/sign-in/copy';
 import type { SignInPolicy } from '@/lib/sign-in/types';
 
 /** The sign-in policy as a radio group: what each one asks for, in words. */
@@ -29,6 +29,7 @@ export function PolicyChoice<P extends SignInPolicy>({ id, value, options, onCha
           </Label>
         </div>
       ))}
+      {asksForKey(value) && <p className="text-xs text-muted-foreground" data-testid={`${id}-policy-reconnect-note`}>{KEY_POLICY_RECONNECT_NOTE}</p>}
     </RadioGroup>
   );
 }

@@ -21,6 +21,7 @@ const TIMED_OUT: LoaderInputs = {
   keptTree: false,
   keptTreeLocked: false,
   refused: false,
+  outage: null,
 };
 
 describe('the workspace loader', () => {
@@ -42,12 +43,33 @@ describe('the workspace loader', () => {
     expect(view).toEqual({ kind: 'spinner', message: 'Reconnecting to acme.work.example.net…', showConnectButton: false });
   });
 
-  it('still reports data that never came on a connection that is up', () => {
+  // It span "Workspace data is taking longer than expected..." for ever, beside a button to /connect.
+  it('says the service failed, as the whole page, when data never came on a connection that is up', () => {
     expect(loaderView({ ...TIMED_OUT, hasConnection: true, workspaceDataTimeout: true })).toEqual({
-      kind: 'spinner',
-      message: 'Workspace data is taking longer than expected...',
-      showConnectButton: true,
+      kind: 'unavailable',
+      outage: 'workspace-timeout',
     });
+  });
+
+  // The control: while the agent says it is reconnecting, or a claim is under way, that same
+  // silence is still a wait, not a failure.
+  it('still waits on silence the agent or a claim accounts for', () => {
+    const silent: LoaderInputs = { ...TIMED_OUT, hasConnection: true, workspaceDataTimeout: true };
+    expect(loaderView({ ...silent, reconnectingTo: 'acme.work.example.net' }).kind).toBe('spinner');
+    expect(loaderView({ ...silent, isAutoClaiming: true }).kind).toBe('spinner');
+  });
+
+  it('shows the outage in place of a loaded workspace, a kept tree and the spinner alike', () => {
+    for (const under of [{ isLoading: false }, { reconnectingTo: 'acme.work.example.net', keptTree: true }, {}] satisfies Array<Partial<LoaderInputs>>) {
+      expect(loaderView({ ...TIMED_OUT, ...under, outage: 'reconnect-slow' })).toEqual({ kind: 'unavailable', outage: 'reconnect-slow' });
+      // The control: with no outage each of them is what it always was.
+      expect(loaderView({ ...TIMED_OUT, ...under }).kind).not.toBe('unavailable');
+    }
+  });
+
+  it('does not leave for /connect from under an outage, and a refusal still outranks it', () => {
+    expect(shouldLeaveForConnect({ ...TIMED_OUT, outage: 'server-unreachable' })).toBe(false);
+    expect(loaderView({ ...TIMED_OUT, outage: 'server-unreachable', refused: true })).toEqual({ kind: 'refused' });
   });
 
   it('renders the workspace once it has loaded', () => {

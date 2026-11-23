@@ -8,15 +8,28 @@
  * `request_id` is always null: they answer no request. A failure is followed by
  * a DisconnectNotification for the session.
  */
-import type { ResponseType, ServerConnectionLost, ServerReconnected, ServerReconnectFailed } from 'citadel-workspace-client-ts';
+import type { FailureReason, ResponseType, ServerConnectionLost, ServerReconnected, ServerReconnectFailed } from 'citadel-workspace-client-ts';
 import { admissionReasonOf, type AdmissionReason } from '@/lib/admission/refusal';
 
+/** Why the agent stopped, beside the admission codes: the server refused the sign-in the session kept, or never answered. */
+export type LinkReason = Extract<FailureReason, 'sign_in_refused' | 'server_unreachable'>;
+
+/** The reasons of a give-up the UI acts on. */
+export type ReconnectReason = AdmissionReason | LinkReason;
+
+const LINK_REASONS: ReadonlySet<string> = new Set<string>(['sign_in_refused', 'server_unreachable'] satisfies LinkReason[]);
+
+function linkReasonOf(body: Record<string, unknown>): LinkReason | null {
+  const code: unknown = body.reason_code;
+  return typeof code === 'string' && LINK_REASONS.has(code) ? (code as LinkReason) : null;
+}
+
 /**
- * A `ServerReconnectFailed` as read here: `reason_code` narrowed to the admission codes the UI
- * acts on (the server's check refused the reconnect, so only a sign-in that passes it brings the
- * session back), null for every other give-up and from an agent that does not send it.
+ * A `ServerReconnectFailed` as read here: `reason_code` narrowed to the codes the UI acts on
+ * (the server's check refused the reconnect, it refused the sign-in the session kept, or it
+ * never answered), null for every other give-up and from an agent that does not send it.
  */
-export type ReadServerReconnectFailed = Omit<ServerReconnectFailed, 'reason_code'> & { reason_code: AdmissionReason | null };
+export type ReadServerReconnectFailed = Omit<ServerReconnectFailed, 'reason_code'> & { reason_code: ReconnectReason | null };
 
 export const AGENT_RECONNECT_NOTIFICATIONS = ['ServerConnectionLost', 'ServerReconnected', 'ServerReconnectFailed'] as const satisfies readonly ResponseType[];
 
@@ -25,7 +38,7 @@ export type AgentReconnectNotification = (typeof AGENT_RECONNECT_NOTIFICATIONS)[
 export type AgentReconnectEvent =
   | { kind: 'lost'; cid: bigint; reconnecting: boolean }
   | { kind: 'reconnected'; cid: bigint }
-  | { kind: 'failed'; cid: bigint; reason: string; reasonCode: AdmissionReason | null };
+  | { kind: 'failed'; cid: bigint; reason: string; reasonCode: ReconnectReason | null };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -61,7 +74,7 @@ export function readServerReconnectFailed(message: unknown): ReadServerReconnect
   const body: (Record<string, unknown> & { cid: bigint; request_id: string | null }) | null = bodyOf(message, 'ServerReconnectFailed');
   const reason: unknown = body?.reason;
   return body && typeof reason === 'string'
-    ? { cid: body.cid, reason, request_id: body.request_id, reason_code: admissionReasonOf(body) }
+    ? { cid: body.cid, reason, request_id: body.request_id, reason_code: admissionReasonOf(body) ?? linkReasonOf(body) }
     : null;
 }
 
