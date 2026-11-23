@@ -2,7 +2,7 @@
 //!
 //! The kernel has already admitted the caller (EditWorkspaceConfig, from the session's own
 //! account) when it asks. The object is asked with no argument and opens its OWN tenant's portal
-//! (control/tenant-billing.mjs): nothing on this side names a tenant, so no request can point it
+//! (control/billing-portal.mjs): nothing on this side names a tenant, so no request can point it
 //! at another. Its Promise resolves to `{portal_url}` or `{refused: "<code>"}`, the codes being
 //! the control plane's own (control/billing-portal.mjs).
 //!
