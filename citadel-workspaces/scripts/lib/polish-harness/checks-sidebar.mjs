@@ -183,11 +183,32 @@ async function aLiteLevelChangeOverlapsNothing(args) {
   });
 }
 
+/**
+ * A workspace with no spaces still draws its root: on screen, inside the sidebar, at its design height,
+ * and it takes a tap at its centre -- with its Add row beneath it. It was a sentence and nothing else.
+ */
+async function anEmptyWorkspaceShowsItsRoot({ page, url, viewport }) {
+  const phone = viewport.width < MOBILE_BELOW;
+  await page.goto(url('empty-sidebar'));
+  const root = page.getByTestId('tree-node-workspace-root');
+  await root.waitFor({ state: 'visible', timeout: 8000 });
+  await settled(page);
+  const box = await root.boundingBox();
+  assert.ok(within(box.height, phone ? 44 : 36), `the root row is ${box.height}px tall (expected ${phone ? 44 : 36})`);
+  assert.ok(box.x >= 0 && box.x + box.width <= viewport.width && box.y >= 0 && box.y + box.height <= viewport.height, `the root row is off screen: ${JSON.stringify(box)}`);
+  const hit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-testid="tree-node-workspace-root"]') !== null, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+  assert.ok(hit, 'something else takes a tap at the root row\'s centre');
+  const add = await page.getByTestId('add-child-row-workspace-root').boundingBox();
+  assert.ok(add && within(add.height, phone ? 44 : 26), `the Add row under the root is ${add?.height}px tall (expected ${phone ? 44 : 26})`);
+}
+
 export const SIDEBAR_CHECKS = {
+  anEmptyWorkspaceShowsItsRoot,
   focusedRowsHaveTheirHeights,
   focusedTreeIsATree,
   aSelectionGlides,
   aLevelChangeIsOneMotion,
   aLiteLevelChangeOverlapsNothing,
   targetsInTheFocusedSidebar: targetsAreBigEnough('focused-sidebar&sel=eng', '[role="tree"]'),
+  targetsInTheEmptySidebar: targetsAreBigEnough('empty-sidebar', '[role="tree"]'),
 };

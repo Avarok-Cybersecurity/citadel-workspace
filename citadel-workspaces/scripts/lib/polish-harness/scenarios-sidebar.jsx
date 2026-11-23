@@ -71,6 +71,7 @@ function FocusedSidebar() {
         <div className="bg-sidebar" style={{ width: 'var(--appearance-sidebar-width)', minHeight: '100vh', paddingTop: 8 }}>
           <TreeNodesSection
             workspaceName="Lexelnet"
+            topLevelTypes={[]}
             nodes={ESTATE}
             selectedNodeId={selected}
             onNodeSelect={setSelected}
@@ -91,4 +92,27 @@ function FocusedSidebar() {
   );
 }
 
-export const SIDEBAR_SCENARIOS = { 'focused-sidebar': FocusedSidebar };
+/** A workspace just made: no spaces yet, a reader who may add. Its root row is all the tree there is. */
+function EmptySidebar() {
+  const [selected, setSelected] = useState(prepare);
+  return (
+    <SidebarProvider>
+      <TooltipProvider delayDuration={0}>
+        <div className="bg-sidebar" style={{ width: 'var(--appearance-sidebar-width)', minHeight: '100vh', paddingTop: 8 }}>
+          <TreeNodesSection
+            workspaceName="Lexelnet"
+            topLevelTypes={['City']}
+            nodes={[]}
+            selectedNodeId={selected}
+            onNodeSelect={setSelected}
+            onNodeCreate={NOTHING}
+            onAdminSettings={NOTHING}
+            createBlockedReason={null}
+          />
+        </div>
+      </TooltipProvider>
+    </SidebarProvider>
+  );
+}
+
+export const SIDEBAR_SCENARIOS = { 'focused-sidebar': FocusedSidebar, 'empty-sidebar': EmptySidebar };
