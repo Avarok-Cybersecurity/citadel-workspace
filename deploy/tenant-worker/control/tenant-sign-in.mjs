@@ -13,6 +13,9 @@
  *       `{"username","kind":"SignIn"|"Register"|"Recover","token":string|null,"remote_addr":"100.64.x.y"|null}`.
  *       null admits; `{refuse:"admission_required",challenge?}` / `{refuse:"admission_failed",reason}`,
  *       `challenge` being `{provider:"turnstile",site_key,identity}` (public; admission.mjs `needsToken`).
+ * tenant-node.mjs adds one method to that object before the node gets it:
+ *   openBillingPortal() -> Promise<{portal_url} | {refused}>   this tenant's billing portal (the
+ *       kernel has checked the caller holds EditWorkspaceConfig; control/billing-portal.mjs)
  */
 import { admit, SignInSettings } from "./admission.mjs";
 import { required } from "./http.mjs";

@@ -856,6 +856,8 @@ fn name_policy(
 /// host that has none, whose installs then take uploaded artifacts only. `server_egress` makes
 /// apps' `net.server` requests (`kernel::apps::egress`), or `None` for a host that has none.
 /// `network` is what the host says about the network: its STUN servers (`crate::network`).
+/// `billing_portal` opens the tenant's billing portal for an admitted `OpenBillingPortal`
+/// (`kernel::billing`), or `None` for a host that has none.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_server_on<T: PlatformOps>(
     config: ServerConfig,
@@ -871,6 +873,7 @@ pub async fn run_server_on<T: PlatformOps>(
     server_egress: kernel::apps::egress::ServerEgressHandle,
     network: network::HostedNetwork,
     server_identity: std::sync::Arc<kernel::server_identity::ServerIdentity>,
+    billing_portal: kernel::billing::BillingPortalHandle,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
     if kernel::server_identity::config::plan(config.identity.as_ref()).map_err(NetworkError::msg)?
@@ -904,6 +907,7 @@ pub async fn run_server_on<T: PlatformOps>(
         artifact_fetcher,
         server_egress,
         server_identity,
+        billing_portal,
     )
     .await?;
     let admission = name_policy(&kernel, sign_in.admission)?;

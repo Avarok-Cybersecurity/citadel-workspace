@@ -1229,6 +1229,17 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             )
         }
 
+        WorkspaceProtocolRequest::OpenBillingPortal => {
+            // EditWorkspaceConfig, asked of the session's own account: the plan is the
+            // workspace's configuration, as its sign-in settings are. Nothing in the request
+            // names a caller or a tenant.
+            let may_configure = kernel
+                .domain_operations
+                .holds_workspace_permission(actor_user_id, Permission::EditWorkspaceConfig)
+                .await?;
+            Ok(crate::kernel::billing::open(kernel.billing_portal(), may_configure).await)
+        }
+
         // ========== Tree Node Operations (Generalized Hierarchy) ==========
         // These handlers support the generalized workspace tree structure
         // where any node can have child nodes of any type

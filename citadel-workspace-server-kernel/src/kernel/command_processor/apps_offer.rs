@@ -1,6 +1,9 @@
 //! Where a listing and its artifact come from: the registry or a signed manifest the caller
 //! holds, and the module from the store, the caller's upload or the host's fetcher. The
 //! signature is verified before anything is fetched, and the bytes against the digest after.
+//! A first-party release recorded at provisioning (`FirstPartyReleases`) is offered as its exact
+//! signed bytes, verified when it was recorded. Whether it brings a module is its ABI's to say
+//! (`install::stores_module`): a glue release's is in the UI bundle, any other's is obtained.
 
 use super::apps::{Caller, Step};
 use super::apps_gather::gather;
@@ -9,11 +12,12 @@ use crate::kernel::apps::audience::audience_admits;
 use crate::kernel::apps::facts::ViewsNeeded;
 use crate::kernel::apps::fetcher::{admit_url, location_url, MAX_FETCH_BYTES};
 use crate::kernel::apps::install::verify_listing;
-use crate::kernel::apps::records::{RegistryEntry, StoredRelease, UploadSlot};
+use crate::kernel::apps::records::{FirstPartyReleases, RegistryEntry, StoredRelease, UploadSlot};
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_app_signature::sha256;
 use citadel_logging::warn;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::apps::AppAudience;
 use citadel_workspace_types::apps_install::{AppsRefusal, ListingSource};
 use citadel_workspace_types::apps_manifest::{AppManifest, ArtifactRef};
 use citadel_workspace_types::apps_protocol::ListingOffer;
@@ -41,10 +45,30 @@ pub(super) async fn admitted<R: Ratchet + Send + Sync + 'static>(
     caller: &Caller<'_>,
     entry: &RegistryEntry,
 ) -> Result<bool, NetworkError> {
+    audience_admitted(kernel, caller, &entry.audience).await
+}
+
+pub(super) async fn audience_admitted<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    caller: &Caller<'_>,
+    audience: &AppAudience,
+) -> Result<bool, NetworkError> {
     let mut needed = ViewsNeeded::default();
-    needed.audience(&entry.audience);
+    needed.audience(audience);
     let facts = gather(kernel, &[caller.user.to_string()], &needed).await?;
-    Ok(audience_admits(&entry.audience, caller.user, &facts))
+    Ok(audience_admits(audience, caller.user, &facts))
+}
+
+/// A first-party release recorded at provisioning whose manifest is `manifest_bytes` and
+/// signature `signature`, exactly: verified then, under the keys provisioning trusted.
+fn recorded_first_party<'a>(
+    recorded: &'a FirstPartyReleases,
+    manifest_bytes: &[u8],
+    signature: &str,
+) -> Option<&'a StoredRelease> {
+    recorded
+        .values()
+        .find(|r| r.manifest.as_bytes() == manifest_bytes && r.signature == signature)
 }
 
 pub(super) async fn resolve_offer<R: Ratchet + Send + Sync + 'static>(
@@ -73,6 +97,17 @@ pub(super) async fn resolve_offer<R: Ratchet + Send + Sync + 'static>(
             manifest_bytes,
             signature,
         } => {
+            let recorded = backend.first_party_releases().await?;
+            if let Some(release) = recorded_first_party(&recorded, manifest_bytes, signature) {
+                let manifest = AppManifest::from_bytes(release.manifest.as_bytes())
+                    .map_err(|why| AppsRefusal::InvalidManifest(why.to_string()))?;
+                return Ok(Offered {
+                    manifest_sha256: hex::encode(sha256(release.manifest.as_bytes())),
+                    manifest,
+                    release: release.clone(),
+                    source: ListingSource::FirstParty,
+                });
+            }
             let manifest = String::from_utf8(manifest_bytes.clone()).map_err(|_| {
                 AppsRefusal::InvalidManifest("the manifest is not UTF-8".to_string())
             })?;

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { act, render, waitFor, type RenderResult } from '@testing-library/react';
 import type { AppInstall } from 'citadel-workspace-client-ts';
 import { AppZone } from '../AppZone';
-import { NO_GLUE, NO_PAGES, NO_TABS } from './doubles/no-tabs';
+import { NO_GLUE, NO_PAGES, NO_TABS, ANSWER_TAKEN } from './doubles/no-tabs';
 import { AppZoneContext, zoneClaims, type AppZoneEnvironment, type AppZoneHandle, type AppZoneMount, type AppZoneRuntime, type ZoneHost } from '../app-zone-environment';
 import { closeReasonFor } from '../zone-close-reason';
 import type { ZoneFacts, ZoneView } from '../zone-state';
@@ -30,8 +30,8 @@ describe('the close reason for what a zone shows next', () => {
     const cases: [ZoneView, CloseReason][] = [
       [{ kind: 'ready', app: KANBAN, install: RUNNING }, 'unmount'],
       [{ kind: 'ready', app: KANBAN, install: { ...RUNNING, manifest_sha256: '2'.repeat(64) } }, 'version_update'],
-      [{ kind: 'loading' }, 'unmount'], [{ kind: 'not-available' }, 'unmount'],
-      [{ kind: 'install', name: 'Kanban' }, 'uninstall'], [{ kind: 'ask-admin', name: 'Kanban' }, 'uninstall'],
+      [{ kind: 'loading' }, 'unmount'], [{ kind: 'failed' }, 'unmount'], [{ kind: 'not-available' }, 'unmount'],
+      [{ kind: 'install', name: 'Kanban', elsewhere: false }, 'uninstall'], [{ kind: 'ask-admin', name: 'Kanban', elsewhere: true }, 'uninstall'],
       [{ kind: 'disabled', name: 'Kanban', install: RUNNING }, 'access_revoked'], [{ kind: 'suspended', name: 'Kanban' }, 'access_revoked'],
       [{ kind: 'needs-consent', name: 'Kanban', version: '2.0.0' }, 'version_update'], [{ kind: 'outdated', name: 'Kanban', installed: '1.0.0' }, 'version_update'],
     ];
@@ -75,8 +75,10 @@ function env(installs: AppInstall[], runtime: AppZoneRuntime, claims: Pick<AppZo
     data: {
       listing: async () => ({ ok: true, value: KANBAN }),
       installs: async () => ({ ok: true, value: installs }),
-      setDisabledForMe: async (_id: string, d: boolean) => ({ ok: true, value: d }),
+      setDisabledForMe: async (_id: string, d: boolean) => ({ ok: true, value: d }), setPeerConsentForMe: ANSWER_TAKEN,
     },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: (): void => undefined, linkUrl: (): string => '', copyText: async (): Promise<void> => undefined, ...claims,
   };
 }

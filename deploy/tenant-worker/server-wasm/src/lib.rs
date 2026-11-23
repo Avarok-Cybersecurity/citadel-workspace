@@ -7,6 +7,7 @@
 
 mod admin;
 mod auth_versions;
+mod billing;
 mod chat_files;
 mod host_promise;
 mod ice;
@@ -78,8 +79,8 @@ impl TenantServer {
     /// Start the node. `config_toml` is a `kernel.toml`; `storage` is the object's SQLite storage
     /// (see `storage::TenantStorage`); `ice` mints relay credentials for `GetIceServers` (see
     /// `ice::IceHost`); `pq` is post-quantum sign-in and `sign_in` the object's sign-in settings
-    /// (see `sign_in`). `support_grants` mirrors the support grant (see `support`). `links`
-    /// gives the secure-link limits (see `links`), `turn_usage` the meter agents' TURN bytes go
+    /// (see `sign_in`), which also opens the tenant's billing portal (see `billing`).
+    /// `support_grants` mirrors the support grant (see `support`). `links` gives the secure-link limits (see `links`), `turn_usage` the meter agents' TURN bytes go
     /// to (see `turn`), `usage` the meter apps' egress and relayed iHTTP go to (see `usage`).
     /// `stun_servers` is the host's comma-separated
     /// STUN list, required (`citadel_workspace_server_kernel::network`). `path_policy_json` is
@@ -137,12 +138,13 @@ impl TenantServer {
         let plan_limits = links::sources(links);
         let link_quota = Some(plan_limits.links);
         let chat_document_limit = Some(plan_limits.chat_documents);
-        let (settings, admission) = sign_in::host_capabilities(sign_in);
+        let host = sign_in::host_capabilities(sign_in);
         let sign_in = HostedSignIn {
             pq_sign_in: Some(pq.into_settings()),
-            admission: Some(admission),
-            settings: Some(settings),
+            admission: Some(host.admission),
+            settings: Some(host.settings),
         };
+        let billing_portal = Some(host.billing_portal);
         let kernel = telemetry::KernelSlot::default();
         let slot = kernel.clone();
         let telemetry = HostedTelemetry {
@@ -172,6 +174,7 @@ impl TenantServer {
                 None,
                 network,
                 server_identity,
+                billing_portal,
             )
             .await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());

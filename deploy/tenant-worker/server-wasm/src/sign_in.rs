@@ -8,6 +8,7 @@
 
 use crate::host_promise::{parse, HostPromise};
 use citadel_sdk::prelude::async_trait;
+use citadel_workspace_server_kernel::kernel::billing::BillingPortalHost;
 use citadel_workspace_server_kernel::kernel::sign_in::admission::{
     CHECK_UNAVAILABLE, RESUME_GRACE,
 };
@@ -71,19 +72,28 @@ impl PqSignIn {
     }
 }
 
-struct DurableObjectSignIn(SignInHost);
+pub(crate) struct DurableObjectSignIn(pub(crate) SignInHost);
 
 // SAFETY: wasm32 without threads has one thread, and each Durable Object gets its own wasm
 // instance (see worker.mjs), so this handle is never reached from another thread or object.
 unsafe impl Send for DurableObjectSignIn {}
 unsafe impl Sync for DurableObjectSignIn {}
 
-/// The kernel's sign-in settings store and the node's admission check, both over `host`.
-pub fn host_capabilities(
-    host: SignInHost,
-) -> (Arc<dyn SignInSettingsStore>, Arc<dyn AdmissionPolicy>) {
+/// What the kernel and the node reach through `host`: the sign-in settings store, the admission
+/// check, and the billing portal (`billing`).
+pub struct HostCapabilities {
+    pub settings: Arc<dyn SignInSettingsStore>,
+    pub admission: Arc<dyn AdmissionPolicy>,
+    pub billing_portal: Arc<dyn BillingPortalHost>,
+}
+
+pub fn host_capabilities(host: SignInHost) -> HostCapabilities {
     let host = Arc::new(DurableObjectSignIn(host));
-    (host.clone(), host)
+    HostCapabilities {
+        settings: host.clone(),
+        admission: host.clone(),
+        billing_portal: host,
+    }
 }
 
 /// What the object is asked: the SDK's `AdmissionContext`, the token as its string.

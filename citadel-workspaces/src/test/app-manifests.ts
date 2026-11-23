@@ -14,7 +14,7 @@ export const PUBLISHER_KEY: string = 'ab'.repeat(1952);
 export const OTHER_KEY: string = 'cd'.repeat(1952);
 
 /** Fields of the base manifest a test replaces, as the manifest types them; `key` is the publisher's. */
-const OVERRIDABLE = ['id', 'version', 'name', 'summary', 'description', 'categories', 'audience', 'scopes', 'surfaces', 'capabilities', 'icon', 'limits'] as const satisfies readonly (keyof AppManifest)[];
+const OVERRIDABLE = ['id', 'version', 'name', 'summary', 'description', 'categories', 'audience', 'scopes', 'surfaces', 'capabilities', 'icon', 'limits', 'opens'] as const satisfies readonly (keyof AppManifest)[];
 export type ManifestChanges = Partial<Pick<AppManifest, (typeof OVERRIDABLE)[number]>> & { key?: string };
 
 export function manifestJson(c: ManifestChanges = {}): Record<string, unknown> {
@@ -24,6 +24,8 @@ export function manifestJson(c: ManifestChanges = {}): Record<string, unknown> {
   for (const k of OVERRIDABLE) {
     if (c[k] !== undefined) m[k] = c[k];
   }
+  // The manifest is JSON on the wire; its u64 is a plain number there.
+  if (c.opens !== undefined) m.opens = { ...c.opens, max_bytes: Number(c.opens.max_bytes) };
   if (c.version !== undefined) delete m.previous_versions;
   return m;
 }

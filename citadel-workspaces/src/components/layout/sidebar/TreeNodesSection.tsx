@@ -12,7 +12,8 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AddNodeButton } from "./AddNodeButton";
 import { NodeDeleteDialog } from "./NodeDeleteDialog";
-import { workspaceRoot } from "./tree-node-utils";
+import { emptyWorkspaceRoot, workspaceRoot } from "./tree-node-utils";
+import { EmptyTreeHint } from "./EmptyTreeHint";
 import { searchResults, type SearchResult } from "./focused-search";
 import { FocusedTree } from "./FocusedTree/FocusedTree";
 import { SearchResults } from "./FocusedTree/SearchResults";
@@ -56,6 +57,8 @@ export interface TreeNodesSectionProps {
    * outcome is an error is disabled and says why; see AddNodeButton.
    */
   createBlockedReason?: string | null;
+  /** The live schema's types allowed under the workspace: what an empty workspace's root offers to add. */
+  topLevelTypes: readonly string[];
 }
 
 const NO_NODES: DomainNode[] = [];
@@ -77,13 +80,16 @@ export function TreeNodesSection({
   unavailable = false,
   createBlockedReason = null,
   workspaceName,
+  topLevelTypes,
 }: TreeNodesSectionProps): JSX.Element {
   const { setOpenMobile } = useSidebar();
   const isMobile: boolean = useIsMobile();
 
   const nodeMap: Record<string, DomainNode> = useMemo(
     (): Record<string, DomainNode> => Object.fromEntries(nodes.map((n: DomainNode): [string, DomainNode] => [n.id, n])), [nodes]);
-  const root: DomainNode | null = useMemo((): DomainNode | null => workspaceRoot(nodes, workspaceName), [nodes, workspaceName]);
+  // A new workspace has no spaces but is still a workspace: its row is drawn, unless the load failed.
+  const root: DomainNode | null = useMemo((): DomainNode | null => workspaceRoot(nodes, workspaceName)
+    ?? (nodes.length === 0 && !unavailable ? emptyWorkspaceRoot(workspaceName, topLevelTypes) : null), [nodes, workspaceName, unavailable, topLevelTypes]);
   const selected: DomainNode | null = (selectedNodeId !== undefined ? nodeMap[selectedNodeId] : undefined) ?? root;
 
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
@@ -127,20 +133,7 @@ export function TreeNodesSection({
           {onNodeCreate && <AddNodeButton onClick={() => onNodeCreate(null)} blockedReason={createBlockedReason} label="Add to this workspace" testId="add-root-node-button" />}
         </div>
         <SidebarGroupContent>
-          <div className="px-3 py-2 text-sm text-muted-foreground">
-            {unavailable ? (
-              <span data-testid="tree-unavailable">
-                Your spaces could not be loaded. Nothing has been deleted — reload, or open
-                another workspace and come back, to try again.
-              </span>
-            ) : (
-              <span data-testid="tree-empty">
-                {createBlockedReason === null
-                  ? 'Your workspace is empty. Click the + button to create your first space.'
-                  : 'No spaces yet. An administrator adds the first one.'}
-              </span>
-            )}
-          </div>
+          <EmptyTreeHint unavailable={unavailable} createBlockedReason={createBlockedReason} />
         </SidebarGroupContent>
       </SidebarGroup>
     );
@@ -229,6 +222,7 @@ export function TreeNodesSection({
                           onAdd={createUnder}
                         />
                       )}
+                      {!searching && nodes.length === 0 && <EmptyTreeHint unavailable={false} createBlockedReason={createBlockedReason} />}
                     </PresenceScope>
                   </motion.div>
                 </AnimatePresence>

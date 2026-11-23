@@ -1,6 +1,6 @@
 //! The kernel a hosted server runs (`run_server_on`), assembled from what its host gives: the
 //! same `workspace_kernel` the native server builds, with the host's support-grant mirror, TURN
-//! sink and app usage meter installed, handed to the host before the node starts.
+//! sink, app usage meter and billing portal installed, handed to the host before the node starts.
 
 use crate::config::ServerConfig;
 use crate::kernel;
@@ -21,6 +21,7 @@ pub(crate) async fn hosted_kernel(
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
     server_egress: kernel::apps::egress::ServerEgressHandle,
     server_identity: std::sync::Arc<kernel::server_identity::ServerIdentity>,
+    billing_portal: kernel::billing::BillingPortalHandle,
 ) -> Result<AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
     let workspace_structure = crate::resolve_workspace_structure(config, None)?;
     let first_connect_admin =
@@ -42,6 +43,7 @@ pub(crate) async fn hosted_kernel(
     .await?;
     kernel.set_support_grant_observer(telemetry.support_grants);
     kernel.set_turn_usage_sink(telemetry.turn_usage);
+    kernel.set_billing_portal(billing_portal);
     (telemetry.kernel_ready)(kernel.clone());
     Ok(kernel)
 }

@@ -49,6 +49,12 @@ describe('debug formatting', () => {
     expect(rendered(serialized)).not.toContain(SECRET);
   });
 
+  it('redacts a billing portal URL, which opens the subscription to whoever holds it', () => {
+    // The whole response, as WorkspaceResponseHandler logs every answer it processes.
+    const url: string = `https://billing.stripe.com/p/session/${SECRET}`;
+    expect(rendered({ BillingPortal: { Opened: { portal_url: url } } })).not.toContain(SECRET);
+  });
+
   it('still prints the non-secret fields, or the log is useless', () => {
     const out: string = rendered({ username: 'alice', password: SECRET, serverAddress: 'ws://x' });
     expect(out).toContain('alice');

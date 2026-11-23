@@ -11,7 +11,10 @@
  * A node channel's shared-file cards (file, picture, downloading, refused), its upload strip (storing, shared,
  * refused) and the composer's destination line fit 375px and desktop, under Full and Lite motion, with 44px targets.
  * A node's tab row at its fullest fits a phone: 44px tabs that scroll, "+" and the tab menu always in reach.
+ * An uninstalled app's tab leaves the row; the Calendar's settings say why it does not reach you, with 44px actions and axe clean.
  * Account recovery's phrase, its check, the recover form and the recovery console fit a phone with 44px actions and pass axe.
+ * Dev mode (Settings -> Advanced) hides the Leader/Follower badge until switched on, then shows it live.
+ * A document's encryption lock says what the device stores, takes focus with its tooltip, and opens Settings at Security.
  * Serves the real components (see lib/polish-harness) and asserts bounding boxes, in Chromium and WebKit,
  * light and dark, at desktop and phone widths.
  */
@@ -33,5 +36,9 @@ import { SIGN_IN_CHECKS } from './lib/polish-harness/checks-sign-in.mjs';
 import { RECOVERY_CHECKS } from './lib/polish-harness/checks-recovery.mjs';
 import { SERVER_FILE_CHECKS } from './lib/polish-harness/checks-server-files.mjs';
 import { NODE_TAB_CHECKS } from './lib/polish-harness/checks-node-tabs.mjs';
+import { BILLING_CHECKS } from './lib/polish-harness/checks-billing.mjs';
+import { APP_SETTINGS_CHECKS } from './lib/polish-harness/checks-app-settings.mjs';
+import { DEV_MODE_CHECKS } from './lib/polish-harness/checks-dev-mode.mjs';
+import { AT_REST_CHECKS } from './lib/polish-harness/checks-at-rest.mjs';
 
-process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS }));
+process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS, ...DEV_MODE_CHECKS, ...AT_REST_CHECKS, ...APP_SETTINGS_CHECKS, ...BILLING_CHECKS }));

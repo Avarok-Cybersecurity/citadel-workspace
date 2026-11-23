@@ -49,6 +49,7 @@ pub enum ManifestRefusal {
     Limits(String),
     Artifact(String),
     PreviousVersions,
+    Opens(String),
 }
 
 impl fmt::Display for ManifestRefusal {
@@ -62,7 +63,8 @@ impl fmt::Display for ManifestRefusal {
             | Self::Audience(why)
             | Self::Capabilities(why)
             | Self::Limits(why)
-            | Self::Artifact(why) => write!(f, "the manifest's {self:?} is refused: {why}"),
+            | Self::Artifact(why)
+            | Self::Opens(why) => write!(f, "the manifest's {self:?} is refused: {why}"),
             other => write!(f, "the manifest's {other:?} field is malformed"),
         }
     }
@@ -156,6 +158,13 @@ impl AppManifest {
         check_capabilities(&self.id, &self.capabilities)?;
         check_limits(&self.limits, &self.capabilities)?;
         check_artifact(&self.artifact)?;
+        if let Some(why) = self
+            .opens
+            .as_ref()
+            .and_then(|o| crate::apps_opens::opens_problem(o, &self.surfaces))
+        {
+            return Err(ManifestRefusal::Opens(why));
+        }
         if let Some(previous) = &self.previous_versions {
             let older = |v: &String| AppVersion::parse(v).is_ok_and(|v| v < version);
             let ok = previous.len() <= MAX_PREVIOUS_VERSIONS

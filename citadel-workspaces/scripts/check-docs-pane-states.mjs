@@ -12,6 +12,9 @@
  * a pixel; the quiet "saved" state draws no words beside its icon, and every state that needs the
  * person draws its words; the title bar never scrolls sideways, at desktop or phone width, and on
  * a phone what a state offers (Try again; Sync or Discard) takes a row of its own under it.
+ *
+ * Keys: with the real editor focused, Ctrl/Cmd+B is the editor's (bold) and never the sidebar's,
+ * whose window-wide shortcut folded it while bolding; from the page, the shortcut still folds it.
  */
 import { chromium } from 'playwright';
 import { serveDocsHarness } from './lib/docs-harness/serve.mjs';
@@ -119,6 +122,27 @@ async function saveStates(browser, viewport) {
   await context.close();
 }
 
+async function keysStayInTheEditor(browser, viewport) {
+  const context = await browser.newContext({ viewport });
+  const page = await context.newPage();
+  await page.goto(`${harness.origin}/?sidebar=1`);
+  const canvas = page.locator('canvas[data-layer="page"]').first();
+  await canvas.waitFor({ timeout: 60_000 });
+  const state = () => page.getByTestId('harness-sidebar-state').textContent();
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+  const before = await state();
+  const c = await box(canvas);
+  await page.mouse.click(c.x + c.width / 2, c.y + c.height / 2);
+  const focus = await page.evaluate(() => document.activeElement?.tagName ?? 'none');
+  check(focus === 'TEXTAREA', `${viewport.name}: a press on the page gives the editor's input the keys (${focus})`);
+  await page.keyboard.press(`${mod}+b`);
+  check(await state() === before, `${viewport.name}: ${mod}+B in the document leaves the sidebar where it was (${before} -> ${await state()})`);
+  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+  await page.keyboard.press(`${mod}+b`);
+  check(await state() !== before, `${viewport.name}: ${mod}+B from the page still toggles the sidebar (${before} -> ${await state()})`);
+  await context.close();
+}
+
 const harness = await serveDocsHarness();
 const browser = await chromium.launch();
 try {
@@ -127,6 +151,11 @@ try {
     for (const tier of ['full', 'lite', 'os-reduce']) await loading(browser, viewport, tier);
     console.log(`\nSave status, ${viewport.name}`);
     await saveStates(browser, viewport);
+    // A shortcut chord is a hardware keyboard's; the phone's sidebar is a sheet a key never reaches for.
+    if (viewport.name === 'desktop') {
+      console.log(`\nKeys, ${viewport.name}`);
+      await keysStayInTheEditor(browser, viewport);
+    }
   }
 } finally {
   await browser.close();

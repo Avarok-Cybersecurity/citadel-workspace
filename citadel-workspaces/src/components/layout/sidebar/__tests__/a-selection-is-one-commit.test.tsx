@@ -39,7 +39,7 @@ function renderTree(selected: string): { select: (id: string) => void } {
   const tree = (id: string): ReactNode => (
     <SidebarProvider>
       <TooltipProvider delayDuration={0}>
-        <TreeNodesSection workspaceName="Lexelnet" nodes={ESTATE} selectedNodeId={id} onNodeSelect={NOTHING} />
+        <TreeNodesSection workspaceName="Lexelnet" topLevelTypes={[]} nodes={ESTATE} selectedNodeId={id} onNodeSelect={NOTHING} />
       </TooltipProvider>
     </SidebarProvider>
   );

@@ -8,6 +8,8 @@
  * a live session and are not under test) and the permission hook (its answer is the input here).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Installs not known: every stored tab shows (installed-tabs.ts); these are about the stored list.
+import { INSTALLS_UNKNOWN } from '@/lib/node-tabs/installed-tabs';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AppInstall } from 'citadel-workspace-client-ts';
@@ -16,7 +18,7 @@ import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
 import { forgetAllTabs } from '@/lib/node-tabs/tab-memory';
 import { installOf, listingOf } from '@/test/app-manifests';
 import { AppZoneContext, zoneClaims, type AppTabMount, type AppZoneEnvironment, type AppZoneHandle, type AppZoneRuntime } from '../../app-zone/app-zone-environment';
-import { NO_GLUE, NO_PAGES } from '../../app-zone/__tests__/doubles/no-tabs';
+import { NO_GLUE, NO_PAGES, ANSWER_TAKEN } from '../../app-zone/__tests__/doubles/no-tabs';
 
 vi.mock('../../NodeChat', () => ({ NodeChat: (): JSX.Element => <div data-testid="chat-view" /> }));
 vi.mock('@/components/call/GroupCallControls', () => ({ GroupCallControls: (): JSX.Element => <div /> }));
@@ -48,7 +50,9 @@ function recordingRuntime(rec: Recording): AppZoneRuntime {
 function env(listing: ListedApp, runtime: AppZoneRuntime): AppZoneEnvironment {
   return {
     nodeId: 'n1', me: 'alice', ancestors: [], mayInstall: 'yes', runtime,
-    data: { listing: async () => ({ ok: true, value: listing }), installs: async () => ({ ok: true, value: [INSTALL] }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }) },
+    data: { listing: async () => ({ ok: true, value: listing }), installs: async () => ({ ok: true, value: [INSTALL] }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }), setPeerConsentForMe: ANSWER_TAKEN },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: () => undefined, linkUrl: () => '', copyText: async () => undefined, ...zoneClaims(),
   };
 }
@@ -59,7 +63,7 @@ const REFUSING: import('../use-node-tabs').NodeTabsWriter = {
 };
 
 function Pane({ zoneEnv }: { zoneEnv: AppZoneEnvironment }): JSX.Element {
-  const model: import('../use-node-tabs').NodeTabsModel = useNodeTabs({ nodeId: 'n1', chatEnabled: false, nodeMetadata: { app_tabs: [APP] }, workspaceMetadata: { default_app_tabs: [] }, writer: REFUSING });
+  const model: import('../use-node-tabs').NodeTabsModel = useNodeTabs({ nodeId: 'n1', chatEnabled: false, nodeMetadata: { app_tabs: [APP] }, workspaceMetadata: { default_app_tabs: [] }, here: INSTALLS_UNKNOWN, writer: REFUSING });
   return (
     <AppZoneContext.Provider value={zoneEnv}>
       <NodeTabs

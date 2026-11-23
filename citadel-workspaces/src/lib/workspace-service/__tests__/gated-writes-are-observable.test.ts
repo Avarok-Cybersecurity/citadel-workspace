@@ -16,6 +16,7 @@
  */
 import { describe, it, expect, beforeEach, vi  } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
+import { debugEnabled } from '@/lib/debug-config';
 import { SUCCESS_RESPONSES } from '../await-write-response';
 import { WorkspaceResponseHandler } from '@/lib/workspace-response-handler/service';
 import { groupMessagingManager } from '@/lib/group-messaging-manager';
@@ -39,6 +40,7 @@ const PAYLOADS: Record<string, unknown> = {
   GroupMessageReacted: { group_id: 'g1', message_id: 'm1', reactions: [] },
   GroupReadCursorMoved: { group_id: 'g1', cursor: { member: 'ada', upto_message_id: 'm1' } },
   SignInSettings: { require_turnstile_sign_in: true },
+  BillingPortal: 'NoSubscription',
   Telemetry: { Deleted: { segments: 0 } },
   MessagingTrust: { Settings: { workspace: 'AllTrusted', mine: null, effective_root: 'workspace-root' } },
   Roles: { RoleChanged: { role_id: 'guest', roles: { roles: [], default_role_id: 'member' } } },
@@ -57,6 +59,13 @@ const STATE_WRITES: Record<string, () => ReturnType<typeof vi.spyOn>> = {
 };
 
 /**
+ * Answers to one request and nothing else: the raw response IS their effect, so they are
+ * recognised by NOT reaching the router's Unhandled branch, which says so on the debug log
+ * (on in this suite: debugEnabled is asserted below).
+ */
+const ANSWERS_ONLY: ReadonlySet<string> = new Set(['BillingPortal']);
+
+/**
  * Dispatch one response through the real router and report every event it
  * emitted.
  *
@@ -70,6 +79,7 @@ const STATE_WRITES: Record<string, () => ReturnType<typeof vi.spyOn>> = {
 function dispatch(variant: string): { events: string[]; handled: boolean } {
   const spy: ReturnType<typeof vi.spyOn> = vi.spyOn(eventEmitter, 'emit');
   const write: ReturnType<typeof vi.spyOn> | null = STATE_WRITES[variant]?.() ?? null;
+  const printed: ReturnType<typeof vi.spyOn> | null = ANSWERS_ONLY.has(variant) ? vi.spyOn(console, 'log').mockImplementation((): void => undefined) : null;
   try {
     // The shape extractWorkspaceResponse actually accepts: msg.Response IS the
     // WorkspaceProtocolResponse.
@@ -81,11 +91,13 @@ function dispatch(variant: string): { events: string[]; handled: boolean } {
       events,
       // A real variant handler emits at least one domain event of its own.
       // Only the Unhandled fallback emits raw-response and nothing else.
-      handled: events.some((n) => n !== 'workspace:raw-response') || (write !== null && write.mock.calls.length > 0),
+      handled: events.some((n) => n !== 'workspace:raw-response') || (write !== null && write.mock.calls.length > 0)
+        || (printed !== null && !printed.mock.calls.some((c: unknown[]) => c.includes('Unhandled response type:'))),
     };
   } finally {
     spy.mockRestore();
     write?.mockRestore();
+    printed?.mockRestore();
   }
 }
 
@@ -93,6 +105,10 @@ describe('every gated write is observable', () => {
   beforeEach(() => { WorkspaceResponseHandler.getInstance(); });
 
   const entries: [string, readonly string[]][] = Object.entries(SUCCESS_RESPONSES);
+
+  it('can see the Unhandled branch, which is how an answer-only variant is told apart from it', () => {
+    expect(debugEnabled).toBe(true);
+  });
 
   it('covers a non-trivial number of writes', () => {
     // Guards the loop below against silently iterating nothing.

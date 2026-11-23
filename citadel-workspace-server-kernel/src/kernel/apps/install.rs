@@ -150,6 +150,13 @@ pub fn decide_install(input: &InstallInput<'_>) -> Result<InstallPlan, AppsRefus
     })
 }
 
+/// Whether installing this release stores a module the server must obtain. Every ABI's module
+/// does, wherever its listing came from, except the transitional first-party glue ABI's, which
+/// ships in the UI bundle. Only a first-party key may publish that ABI (`verify_listing_with`).
+pub fn stores_module(manifest: &AppManifest) -> bool {
+    manifest.sdk.abi != ABI_FIRST_PARTY_GLUE
+}
+
 /// The hosts, routes and targets the manifest lists for the capabilities in `granted`.
 pub fn grant_details(manifest: &AppManifest, granted: &BTreeSet<Capability>) -> GrantDetails {
     let listed = |cap: Capability, pick: fn(&CapabilityRequest) -> Option<Vec<String>>| {

@@ -48,6 +48,10 @@ pub struct AppManifest {
     pub capabilities: Vec<CapabilityRequest>,
     pub limits: AppLimits,
     pub artifact: ArtifactRef,
+    /// The files the app opens; absent for an app that opens none.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opens: Option<crate::apps_opens::FileOpens>,
     /// Optional and informational: earlier versions, each lower than `version`.
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]

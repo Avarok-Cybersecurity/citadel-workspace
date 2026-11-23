@@ -23,7 +23,7 @@ import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
 import { installOf, listingOf } from '@/test/app-manifests';
 import { AppZoneContext, zoneClaims, type AppPageMount, type AppZoneEnvironment, type AppZoneHandle, type AppZoneRuntime, type ZoneHost } from '../app-zone-environment';
 import { AppPagePane } from '../AppPagePane';
-import { NO_GLUE, NO_TABS } from './doubles/no-tabs';
+import { NO_GLUE, NO_TABS, ANSWER_TAKEN } from './doubles/no-tabs';
 import type { Tri } from '@/lib/citadel-apps/scope-options';
 
 const APP: string = 'work.synchronized.app';
@@ -57,8 +57,10 @@ function env(runtime: AppZoneRuntime, listing: ListedApp | 'pending', installs: 
     data: {
       listing: () => (listing === 'pending' ? never : Promise.resolve({ ok: true, value: listing })),
       installs: async () => ({ ok: true, value: installs }),
-      setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }),
+      setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }), setPeerConsentForMe: ANSWER_TAKEN,
     },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: () => undefined, linkUrl: () => '', copyText: async () => undefined, ...zoneClaims(),
   };
 }

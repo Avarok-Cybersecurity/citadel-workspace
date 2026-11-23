@@ -14,7 +14,7 @@ import { usePermission } from '@/hooks/use-permission';
 import { permits } from '@/hooks/use-permission-result';
 import { AppZoneContext, type AppTabMount, type AppZoneEnvironment, type AppZoneHandle, type AppZoneRuntime, type ZoneHost } from './app-zone-environment';
 import { useGlueBinding, type GlueBinding } from './use-glue-binding';
-import { AppZoneRequired, type PlaceholderView } from './AppZoneRequired';
+import { AppZoneRequired, placeholderFor, type PlaceholderView } from './AppZoneRequired';
 import type { ZoneProps, ZoneView } from './zone-state';
 import { usePlacedApp, useRuntimeMount, type PlacedApp } from './use-placed-app';
 
@@ -88,7 +88,7 @@ function PlacedTab({ appId, tabId, env }: AppTabPaneProps & { env: AppZoneEnviro
       return <GlueTabHost runtime={env.runtime} load={load} tab={{ install: view.install, manifest: view.app.manifest, nodeId: env.nodeId, me: env.me, tabId }} />;
     }
   }
-  const shown: PlaceholderView = view.kind !== 'ready' ? view : { kind: waiting ? 'needs-answer' : 'ready-unmounted', name: view.app.manifest.name };
+  const shown: PlaceholderView = placeholderFor(view, waiting);
   return (
     <div className="mx-auto w-full max-w-3xl px-[16px] py-[8px]" data-testid="app-tab-pane" data-app-id={appId}>
       <AppZoneRequired

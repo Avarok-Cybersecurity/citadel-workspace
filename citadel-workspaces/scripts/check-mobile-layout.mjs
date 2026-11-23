@@ -180,7 +180,7 @@ async function main() {
       // straight through that -- so two of these five surfaces measured
       // whichever tab was already open, under someone else's name. The same
       // two, in the same way, in the accessibility gate; see round 231.
-      ...['General', 'Theme', 'Privacy', 'Security'].map((tab) => [
+      ...['General', 'Theme', 'Privacy', 'Security', 'Advanced'].map((tab) => [
         `settings/${tab}`,
         async () => {
           // Fresh load, then wait for the tab rather than sleeping. The

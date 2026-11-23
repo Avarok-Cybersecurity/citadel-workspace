@@ -16,6 +16,9 @@
 //!   artifact a member is uploading; `.chat_upload.<username>` and `.chat_upload_chunk.<n>.<username>`
 //!   the one chat file (`UploadSlot`).
 //! - `citadel_workspace.apps.audit`: the audit log, at most `MAX_AUDIT_ENTRIES`.
+//! - `citadel_workspace.apps.first_party`: the first-party releases this workspace was
+//!   provisioned with, by app id (`FirstPartyReleases`): listed and installable again after an
+//!   uninstall, and never installed by provisioning a second time.
 //! - `citadel_workspace.apps.ledger.<root>`: what one app holds at one scope
 //!   (`storage::StorageLedger`); `.kvindex.<namespace>` one KV's keys, `.kv.<namespace>.<key>`
 //!   one value, `.blob.<root>.<sha256>` and `.blob_chunk.<root>.<sha256>.<n>` one blob. Every
@@ -34,6 +37,10 @@ const PREFIX: &str = "citadel_workspace.apps.";
 pub(crate) const SCOPES_KEY: &str = "citadel_workspace.apps.scopes";
 pub(crate) const REGISTRY_INDEX_KEY: &str = "citadel_workspace.apps.registry_index";
 pub(crate) const AUDIT_KEY: &str = "citadel_workspace.apps.audit";
+pub(crate) const FIRST_PARTY_KEY: &str = "citadel_workspace.apps.first_party";
+
+/// App id to the first-party release the server last provisioned it from, verified then.
+pub type FirstPartyReleases = BTreeMap<String, StoredRelease>;
 
 /// The telemetry access log's bound: the log is one record, read and written whole.
 pub const MAX_AUDIT_ENTRIES: usize = 2000;

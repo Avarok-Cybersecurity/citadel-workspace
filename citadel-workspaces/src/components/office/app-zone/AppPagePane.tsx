@@ -15,7 +15,7 @@ import type { NodeAppPage } from '@/lib/citadel-apps/node-app-metadata';
 import { PAGE_PLACEMENT_ID } from '@/lib/citadel-apps/runtime/placement';
 import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
 import { AppZoneContext, type AppZoneEnvironment, type AppZoneHandle, type AppZoneRuntime, type ZoneHost } from './app-zone-environment';
-import { AppZoneRequired, type PlaceholderView } from './AppZoneRequired';
+import { AppZoneRequired, placeholderFor, type PlaceholderView } from './AppZoneRequired';
 import type { ZoneProps, ZoneView } from './zone-state';
 import { usePlacedApp, useRuntimeMount, type PlacedApp } from './use-placed-app';
 
@@ -97,9 +97,8 @@ function PlacedPage({ page, env }: { page: NodeAppPage; env: AppZoneEnvironment 
     return <PageRuntimeHost key={attempt} runtime={env.runtime} view={view} reasonFor={reasonFor} nodeId={env.nodeId} me={env.me} onRetry={(): void => setAttempt((n: number): number => n + 1)} />;
   }
   // A first-party glue app draws its own tab component and has no page; it is placed here as one that cannot be.
-  const shown: PlaceholderView = view.kind !== 'ready' ? view
-    : waiting ? { kind: 'needs-answer', name: view.app.manifest.name }
-      : env.runtime === null ? { kind: 'ready-unmounted', name: view.app.manifest.name } : { kind: 'wrong-surface', name: view.app.manifest.name };
+  const shown: PlaceholderView = view.kind !== 'ready' || waiting || env.runtime === null
+    ? placeholderFor(view, waiting) : { kind: 'wrong-surface', name: view.app.manifest.name };
   return (
     <div className="mx-auto w-full max-w-3xl px-[16px] py-[8px]" data-testid="app-page-pane" data-app-id={page.app}>
       <AppZoneRequired

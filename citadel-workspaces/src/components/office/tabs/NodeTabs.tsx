@@ -122,13 +122,13 @@ export function NodeTabs({
         // component instance threw a reader back to the page mid-conversation.
         value={model.active}
         onValueChange={(next: string): void => {
-          const chosen: NodeTab | undefined = model.list.tabs.find((tab: NodeTab): boolean => tab.key === next);
+          const chosen: NodeTab | undefined = model.tabs.find((tab: NodeTab): boolean => tab.key === next);
           if (chosen !== undefined) model.select(chosen.key as NodeTabKey);
         }}
         className="w-full flex-1 min-h-0 flex flex-col"
       >
         <TabRow
-          tabs={model.list.tabs}
+          tabs={model.tabs}
           names={names}
           menu={<TabMenu model={model} names={names} />}
           onAdd={onAdd}
@@ -144,7 +144,7 @@ export function NodeTabs({
           )}
         />
         <TabNotices model={model} />
-        {model.list.tabs.map((tab: NodeTab): JSX.Element => (
+        {model.tabs.map((tab: NodeTab): JSX.Element => (
           <TabsContent
             key={tab.key}
             value={tab.key}

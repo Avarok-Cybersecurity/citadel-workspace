@@ -8,14 +8,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { blockableUsername, type MemberAsk } from '@/lib/citadel-apps/consent-model';
+import { blockableUsername, PLANE_TITLE, type MemberAsk } from '@/lib/citadel-apps/consent-model';
 import type { ConsentPlane } from '@/lib/citadel-apps/member-consent-types';
-
-const PLANE_TITLE: Record<ConsentPlane, string> = {
-  serve: 'Answer requests from other members’ copies',
-  call: 'Send requests straight to other members',
-  topics: 'Join this app’s channels',
-};
 
 interface PeerConsentPanelProps {
   appName: string;

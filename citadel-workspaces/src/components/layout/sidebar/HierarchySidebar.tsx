@@ -15,7 +15,7 @@ import { HierarchySidebarModals } from './HierarchySidebarModals';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { usePermission } from '@/hooks/use-permission';
 import { createBlockedReason } from './AddNodeButton';
-import { childTypeChoice, type ChildTypeChoice } from './child-type-choice';
+import { childTypeChoice, topLevelChildTypes, type ChildTypeChoice } from './child-type-choice';
 import { useNewDocument, type NewDocumentFlow } from './use-new-document';
 import { sessionCandidates, useNewAppPage, type NewAppPageFlow } from './use-new-app-page';
 import type { NavigateFunction } from 'react-router';
@@ -110,10 +110,7 @@ export function HierarchySidebar(): JSX.Element {
         toastError(toast, 'Loading', 'Workspace schema is still loading. Please try again in a moment.');
         return;
       }
-      const workspaceRule: { parent_type: string; allowed_child_types: string[] } | undefined = state.treeSchema.rules?.find(
-        r => r.parent_type === 'Workspace'
-      );
-      const rootChoice: ChildTypeChoice = childTypeChoice(workspaceRule?.allowed_child_types);
+      const rootChoice: ChildTypeChoice = childTypeChoice(topLevelChildTypes(state.treeSchema));
       if (rootChoice.kind === 'none') {
         // GetTreeSchema answers everyone alike, so this is nearly unreachable; the real refusal
         // arrives from the server after submit and is reported verbatim there.
@@ -184,6 +181,7 @@ export function HierarchySidebar(): JSX.Element {
         // Until the workspace record arrives there is no name to give the parent.
         workspaceName={state.workspace?.name || 'Workspace'}
         createBlockedReason={createBlockedReason(Boolean(state.treeSchema), treeEdit)}
+        topLevelTypes={topLevelChildTypes(state.treeSchema)}
         nodes={nodes.length > 0 ? nodes : undefined}
         selectedNodeId={selectedNodeId ?? undefined}
         onNodeSelect={handleNodeSelect}

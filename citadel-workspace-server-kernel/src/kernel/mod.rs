@@ -11,6 +11,8 @@
 
 /// Citadel Apps: the pure install, grant and audience rules.
 pub mod apps;
+/// "Plan & billing": who may open the billing portal, and the host that opens it.
+pub mod billing;
 /// Whether a session may be sent a broadcast.
 mod broadcast_scope;
 /// Reclaiming the space node chat files no longer need, on upload and on the host's timer.

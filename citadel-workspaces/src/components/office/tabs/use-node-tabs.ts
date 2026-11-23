@@ -15,6 +15,8 @@ import { appIdsOf, deriveTabList, storedTabs, type NodeTabKey, type TabList } fr
 import { APP_TABS_KEY, DEFAULT_APP_TABS_KEY } from '@/lib/node-tabs/tab-keys';
 import { appendTab, moveTab, removeTab, type TabEdit } from '@/lib/node-tabs/tab-edits';
 import { chooseOpenTab, deepLinkedTab, rememberTab, rememberedTab } from '@/lib/node-tabs/tab-memory';
+import { shownTabs, type InstallsHere } from '@/lib/node-tabs/installed-tabs';
+import type { NodeTab } from '@/lib/node-tabs/tab-list';
 
 /** Where tab edits are written: `WorkspaceService` in the app. */
 export interface NodeTabsWriter {
@@ -25,7 +27,10 @@ export interface NodeTabsWriter {
 export type TabChange = { kind: 'left' | 'right' | 'remove' | 'add'; appId: string } | { kind: 'follow-default' } | { kind: 'use-everywhere' };
 
 export interface NodeTabsModel {
+  /** The stored tabs, which every edit starts from. */
   readonly list: TabList;
+  /** What the row shows: `list` without the app tabs whose app is not here (installed-tabs.ts). */
+  readonly tabs: readonly NodeTab[];
   readonly active: NodeTabKey;
   readonly select: (key: NodeTabKey) => void;
   /** May add, remove and reorder this node's app tabs (`UpdateNodeSettings`). */
@@ -42,6 +47,8 @@ interface UseNodeTabsInput {
   chatEnabled: boolean;
   nodeMetadata: MetadataSource;
   workspaceMetadata: MetadataSource;
+  /** The installs that reach this person here: an app tab shows only while its app does. */
+  here: InstallsHere;
   writer: NodeTabsWriter;
 }
 
@@ -55,17 +62,20 @@ function editFor(change: TabChange, appIds: readonly string[]): TabEdit {
   }
 }
 
-export function useNodeTabs({ nodeId, chatEnabled, nodeMetadata, workspaceMetadata, writer }: UseNodeTabsInput): NodeTabsModel {
+export function useNodeTabs({ nodeId, chatEnabled, nodeMetadata, workspaceMetadata, here, writer }: UseNodeTabsInput): NodeTabsModel {
   const list: TabList = useMemo((): TabList => deriveTabList({
     chatEnabled,
     node: storedTabs(nodeMetadata, APP_TABS_KEY),
     workspace: storedTabs(workspaceMetadata, DEFAULT_APP_TABS_KEY),
   }), [chatEnabled, nodeMetadata, workspaceMetadata]);
 
-  // What the reader asked for; the open tab is the first of these still in the list, so a tab the
-  // list has not loaded yet opens once it does, and a removed one falls back to the page.
+  const tabs: readonly NodeTab[] = useMemo((): readonly NodeTab[] => shownTabs(list.tabs, here), [list, here]);
+
+  // What the reader asked for; the open tab is the first of these still shown, so a tab not loaded
+  // yet opens once it does, and a removed one, or one whose app was uninstalled, falls back to the
+  // page -- and comes back if its app is installed again while the reader is still here.
   const [wanted, setWanted] = useState<string | null>((): string | null => deepLinkedTab(nodeId) ?? rememberedTab(nodeId));
-  const active: NodeTabKey = chooseOpenTab(list.tabs, [wanted]);
+  const active: NodeTabKey = chooseOpenTab(tabs, [wanted]);
   const select: (key: NodeTabKey) => void = useCallback((key: NodeTabKey): void => {
     setWanted(key);
     rememberTab(nodeId, key);
@@ -96,5 +106,5 @@ export function useNodeTabs({ nodeId, chatEnabled, nodeMetadata, workspaceMetada
     }
   }, [list, writer, nodeId, select]);
 
-  return { list, active, select, canConfigure: permits(configure), canSetDefault: permits(setDefault), busy, change };
+  return { list, tabs, active, select, canConfigure: permits(configure), canSetDefault: permits(setDefault), busy, change };
 }

@@ -5,7 +5,10 @@
  * (zone-close-reason.ts), the wait for open P2P or topic answers, and the placeholder's actions.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import type { AppInstall } from 'citadel-workspace-client-ts';
+import type { AppInstall, PeerConsent } from 'citadel-workspace-client-ts';
+import { answerOpen } from '@/lib/citadel-apps/consent-model';
+import { recordPeerConsent } from '@/lib/citadel-apps/peer-for-me';
+import { refusalCopy } from '@/lib/citadel-apps/refusal-copy';
 import type { AppLink } from '@/lib/citadel-apps/app-link';
 import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
 import { recordDisabledForMe } from '@/lib/citadel-apps/disabled-for-me';
@@ -22,6 +25,9 @@ export interface PlaceholderActions {
   onEnable: () => void;
   onCopyLink: () => Promise<void>;
   onOpenApps: () => void;
+  onRetry: () => void;
+  /** Answer every open question of a `needs-answer` view; rejects with the refusal's words. */
+  onAnswer: (allowed: boolean) => Promise<void>;
 }
 
 export interface PlacedApp {
@@ -62,11 +68,20 @@ export function usePlacedApp(props: ZoneProps, env: AppZoneEnvironment, kind: Pl
     const r: AppsResult<boolean> = await env.data.setDisabledForMe(view.install.id, false);
     if (r.ok) recordDisabledForMe(view.install.id, r.value);
   };
+  const answer = async (allowed: boolean): Promise<void> => {
+    if (view.kind !== 'needs-answer') return;
+    const id: string = view.install.id;
+    const r: AppsResult<PeerConsent> = await env.data.setPeerConsentForMe(id, answerOpen(facts.peerForMe.get(id)?.consent ?? null, view.asks, allowed));
+    if (!r.ok) throw new Error(refusalCopy(r.refusal));
+    recordPeerConsent(id, r.value);
+  };
   const actions: PlaceholderActions = {
     onInstall: (): void => env.openLink(link),
     onEnable: (): void => { void enable(); },
     onCopyLink: (): Promise<void> => env.copyText(env.linkUrl(link)),
     onOpenApps: (): void => env.openLink(link),
+    onRetry: (): void => env.reload(),
+    onAnswer: answer,
   };
   return { facts, view, waiting, reasonFor, actions };
 }

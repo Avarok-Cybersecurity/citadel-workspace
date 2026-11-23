@@ -1,6 +1,6 @@
 import { isVariant } from 'citadel-workspace-client-ts';
 import { getEntityTypeString } from '@/lib/entity-type-registry';
-import type { DomainNode, TreeNode } from './tree-node-types';
+import type { DomainNode, DomainPermissions, TreeNode } from './tree-node-types';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 
@@ -75,13 +75,23 @@ export function buildTreeFromNodes(nodes: DomainNode[], rootName: string): TreeN
 }
 
 /**
- * The workspace root the client stands in for when the server sends none.
- *
- * WORKSPACE_ROOT_ID is a sentinel on the server, never a stored node, so the
- * row that represents the workspace is invented here: named after it, holding
- * `roots`, offering their types as its children.
+ * What the invented workspace row "grants": nothing. The workspace is not a
+ * stored node, so no switch or gate reads this (MembersVisibilitySwitch reads
+ * `state.nodes`, where the synthetic root never is); it is here because the
+ * generated DomainNode type requires it, and least privilege is the only
+ * honest value for a node nobody stored.
  */
-export function syntheticWorkspaceRoot(roots: DomainNode[], rootName: string): DomainNode {
+const SYNTHETIC_ROOT_PERMISSIONS: DomainPermissions = {
+  view_content: false, view_members: false, read_messages: false, download_files: false,
+  edit_content: false, edit_mdx: false, send_messages: false, upload_files: false,
+  create_node: false, delete_node: false, update_node: false, add_node: false,
+  edit_node_config: false, update_node_settings: false, manage_node_members: false,
+  create_workspace: false, update_workspace: false, delete_workspace: false, edit_workspace_config: false,
+  add_users: false, remove_users: false, ban_user: false, manage_domains: false,
+  configure_system: false, edit_tree_structure: false, manage_node_types: false, themes: false,
+};
+
+function workspaceNode(rootName: string, children: string[], allowedChildTypes: string[]): DomainNode {
   return {
     id: WORKSPACE_ROOT_ID,
     parent_id: null,
@@ -91,23 +101,34 @@ export function syntheticWorkspaceRoot(roots: DomainNode[], rootName: string): D
     description: '',
     owner_id: '',
     members: [],
-    children: roots.map(r => r.id),
+    children,
     mdx_content: '',
     // A synthetic root the client invents to hold the real roots: no document.
     mdx_content_hash: EMPTY_DOCUMENT_HASH,
     rules: null,
     chat_enabled: false,
     chat_channel_id: null,
-    default_permissions: roots[0].default_permissions,
+    default_permissions: SYNTHETIC_ROOT_PERMISSIONS,
     metadata: [],
-    allowed_child_types: [...new Set(roots.map(r =>
-      isVariant(r.entity_type as Record<string, unknown>, 'Child') ? (r.entity_type as { Child: string }).Child :
-      getEntityTypeString(r.entity_type)
-    ))],
+    allowed_child_types: allowedChildTypes,
     is_default: false,
     created_at: 0n,
     updated_at: 0n,
   };
+}
+
+/**
+ * The workspace root the client stands in for when the server sends none.
+ *
+ * WORKSPACE_ROOT_ID is a sentinel on the server, never a stored node, so the
+ * row that represents the workspace is invented here: named after it, holding
+ * `roots`, offering their types as its children.
+ */
+export function syntheticWorkspaceRoot(roots: DomainNode[], rootName: string): DomainNode {
+  return workspaceNode(rootName, roots.map(r => r.id), [...new Set(roots.map(r =>
+    isVariant(r.entity_type as Record<string, unknown>, 'Child') ? (r.entity_type as { Child: string }).Child :
+    getEntityTypeString(r.entity_type)
+  ))]);
 }
 
 /**
@@ -121,6 +142,16 @@ export function workspaceRoot(nodes: DomainNode[], rootName: string): DomainNode
   if (!tree) return null;
   const isWorkspace: boolean = tree.node.id === WORKSPACE_ROOT_ID || tree.node.entity_type === 'Workspace';
   return isWorkspace ? tree.node : syntheticWorkspaceRoot([tree.node], rootName);
+}
+
+/**
+ * The workspace a new, empty workspace still is: one row, named after it, that
+ * may hold `topLevelTypes` -- the live schema's top-level types, since there
+ * are no spaces yet to read them from. Without it the sidebar had no root to
+ * draw and replaced the whole tree with a sentence.
+ */
+export function emptyWorkspaceRoot(rootName: string, topLevelTypes: readonly string[]): DomainNode {
+  return workspaceNode(rootName, [], [...new Set(topLevelTypes)]);
 }
 
 /**

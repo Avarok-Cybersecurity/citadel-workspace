@@ -113,8 +113,11 @@ export function formatForDebug(obj: unknown): unknown {
  * covered without having to enumerate every variant someone adds later. A new
  * credential field should be redacted by default rather than by remembering to
  * add it here.
+ *
+ * `portal_url` is a bearer link: a Stripe billing portal session opens the workspace's
+ * subscription to whoever holds it (`BillingPortal` answers carry one).
  */
-const SECRET_FIELD_PATTERN: RegExp = /^(pass(word|phrase)|secret|token|psk|credential)$|pass(word|phrase)$|^.*_?secret$/i;
+const SECRET_FIELD_PATTERN: RegExp = /^(pass(word|phrase)|secret|token|psk|credential|portal_url)$|pass(word|phrase)$|^.*_?secret$/i;
 
 export function isSecretField(fieldName: string): boolean {
   return SECRET_FIELD_PATTERN.test(fieldName);

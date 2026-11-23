@@ -9,83 +9,17 @@
 //! (apps/first-party/signer: the signer's key written into the manifest, pretty-printed with a
 //! final newline, the signature over its digest and the module's).
 
-use citadel_app_signature::{AppSigningKey, ArtifactDigests};
-use citadel_workspace_server_kernel::kernel::apps::first_party::SignedBundle;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use citadel_workspace_server_kernel::kernel::command_processor::PROVISIONING_INSTALLER;
-use citadel_workspace_types::apps::{Capability, InstallScope};
-use citadel_workspace_types::apps_install::{AppInstall, InstallState, ListingSource};
+use citadel_workspace_types::apps::Capability;
+use citadel_workspace_types::apps_install::{InstallState, ListingSource};
 use citadel_workspace_types::apps_protocol::AppsRequest;
 use citadel_workspace_types::apps_responses::AppsResponse;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
-use common::member_test_utils::GateKernel as Kernel;
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
-use std::path::Path;
+use first_party_signing::{signed, signed_calendar, workspace_installs, CALENDAR};
 
-const CALENDAR: &str = "net.avarok.calendar";
-
-struct Signed {
-    manifest: Vec<u8>,
-    signature: String,
-    key: String,
-}
-
-impl Signed {
-    fn bundle(&self) -> SignedBundle<'_> {
-        SignedBundle {
-            manifest: &self.manifest,
-            signature: &self.signature,
-        }
-    }
-}
-
-/// The committed Calendar, signed with `seed_byte` repeated: a seed for these tests only.
-fn signed_calendar(seed_byte: &str) -> Signed {
-    signed(
-        "apps/first-party/calendar/manifest.json",
-        "citadel-workspaces/public/calendar/calendar_glue_bg.wasm",
-        seed_byte,
-    )
-}
-
-/// The committed app whose manifest and module these are, signed with `seed_byte` repeated.
-fn signed(manifest: &str, module: &str, seed_byte: &str) -> Signed {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    let read = |p: &str| std::fs::read(root.join(p)).unwrap_or_else(|e| panic!("{p}: {e}"));
-    let key = AppSigningKey::from_seed_hex(&seed_byte.repeat(32)).expect("seed");
-    let mut manifest: serde_json::Value = serde_json::from_slice(&read(manifest)).expect("json");
-    manifest["publisher"]["mldsa65_public_key"] = key.public_key_hex().into();
-    let mut bytes = serde_json::to_vec_pretty(&manifest).expect("json");
-    bytes.push(b'\n');
-    let wasm = read(module);
-    let (id, version) = (manifest["id"].as_str(), manifest["version"].as_str());
-    let signature = key
-        .sign(
-            id.expect("id"),
-            version.expect("version"),
-            &ArtifactDigests::of(&bytes, &wasm),
-        )
-        .expect("sign");
-    Signed {
-        manifest: bytes,
-        signature,
-        key: key.public_key_hex(),
-    }
-}
-
-async fn workspace_installs(kernel: &Kernel) -> Vec<AppInstall> {
-    let request = WorkspaceProtocolRequest::Apps(AppsRequest::ListInstalls);
-    match process_command_with_user(kernel, &request, TEST_ADMIN_USER_ID)
-        .await
-        .expect("dispatched")
-    {
-        WorkspaceProtocolResponse::Apps(AppsResponse::Installs { installs, .. }) => installs
-            .into_iter()
-            .filter(|i| i.scope == InstallScope::Workspace)
-            .collect(),
-        other => panic!("no installs: {other:?}"),
-    }
-}
+mod first_party_signing;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_first_party_release_is_installed_once_for_the_workspace() {

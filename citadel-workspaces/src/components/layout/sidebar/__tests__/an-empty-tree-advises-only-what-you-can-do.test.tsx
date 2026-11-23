@@ -15,7 +15,7 @@ function emptyText(createBlockedReason: string | null): string {
   render(
     <MemoryRouter>
       <SidebarProvider>
-        <TreeNodesSection workspaceName="Test Workspace" title="Spaces" nodes={undefined} isLoading={false} unavailable={false}
+        <TreeNodesSection workspaceName="Test Workspace" topLevelTypes={[]} title="Spaces" nodes={undefined} isLoading={false} unavailable={false}
           onNodeSelect={(): void => {}} onNodeCreate={(): void => {}} createBlockedReason={createBlockedReason} />
       </SidebarProvider>
     </MemoryRouter>,

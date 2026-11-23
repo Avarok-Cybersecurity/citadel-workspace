@@ -7,8 +7,7 @@
 //! Whether apps may reach a member's private network is not configured here: it is each
 //! member's own grant on this agent (citadel-internal-service's kernel/apps/settings.rs).
 
-use citadel_internal_service::{AppNetConfig, AppSessionConfig, OriginPolicy};
-use std::collections::HashMap;
+use citadel_internal_service::{AppNetConfig, AppSessionConfig, OriginPolicy, PinEntry, PinError};
 
 /// The host of an allowed origin (`https://acme.work.avarok.net:8443` -> `acme.work.avarok.net`).
 fn origin_host(origin: &str) -> Option<String> {
@@ -37,11 +36,10 @@ pub fn app_net_config(origins: &OriginPolicy, agent_port: u16) -> AppNetConfig {
 /// nothing is the production value, stated rather than defaulted: a pinned server is dialled
 /// at its name as typed, on an operator's fingerprint, because it serves no HTTPS. The shipped
 /// agent reaches every server through its signed `/.well-known/citadel`, so no server is exempt
-/// from discovery, and an app cannot name one that is.
-pub fn app_session_config() -> AppSessionConfig {
-    AppSessionConfig {
-        pinned_servers: HashMap::new(),
-    }
+/// from discovery, and an app cannot name one that is. Built through `AppSessionConfig::new`,
+/// the one place pins are validated, so a refusal is a startup error rather than a panic.
+pub fn app_session_config() -> Result<AppSessionConfig, PinError> {
+    AppSessionConfig::new(Vec::<PinEntry>::new())
 }
 
 #[cfg(test)]
@@ -64,7 +62,9 @@ mod tests {
 
     #[test]
     fn the_shipped_agent_discovers_every_app_server() {
-        assert!(app_session_config().pinned_servers.is_empty());
+        let config = app_session_config().expect("pinning nothing is always valid");
+        assert_eq!(config.pins().count(), 0);
+        assert!(config.pinned("acme.work.avarok.net").is_none());
     }
 
     #[test]

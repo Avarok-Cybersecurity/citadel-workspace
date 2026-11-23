@@ -5,6 +5,7 @@
 export type { AppAudience } from './generated/AppAudience.js';
 export type { AppCategory } from './generated/AppCategory.js';
 export type { AppIcon } from './generated/AppIcon.js';
+export type { FileOpens } from './generated/FileOpens.js';
 export type { AppInstall } from './generated/AppInstall.js';
 export type { AppLimits } from './generated/AppLimits.js';
 export type { AppListing } from './generated/AppListing.js';
@@ -19,6 +20,7 @@ export type { AppsRequest } from './generated/AppsRequest.js';
 export type { AppsResponse } from './generated/AppsResponse.js';
 export type { ArtifactLocation } from './generated/ArtifactLocation.js';
 export type { ArtifactRef } from './generated/ArtifactRef.js';
+export type { BillingPortalAnswer } from './generated/BillingPortalAnswer.js';
 export type { Capability } from './generated/Capability.js';
 export type { CapabilityRequest } from './generated/CapabilityRequest.js';
 export type { ChatDocumentsRequest } from './generated/ChatDocumentsRequest.js';
