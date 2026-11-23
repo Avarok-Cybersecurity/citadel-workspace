@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { act, render, waitFor, type RenderResult } from '@testing-library/react';
 import type { AppInstall } from 'citadel-workspace-client-ts';
 import { AppZone } from '../AppZone';
-import { NO_GLUE, NO_TABS } from './doubles/no-tabs';
+import { NO_GLUE, NO_TABS, ANSWER_TAKEN } from './doubles/no-tabs';
 import { AppZoneContext, zoneClaims, type AppZoneEnvironment, type AppZoneHandle, type AppZoneMount, type AppZoneRuntime, type ZoneHost } from '../app-zone-environment';
 import { listedApps, type ListedApp } from '@/lib/citadel-apps/listing-model';
 import { markPeerAnswering } from '@/lib/citadel-apps/peer-answering';
@@ -48,7 +48,7 @@ function env(installs: AppInstall[], runtime: AppZoneRuntime, claims: Pick<AppZo
     data: {
       listing: async () => ({ ok: true, value: POOL }),
       installs: async () => ({ ok: true, value: installs }),
-      setDisabledForMe: async (_id: string, d: boolean) => ({ ok: true, value: d }),
+      setDisabledForMe: async (_id: string, d: boolean) => ({ ok: true, value: d }), setPeerConsentForMe: ANSWER_TAKEN,
     },
     // Nothing here presses "Try again": the data never fails to load.
     reload: (): void => undefined,

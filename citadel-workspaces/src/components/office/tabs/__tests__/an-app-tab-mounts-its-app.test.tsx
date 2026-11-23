@@ -18,7 +18,7 @@ import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
 import { forgetAllTabs } from '@/lib/node-tabs/tab-memory';
 import { installOf, listingOf } from '@/test/app-manifests';
 import { AppZoneContext, zoneClaims, type AppTabMount, type AppZoneEnvironment, type AppZoneHandle, type AppZoneRuntime } from '../../app-zone/app-zone-environment';
-import { NO_GLUE } from '../../app-zone/__tests__/doubles/no-tabs';
+import { NO_GLUE, ANSWER_TAKEN } from '../../app-zone/__tests__/doubles/no-tabs';
 
 vi.mock('../../NodeChat', () => ({ NodeChat: (): JSX.Element => <div data-testid="chat-view" /> }));
 vi.mock('@/components/call/GroupCallControls', () => ({ GroupCallControls: (): JSX.Element => <div /> }));
@@ -49,7 +49,7 @@ function recordingRuntime(rec: Recording): AppZoneRuntime {
 function env(listing: ListedApp, runtime: AppZoneRuntime): AppZoneEnvironment {
   return {
     nodeId: 'n1', me: 'alice', ancestors: [], mayInstall: 'yes', runtime,
-    data: { listing: async () => ({ ok: true, value: listing }), installs: async () => ({ ok: true, value: [INSTALL] }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }) },
+    data: { listing: async () => ({ ok: true, value: listing }), installs: async () => ({ ok: true, value: [INSTALL] }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }), setPeerConsentForMe: ANSWER_TAKEN },
     // Nothing here presses "Try again": the data never fails to load.
     reload: (): void => undefined,
     openLink: () => undefined, linkUrl: () => '', copyText: async () => undefined, ...zoneClaims(),

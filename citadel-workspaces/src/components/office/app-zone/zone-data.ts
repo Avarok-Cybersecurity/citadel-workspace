@@ -8,7 +8,9 @@
  * release its zone would read "not available" to everyone it was installed for. The release says
  * nothing a registry refusal hides: the server answers it only for an install this person sees.
  */
-import type { AppInstall, AppListing } from 'citadel-workspace-client-ts';
+import type { AppInstall, AppListing, PeerConsent } from 'citadel-workspace-client-ts';
+import type { ConsentChoice } from '@/lib/citadel-apps/member-consent-types';
+import { setPeerConsentForMe } from '@/lib/workspace-service/apps-peer-operations';
 import { getListing, listInstalls, setDisabledForMe, type AppsResult, type AppsTransport, type InstallsView } from '@/lib/workspace-service/apps-operations';
 import { getRelease, type Release } from '@/lib/workspace-service/apps-runtime-operations';
 import { adoptDisabledForMe } from '@/lib/citadel-apps/disabled-for-me';
@@ -62,6 +64,7 @@ export function zoneDataFrom(transport: AppsTransport): ZoneDataPort {
       return asked;
     },
     setDisabledForMe: (installId: string, disabled: boolean): Promise<AppsResult<boolean>> => setDisabledForMe(transport, installId, disabled),
+    setPeerConsentForMe: (installId: string, answer: ConsentChoice): Promise<AppsResult<PeerConsent>> => setPeerConsentForMe(transport, installId, answer),
   };
 }
 

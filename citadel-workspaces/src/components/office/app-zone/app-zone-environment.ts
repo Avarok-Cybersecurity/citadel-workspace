@@ -4,7 +4,8 @@
  * the page's zones share their requests and the page can refuse a zone name used twice.
  */
 import { createContext } from 'react';
-import type { AppInstall, AppManifest } from 'citadel-workspace-client-ts';
+import type { AppInstall, AppManifest, PeerConsent } from 'citadel-workspace-client-ts';
+import type { ConsentChoice } from '@/lib/citadel-apps/member-consent-types';
 import type { AppLink } from '@/lib/citadel-apps/app-link';
 import type { GlueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import type { NoticeSink, RosterRead } from '@/lib/citadel-apps/runtime/first-party-ports';
@@ -87,6 +88,8 @@ export interface ZoneDataPort {
   listing: (appId: string) => Promise<AppsResult<ListedApp>>;
   installs: () => Promise<AppsResult<AppInstall[]>>;
   setDisabledForMe: (installId: string, disabled: boolean) => Promise<AppsResult<boolean>>;
+  /** This person's answer to an install's P2P and topic questions (`SetPeerConsentForMe`). */
+  setPeerConsentForMe: (installId: string, answer: ConsentChoice) => Promise<AppsResult<PeerConsent>>;
 }
 
 export interface AppZoneEnvironment {

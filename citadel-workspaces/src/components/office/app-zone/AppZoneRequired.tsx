@@ -9,14 +9,22 @@ import { Button } from '@/components/ui/button';
 import { versionFloorLabel, type AppVersion } from '@/lib/citadel-apps/app-identity';
 import { AppIconImage } from '@/components/citadel-apps/marketplace/AppIconImage';
 import type { ZoneView } from './zone-state';
+import { MemberAnswerPrompt } from './MemberAnswerPrompt';
 
-export type PlaceholderView = Exclude<ZoneView, { kind: 'ready' }> | { kind: 'ready-unmounted'; name: string };
+/**
+ * A view that is not a running app: one zoneView decided, an app ready where apps cannot run
+ * (`ready-unmounted`), or one waiting while its member answers in Apps (`answering`).
+ */
+export type PlaceholderView = Exclude<ZoneView, { kind: 'ready' }> | { kind: 'ready-unmounted'; name: string } | { kind: 'answering'; name: string };
+
+/** What a placed app shows when it is not running: its view, or why a ready one is not. */
+export const placeholderFor = (view: ZoneView, waiting: boolean): PlaceholderView =>
+  view.kind !== 'ready' ? view : { kind: waiting ? 'answering' : 'ready-unmounted', name: view.app.manifest.name };
 
 /** Where the app would run: a zone in a page, a tab of the node's pane, or a page of settings. */
 export type Placement = 'zone' | 'tab' | 'setting';
 
 const SURFACE: Readonly<Record<Placement, string>> = { zone: 'a page zone', tab: 'a tab', setting: 'these settings' };
-const RUNS: Readonly<Record<Placement, string>> = { zone: 'on pages', tab: 'in tabs', setting: 'here' };
 const GROUP: Readonly<Record<Placement, string>> = { zone: 'App zone', tab: 'App tab', setting: 'App settings' };
 
 interface AppZoneRequiredProps {
@@ -31,12 +39,13 @@ interface AppZoneRequiredProps {
   onCopyLink: () => Promise<void>;
   onOpenApps: () => void;
   onRetry: () => void;
+  onAnswer: (allowed: boolean) => Promise<void>;
 }
 
 const needs = (placement: Placement, name: string, floor: AppVersion | null): string => `This ${placement} requires ${name}${floor === null ? '' : ` ${versionFloorLabel(floor)}`}`;
 const NOT_HERE: string = 'It is installed in this workspace, but not for you here.';
 
-export function AppZoneRequired({ placement, appId, floor, height, view, icon, onInstall, onEnable, onCopyLink, onOpenApps, onRetry }: AppZoneRequiredProps): JSX.Element {
+export function AppZoneRequired({ placement, appId, floor, height, view, icon, onInstall, onEnable, onCopyLink, onOpenApps, onRetry, onAnswer }: AppZoneRequiredProps): JSX.Element {
   const [copied, setCopied] = useState<'no' | 'yes' | 'failed'>('no');
   const button = (label: string, onClick: () => void, testId: string): JSX.Element => (
     <Button variant="outline" className="min-h-[44px] self-start" onClick={onClick} data-testid={testId}>{label}</Button>
@@ -59,8 +68,9 @@ export function AppZoneRequired({ placement, appId, floor, height, view, icon, o
     case 'needs-consent': title = `${view.name} ${view.version} needs a new permission; waiting for an admin.`; break;
     case 'suspended': title = `${view.name} has been turned off by an admin.`; break;
     case 'outdated': title = needs(placement, view.name, floor); detail = `You have ${view.installed}.`; action = button('Open in Apps', onOpenApps, 'app-zone-open-apps'); break;
-    case 'needs-answer': title = `${view.name} asks you first.`; detail = 'Answer what it asks in Apps → Installed, and it starts here.'; action = button('Open in Apps', onOpenApps, 'app-zone-answer'); break;
-    case 'ready-unmounted': title = `${view.name} is installed.`; detail = `It will run here once apps can run ${RUNS[placement]}.`; break;
+    case 'needs-answer': title = `${view.name} needs your OK first.`; action = <MemberAnswerPrompt name={view.name} asks={view.asks} onAnswer={onAnswer} />; break;
+    case 'answering': title = `${view.name} starts when you finish answering in Apps.`; break;
+    case 'ready-unmounted': title = `${view.name} is installed.`; detail = 'Apps cannot run on this page.'; break;
   }
   return (
     <div

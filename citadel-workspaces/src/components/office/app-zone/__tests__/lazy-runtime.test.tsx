@@ -9,7 +9,7 @@ import type { AppInstall } from 'citadel-workspace-client-ts';
 import { AppZone } from '../AppZone';
 import { AppZoneContext, zoneClaims, type AppZoneEnvironment, type AppZoneHandle, type AppZoneMount, type AppZoneRuntime, type ZoneHost } from '../app-zone-environment';
 import { lazyRuntime } from '../lazy-runtime';
-import { NO_GLUE, NO_TABS } from './doubles/no-tabs';
+import { NO_GLUE, NO_TABS, ANSWER_TAKEN } from './doubles/no-tabs';
 import { listedApps, type ListedApp } from '@/lib/citadel-apps/listing-model';
 import { installOf, listingOf } from '@/test/app-manifests';
 
@@ -18,7 +18,7 @@ const KANBAN: ListedApp = listedApps([listingOf({ id: 'com.acme.kanban', name: '
 function env(installs: AppInstall[], runtime: AppZoneRuntime): AppZoneEnvironment {
   return {
     nodeId: 'n-2', me: 'alice', ancestors: [], mayInstall: 'yes', runtime,
-    data: { listing: async () => ({ ok: true, value: KANBAN }), installs: async () => ({ ok: true, value: installs }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }) },
+    data: { listing: async () => ({ ok: true, value: KANBAN }), installs: async () => ({ ok: true, value: installs }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }), setPeerConsentForMe: ANSWER_TAKEN },
     // Nothing here presses "Try again": the data never fails to load.
     reload: (): void => undefined,
     openLink: () => undefined, linkUrl: () => '', copyText: async () => undefined, ...zoneClaims(),

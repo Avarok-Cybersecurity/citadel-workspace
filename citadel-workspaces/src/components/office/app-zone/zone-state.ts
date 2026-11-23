@@ -13,7 +13,7 @@ import type { AppInstall, PeerForMe } from 'citadel-workspace-client-ts';
 import { covers } from '@/lib/citadel-apps/install-covers';
 import { compareVersions, isAppId, parseAppVersion, type AppVersion } from '@/lib/citadel-apps/app-identity';
 import type { ListedApp } from '@/lib/citadel-apps/listing-model';
-import { memberAsks, needsMemberPrompt } from '@/lib/citadel-apps/consent-model';
+import { memberAsks, needsMemberPrompt, type MemberAsk } from '@/lib/citadel-apps/consent-model';
 import type { Tri } from '@/lib/citadel-apps/scope-options';
 import { runsOn, type Placement } from '@/lib/citadel-apps/runtime/placement';
 
@@ -67,8 +67,11 @@ export type ZoneView =
   | { kind: 'needs-consent'; name: string; version: string }
   | { kind: 'suspended'; name: string }
   | { kind: 'outdated'; name: string; installed: string }
-  /** Granted P2P or topics this person has not answered: the app starts once they have, holding what they allowed. */
-  | { kind: 'needs-answer'; name: string }
+  /**
+   * Granted P2P or topics this person has not answered: the app starts once they have, holding
+   * what they allowed. `asks` are the install's questions (consent-model.ts), answered or not.
+   */
+  | { kind: 'needs-answer'; name: string; install: AppInstall; asks: readonly MemberAsk[] }
   | { kind: 'ready'; app: ListedApp; install: AppInstall };
 
 export function zoneView(props: ZoneProps, f: ZoneFacts, placed: Placement['kind']): ZoneView {
@@ -94,6 +97,7 @@ export function zoneView(props: ZoneProps, f: ZoneFacts, placed: Placement['kind
   const installed: AppVersion | null = parseAppVersion(active.version);
   if (props.floor !== null && (installed === null || compareVersions(installed, props.floor) < 0)) return { kind: 'outdated', name, installed: active.version };
   // An instance holds the answers it started with (runtime/peer-ports.ts), so it starts only after them.
-  if (needsMemberPrompt(memberAsks(active.granted, f.peerForMe.get(active.id)?.consent ?? null))) return { kind: 'needs-answer', name };
+  const asks: MemberAsk[] = memberAsks(active.granted, f.peerForMe.get(active.id)?.consent ?? null);
+  if (needsMemberPrompt(asks)) return { kind: 'needs-answer', name, install: active, asks };
   return { kind: 'ready', app: f.listing, install: active };
 }

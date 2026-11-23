@@ -16,7 +16,7 @@ import { AppZoneContext, type AppTabMount, type AppZoneEnvironment, type AppZone
 import { pageZoneRuntime } from '@/components/office/app-zone/lazy-runtime';
 import { useGlueBinding, type GlueBinding } from '@/components/office/app-zone/use-glue-binding';
 import { usePlacedApp, type PlacedApp, type PlaceholderActions } from '@/components/office/app-zone/use-placed-app';
-import type { PlaceholderView } from '@/components/office/app-zone/AppZoneRequired';
+import { placeholderFor, type PlaceholderView } from '@/components/office/app-zone/AppZoneRequired';
 import { recordAppNoticeDelivery } from '@/lib/citadel-apps/app-notice-delivery';
 import { CALENDAR_APP_ID } from '@/lib/calendar/app-id';
 import { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
@@ -34,7 +34,7 @@ export type CalendarReach =
    * can do about it: the same view and actions an app tab's placeholder draws (AppZoneRequired).
    */
   | { readonly kind: 'placeholder'; readonly view: PlaceholderView; readonly actions: PlaceholderActions; readonly icon: AppIcon | null }
-  /** It reaches them but cannot start: `why` says why, for a member to read. */
+  /** Its binding stopped or its core did not load: `why` says why, for a member to read. */
   | { readonly kind: 'absent'; readonly why: string }
   | { readonly kind: 'ready'; readonly ports: CalendarPorts; readonly engine: CalendarEngine };
 
@@ -69,12 +69,12 @@ function Placed({ me, purpose, children }: WithCalendarProps): JSX.Element {
   const env: AppZoneEnvironment | null = useContext(AppZoneContext);
   if (env === null) throw new Error('WithCalendar renders its own zone environment');
   const { view, waiting, actions, facts }: PlacedApp = usePlacedApp({ app: CALENDAR_APP_ID, zone: purpose, height: 0, floor: null }, env, 'tab');
-  if (view.kind === 'loading' || waiting) return <>{children({ kind: 'waiting' })}</>;
-  if (view.kind !== 'ready') {
+  if (view.kind === 'loading') return <>{children({ kind: 'waiting' })}</>;
+  // Not running here, for the reason an app tab would show (AppZoneRequired.placeholderFor).
+  if (view.kind !== 'ready' || waiting || env.runtime === null) {
     const icon: AppIcon | null = typeof facts.listing === 'object' ? facts.listing.manifest.icon : null;
-    return <>{children({ kind: 'placeholder', view, actions, icon })}</>;
+    return <>{children({ kind: 'placeholder', view: placeholderFor(view, waiting), actions, icon })}</>;
   }
-  if (env.runtime === null) return <>{children({ kind: 'absent', why: 'Apps cannot run on this page.' })}</>;
   return <Bound runtime={env.runtime} tab={{ install: view.install, manifest: view.app.manifest, tabId: purpose, nodeId: WORKSPACE_ROOT_ID, me }}>{children}</Bound>;
 }
 

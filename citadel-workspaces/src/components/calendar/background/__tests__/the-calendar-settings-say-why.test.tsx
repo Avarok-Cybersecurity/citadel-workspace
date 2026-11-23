@@ -52,12 +52,12 @@ const state = async (): Promise<string | null> => (await placeholder()).getAttri
 describe("the Calendar's settings say why it does not reach you, and what to do", () => {
   beforeEach((): void => { cleanup(); server.listing = 'listed'; server.installs = []; server.mayInstall = false; server.asked = 0; });
 
-  it('installed with group topics and not yet answered: it asks first, with Apps to answer in', async () => {
+  it('installed with group topics and not yet answered: it asks for your OK, answerable here', async () => {
     server.installs = [installOf(CALENDAR, 'Workspace', { id: 'i1', source: 'FirstParty', granted: ['group.topic.subscribe', 'group.topic.publish'] })];
     render(<CalendarNotificationsHere />);
     expect(await state()).toBe('needs-answer');
-    expect(screen.getByText('Calendar asks you first.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Open in Apps' })).toBeTruthy();
+    expect(screen.getByText('Calendar needs your OK first.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Allow and start Calendar' })).toBeTruthy();
     expect(screen.queryByText(OLD)).toBeNull();
   });
 
@@ -97,8 +97,8 @@ describe("the Calendar's settings say why it does not reach you, and what to do"
   it('installed and reaching you, on a page where apps cannot run: says so', async () => {
     server.installs = [installOf(CALENDAR, 'Workspace', { id: 'i4', source: 'FirstParty' })];
     render(<CalendarNotificationsHere />);
-    expect(await screen.findByText('Apps cannot run on this page.')).toBeTruthy();
-    expect(screen.queryByTestId('app-zone-required')).toBeNull();
+    expect(await state()).toBe('ready-unmounted');
+    expect(screen.getByText('Apps cannot run on this page.')).toBeTruthy();
   });
 
   it('no answer from the server: could not be loaded, and Try again asks again (control: a refusal is not a failure)', async () => {
