@@ -65,6 +65,9 @@ if [ "$MODE" != dry-run ]; then
   # Without it the server builds with no first-party apps, and every new workspace lacks them.
   [ -n "${CITADEL_FIRST_PARTY_SIGNED_DIR:-}" ] || fail "set CITADEL_FIRST_PARTY_SIGNED_DIR to the signed first-party apps (build-first-party-apps.mjs --sign)"
   [ -f "$CITADEL_FIRST_PARTY_SIGNED_DIR/calendar/app.mldsa.sig" ] || fail "CITADEL_FIRST_PARTY_SIGNED_DIR holds no signed calendar"
+  [ -f "$CITADEL_FIRST_PARTY_SIGNED_DIR/synchronized-work/app.mldsa.sig" ] || fail "CITADEL_FIRST_PARTY_SIGNED_DIR holds no signed synchronized-work"
+  # An app-ABI app is listed only with the module the server stores for it (kernel build.rs).
+  [ -s "$CITADEL_FIRST_PARTY_SIGNED_DIR/synchronized-work/module.wasm" ] || fail "CITADEL_FIRST_PARTY_SIGNED_DIR holds no synchronized-work module.wasm"
 fi
 
 # wrangler with the token in its environment, and any line that could echo an auth header dropped.

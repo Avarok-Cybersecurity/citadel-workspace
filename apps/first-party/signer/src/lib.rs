@@ -17,6 +17,9 @@ pub const ABI_FIRST_PARTY_GLUE: &str = "wasm-bindgen-glue-firstparty";
 pub struct Signed {
     pub manifest: Vec<u8>,
     pub signature: String,
+    /// Whether the server stores this release's module, so it ships beside the signature: every
+    /// ABI's but the glue one's, which is in the UI bundle (the kernel's `install::stores_module`).
+    pub ships_module: bool,
 }
 
 fn field<'a>(m: &'a Value, path: &[&str]) -> Result<&'a Value, String> {
@@ -53,12 +56,15 @@ pub fn sign(manifest_text: &str, wasm: &[u8], key: &AppSigningKey) -> Result<Sig
     if field(&m, &["artifact", "bytes"])?.as_u64() != Some(wasm.len() as u64) {
         return Err("the module's size is not the manifest's".into());
     }
-    match text(&m, &["sdk", "abi"])? {
-        ABI_ID => inspect(&m, wasm)?,
+    let ships_module = match text(&m, &["sdk", "abi"])? {
+        ABI_ID => {
+            inspect(&m, wasm)?;
+            true
+        }
         // Its imports are wasm-bindgen's, not the host's: there is no ABI-1 import table to judge.
-        ABI_FIRST_PARTY_GLUE => {}
+        ABI_FIRST_PARTY_GLUE => false,
         other => return Err(format!("the signer knows no ABI {other:?}")),
-    }
+    };
     m["publisher"]["mldsa65_public_key"] = Value::String(key.public_key_hex());
     let mut manifest = serde_json::to_vec_pretty(&m).map_err(|e| e.to_string())?;
     manifest.push(b'\n');
@@ -68,6 +74,7 @@ pub fn sign(manifest_text: &str, wasm: &[u8], key: &AppSigningKey) -> Result<Sig
     Ok(Signed {
         manifest,
         signature,
+        ships_module,
     })
 }
 

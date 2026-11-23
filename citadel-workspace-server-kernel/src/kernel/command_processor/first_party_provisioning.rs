@@ -1,6 +1,9 @@
 //! Installing the first-party apps every workspace is provisioned with (Calendar design §3.2): each
-//! release the server embeds (`apps::first_party_bundles`), once, as an Active install for the
-//! whole workspace, with the release stored for it. Decided by `apps::first_party`.
+//! glue release the server embeds (`apps::first_party_bundles`), once, as an Active install for
+//! the whole workspace, with the release stored for it. Decided by `apps::first_party`, which also
+//! lists an app-ABI release without installing it: its module is stored here (`store_artifact`,
+//! once per sha256), so an admin's install finds it `Stored` (`apps_offer::obtain_artifact`) and
+//! needs no upload or fetch.
 //!
 //! Run at every provisioning pass, so it is idempotent: an app installed for the workspace already
 //! is left as it is, whatever its version (an update is an admin's, as for any install). A release
@@ -15,7 +18,7 @@
 //! installed the app before (the log is bounded, so a long-busy workspace may get it once more).
 
 use super::apps::audit_entry;
-use crate::kernel::apps::first_party::{plan_provisioning, SignedBundle};
+use crate::kernel::apps::first_party::{plan_provisioning, Provisioning, SignedBundle};
 use crate::kernel::apps::records::StoredRelease;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::transaction::apps_store::APPS_LOCK;
@@ -54,12 +57,19 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let mut recorded = backend.first_party_releases().await?;
         let audit = backend.apps_audit().await?;
         for (name, bundle) in bundles {
-            let plan = plan_provisioning(bundle, trusted).map_err(|why| {
+            let provisioning = plan_provisioning(bundle, trusted).map_err(|why| {
                 NetworkError::msg(format!(
                     "The first-party release {name} is refused: {why:?}"
                 ))
             })?;
-            let manifest = &plan.manifest;
+            // The module before the record, so a listed release always has its module stored.
+            if let Provisioning::List { manifest, module } = &provisioning {
+                let sha256 = &manifest.artifact.sha256;
+                if backend.artifact_meta(sha256).await?.is_none() {
+                    backend.store_artifact(sha256, module).await?;
+                }
+            }
+            let manifest = provisioning.manifest();
             let manifest_text = std::str::from_utf8(bundle.manifest)
                 .map_err(|_| NetworkError::msg("A signed manifest is not UTF-8"))?;
             let release = StoredRelease {
@@ -73,6 +83,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     .iter()
                     .any(|e| e.actor == PROVISIONING_INSTALLER && e.app_id == manifest.id);
             backend.save_first_party_releases(&recorded).await?;
+            let Provisioning::Install(plan) = &provisioning else {
+                info!(target: "citadel", "Listed the first-party app {} {} for the workspace", manifest.id, manifest.version);
+                continue;
+            };
             let mut installed = false;
             for id in backend.app_install_ids_at(&scope_key).await? {
                 installed |= backend

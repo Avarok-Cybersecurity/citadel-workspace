@@ -1126,6 +1126,7 @@ dependencies = [
  "citadel-internal-service-connector",
  "citadel-internal-service-test-common",
  "citadel-internal-service-types",
+ "citadel-workspace-server-kernel",
  "citadel-workspace-server-kernel-test-common",
  "citadel-workspace-types",
  "citadel_logging",
