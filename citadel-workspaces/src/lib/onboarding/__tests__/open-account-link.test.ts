@@ -30,6 +30,7 @@ function record(ok: boolean, sessions: Session[]): Recorder {
       // These cases are about the answer, which is immediate; the deadline never passes.
       signInDeadline: (): Promise<void> => new Promise<void>(() => undefined),
       switchTo: async (session: Session): Promise<void> => { switched.push(session); },
+      endSession: async (): Promise<void> => undefined,
       login: (username: string, server: string | null): void => { loginFor.push(username); scopes.push(server); },
     },
   };

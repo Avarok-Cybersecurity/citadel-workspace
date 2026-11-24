@@ -8,13 +8,14 @@ import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { ensureOprfSeed, OPRF_SEED_BYTES, OPRF_SEED_KEY } from "../control/oprf-seed.mjs";
 import { SIGN_IN_SETTINGS_KEY } from "../control/admission.mjs";
-import { ksfParams, securityKeyRpId } from "../control/tenant-sign-in.mjs";
+import { ksfParams, resumeMaxLifetimeSecs, securityKeyRpId } from "../control/tenant-sign-in.mjs";
 import { freeTenant, objectStats, openSocket, production, until } from "./helpers.mjs";
 import { instantiate } from "../server-wasm/pkg/instance.mjs";
 import wasm from "../server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
 
 /** Any bare domain: what these checks of the seed and cost pass for the relying party. */
 const RP_ID = "work.avarok.net";
+const WEEK = 604800;
 const hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 const storedSeed = (object) => runInDurableObject(object, (instance) => instance.ctx.storage.get(OPRF_SEED_KEY));
 
@@ -106,14 +107,29 @@ describe("the KSF parameters", () => {
   it("as wrangler.toml deploys them, are ones the node accepts", () => {
     const vars = production().vars;
     const ksf = ksfParams(vars);
-    expect(() => new (instantiate(wasm).PqSignIn)(new Uint8Array(32), ksf.memKib, ksf.iterations, ksf.lanes, securityKeyRpId(vars))).not.toThrow();
+    expect(() => new (instantiate(wasm).PqSignIn)(new Uint8Array(32), ksf.memKib, ksf.iterations, ksf.lanes, securityKeyRpId(vars), resumeMaxLifetimeSecs(vars))).not.toThrow();
   });
 
   it("below the SDK's floor, or with a seed of the wrong size, are refused by the node's own check", () => {
     const node = instantiate(wasm);
-    expect(() => new node.PqSignIn(new Uint8Array(32), 1024, 1, 1, RP_ID)).toThrow(/floor/);
-    expect(() => new node.PqSignIn(new Uint8Array(31), 19456, 2, 1, RP_ID)).toThrow(/32 bytes/);
-    expect(() => new node.PqSignIn(new Uint8Array(32), 19456, 2, 1, RP_ID)).not.toThrow();
+    expect(() => new node.PqSignIn(new Uint8Array(32), 1024, 1, 1, RP_ID, WEEK)).toThrow(/floor/);
+    expect(() => new node.PqSignIn(new Uint8Array(31), 19456, 2, 1, RP_ID, WEEK)).toThrow(/32 bytes/);
+    expect(() => new node.PqSignIn(new Uint8Array(32), 19456, 2, 1, RP_ID, WEEK)).not.toThrow();
+  });
+});
+
+describe("the resume credential maximum", () => {
+  it("is read from the vars, may not be missing, and 0 is the explicit none", () => {
+    expect(resumeMaxLifetimeSecs({ PQ_RESUME_MAX_LIFETIME_SECS: "604800" })).toBe(604800);
+    expect(resumeMaxLifetimeSecs({ PQ_RESUME_MAX_LIFETIME_SECS: "0" })).toBe(0);
+    expect(() => resumeMaxLifetimeSecs({})).toThrow(/PQ_RESUME_MAX_LIFETIME_SECS/);
+    for (const bad of ["", "-1", "1.5", "a week", "4294967296"]) {
+      expect(() => resumeMaxLifetimeSecs({ PQ_RESUME_MAX_LIFETIME_SECS: bad }), bad).toThrow(/PQ_RESUME_MAX_LIFETIME_SECS/);
+    }
+  });
+
+  it("as wrangler.toml deploys it, is seven days", () => {
+    expect(resumeMaxLifetimeSecs(production().vars)).toBe(WEEK);
   });
 });
 
@@ -126,7 +142,7 @@ describe("the security-key relying party", () => {
   it("is a bare domain, or the node will not start", () => {
     const node = instantiate(wasm);
     for (const bad of ["", "https://work.avarok.net", "work.avarok.net:443", "Work.Avarok.Net"]) {
-      expect(() => new node.PqSignIn(new Uint8Array(32), 19456, 2, 1, bad), bad).toThrow(/relying party/);
+      expect(() => new node.PqSignIn(new Uint8Array(32), 19456, 2, 1, bad, WEEK), bad).toThrow(/relying party/);
     }
   });
 });

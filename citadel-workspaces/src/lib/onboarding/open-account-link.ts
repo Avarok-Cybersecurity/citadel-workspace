@@ -33,6 +33,8 @@ export interface AccountLinkIO<T extends LinkableSession> {
    */
   signInDeadline: () => Promise<void>;
   switchTo: (session: T) => Promise<void>;
+  /** Sign `session` out, for a link that asks for the account's sign-in while it is live. */
+  endSession: (session: T) => Promise<void>;
   login: (username: string, server: string | null) => void;
 }
 
@@ -76,6 +78,13 @@ export async function openAccountLink<T extends LinkableSession>(
   if (signedInEarly) io.login(link.username, link.server ?? null);
   const { ok, sessions }: Answer = first === 'deadline' ? await answered : first;
   const decision: AccountLinkDecision<T> = decideAccountLink(link, ok ? sessions : []);
+  // A link for the sign-in itself (the "sign in again" notice): the live session is signed
+  // out first, so the form signs the account in afresh instead of being skipped for it.
+  if (decision.kind === 'switch' && link.open?.kind === 'sign-in') {
+    await io.endSession(decision.session);
+    if (!signedInEarly) io.login(link.username, link.server ?? null);
+    return { kind: 'login', username: link.username, server: link.server ?? null };
+  }
   if (decision.kind === 'switch') await io.switchTo(decision.session);
   else if (!signedInEarly) io.login(decision.username, decision.server);
   return decision;

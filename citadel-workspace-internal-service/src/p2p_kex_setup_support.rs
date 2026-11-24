@@ -121,6 +121,7 @@ pub(super) fn register_identity(
 ) -> (Uuid, InternalServiceRequest) {
     let request_id = Uuid::new_v4();
     let request = InternalServiceRequest::RegisterIdentity {
+        resume_lifetime_s: None,
         request_id,
         server_addr: server.to_string(),
         handle: handle.to_string(),
