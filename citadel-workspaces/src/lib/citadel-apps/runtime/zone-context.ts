@@ -5,6 +5,7 @@
  * `InstallScope::scope_key` in citadel-workspace-types computes it.
  */
 import type { AppInstall, InstallScope } from 'citadel-workspace-client-ts';
+import { ABI_MINOR } from '../sdk/generated/AbiConstants';
 import type { AppContext } from '../sdk/generated/AppContext';
 import type { AppScope } from '../sdk/generated/AppScope';
 import type { Surface } from '../sdk/generated/Surface';
@@ -50,5 +51,7 @@ export function zoneContext(p: ZonePlacement): AppContext {
     granted: [...p.install.granted].sort() as Capability[],
     surface: p.surface, size: { width: p.width, height: p.height }, dpr: p.dpr,
     theme: { ...p.theme }, locale: p.locale, acting_username: p.actingUsername, node_id: p.nodeId, close_grace_ms: p.closeGraceMs,
+    // What this host paints (the CW-5 canvas extension among it), so a guest can tell an older host.
+    sdk_abi_minor: ABI_MINOR,
   };
 }

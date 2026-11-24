@@ -10,10 +10,11 @@ import type { HttpMethod } from '../sdk/generated/HttpMethod';
 import type { HttpRequest } from '../sdk/generated/HttpRequest';
 import type { IhttpFrame } from '../sdk/generated/IhttpFrame';
 import type { KvBackend } from '../sdk/generated/KvBackend';
+import type { RegionRole } from '../sdk/generated/RegionRole';
 import type { RequestHead } from '../sdk/generated/RequestHead';
 import type { ResponseHead } from '../sdk/generated/ResponseHead';
 import type { Route } from '../sdk/generated/Route';
-import { array, bytes, float, literal, nullable, pair, str, struct, tagged, u16, u32, u64, u8, type Schema } from './schema';
+import { array, bool, bytes, float, literal, nullable, pair, str, struct, tagged, u16, u32, u64, u8, type Parsed, type Schema } from './schema';
 
 export const httpMethod: Schema<HttpMethod> = literal('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD');
 export const headers: Schema<[string, string][]> = array(pair);
@@ -53,6 +54,26 @@ export const kvBackend: Schema<KvBackend> = tagged<KvBackend>(['user', 'scope', 
 export const httpRequest: Schema<HttpRequest> = struct<HttpRequest>({ method: httpMethod, url: str, headers, body: bytes });
 
 const rect = { x: float, y: float, w: float, h: float } as const;
+
+/** The CW-5 commands (canvas-ext-abi.md §1), each typed against its generated variant. */
+type Variant<K extends string> = Extract<DrawCommand, Record<K, unknown>>[K];
+const twoOf = <A, B>(a: Schema<A>, b: Schema<B>): Schema<[A, B]> => (v) => {
+  if (!Array.isArray(v) || v.length !== 2) return null;
+  const x: Parsed<A> = a(v[0]);
+  const y: Parsed<B> = b(v[1]);
+  return x === null || y === null ? null : { v: [x.v, y.v] };
+};
+/** The centre and radius every circular command shares, as the generated fill_circle names them. */
+const circle: { readonly [K in keyof Pick<Variant<'fill_circle'>, 'cx' | 'cy' | 'r'>]: Schema<number> } = { cx: float, cy: float, r: float };
+export const regionRole: Schema<RegionRole> = literal('button', 'link', 'img', 'group');
+export const region: Schema<Variant<'region'>> = struct<Variant<'region'>>({ id: str, ...rect, label: str, role: regionRole });
+const canvasExtension: Readonly<Record<string, Schema<unknown>>> = {
+  fill_circle: struct<Variant<'fill_circle'>>({ ...circle, color: u32 }),
+  stroke_circle: struct<Variant<'stroke_circle'>>({ ...circle, line_width: float, color: u32 }),
+  path: struct<Variant<'path'>>({ points: array(twoOf(float, float)), closed: bool, fill: nullable(u32), stroke: nullable(twoOf(float, u32)) }),
+  arc: struct<Variant<'arc'>>({ ...circle, start: float, end: float, line_width: float, color: u32 }),
+  region,
+};
 export const drawCommand: Schema<DrawCommand> = tagged<DrawCommand>([], {
   clear: struct<{ color: number }>({ color: u32 }),
   fill_rect: struct<{ x: number; y: number; w: number; h: number; color: number }>({ ...rect, color: u32 }),
@@ -61,4 +82,5 @@ export const drawCommand: Schema<DrawCommand> = tagged<DrawCommand>([], {
     x1: float, y1: float, x2: float, y2: float, line_width: float, color: u32,
   }),
   fill_text: struct<{ x: number; y: number; text: string; px: number; color: number }>({ x: float, y: float, text: str, px: float, color: u32 }),
+  ...canvasExtension,
 });

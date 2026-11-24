@@ -37,6 +37,18 @@ const GROUP: PaneTestIds = {
   picker: { 'data-testid': 'group-file-input' },
 };
 
+const SCRATCHPAD: PaneTestIds = {
+  root: { 'data-testid': 'scratchpad-chat' },
+  log: { 'data-testid': 'scratchpad-chat-view' },
+  input: { 'data-testid': 'scratchpad-message-input' },
+  restricted: { 'data-testid': 'scratchpad-send-restricted' },
+  picker: { 'data-testid': 'scratchpad-file-input' },
+};
+
 export function paneTestIds(kind: ChatKind): PaneTestIds {
-  return kind === 'peer' ? PEER : GROUP;
+  switch (kind) {
+    case 'peer': return PEER;
+    case 'scratchpad': return SCRATCHPAD;
+    case 'node': case 'peer-group': return GROUP;
+  }
 }

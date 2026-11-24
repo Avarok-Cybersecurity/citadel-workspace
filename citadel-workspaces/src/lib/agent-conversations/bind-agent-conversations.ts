@@ -13,6 +13,7 @@ import { onPrivacySettingsSaved } from '../privacy-settings';
 import { createFocusReporter, windowInFront, type FocusReporter } from './report-focus';
 import { SESSION_CLAIMED, type ClaimedEvent } from '../multi-instance/claim-relay';
 import { sendToAgent } from './sender';
+import { agentKeepsNotesToSelf } from './capabilities';
 import { createPreferencesTeller, type PreferencesTeller } from './tell-preferences';
 
 type Listen = (event: string, handler: (data: unknown) => void) => void;
@@ -84,5 +85,6 @@ export function bindAgentConversations(listen: Listen, parts: AgentConversationP
       return (): void => { watchers.delete(listener); };
     },
     now: (): number => Date.now(),
+    keepsNotesToSelf: agentKeepsNotesToSelf,
   };
 }

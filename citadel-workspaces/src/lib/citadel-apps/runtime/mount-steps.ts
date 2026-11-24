@@ -5,7 +5,8 @@
  * it runs, suspend it while it or the page is out of sight (zone-presence.ts), tell it its new
  * size, and close it gracefully when it goes or the page does (zone-close.ts). The app's toolbar is
  * host buttons above the canvas (ui-port.ts); a press reaches the app as `ui_action` only while it
- * runs. Every dependency is passed in (SBIO); page-runtime.ts composes the page's.
+ * runs, and a file a member opens in the install reaches it as `open_file` (opened-files.ts).
+ * Every dependency is passed in (SBIO); page-runtime.ts composes the page's.
  */
 import type { AppInstall } from 'citadel-workspace-client-ts';
 import type { AppZoneHandle, ZoneHost } from '@/components/office/app-zone/app-zone-environment';
@@ -14,14 +15,15 @@ import type { DispatchClock } from '../host/dispatch';
 import { launchAppInstance, type AppInstance, type InstanceState, type Launch } from '../host/instance';
 import type { InstanceSlots } from '../host/instance-slots';
 import { instanceLimits, type HostPolicy } from '../host/limits';
-import type { TopicArrival } from '../host/ports';
+import type { SessionArrival, TopicArrival } from '../host/ports';
 import type { HostChannel } from '../host/worker-protocol';
 import type { ArtifactVerifierPort } from '../host/verify-artifact';
 import type { CloseReason } from '../sdk/generated/CloseReason';
 import type { SuspendReason } from '../sdk/generated/SuspendReason';
-import { hostPortsFor, type BoundPorts, type PortWorld } from './host-ports';
+import { hostPortsFor, sessionBindingOf, type BoundPorts, type PortWorld } from './host-ports';
 import type { InstallPlaneRegistry } from './install-plane-registry';
-import { placementId, runsOn, sizeIn, surfaceOf, type PlacedSize, type Placement } from './placement';
+import { takeDeclared, type OpenedFile, type OpenedFiles } from './opened-files';
+import { placementId, placementPhrase, runsOn, sizeIn, surfaceKind, surfaceOf, type PlacedSize, type Placement } from './placement';
 import { loadRelease, type LoadedRelease } from './release-loader';
 import { closeZone, type ZoneCloseDeps } from './zone-close';
 import { stoppedCopy, failureCopy } from './zone-copy';
@@ -53,6 +55,8 @@ export interface ZoneRuntimeDeps extends ZoneCloseDeps {
   readonly locale: () => string;
   readonly dpr: () => number;
   readonly theme: () => Readonly<Record<string, string>>;
+  /** Files the member chose to open in an app; its running instance takes them (opened-files.ts). */
+  readonly opened: OpenedFiles;
 }
 
 /** One instance to mount: its install, where it is placed, and who it acts for. */
@@ -74,7 +78,9 @@ export function mountPlaced(slots: ZoneHost, placed: PlacedMount, deps: ZoneRunt
   const { install, name, placement } = placed;
   const dpr: number = deps.dpr();
   let size: PlacedSize = sizeIn(placement, measure(host));
-  const surface: ZoneSurface = zoneSurface(host, name, { ...size, dpr }, placement.kind === 'tab');
+  const surface: ZoneSurface = zoneSurface(host, name, { ...size, dpr }, placement.kind !== 'zone', (id: string): void => {
+    if (closing === null && instance?.state === 'running') instance.postEvent({ activate: { id } });
+  });
   const input: ZoneInput = zoneInput(deps.frames);
   const presence: ZonePresence = new ZonePresence();
   let closing: Promise<void> | null = null;
@@ -152,13 +158,15 @@ export function mountPlaced(slots: ZoneHost, placed: PlacedMount, deps: ZoneRunt
     }
     // The verified release's own manifest decides, not the listing the page was shown.
     if (!runsOn(loaded.manifest, placement.kind)) {
-      surface.show({ kind: 'stopped', why: `${name} cannot run ${placement.kind === 'zone' ? 'in a page' : 'in a tab'}, so it was not started.` });
+      surface.show({ kind: 'stopped', why: `${name} cannot run ${placementPhrase(placement.kind)}, so it was not started.` });
       return;
     }
     const world: PortWorld = { ...(await deps.portWorld()), policy: deps.policy };
     const scopeKey: string = await scopeKeyOf(install.scope, world.sha256Hex);
     if (closing !== null) return;
-    bound = hostPortsFor(install, loaded.manifest.limits, deps.newInstanceId(), scopeKey, { events: input.port, ui: zoneUiPort(toolbar) }, planes.attach(install.id, install.app_id), world);
+    bound = hostPortsFor(install, loaded.manifest.limits, deps.newInstanceId(), scopeKey, { events: input.port, ui: zoneUiPort(toolbar) }, planes.attach(install.id, install.app_id), world, sessionBindingOf(loaded.manifest, placed.me), {
+      id: loaded.manifest.id, name: loaded.manifest.name, nodeId: placed.nodeId,
+    });
     const closeGraceMs: number = loaded.manifest.limits.close_grace_ms;
     const launch: Launch = launchAppInstance({
       appId: install.app_id, module: loaded.module, granted: bound.held, memory: loaded.memory, closeGraceMs,
@@ -177,12 +185,25 @@ export function mountPlaced(slots: ZoneHost, placed: PlacedMount, deps: ZoneRunt
       if (closing === null && running.state === 'running') running.postEvent({ topic: { name: a.name, event: a.event } });
     });
     if (offTopic !== undefined) watching.push(offTopic);
+    const offSession: (() => void) | undefined = bound.ports.session?.onEvent((a: SessionArrival): void => {
+      if (closing === null && running.state === 'running') running.postEvent({ session: { session: a.session, event: a.event } });
+    });
+    if (offSession !== undefined) watching.push(offSession);
+    watching.push(running.onRegions(surface.regions));
     running.attachCanvas(deps.offscreen(surface.canvas), dpr);
     running.onState((state: InstanceState): void => {
       if (state === 'running') {
         surface.show({ kind: 'running' });
-        if (running.start()) sync();
-        else deps.report(`[apps] ${name} could not be started`, running.lifecycle);
+        if (!running.start()) {
+          deps.report(`[apps] ${name} could not be started`, running.lifecycle);
+          return;
+        }
+        sync();
+        if (closing === null) {
+          watching.push(takeDeclared(deps.opened, install.app_id, loaded.manifest.opens, surfaceKind(placement.kind),
+            (file: OpenedFile): void => running.postEvent({ open_file: { ...file } }),
+            (file: OpenedFile, why: string): void => deps.report(`[apps] ${name} was not handed ${file.name}: ${why}`, file.name)));
+        }
         return;
       }
       stopInput();

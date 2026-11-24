@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { MessageBubble } from '@/components/p2p/bubbles';
 import { AwaitingAcceptContext } from '@/components/p2p/bubbles/awaiting-accept';
+import { DeliveryTicksContext } from '@/components/p2p/bubbles/delivery-ticks';
 import { reactionChips } from '@/lib/reactions/reaction-state';
 import type { ReactionBinding } from '@/components/chat/shared/reactions/reaction-binding';
 import type { ChatDocumentLink } from '@/components/p2p/hooks/useP2PTabs';
@@ -22,8 +23,12 @@ interface MessageListProps {
   messages: ChatMessage[];
   /** The empty transcript's sentence, as the transport words it. */
   greeting: string;
+  /** Above the greeting in an empty transcript; null shows the greeting alone. */
+  emptyHeading: string | null;
   /** Each message shows its sender's name and picture (a channel), not a two-party thread. */
   namesSenders: boolean;
+  /** The reader's own messages carry delivery ticks (the transport's `deliveryTicks`). */
+  deliveryTicks: boolean;
   /** The reader's cid, for which reactions are theirs; null before the session has one. */
   selfCid: bigint | null;
   /** A reactor's name; the reader is "You". */
@@ -60,7 +65,7 @@ const authorOf = (m: ChatMessage): string => m.author.name;
 export const MessageList: React.ForwardRefExoticComponent<MessageListProps & React.RefAttributes<HTMLDivElement>> = forwardRef<HTMLDivElement, MessageListProps>(
   function MessageList(
     {
-      messages, greeting, namesSenders, selfCid, reactorName,
+      messages, greeting, emptyHeading, namesSenders, deliveryTicks, selfCid, reactorName,
       isLoadingMore, isLoadingHistory, hasMorePages, onLoadOlder, olderPagesError,
       onScroll, onRetryMessage, onOpenDocument,
       onAcceptTransfer, onDeclineTransfer, onCancelTransfer, onOpenFile,
@@ -86,6 +91,7 @@ export const MessageList: React.ForwardRefExoticComponent<MessageListProps & Rea
 
     return (
       <AwaitingAcceptContext.Provider value={awaitingAcceptFrom}>
+      <DeliveryTicksContext.Provider value={deliveryTicks}>
       <ScrollArea className="flex-1 p-4" ref={ref} onScroll={onScroll}>
         {/*
         role="log" carries an implicit aria-live="polite" and aria-relevant="additions", the pattern
@@ -112,7 +118,7 @@ export const MessageList: React.ForwardRefExoticComponent<MessageListProps & Rea
           {messages.length === 0 && !isLoadingMore && !isLoadingHistory && (
             // A blank void reads as a screen that failed to load.
             <div className="flex flex-col items-center justify-center gap-1 py-16 text-center">
-              <p className="text-sm text-foreground">No messages yet</p>
+              {emptyHeading !== null && <p className="text-sm text-foreground" data-testid="chat-empty-heading">{emptyHeading}</p>}
               <p className="text-xs text-muted-foreground">{greeting}</p>
             </div>
           )}
@@ -152,6 +158,7 @@ export const MessageList: React.ForwardRefExoticComponent<MessageListProps & Rea
           ))}
         </div>
       </ScrollArea>
+      </DeliveryTicksContext.Provider>
       </AwaitingAcceptContext.Provider>
     );
   }

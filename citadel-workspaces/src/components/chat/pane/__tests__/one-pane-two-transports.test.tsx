@@ -21,7 +21,7 @@ afterEach((): void => { cleanup(); clearAllDraftsForTests(); });
 const PEER: FakeOptions = {
   kind: 'peer', self: { cid: 1n, username: 'me', displayName: 'You' }, counterpart: 'Bob',
   latest: { messages: [fakeMessage('m1', 'hello there', 1_700_000_000_000, false)], older: null },
-  stated: { markdown: true, readReceipts: true, securityLevel: true, retention: true, optimistic: true, namesSenders: false },
+  stated: { markdown: true, readReceipts: true, securityLevel: true, retention: true, optimistic: true, namesSenders: false, deliveryTicks: true },
   ports: { status: true, files: true, documents: true, settings: true, revise: true, reactions: true }, sendGate: 'allowed', recordsOnSend: true,
 };
 

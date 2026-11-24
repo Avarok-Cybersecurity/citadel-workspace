@@ -6,7 +6,7 @@
  */
 import type { AppInstall, AppManifest, Capability, CapabilityRequest, PeerConsent } from 'citadel-workspace-client-ts';
 import { PERMISSION_LABELS } from '@/lib/permissions-service/types';
-import { CAPABILITY_COPY, FIRST_PARTY_ONLY, MEMBER_CONSENT_COPY, NETWORK_CAPABILITIES, PEER_METADATA_DISCLOSURE, type Risk } from './capability-copy';
+import { CAPABILITY_COPY, FIRST_PARTY_ONLY, MEMBER_CONSENT_COPY, NETWORK_CAPABILITIES, PEER_METADATA_DISCLOSURE, sessionLabel, type Risk } from './capability-copy';
 import type { ConsentChoice, ConsentPlane } from './member-consent-types';
 import type { Authority } from './scope-options';
 
@@ -42,7 +42,7 @@ export function consentRows(manifest: AppManifest, turnedOff: ReadonlySet<Capabi
       : held === 'no' ? `You need “${PERMISSION_LABELS[copy.installerNeeds]}” to allow this.`
       : held === 'unknown' ? 'Checking your permissions…' : null;
     return {
-      cap: r.cap, label: copy.label, why: r.why, risk: copy.risk, optional: r.optional,
+      cap: r.cap, label: r.servers === undefined ? copy.label : sessionLabel(r.servers), why: r.why, risk: copy.risk, optional: r.optional,
       on: !r.optional || (!turnedOff.has(r.cap) && blocked === null), blocked, hosts: r.hosts ?? [], memberNote: memberNoteFor(r.cap),
     };
   });
@@ -85,6 +85,13 @@ export function keyTrustCopy(trust: KeyTrust): string {
   if (trust.kind === 'first-time') return 'This is the first time you trust this publisher key.';
   return `Same key as ${trust.apps} ${trust.apps === 1 ? 'app' : 'apps'} you already use.`;
 }
+
+/** Each plane's name, as the member is asked it: the Installed panel and an app's placeholder. */
+export const PLANE_TITLE: Readonly<Record<ConsentPlane, string>> = {
+  serve: 'Answer requests from other members’ copies',
+  call: 'Send requests straight to other members',
+  topics: 'Join this app’s channels',
+};
 
 /** The capabilities each plane of a member's consent covers. */
 export const PLANE_CAPABILITIES: Readonly<Record<ConsentPlane, readonly Capability[]>> = {
@@ -131,6 +138,12 @@ export function effectiveForMember(granted: readonly Capability[], consent: Peer
   if (disabledForMe) return [];
   const withheld: Set<Capability> = new Set(PLANES.filter((p: ConsentPlane) => consent === null || !consent[p]).flatMap((p: ConsentPlane) => PLANE_CAPABILITIES[p]));
   return granted.filter((c: Capability) => !withheld.has(c));
+}
+
+/** The whole answer when the member answers every open question at once: what they answered before stays. */
+export function answerOpen(consent: PeerConsent | null, asks: readonly MemberAsk[], allowed: boolean): ConsentChoice {
+  return asks.filter((a: MemberAsk) => a.allowed === null).reduce((c: ConsentChoice, a: MemberAsk): ConsentChoice => ({ ...c, [a.plane]: allowed }),
+    { serve: consent?.serve ?? false, call: consent?.call ?? false, topics: consent?.topics ?? false });
 }
 
 /** The whole answer to send when the member changes one plane; an unanswered plane is sent as not allowed. */

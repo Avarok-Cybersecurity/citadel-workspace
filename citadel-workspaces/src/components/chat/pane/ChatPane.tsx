@@ -22,7 +22,7 @@ import { ChatSettingsPanel } from '@/components/p2p/ChatSettingsPanel';
 import type { PauseView } from '@/components/p2p/hooks/use-peer-pause';
 import type { ChatTransport } from '@/lib/chat/transport/chat-transport';
 import { MessageList } from './MessageList';
-import { AttachmentIOContext, type AttachmentIO } from '@/components/chat/attachments/attachment-io';
+import { AttachmentIOContext, TransferReaderContext, keptWhere, type AttachmentIO, type TransferReader } from '@/components/chat/attachments/attachment-io';
 import type { SharedFile } from '@/lib/chat/attachments/shared-file';
 import { browserDocumentFiles } from '@/lib/document-files';
 import { ServerUploadStatus } from '@/components/chat/attachments/ServerUploadStatus';
@@ -55,7 +55,9 @@ interface ChatPaneProps {
 export function ChatPane({ transport, header, pause }: ChatPaneProps): JSX.Element {
   const pane: ChatPaneModel = useChatPane(transport, pause);
   const read: ((file: SharedFile) => Promise<Uint8Array>) | null = transport.files?.read ?? null;
-  const attachmentIO: AttachmentIO | null = useMemo((): AttachmentIO | null => (read === null ? null : { read, files: browserDocumentFiles }), [read]);
+  const readTransfer: TransferReader | null = transport.files?.readTransfer ?? null;
+  const where: string = keptWhere(transport.files?.modes ?? []);
+  const attachmentIO: AttachmentIO | null = useMemo((): AttachmentIO | null => (read === null ? null : { read, files: browserDocumentFiles, where }), [read, where]);
   const { tabs, messages: list, compose, fileSend } = pane;
   const ids: PaneTestIds = paneTestIds(transport.kind);
   const { counterpart, features, self } = transport;
@@ -65,6 +67,7 @@ export function ChatPane({ transport, header, pause }: ChatPaneProps): JSX.Eleme
 
   return (
     <AttachmentIOContext.Provider value={attachmentIO}>
+    <TransferReaderContext.Provider value={readTransfer}>
     <ChatDropTarget className="h-full flex flex-col bg-background" testId={ids.root['data-testid']} recipient={counterpart.name} hint="Only the first file is sent. You can cancel it from the conversation." {...fileSend.drop}>
       {header({
         typing: list.typing, presence: list.peerPresence, connected: list.isConnected, accepted: list.isRegistered,
@@ -84,7 +87,7 @@ export function ChatPane({ transport, header, pause }: ChatPaneProps): JSX.Eleme
           <>
             <div className="relative flex min-h-0 flex-1 flex-col" {...ids.log}>
             <MessageList
-              ref={pane.scrollRef} messages={list.messages} greeting={counterpart.greeting} namesSenders={features.namesSenders}
+              ref={pane.scrollRef} messages={list.messages} greeting={counterpart.greeting} emptyHeading={counterpart.emptyHeading} namesSenders={features.namesSenders} deliveryTicks={features.deliveryTicks}
               selfCid={self?.cid ?? null} reactorName={transport.reactorName} awaitingAcceptFrom={awaitingAcceptFrom}
               isLoadingMore={list.isLoadingMore} isLoadingHistory={list.isLoadingHistory} hasMorePages={list.hasMorePages}
               onLoadOlder={(): void => { void list.loadOlderMessages(); }} olderPagesError={list.olderPagesError}
@@ -131,6 +134,7 @@ export function ChatPane({ transport, header, pause }: ChatPaneProps): JSX.Eleme
         <ChatSettingsPanel isOpen={pane.settingsOpen} onClose={(): void => pane.setSettingsOpen(false)} peerCid={transport.settings.key} peerName={counterpart.name} />
       )}
     </ChatDropTarget>
+    </TransferReaderContext.Provider>
     </AttachmentIOContext.Provider>
   );
 }

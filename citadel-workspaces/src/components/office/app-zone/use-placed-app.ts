@@ -1,11 +1,14 @@
 /**
  * What a placed app (a zone in a page, or an app tab) shows and how its running app is closed,
- * shared by AppZone.tsx and AppTabPane.tsx so the two cannot drift: the view decided from the
+ * shared by AppZone.tsx, AppTabPane.tsx and AppPagePane.tsx so they cannot drift: the view decided from the
  * facts (zone-state.ts), the close reason read in the commit that removed or replaced it
  * (zone-close-reason.ts), the wait for open P2P or topic answers, and the placeholder's actions.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import type { AppInstall } from 'citadel-workspace-client-ts';
+import type { AppInstall, PeerConsent } from 'citadel-workspace-client-ts';
+import { answerOpen } from '@/lib/citadel-apps/consent-model';
+import { recordPeerConsent } from '@/lib/citadel-apps/peer-for-me';
+import { refusalCopy } from '@/lib/citadel-apps/refusal-copy';
 import type { AppLink } from '@/lib/citadel-apps/app-link';
 import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
 import { recordDisabledForMe } from '@/lib/citadel-apps/disabled-for-me';
@@ -14,7 +17,7 @@ import type { Placement } from '@/lib/citadel-apps/runtime/placement';
 import type { AppsResult } from '@/lib/workspace-service/apps-operations';
 import type { AppZoneEnvironment, AppZoneHandle, ZoneHost } from './app-zone-environment';
 import { closeReasonFor, type ZoneNext } from './zone-close-reason';
-import { zoneView, type ZoneFacts, type ZoneProps, type ZoneView } from './zone-state';
+import { boundTo, zoneView, type ZoneFacts, type ZoneProps, type ZoneView } from './zone-state';
 import { useZoneFacts } from './use-zone-facts';
 
 export interface PlaceholderActions {
@@ -22,6 +25,9 @@ export interface PlaceholderActions {
   onEnable: () => void;
   onCopyLink: () => Promise<void>;
   onOpenApps: () => void;
+  onRetry: () => void;
+  /** Answer every open question of a `needs-answer` view; rejects with the refusal's words. */
+  onAnswer: (allowed: boolean) => Promise<void>;
 }
 
 export interface PlacedApp {
@@ -34,8 +40,9 @@ export interface PlacedApp {
   actions: PlaceholderActions;
 }
 
-export function usePlacedApp(props: ZoneProps, env: AppZoneEnvironment, kind: Placement['kind']): PlacedApp {
-  const facts: ZoneFacts = useZoneFacts(env, props.app);
+/** `bound`: the one install this placement runs (a node's page), or null for any that covers this person here. */
+export function usePlacedApp(props: ZoneProps, env: AppZoneEnvironment, kind: Placement['kind'], bound: string | null): PlacedApp {
+  const facts: ZoneFacts = boundTo(useZoneFacts(env, props.app), bound);
   const view: ZoneView = zoneView(props, facts, kind);
   // The view this commit shows and its facts, recorded in the layout phase: before any passive cleanup of the commit.
   const next: React.MutableRefObject<ZoneNext> = useRef<ZoneNext>({ view, facts });
@@ -61,11 +68,20 @@ export function usePlacedApp(props: ZoneProps, env: AppZoneEnvironment, kind: Pl
     const r: AppsResult<boolean> = await env.data.setDisabledForMe(view.install.id, false);
     if (r.ok) recordDisabledForMe(view.install.id, r.value);
   };
+  const answer = async (allowed: boolean): Promise<void> => {
+    if (view.kind !== 'needs-answer') return;
+    const id: string = view.install.id;
+    const r: AppsResult<PeerConsent> = await env.data.setPeerConsentForMe(id, answerOpen(facts.peerForMe.get(id)?.consent ?? null, view.asks, allowed));
+    if (!r.ok) throw new Error(refusalCopy(r.refusal));
+    recordPeerConsent(id, r.value);
+  };
   const actions: PlaceholderActions = {
     onInstall: (): void => env.openLink(link),
     onEnable: (): void => { void enable(); },
     onCopyLink: (): Promise<void> => env.copyText(env.linkUrl(link)),
     onOpenApps: (): void => env.openLink(link),
+    onRetry: (): void => env.reload(),
+    onAnswer: answer,
   };
   return { facts, view, waiting, reasonFor, actions };
 }

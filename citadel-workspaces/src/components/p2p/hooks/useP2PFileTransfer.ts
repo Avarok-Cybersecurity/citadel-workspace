@@ -56,6 +56,7 @@ export function useP2PFileTransfer({
         move({ kind: 'uploading', name: file.name, storedBytes, totalBytes });
       });
       if (outcome === 'shared') { move({ kind: 'shared', name: file.name }); return; }
+      if (outcome === 'kept') return; // its note in the transcript is the confirmation
       toast(outcome === 'held'
         ? { title: `Will send ${file.name} when ${recipient} is online`, description: 'Keep this browser open; it goes by itself.' }
         : { title: `Preparing to send ${file.name}`, description: `Keep this tab open until ${recipient} is offered it.` });

@@ -54,7 +54,9 @@ export function peerHistory(messenger: P2PMessengerManager, peer: ChatPeer, self
       const stops: (() => void)[] = [
         messenger.onMessage((message: P2PMessage): void => {
           if (!withPeer(message, peer.cid)) return;
-          listener({ kind: 'arrived', message: authored(message, self, peer), incoming: message.sender_cid === peer.cid });
+          // Incoming is "not the reader's own": in the scratchpad the peer IS the reader.
+          const stamped: ChatMessage = authored(message, self, peer);
+          listener({ kind: 'arrived', message: stamped, incoming: message.sender_cid === peer.cid && !stamped.author.own });
         }),
         messenger.onMessageStatusChange((messageId: string, status: P2PMessage['status']): void => listener({ kind: 'status', messageId, status })),
         eventEmitter.on('p2p:message-updated', (updated: P2PMessage): void => {

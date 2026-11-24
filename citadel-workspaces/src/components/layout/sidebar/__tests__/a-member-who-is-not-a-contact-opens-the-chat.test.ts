@@ -20,8 +20,8 @@ describe('where a member row goes', () => {
     expect(memberChatTarget('thomas', 'me', CONTACTS, listed)).toEqual({ kind: 'conversation', cid: 11n });
   });
 
-  it('says a never-listed member is unreachable, and opens nothing on your own row', () => {
+  it('says a never-listed member is unreachable, and opens your scratchpad on your own row', () => {
     expect(memberChatTarget('ghost', 'me', CONTACTS, listed)).toEqual({ kind: 'unreachable' });
-    expect(memberChatTarget('me', 'me', CONTACTS, listed)).toBeNull();
+    expect(memberChatTarget('me', 'me', CONTACTS, listed)).toEqual({ kind: 'scratchpad' });
   });
 });

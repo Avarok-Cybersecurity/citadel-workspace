@@ -36,6 +36,8 @@ pub fn required_installer_permission(cap: Capability) -> Permission {
         IhttpP2pServe => Permission::AppInstallAllowPeerServe,
         IhttpP2pCall => Permission::AppInstallAllowPeerCall,
         GroupTopicSubscribe | GroupTopicPublish => Permission::AppInstallAllowGroupTopics,
+        // The member's agent reaches the named server for the app, as `net.host` reaches a host.
+        CitadelSession => Permission::AppInstallAllowHostNetwork,
     }
 }
 
@@ -65,7 +67,7 @@ pub fn acting_user_requirement(cap: Capability) -> &'static [Permission] {
         MembersList => &[Permission::ViewMembers],
         ClipboardRead | ClipboardWrite | Notifications | NetHost | NetHostPrivate | NetServer
         | IhttpServe | IhttpCall | IhttpP2pServe | IhttpP2pCall | GroupTopicSubscribe
-        | GroupTopicPublish => &[],
+        | GroupTopicPublish | CitadelSession => &[],
     }
 }
 

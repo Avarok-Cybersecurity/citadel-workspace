@@ -110,6 +110,27 @@ async function contextMenuFits({ page, url, viewport }) {
   assert.deepEqual(found, [], `with the context menu open: ${found.slice(0, 5).join(' | ')}`);
 }
 
+/**
+ * New opens again when it is pressed while its menu is still closing, as a second upload straight after a
+ * first presses it. The closing menu is held on the page by this check's own stylesheet, so the second press
+ * lands inside the close on any machine; without it the window is the animation's 150ms, or one frame under
+ * reduced motion, and files-open-in-their-apps.spec.ts met it only on a busy runner.
+ */
+async function newMenuReopensWhileItIsClosing({ page, url }) {
+  await openScene(page, url, 'file-manager');
+  await page.addStyleTag({ content: '[role="menu"][data-state="closed"] { animation-duration: 5s !important; }' });
+  const trigger = page.getByTestId('vfs-new');
+  await trigger.click();
+  await page.getByTestId('vfs-new-folder').click({ timeout: 5000 });
+  assert.equal(await page.locator('[role="menu"][data-state="closed"]').count(), 1, 'the menu is not on the page while it closes, so this check measures nothing');
+  await trigger.click({ timeout: 5000 });
+  // Two frames: the press that shut the menu again did so in the same event, so this is not a wait for it.
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+  assert.equal(await trigger.getAttribute('data-state'), 'open', 'New was pressed while its menu was closing, and the menu is shut: the press did nothing');
+  assert.equal(await page.locator('[role="menu"][data-state="open"]').count(), 1, 'New says it is open and no open menu is on the page');
+  assert.ok(await page.getByTestId('vfs-new-folder').isVisible(), 'the reopened menu does not offer New folder');
+}
+
 /** No serious or critical WCAG 2.2 AA violation -- contrast of every badge and state among them -- in either theme. */
 const axeClean = (scene) => async ({ page, url }) => {
   await openScene(page, url, scene);
@@ -129,4 +150,5 @@ export const FILE_MANAGER_CHECKS = {
   fileManagerAddressBarFits: addressBarFits,
   fileManagerInspectorLeavesTheListVisible: inspectorLeavesTheListVisible,
   fileManagerContextMenuFits: contextMenuFits,
+  fileManagerNewMenuReopensWhileItIsClosing: newMenuReopensWhileItIsClosing,
 };

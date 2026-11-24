@@ -3,6 +3,7 @@
  * SDK's fixtures until they land. `appModule()` with no options is the CLEAN module (the control
  * for every hostile variant): memory imported, the two reply readers, the five required exports.
  */
+import { ABI_MINOR } from '../../sdk/generated/AbiConstants';
 import type { AppContext } from '../../sdk/generated/AppContext';
 import { ABI_NAMESPACE, type AbiGroup } from '../abi';
 import type { Capability } from '../capabilities';
@@ -95,6 +96,6 @@ export function fixtureContext(granted: readonly Capability[], closeGraceMs: num
   return {
     app_id: 'net.avarok.fixture', install_id: 'install-1', scope: 'workspace', granted: [...granted].sort(), surface: 'canvas_pane',
     size: { width: 320, height: 200 }, dpr: 1, theme: {}, locale: 'en', acting_username: 'alice', node_id: 'root',
-    close_grace_ms: closeGraceMs,
+    close_grace_ms: closeGraceMs, sdk_abi_minor: ABI_MINOR,
   };
 }

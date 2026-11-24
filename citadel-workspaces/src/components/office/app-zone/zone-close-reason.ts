@@ -35,7 +35,7 @@ function fromInstalls(running: AppInstall, f: ZoneFacts): CloseReason | null {
 function fromView(running: AppInstall, next: ZoneView): CloseReason {
   switch (next.kind) {
     case 'ready': return next.install.id === running.id && next.install.manifest_sha256 !== running.manifest_sha256 ? 'version_update' : 'unmount';
-    case 'loading': case 'not-available': return 'unmount';
+    case 'loading': case 'failed': case 'not-available': return 'unmount';
     case 'install': case 'ask-admin': return 'uninstall';
     case 'disabled': case 'suspended': case 'needs-answer': return 'access_revoked';
     // A release that no longer runs here replaced the one that did.

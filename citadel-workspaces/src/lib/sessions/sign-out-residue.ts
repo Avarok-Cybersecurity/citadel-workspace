@@ -26,7 +26,6 @@
  *                                  UI. Silently emptying a visible list is a
  *                                  different bug from clearing invisible
  *                                  residue.
- *   citadel:diagnostics            a debugging opt-in the user set themselves.
  *
  * The split is the point: residue the user cannot see goes, state the user
  * chose stays.
@@ -36,6 +35,8 @@
 export const RESIDUE_KEYS: readonly string[] = [
   'citadel:file-transfers',
   'citadel:file-transfer-settings',
+  // The old diagnostics opt-in, which nothing reads since Dev mode replaced it (lib/dev-mode.ts).
+  'citadel:diagnostics',
 ];
 
 /** Key prefixes removed on sign-out, one key per peer. */

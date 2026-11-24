@@ -14,7 +14,6 @@ import { VFSContextMenu } from '../VFSContextMenu';
 import { VFSInspector } from '../VFSInspector';
 import { useFileManagerPlace, type FileManagerPlace } from '../useFileManagerPlace';
 import { spyActions, type SpiedActions } from './grid-fixture';
-import { docsOpenAction } from '../docs-file-open';
 import type { VFSItemActions } from '../vfs-item-actions';
 
 const file = (name: string): RevfsNode => ({ name, path: `/Reports/${name}`, type: 'file', fileState: RevfsFileState.Remote, createdAt: 0, updatedAt: 0 });
@@ -30,7 +29,7 @@ describe('Open in Citadel Docs', () => {
     const actions: SpiedActions = spyActions();
     expect(menuItems(file('plan.docx'), actions)).toContain('Open in Citadel Docs');
     fireEvent.click(screen.getByRole('menuitem', { name: 'Open in Citadel Docs' }));
-    expect(actions.openInDocs).toHaveBeenCalledWith(expect.objectContaining({ path: '/Reports/plan.docx' }));
+    expect(actions.openIn).toHaveBeenCalledWith(expect.objectContaining({ id: 'docs' }), expect.objectContaining({ path: '/Reports/plan.docx' }));
   });
 
   it('is not offered for a file Docs does not read', () => {
@@ -40,19 +39,20 @@ describe('Open in Citadel Docs', () => {
   it('is not offered, anywhere, for a file that is a local record rather than stored', () => {
     const actions: VFSItemActions = spyActions();
     const received: RevfsNode = { ...file('plan.docx'), fileState: RevfsFileState.Received };
-    expect(docsOpenAction(actions, received)).toBeNull();
+    expect(actions.openersOf(received)).toBeNull();
     expect(menuItems(received, actions)).not.toContain('Open in Citadel Docs');
     render(<VFSInspector node={received} actions={actions} peerName={null} storageName="Server Storage" from={null} modified="today" onClose={(): void => {}} />);
-    expect(screen.queryByTestId('vfs-inspector-open-in-docs')).toBeNull();
+    expect(screen.queryByTestId('vfs-inspector-open-in-app')).toBeNull();
   });
 
   it('is the inspector\'s first action, 44 px tall', () => {
     const actions: SpiedActions = spyActions();
     render(<VFSInspector node={file('notes.txt')} actions={actions} peerName={null} storageName="Server Storage" from={null} modified="today" onClose={(): void => {}} />);
-    const open: HTMLElement = screen.getByTestId('vfs-inspector-open-in-docs');
+    const open: HTMLElement = screen.getByTestId('vfs-inspector-open-in-app');
+    expect(open).toHaveTextContent('Open in Citadel Docs');
     expect(open.className).toContain('h-[44px]');
     fireEvent.click(open);
-    expect(actions.openInDocs).toHaveBeenCalledTimes(1);
+    expect(actions.openIn).toHaveBeenCalledTimes(1);
   });
 });
 

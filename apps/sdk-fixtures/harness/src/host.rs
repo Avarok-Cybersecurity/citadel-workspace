@@ -221,6 +221,11 @@ impl Instance {
         self.store.data()
     }
 
+    /// `storage.user` as an earlier run of the app left it, before this one starts.
+    pub fn seed_user_kv(&mut self, key: &str, value: Vec<u8>) {
+        self.store.data_mut().kv.insert(key.into(), value);
+    }
+
     pub fn memory_pages(&self) -> u64 {
         self.memory.size(&self.store)
     }

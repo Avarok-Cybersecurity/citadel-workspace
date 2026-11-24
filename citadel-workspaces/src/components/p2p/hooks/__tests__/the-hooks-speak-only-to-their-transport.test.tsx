@@ -24,7 +24,7 @@ import { fakeTransport, fakeMessage, type Recorded } from '@/lib/chat/transport/
 import type { ChatMessage, ChatTransport } from '@/lib/chat/transport/chat-transport';
 import type { StatedFeatures } from '@/lib/chat/transport/features';
 
-const STATED: StatedFeatures = { markdown: true, readReceipts: true, securityLevel: false, retention: false, optimistic: true, namesSenders: true };
+const STATED: StatedFeatures = { markdown: true, readReceipts: true, securityLevel: false, retention: false, optimistic: true, namesSenders: true, deliveryTicks: true };
 let transport: ChatTransport;
 let recorded: Recorded;
 // Stable, as the chat's own useCallback is: a fresh one per render re-runs the conversation's effect.

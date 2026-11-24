@@ -7,6 +7,7 @@
 //! oprf_seed_file = "/data/server/sign-in/oprf-seed"   # made by --init-sign-in-seed, mode 0600
 //! ksf = "owasp-floor"            # or ksf_mem_kib / ksf_iterations / ksf_lanes, all three
 //! security_key_rp_id = "work.example.com"  # the WebAuthn relying party; permanent for every key
+//! resume_max_lifetime_secs = 604800  # the longest a resume credential lives; 0 issues none
 //! admission = "none"             # or "turnstile", with the five keys below
 //! # turnstile_secret_env = "TURNSTILE_SECRET"   # the NAME of the variable holding the secret
 //! # turnstile_site_key = "0x4AAAAAAA..."        # the widget's PUBLIC site key
@@ -23,7 +24,7 @@
 //! inline. The server publishes it, with `turnstile_cdata`, on each `admission_required`
 //! refusal: a window reaching this server only through its agent has no HTTP discovery to ask.
 
-use super::pq::ksf_preset;
+use super::pq::{ksf_preset, ResumeMaxLifetime};
 use super::KsfParams;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -45,6 +46,7 @@ pub struct NativeSignInConfig {
     pub ksf_iterations: Option<u32>,
     pub ksf_lanes: Option<u32>,
     pub security_key_rp_id: Option<String>,
+    pub resume_max_lifetime_secs: Option<u64>,
     pub admission: Option<AdmissionMode>,
     pub turnstile_secret_env: Option<String>,
     pub turnstile_site_key: Option<String>,
@@ -70,6 +72,8 @@ pub struct SignInPlan {
     pub ksf: KsfParams,
     /// The domain the server's browser clients are served from (the SDK checks its shape).
     pub security_key_rp_id: String,
+    /// The longest a resume credential may live here (`pq::ResumeMaxLifetime`).
+    pub resume: ResumeMaxLifetime,
     pub turnstile: Option<TurnstilePlan>,
 }
 
@@ -183,6 +187,11 @@ pub fn plan(config: Option<&NativeSignInConfig>) -> Result<SignInPlan, String> {
         "[sign_in] security_key_rp_id is required: the WebAuthn relying party the server's \
          security keys are scoped to (the domain its browser clients are served from)",
     )?;
+    let resume = config.resume_max_lifetime_secs.ok_or(
+        "[sign_in] resume_max_lifetime_secs is required: the longest, in seconds, a device may \
+         sign in again without the account's factors after a full sign-in (0 to never allow it)",
+    )?;
+    let resume = ResumeMaxLifetime::from_secs(resume);
     let turnstile = match config.admission {
         None => return Err("[sign_in] admission is required: \"none\" or \"turnstile\"".into()),
         Some(AdmissionMode::Turnstile) => Some(turnstile(config)?),
@@ -209,6 +218,7 @@ pub fn plan(config: Option<&NativeSignInConfig>) -> Result<SignInPlan, String> {
         seed_file,
         ksf,
         security_key_rp_id,
+        resume,
         turnstile,
     })
 }

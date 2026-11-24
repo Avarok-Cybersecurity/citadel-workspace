@@ -9,6 +9,7 @@ import { INTERVAL } from '../timeout-constants';
 import type { ResponseType } from 'citadel-workspace-client-ts';
 import { SUPERVISOR_NOTIFICATION } from '@/types/agent-supervisor';
 import { AGENT_RECONNECT_NOTIFICATIONS } from '@/types/agent-reconnect';
+import { RESUME_EXPIRED_NOTIFICATION } from '@/lib/resume/expiry-notice';
 
 // Message types that should be broadcast to all instances.
 //
@@ -67,6 +68,9 @@ export const CID_ROUTED_NOTIFICATIONS: Set<ResponseType> = new Set<ResponseType>
   // tab's "Reconnecting…" and send the wrong account to sign-in. Not generated
   // variants yet; see types/agent-reconnect.ts.
   ...AGENT_RECONNECT_NOTIFICATIONS,
+  // cid = the session whose resume credential ran out. It answers no request, so without cid
+  // routing the leader tab would tell another tab's account to sign in again.
+  RESUME_EXPIRED_NOTIFICATION,
   // cid = the session whose links the supervisor is healing; unsolicited, so
   // without cid routing it would reach no tab (types/agent-supervisor.ts).
   SUPERVISOR_NOTIFICATION,
@@ -95,6 +99,11 @@ export const CID_ROUTED_NOTIFICATIONS: Set<ResponseType> = new Set<ResponseType>
   // it. Unsolicited (request_id null): without cid routing no tab would raise the changed-key
   // screen, and the peer would stay refused with nobody told why.
   'PeerIdentityKeyChangedNotification',
+  // cid = the member session whose app holds the citadel.session (citadel-session-abi §3). A
+  // message and a later state change are unsolicited (request_id null): without cid routing no
+  // tab would hear them. An open's answer is cid-routed too, and reaches the tab of that session.
+  'AppSessionState',
+  'AppSessionMessage',
 ]);
 
 /**

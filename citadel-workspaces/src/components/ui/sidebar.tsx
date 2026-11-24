@@ -16,6 +16,7 @@ import { cva } from "class-variance-authority"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
+import { globalShortcutMayFire } from "@/lib/global-shortcut"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import {
   Tooltip,
@@ -105,10 +106,8 @@ const SidebarProvider: React.ForwardRefExoticComponent<
     // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {
       const handleKeyDown: (event: KeyboardEvent) => void = (event: KeyboardEvent): void => {
-        if (
-          event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
-          (event.metaKey || event.ctrlKey)
-        ) {
+        // Never from a surface that takes text, nor a key already handled: see global-shortcut.ts.
+        if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey) && globalShortcutMayFire(event)) {
           event.preventDefault()
           toggleSidebar()
         }

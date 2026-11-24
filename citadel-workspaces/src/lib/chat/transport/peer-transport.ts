@@ -15,16 +15,18 @@ import type { OpeningPorts } from '@/components/p2p/chat-document/chat-document-
 import { createValueStore } from '@/lib/value-store';
 import type { GroupRestriction } from '@/components/chat/group-restriction';
 import { chatFeatures } from './features';
+import { NO_MESSAGES_YET } from './chat-counterpart';
 import { peerHistory } from './peer-history';
 import { peerStatus } from './peer-status';
-import { openReceivedFile, type ReceivedFileRead } from '@/lib/received-files/received-file';
+import { openReceivedFile, readReceivedFile, type ReceivedFileRead } from '@/lib/received-files/received-file';
+import { MAX_PULLED_FILE_BYTES } from '@/components/file-manager/pulled-file-reader';
 import { browserReceivedFileIO } from '@/lib/received-files/received-file-io';
 import type { ChatSelf, ChatTransport, DocumentInvitation, DocumentPort, FileOpening, FilePort, FileSendReceipt, SendPort, TextSend } from './chat-transport';
 
 /** Kinds that change what the document shows: an awareness record or a hello does not light the tab. */
 const ACTIVITY_KINDS: ReadonlySet<string> = new Set<string>(['update', 'diff', 'rename']);
 
-function peerSend(messenger: P2PMessengerManager, peer: ChatPeer): SendPort {
+export function peerSend(messenger: P2PMessengerManager, peer: ChatPeer): SendPort {
   return {
     text: async ({ content, messageType, reply_to, onRecorded }: TextSend): Promise<void> => {
       await messenger.sendMessage(peer.cid, content, { messageType, reply_to: reply_to ?? undefined, onOptimisticAppend: onRecorded });
@@ -64,6 +66,13 @@ function peerFiles(peer: ChatPeer): FilePort {
       return { kind: 'unreadable', reason: read.reason, details };
     },
     read: null,
+    readTransfer: async (transferId: string): Promise<Uint8Array> => {
+      const transfer: FileTransfer | undefined = fileTransferService.getTransfer(transferId);
+      if (!transfer) throw new Error('This device has no record of this file.');
+      const read: ReceivedFileRead = await readReceivedFile(transfer, browserReceivedFileIO, MAX_PULLED_FILE_BYTES);
+      if (read.kind === 'unreadable') throw new Error(read.reason);
+      return read.file.bytes;
+    },
   };
 }
 
@@ -103,9 +112,9 @@ export function createPeerTransport({ peer, self, opening }: PeerTransportParams
     kind: 'peer',
     conversationKey: peer.cid.toString(),
     self,
-    counterpart: { name: peer.name, username: peer.username, greeting: `Say hello to ${peer.name}. Messages are end-to-end encrypted.` },
+    counterpart: { name: peer.name, username: peer.username, greeting: `Say hello to ${peer.name}. Messages are end-to-end encrypted.`, emptyHeading: NO_MESSAGES_YET },
     features: chatFeatures(ports, {
-      markdown: true, readReceipts: true, securityLevel: true, retention: true, optimistic: true, namesSenders: false,
+      markdown: true, readReceipts: true, securityLevel: true, retention: true, optimistic: true, namesSenders: false, deliveryTicks: true,
     }),
     // A direct chat has no roles: whoever is in it may write.
     sendGate: createValueStore<GroupRestriction>(`chat-send-gate:${peer.cid.toString()}`, 'allowed'),

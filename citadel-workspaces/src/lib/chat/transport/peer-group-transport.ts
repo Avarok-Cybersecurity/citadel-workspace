@@ -12,6 +12,7 @@ import type { GroupRestriction } from '@/components/chat/group-restriction';
 import { peerDisplayName } from '@/lib/peer-display';
 import type { GroupMember } from '@/types/group';
 import { chatFeatures } from './features';
+import { NO_MESSAGES_YET } from './chat-counterpart';
 import { groupHistory, type GroupHistory } from './group-history';
 import { withSendNotes } from './peer-group-send-notes';
 import type { PeerGroupChatIO } from './peer-group-chat-io';
@@ -51,6 +52,7 @@ function peerGroupFiles(io: PeerGroupChatIO, groupName: string): FilePort {
     // Each member's copy is opened from their chat with the sender, where its offer arrived.
     open: async (): Promise<FileOpening> => ({ kind: 'unknown' }),
     read: null,
+    readTransfer: null,
   };
 }
 
@@ -69,8 +71,8 @@ export function createPeerGroupTransport({ groupId, groupName, self, sendGate, i
     kind: 'peer-group',
     conversationKey: `peer-group:${groupId}`,
     self,
-    counterpart: { name: groupName, username: null, greeting: `Start the conversation in ${groupName}. Messages are end-to-end encrypted.` },
-    features: chatFeatures(ports, { markdown: false, readReceipts: false, securityLevel: false, retention: false, optimistic: false, namesSenders: true }),
+    counterpart: { name: groupName, username: null, greeting: `Start the conversation in ${groupName}. Messages are end-to-end encrypted.`, emptyHeading: NO_MESSAGES_YET },
+    features: chatFeatures(ports, { markdown: false, readReceipts: false, securityLevel: false, retention: false, optimistic: false, namesSenders: true, deliveryTicks: true }),
     sendGate,
     history: withSendNotes(history.port, groupId, memberName),
     ...ports,

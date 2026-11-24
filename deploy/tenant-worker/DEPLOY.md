@@ -194,6 +194,9 @@ password factor, which must then be reset; security keys and the recovery phrase
 stored value that is not 32 bytes stops the object rather than being replaced. Legacy accounts
 are upgraded at their next login and cannot go back: rolling the Worker back below this release
 locks out every account that signed in since.
+`PQ_RESUME_MAX_LIFETIME_SECS` is the longest a device may sign in again without the account's
+factors after a full sign-in (a resume credential), in seconds; the node will not start without
+it, and `0` issues none. It ships in the same release as the agent that asks for one.
 `PQ_KSF_*` in `wrangler.toml` is the Argon2id cost clients stretch a password factor with; the
 node refuses anything below the SDK's floor. `PQ_SECURITY_KEY_RP_ID` is the WebAuthn relying party every tenant's
 security keys are scoped to; the node names it in every sign-in challenge and will not start without

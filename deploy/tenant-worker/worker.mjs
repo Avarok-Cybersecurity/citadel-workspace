@@ -30,6 +30,7 @@ import { nextAlarm, TenantTelemetry } from "./control/tenant-telemetry.mjs";
 import { TenantLinks } from "./control/tenant-links.mjs";
 import { SupportStore } from "./control/support-store.mjs";
 import { TenantIdentity } from "./control/tenant-identity.mjs";
+import { tenantPortal } from "./control/billing-portal.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
 /** Periods `usage()` reports: the current one and the one before, whose final totals the monitor may not have seen. */
@@ -138,6 +139,9 @@ export class WorkspaceServerV2 extends DurableObject {
     return { entitlements, periods: this.usageTable.recent(REPORTED_PERIODS), storage_bytes: this.ctx.storage.sql.databaseSize };
   }
 
+  /** This tenant's billing portal, by its provisioned tenant id (control/billing-portal.mjs); the node asks once the kernel admits a member. */
+  billingPortal() { return tenantPortal(ioFor(this.env), config(this.env), this.provisioning.tenantId()); }
+
   /** RPC for the monitor: the stored accounts counted by auth-record version (read-only; no HTTP route). */
   authVersions() {
     return authVersions(this.ctx.storage.sql, (this.wasm ??= newInstance()));
@@ -204,6 +208,7 @@ export class WorkspaceServerV2 extends DurableObject {
         console.error(`[tenant] node exited: ${outcome}`);
       },
       identity: this.identity.host(),
+      billingPortal: () => this.billingPortal(),
     });
     console.log(`[tenant] node started in ${Date.now() - t0} ms`);
   }

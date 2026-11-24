@@ -4,6 +4,8 @@
  * is open, and a write reaching it would be a test that changed something it did not mean to.
  */
 import type { ReactNode } from 'react';
+// Installs not known: every stored tab shows (installed-tabs.ts); these are about the stored list.
+import { INSTALLS_UNKNOWN } from '@/lib/node-tabs/installed-tabs';
 import { NodeTabs } from '../../NodeTabs';
 import { useNodeTabs, type NodeTabsModel, type NodeTabsWriter } from '../../use-node-tabs';
 
@@ -20,7 +22,7 @@ export function ChatTabs({ nodeId, chatChannelId, contentView }: { nodeId: strin
     nodeId,
     chatEnabled: true,
     nodeMetadata: undefined,
-    workspaceMetadata: NO_DEFAULT_APP_TABS,
+    workspaceMetadata: NO_DEFAULT_APP_TABS, here: INSTALLS_UNKNOWN,
     writer: REFUSING_WRITER,
   });
   return (

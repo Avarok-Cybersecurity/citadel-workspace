@@ -102,6 +102,10 @@ mod kernel_call_tests;
 #[cfg(test)]
 mod kernel_effective_tests;
 #[cfg(test)]
+mod kernel_first_party_artifact_tests;
+#[cfg(test)]
+mod kernel_first_party_listed_tests;
+#[cfg(test)]
 mod kernel_header_tests;
 #[cfg(test)]
 mod kernel_host_net_grant_tests;
@@ -127,6 +131,8 @@ mod kernel_purge_tests;
 mod kernel_release_change_tests;
 #[cfg(test)]
 mod kernel_scope_tests;
+#[cfg(test)]
+mod kernel_session_grant_tests;
 #[cfg(test)]
 mod kernel_session_tests;
 #[cfg(test)]

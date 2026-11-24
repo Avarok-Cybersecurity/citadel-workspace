@@ -10,6 +10,7 @@ use crate::kernel::apps::records::*;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::apps_manifest::AppManifest;
 use citadel_workspace_types::apps_protocol::ARTIFACT_CHUNK_BYTES;
 use std::collections::BTreeSet;
 
@@ -125,7 +126,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     /// Delete those of `manifests` and `artifacts` that no install (running, previous or
-    /// pending) and no registry entry names.
+    /// pending), no registry entry and (for an artifact) no recorded first-party release names.
     pub(crate) async fn sweep_apps_releases(
         &self,
         manifests: &[String],
@@ -156,6 +157,16 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         }
         for entry in self.registry_entries().await? {
             name(&entry.release);
+        }
+        // A first-party release the workspace lists keeps the module provisioning stored for it,
+        // so an install after an uninstall finds it as the first one did.
+        for release in self.first_party_releases().await?.values() {
+            let manifest = AppManifest::from_bytes(release.manifest.as_bytes()).map_err(|why| {
+                NetworkError::msg(format!(
+                    "A recorded first-party manifest does not read: {why}"
+                ))
+            })?;
+            named_artifacts.insert(manifest.artifact.sha256);
         }
         for sha in manifests.iter().filter(|s| !named_manifests.contains(*s)) {
             self.delete_app_release(sha).await?;

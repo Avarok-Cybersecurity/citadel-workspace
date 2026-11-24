@@ -162,3 +162,19 @@ fn what_is_not_a_calendar_or_is_too_large_is_refused() {
         Err(ImportError::TooLarge)
     );
 }
+
+/// The Calendar's manifest (apps/first-party/calendar/manifest.json) declares the files it opens;
+/// the host hands it none larger than its `max_bytes`, which must be what the core reads.
+#[test]
+fn the_manifest_opens_ics_files_as_large_as_the_core_reads() {
+    let manifest = include_str!("../../manifest.json");
+    let opens = &manifest[manifest
+        .find("\"opens\": {")
+        .expect("the manifest declares opens")..];
+    let opens = &opens[..opens.find('}').expect("opens is closed")];
+    assert!(opens.contains("\"ics\""), "{opens}");
+    assert!(
+        opens.contains(&std::format!("\"max_bytes\": {ICS_MAX_BYTES}\n")),
+        "{opens}"
+    );
+}

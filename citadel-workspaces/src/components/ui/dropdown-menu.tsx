@@ -57,14 +57,38 @@ const DropdownMenuSubContent: React.ForwardRefExoticComponent<React.ComponentPro
 DropdownMenuSubContent.displayName =
   DropdownMenuPrimitive.SubContent.displayName
 
+/**
+ * Whether a press outside the menu landed on the menu's own trigger.
+ *
+ * The trigger answers its own press: it toggles. The menu stays mounted while its closing animation
+ * runs, and from there it also read that press as "outside" and dismissed -- so a press on the trigger
+ * before the animation ended opened the menu and shut it in the same event, and the click did nothing.
+ */
+function pressedOwnTrigger(content: HTMLElement | null, pressed: EventTarget | null): boolean {
+  const triggerId: string | null = content?.getAttribute('aria-labelledby') ?? null;
+  if (content === null || triggerId === null || !(pressed instanceof Node)) return false;
+  return content.ownerDocument.getElementById(triggerId)?.contains(pressed) ?? false;
+}
+
 const DropdownMenuContent: React.ForwardRefExoticComponent<React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & React.RefAttributes<React.ElementRef<typeof DropdownMenuPrimitive.Content>>> = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
+>(({ className, sideOffset = 4, onPointerDownOutside, ...props }, ref) => {
+  const content: React.MutableRefObject<HTMLDivElement | null> = React.useRef<HTMLDivElement | null>(null);
+  const setContent = (node: HTMLDivElement | null): void => {
+    content.current = node;
+    if (typeof ref === 'function') ref(node);
+    else if (ref) ref.current = node;
+  };
+  return (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
-      ref={ref}
+      ref={setContent}
       sideOffset={sideOffset}
+      onPointerDownOutside={(event): void => {
+        onPointerDownOutside?.(event);
+        if (pressedOwnTrigger(content.current, event.detail.originalEvent.target)) event.preventDefault();
+      }}
       className={cn(
         "z-[9999] min-w-[8rem] overflow-hidden rounded-md border border-border bg-background p-1 text-foreground shadow-xl shadow-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         className
@@ -72,7 +96,8 @@ const DropdownMenuContent: React.ForwardRefExoticComponent<React.ComponentPropsW
       {...props}
     />
   </DropdownMenuPrimitive.Portal>
-))
+  );
+})
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName
 
 const DropdownMenuItem: React.ForwardRefExoticComponent<React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {

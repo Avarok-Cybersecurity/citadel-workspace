@@ -1,0 +1,9 @@
+{
+  "about": "Where joined.json comes from. It is a byte-for-byte copy, never edited here: check-app-page.mjs refuses to run when its sha256 is not this one. To take a newer recording, copy the file from the commit named here, update `commit`, `file_commit` and `sha256` together, and run the check.",
+  "repository": "https://github.com/Avarok-Cybersecurity/synchronized.work",
+  "path": "fixtures/app-session/joined.json",
+  "commit": "2856279cb45c2709bd6787384aa67d85a0cbb0c7",
+  "file_commit": "77c0765",
+  "generated_by": "crates/sw-node/tests/app_session_fixture.rs",
+  "sha256": "0b4de300d32e48d3d4becdf1929783ce70180c55d05b635258042bbcb2fab386"
+}

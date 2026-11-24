@@ -66,6 +66,7 @@ export function fakeTransport(options: FakeOptions): { transport: ChatTransport;
     cancel: async (id: string): Promise<void> => call(`files.cancel:${id}`),
     open: async (id: string): Promise<FileOpening> => { call(`files.open:${id}`); return { kind: 'unknown' }; },
     read: null,
+    readTransfer: null,
   };
   const documents: DocumentPort | null = !options.ports.documents ? null : {
     sharedWith: `Shared live with ${options.counterpart}`,
@@ -89,7 +90,7 @@ export function fakeTransport(options: FakeOptions): { transport: ChatTransport;
     kind: options.kind,
     conversationKey: `fake:${options.kind}`,
     self: options.self,
-    counterpart: { name: options.counterpart, username: null, greeting: `Be the first to write in ${options.counterpart}.` },
+    counterpart: { name: options.counterpart, username: null, greeting: `Be the first to write in ${options.counterpart}.`, emptyHeading: 'No messages yet' },
     features: chatFeatures(ports, options.stated),
     sendGate: createValueStore<GroupRestriction>('fake-send-gate', options.sendGate),
     history: {

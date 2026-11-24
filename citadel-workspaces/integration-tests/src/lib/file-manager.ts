@@ -57,14 +57,24 @@ export async function openPeerStorage(page: Page, username: string): Promise<boo
 
 const NEW_MENU_ENTRIES: Readonly<Record<'folder' | 'upload', string>> = { folder: 'vfs-new-folder', upload: 'vfs-new-upload' };
 
-/** Pick an entry from the New menu: New folder or Upload files. */
+/** How long a press in the New menu may take. A click has no deadline of its own here, so one whose target left the page waited out the whole test. */
+const NEW_MENU_CLICK_MS: number = 10_000;
+
+/**
+ * Pick an entry from the New menu: New folder or Upload files. False when New or the entry is not
+ * offered; an entry that is offered and cannot be pressed is an error, said as one.
+ */
 export async function chooseFromNewMenu(page: Page, entry: 'folder' | 'upload'): Promise<boolean> {
   const trigger: Locator = page.getByTestId('vfs-new');
   if (!(await isVisibleWithin(trigger, 5_000))) return false;
-  await trigger.click();
-  const item: Locator = page.getByTestId(NEW_MENU_ENTRIES[entry]);
+  await trigger.click({ timeout: NEW_MENU_CLICK_MS });
+  // The entry of the OPEN menu. A menu stays on the page while it closes, and its entries are
+  // visible until they detach: found there, the entry was pressed on a menu that was going away.
+  const item: Locator = page.locator('[role="menu"][data-state="open"]').getByTestId(NEW_MENU_ENTRIES[entry]);
   if (!(await isVisibleWithin(item, 3_000))) return false;
-  await item.click();
+  await item.click({ timeout: NEW_MENU_CLICK_MS }).catch((error: unknown): never => {
+    throw new Error(`New → ${entry} was offered and could not be pressed within ${NEW_MENU_CLICK_MS}ms: ${String(error)}`);
+  });
   return true;
 }
 

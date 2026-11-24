@@ -11,13 +11,20 @@
 import type { FailureReason, ResponseType, ServerConnectionLost, ServerReconnected, ServerReconnectFailed } from 'citadel-workspace-client-ts';
 import { admissionReasonOf, type AdmissionReason } from '@/lib/admission/refusal';
 
-/** Why the agent stopped, beside the admission codes: the server refused the sign-in the session kept, or never answered. */
-export type LinkReason = Extract<FailureReason, 'sign_in_refused' | 'server_unreachable'>;
+/**
+ * Why the agent stopped, beside the admission codes: the server refused the sign-in the
+ * session kept, never answered, would not take the session's resume credential (its time ran
+ * out, or the account's sign-in changed since), or speaks a protocol the agent is too old for.
+ */
+export type LinkReason = Extract<FailureReason,
+  'sign_in_refused' | 'server_unreachable' | 'resume_credential_expired' | 'resume_credential_revoked' | 'protocol_version_unsupported'>;
 
 /** The reasons of a give-up the UI acts on. */
 export type ReconnectReason = AdmissionReason | LinkReason;
 
-const LINK_REASONS: ReadonlySet<string> = new Set<string>(['sign_in_refused', 'server_unreachable'] satisfies LinkReason[]);
+const LINK_REASONS: ReadonlySet<string> = new Set<string>([
+  'sign_in_refused', 'server_unreachable', 'resume_credential_expired', 'resume_credential_revoked', 'protocol_version_unsupported',
+] satisfies LinkReason[]);
 
 function linkReasonOf(body: Record<string, unknown>): LinkReason | null {
   const code: unknown = body.reason_code;

@@ -4,6 +4,8 @@ import { PeerDiscoveryModal } from './PeerDiscoveryModal';
 import { useNavigate } from 'react-router-dom';
 import type { NavigateFunction } from 'react-router';
 import { P2PMessengerManager } from '@/lib/p2p';
+import { connectionManager } from '@/lib/connection';
+import { isSelfConversation } from '@/lib/scratchpad/self-conversation';
 import { p2pRegistrationService, type Peer } from '@/lib/p2p-registration-service';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MemberAvatar } from '@/components/shared/MemberAvatar';
@@ -30,7 +32,9 @@ export function P2PPeerList({ onSelectPeer, selectedPeerCid }: P2PPeerListProps)
   const messenger: P2PMessengerManager = P2PMessengerManager.getInstance();
 
   const loadPeers: () => void = useCallback((): void => {
-    const conversations: P2PConversation[] = messenger.getAllConversations();
+    // The scratchpad is your own row in the members list, not a contact here (lib/scratchpad).
+    const own: bigint | undefined = connectionManager.getConnectionInfo()?.cid;
+    const conversations: P2PConversation[] = messenger.getAllConversations().filter((c: P2PConversation): boolean => !isSelfConversation(own, c.peerCid));
     const { allPeers } = p2pRegistrationService.getPeers();
     const peerList: ConversationPeerRow[] = conversations.map(conv => {
       const lastMessage: P2PMessage = conv.messages[conv.messages.length - 1];

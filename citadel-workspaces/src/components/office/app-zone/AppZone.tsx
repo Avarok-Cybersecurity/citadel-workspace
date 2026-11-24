@@ -11,7 +11,7 @@ import { useCallback, useContext, useEffect, useId } from 'react';
 import type { AppInstall } from 'citadel-workspace-client-ts';
 import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
 import { AppZoneContext, type AppZoneEnvironment, type AppZoneHandle, type AppZoneRuntime, type ZoneHost } from './app-zone-environment';
-import { AppZoneRequired, type PlaceholderView } from './AppZoneRequired';
+import { AppZoneRequired, placeholderFor, type PlaceholderView } from './AppZoneRequired';
 import { readZoneProps, type ZoneProps, type ZoneView } from './zone-state';
 import { usePlacedApp, useRuntimeMount, type PlacedApp } from './use-placed-app';
 
@@ -50,12 +50,12 @@ function RuntimeHost({ runtime, view, reasonFor, props, nodeId, me }: RuntimeHos
 }
 
 function PlacedZone({ props, env }: { props: ZoneProps; env: AppZoneEnvironment }): JSX.Element {
-  const { facts, view, waiting, reasonFor, actions }: PlacedApp = usePlacedApp(props, env, 'zone');
+  const { facts, view, waiting, reasonFor, actions }: PlacedApp = usePlacedApp(props, env, 'zone', null);
   // `ready` is only decided once `me` is known (zone-state.ts).
   if (view.kind === 'ready' && !waiting && env.runtime !== null && env.me !== null) {
     return <RuntimeHost runtime={env.runtime} view={view} reasonFor={reasonFor} props={props} nodeId={env.nodeId} me={env.me} />;
   }
-  const shown: PlaceholderView = view.kind !== 'ready' ? view : { kind: waiting ? 'needs-answer' : 'ready-unmounted', name: view.app.manifest.name };
+  const shown: PlaceholderView = placeholderFor(view, waiting);
   return (
     <AppZoneRequired
       placement="zone"

@@ -3,6 +3,7 @@ import type { PaneMessage } from '@/lib/chat/transport/chat-transport';
 import { formatTime } from '@/components/chat/shared';
 import { useContext, useId, useState } from 'react';
 import { AwaitingAcceptContext, sendsWhenAcceptedCopy } from './awaiting-accept';
+import { DeliveryTicksContext, reportsRecipient } from './delivery-ticks';
 import { StatusPanel, StatusTick } from '@/components/shared/StatusDetails';
 import { MessageStatusDetails, messageStatusLabel } from './MessageStatusDetails';
 
@@ -33,7 +34,8 @@ function getMessageStatusIcon(message: PaneMessage): JSX.Element | null {
 
 export function BubbleFooter({ message, isOwn, onRetry }: BubbleFooterProps): JSX.Element {
   const isFailed: boolean = message.status === 'failed';
-  const statusIcon: JSX.Element | null = getMessageStatusIcon(message);
+  const ticks: boolean = useContext(DeliveryTicksContext);
+  const statusIcon: JSX.Element | null = !ticks && reportsRecipient(message.status) ? null : getMessageStatusIcon(message);
   const [detailsOpen, setDetailsOpen] = useState<boolean>(false);
   const panelId: string = useId();
   const awaitingAcceptFrom: string | null = useContext(AwaitingAcceptContext);

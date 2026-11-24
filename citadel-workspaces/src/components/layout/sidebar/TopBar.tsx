@@ -20,13 +20,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import NotificationCenter from "@/components/notification/NotificationCenter";
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { SettingsModal, type SettingsTab } from "@/components/SettingsModal";
-import { takeLinkTarget } from "@/lib/onboarding/link-target";
+import { useSettingsRequests } from "@/hooks/use-settings-requests";
 import { openAppsModal } from "@/lib/citadel-apps/apps-modal-store";
 import { getUserInitials } from "@/lib/workspace-metadata-service";
 import { LeaderIndicator } from "@/components/ui/leader-indicator";
-import { isDiagnosticsUiEnabled } from "@/lib/debug-config";
+import { DevModeOnly } from "@/components/DevModeOnly";
 import { useSelfName, type SelfName } from "@/hooks/use-self-name";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ExitConfirmModal } from "@/components/ExitConfirmModal";
 import { ProfileModal } from "@/components/settings/ProfileModal";
 import { DisconnectLoadingModal } from "@/components/LoadingModal";
@@ -50,11 +50,9 @@ export const TopBar = ({ currentWorkspace }: TopBarProps): JSX.Element => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  // A native notice's "settings" link (lib/onboarding/link-target.ts) opens them at Privacy.
+  // A native notice's "settings" link opens them at Privacy; requestSettings(tab) at that tab.
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
-  useEffect(() => {
-    if (takeLinkTarget(['settings'])) { setSettingsTab('privacy'); setShowSettingsModal(true); }
-  }, []);
+  useSettingsRequests((tab: SettingsTab): void => { setSettingsTab(tab); setShowSettingsModal(true); });
   const {
     showDisconnectModal, disconnectStatus, disconnectError, handleRetrySignOut,
     handleExit, handleSignOut, handleDisconnectComplete,
@@ -122,8 +120,8 @@ export const TopBar = ({ currentWorkspace }: TopBarProps): JSX.Element => {
       {/* shrink-0: these controls are the way out of the app and must never be
           what gives way when space runs short. */}
       <div className="flex items-center space-x-2 flex-shrink-0">
-        {/* Internal multi-tab state — hidden from end users; see isDiagnosticsUiEnabled. */}
-        {isDiagnosticsUiEnabled() && <LeaderIndicator />}
+        {/* Internal multi-tab state: shown only with Settings -> Advanced -> Dev mode on. */}
+        <DevModeOnly><LeaderIndicator /></DevModeOnly>
         <NotificationCenter />
 
 

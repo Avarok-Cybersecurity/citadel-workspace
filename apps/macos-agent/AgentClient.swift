@@ -32,6 +32,7 @@ final class AgentClient {
         task.maximumMessageSize = 4 * 1024 * 1024
         var accounts: [UInt64: (username: String, fullName: String, host: String?)]?
         var connected: Set<UInt64>?
+        var dots: [UInt64: String] = [:]
         var finished = false
         func finish(_ result: [Account]?) {
             guard !finished else { return }
@@ -49,12 +50,14 @@ final class AgentClient {
                     AgentClient.send(task, "GetAccountInformation", ["cid": NSNull()])
                     AgentClient.send(task, "GetSessions", [:])
                 case .accounts(let a): accounts = a
-                case .sessions(let s): connected = s
+                case .sessions(let s, let d): connected = s; dots = d
                 case .other: break
                 }
                 if let accounts, let connected {
                     finish(accounts.map { cid, a in
-                        Account(cid: cid, username: a.username, fullName: a.fullName, workspaceHost: a.host, connected: connected.contains(cid))
+                        let on = connected.contains(cid)
+                        return Account(cid: cid, username: a.username, fullName: a.fullName, workspaceHost: a.host, connected: on,
+                                       dot: SessionDot.of(named: dots[cid], connected: on))
                     })
                 } else {
                     receive()
@@ -78,7 +81,8 @@ final class AgentClient {
     private enum Reply {
         case accepted
         case accounts([UInt64: (username: String, fullName: String, host: String?)])
-        case sessions(Set<UInt64>)
+        /// The signed-in CIDs, and the dot the agent names for each account it marks.
+        case sessions(Set<UInt64>, [UInt64: String])
         case other
     }
 
@@ -116,7 +120,7 @@ final class AgentClient {
             return .accounts(out)
         case "GetSessionsResponse":
             let list = body["sessions"] as? [[String: Any]] ?? []
-            return .sessions(Set(list.compactMap { ($0["cid"] as? NSNumber)?.uint64Value }))
+            return .sessions(Set(list.compactMap { ($0["cid"] as? NSNumber)?.uint64Value }), SessionDot.named(inSessionsReply: body))
         default:
             return .other
         }

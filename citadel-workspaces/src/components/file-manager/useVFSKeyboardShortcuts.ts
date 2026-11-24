@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from "react";
 import type { RevfsNode } from "@/types/revfs-types";
 import { findNodeByPath } from "@/lib/revfs/tree-operations";
+import { globalShortcutMayFire } from "@/lib/global-shortcut";
 import { VFS_SHORTCUTS, matchesShortcut, isForeignKeyTarget, type VfsShortcut } from "./vfs-shortcuts";
 import { canDelete, canDownload, canModify } from './item-permissions';
 import type { VFSItemActions } from './vfs-item-actions';
@@ -34,7 +35,7 @@ export function useVFSKeyboardShortcuts({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
-      if (renamingPath || isForeignKeyTarget(e.target)) return;
+      if (renamingPath || !globalShortcutMayFire(e) || isForeignKeyTarget(e.target)) return;
 
       const selected: RevfsNode[] = getSelectedNodes();
       const modifiable: RevfsNode[] = selected.filter(canModify);

@@ -1,0 +1,34 @@
+# synchronized.work (work.synchronized.app), the Citadel App of synchronized.work (its design
+# §7). Built for wasm32-unknown-unknown, deterministically, by scripts/build-first-party-apps.mjs
+# into wasm/ (committed; `--check` rebuilds and compares). The app is `sw-app` in the
+# synchronized.work repository, at one pinned commit; `app` is the module that exports it.
+[workspace]
+resolver = "2"
+members = ["app"]
+exclude = ["sdk"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[workspace.dependencies]
+# Through sdk/'s symlinks, for the reason apps/sdk-fixtures/Cargo.toml gives: a path inside the
+# workspace root keeps the bytes independent of where the repository is checked out.
+citadel-app-sdk = { path = "sdk/citadel-app-sdk" }
+sw-app = { git = "https://github.com/Avarok-Cybersecurity/synchronized.work", rev = "ddb647fca00d09f05c1ab6c06d3bb641e8417383" }
+
+# sw-app names the SDK by git revision; this makes it the sdk/ copy, so exactly one SDK (the one
+# the host and the kernel are built with) is linked into the module.
+[patch."https://github.com/Avarok-Cybersecurity/citadel-internal-service"]
+citadel-app-sdk = { path = "sdk/citadel-app-sdk" }
+citadel-app-sdk-types = { path = "sdk/citadel-app-sdk-types" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true

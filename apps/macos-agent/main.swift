@@ -30,7 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let notices = NoticeClient(port: settings.bindPort, log: log)
             let poster = NoticePoster(log: log)
             poster.onOpen = { account, server, open in
-                WorkspaceLink.open(username: account, server: server, target: open, origin: settings.workspaceURL, log: log)
+                // A notice that names nothing to open (the agent's "sign in again") lands on the account's sign-in.
+                WorkspaceLink.open(username: account, server: server, target: open.isEmpty ? nil : open, origin: settings.workspaceURL, log: log)
             }
             notices.onNotice = { [weak poster] notice in poster?.post(notice) }
             let updater = AppUpdater(bundle: Bundle.main.bundleURL,

@@ -28,6 +28,13 @@
   "surfaces": [
     "node_tab"
   ],
+  "opens": {
+    "extensions": [
+      "ics"
+    ],
+    "surface": "node_tab",
+    "max_bytes": 1048576
+  },
   "scopes": [
     "workspace"
   ],
@@ -119,8 +126,8 @@
     }
   },
   "artifact": {
-    "sha256": "f8c2094943535467f3058facf4f96966435973c55b252131b9d8014d5eaf2c89",
-    "bytes": 1034395,
+    "sha256": "aad3805a90b64f06ffc4de69584cc34baccd9422cc1f6cda8ecae19c719ee356",
+    "bytes": 1034583,
     "locations": [
       {
         "kind": "https",

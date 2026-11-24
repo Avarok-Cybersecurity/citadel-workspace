@@ -19,6 +19,7 @@ import { encodeAppEvent } from './app-event';
 import type { CborMap } from './cbor';
 import { effectiveGrant, type Capability } from './capabilities';
 import { canvasPort, type CanvasSurface } from './canvas-port';
+import type { CanvasRegion } from './canvas-limits';
 import { Dispatcher, isPortAnswer, type DispatchClock, type PortInvoker } from './dispatch';
 import { IhttpRouter, type ClosingAction, type RouterAction } from './ihttp-router';
 import { TopicGate } from './topic-sender';
@@ -143,7 +144,8 @@ export function startWorkerHost(channel: WorkerChannel, clock: DispatchClock, su
     const table: ReplyTable = new ReplyTable(msg.policy.maxLiveReplies, msg.policy.replyTtlMs, clock.now);
     replies = table;
     router = new IhttpRouter(msg.appId, msg.policy.ihttp, msg.limits.p2p);
-    const local: HostPorts = { canvas: canvasPort(() => surface), ...(msg.hasLogPort ? { log: logToPage } : {}) };
+    const painted = (regions: readonly CanvasRegion[]): void => channel.post({ kind: 'regions', regions });
+    const local: HostPorts = { canvas: canvasPort(() => surface, painted), ...(msg.hasLogPort ? { log: logToPage } : {}) };
     const invoker: PortInvoker = splitInvoker(local, LOCAL_PORTS, remote);
     const topics: TopicGate | null = msg.limits.topics === null ? null : new TopicGate(msg.limits.topics);
     const dispatcher: Dispatcher = new Dispatcher({ granted, policy: msg.policy, clock, invoker, router, pageUrl: msg.pageUrl, routerActions, topics });

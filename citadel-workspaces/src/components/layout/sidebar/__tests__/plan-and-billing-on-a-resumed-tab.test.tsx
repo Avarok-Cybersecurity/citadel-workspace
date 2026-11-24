@@ -83,7 +83,8 @@ describe('Plan & billing', () => {
   it('is not offered for a self-hosted server', async () => {
     selectedServer = 'my.server.example:12349';
     renderAs();
-    await screen.findByText('Admin Privileges');
+    // The section has drawn (its first row), so an absent Plan & billing is a decision, not a wait.
+    await screen.findByRole('button', { name: /role permissions/i });
     await new Promise((r: (v: void) => void): void => { setTimeout(r, 50); });
     expect(screen.queryByRole('button', { name: /plan & billing/i })).toBeNull();
   });

@@ -30,7 +30,7 @@ describe('a follower\'s cached answer about the agent', () => {
     answers = [true, false];
     registerCapabilityRoute({
       isLeader: (): boolean => role.isLeader,
-      askLeader: async (): Promise<LeaderAnswer> => ({ supervisesP2p: answers.shift() ?? false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, noticesHeard: false }),
+      askLeader: async (): Promise<LeaderAnswer> => ({ supervisesP2p: answers.shift() ?? false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, noticesHeard: false }),
     });
   });
 

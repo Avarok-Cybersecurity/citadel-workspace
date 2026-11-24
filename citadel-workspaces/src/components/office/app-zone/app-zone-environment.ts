@@ -4,10 +4,11 @@
  * the page's zones share their requests and the page can refuse a zone name used twice.
  */
 import { createContext } from 'react';
-import type { AppInstall, AppManifest } from 'citadel-workspace-client-ts';
+import type { AppInstall, AppManifest, PeerConsent } from 'citadel-workspace-client-ts';
+import type { ConsentChoice } from '@/lib/citadel-apps/member-consent-types';
 import type { AppLink } from '@/lib/citadel-apps/app-link';
 import type { GlueInstance } from '@/lib/citadel-apps/host/glue-instance';
-import type { NoticeSink, RosterRead } from '@/lib/citadel-apps/runtime/first-party-ports';
+import type { RosterRead } from '@/lib/citadel-apps/runtime/first-party-ports';
 import type { TreeRead } from '@/lib/citadel-apps/runtime/nodes-port';
 import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
 import type { ListedApp } from '@/lib/citadel-apps/listing-model';
@@ -36,11 +37,18 @@ export interface AppTabMount {
   me: string;
 }
 
-/** What a first-party glue app's own ports read in the page (nodes-port.ts, first-party-ports.ts). */
+/** A node's own page the runtime is asked to run (node-page-abi.md §3): it fills the pane, resized in both dimensions. */
+export interface AppPageMount {
+  install: AppInstall;
+  manifest: AppManifest;
+  nodeId: string;
+  me: string;
+}
+
+/** What a first-party glue app's own ports read in the page (nodes-port.ts, first-party-ports.ts); its notifications land where every app's do (host-ports.ts). */
 export interface FirstPartyWorld {
   readonly tree: TreeRead;
   readonly roster: RosterRead;
-  readonly notices: NoticeSink;
 }
 
 /** A glue app's tab to bind ports for: no canvas, and the page's reads for its first-party ports. */
@@ -69,8 +77,8 @@ export interface ZoneHost {
 }
 
 /**
- * The runtime's seam (design 2.3, 2.4): mount the app for `zone` (`mount`) or for an app tab
- * (`mountPane`) into `host` and return its handle.
+ * The runtime's seam (design 2.3, 2.4): mount the app for `zone` (`mount`), for an app tab
+ * (`mountPane`) or as a node's page (`mountPage`) into `host` and return its handle.
  * The app paints only its own canvas: never page DOM, never HTML from the app; its toolbar is
  * the host's buttons with the app's plain-text labels. A page passes lazy-runtime.ts; null
  * (tests) shows the placeholder and executes nothing.
@@ -78,6 +86,7 @@ export interface ZoneHost {
 export interface AppZoneRuntime {
   mount: (host: ZoneHost, zone: AppZoneMount) => AppZoneHandle;
   mountPane: (host: ZoneHost, tab: AppTabMount) => AppZoneHandle;
+  mountPage: (host: ZoneHost, page: AppPageMount) => AppZoneHandle;
   /** Binds a first-party glue app's ports for a tab (runtime/glue-steps.ts); nothing is drawn. */
   bindGlue: (tab: GlueTabMount) => GlueHandle;
 }
@@ -87,6 +96,8 @@ export interface ZoneDataPort {
   listing: (appId: string) => Promise<AppsResult<ListedApp>>;
   installs: () => Promise<AppsResult<AppInstall[]>>;
   setDisabledForMe: (installId: string, disabled: boolean) => Promise<AppsResult<boolean>>;
+  /** This person's answer to an install's P2P and topic questions (`SetPeerConsentForMe`). */
+  setPeerConsentForMe: (installId: string, answer: ConsentChoice) => Promise<AppsResult<PeerConsent>>;
 }
 
 export interface AppZoneEnvironment {
@@ -97,6 +108,8 @@ export interface AppZoneEnvironment {
   /** Whether this person may install apps for themselves (`AppInstall`). */
   mayInstall: Tri;
   data: ZoneDataPort;
+  /** Ask for the page's apps data again (a placeholder's "Try again"), as an install change does. */
+  reload: () => void;
   runtime: AppZoneRuntime | null;
   /** Open the marketplace on an app, as its link would. */
   openLink: (link: AppLink) => void;

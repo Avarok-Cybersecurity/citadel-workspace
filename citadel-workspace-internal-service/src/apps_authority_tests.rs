@@ -40,6 +40,8 @@ fn an_answer_is_read_as_the_grant_and_a_refusal_as_none() {
             app_id: "com.acme.kanban".into(),
             hosts: vec!["api.acme.com".into()],
             private: true,
+            servers: Vec::new(),
+            session: None,
         }),
     });
     assert_eq!(
@@ -116,3 +118,7 @@ fn other_traffic_is_unrelated() {
         AuthoritySignal::Unrelated
     );
 }
+
+#[cfg(unix)]
+#[path = "apps_authority_session_tests.rs"]
+mod session;

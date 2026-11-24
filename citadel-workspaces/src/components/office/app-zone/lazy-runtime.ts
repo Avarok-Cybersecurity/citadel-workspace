@@ -5,7 +5,7 @@
  * mounts nothing.
  */
 import type { CloseReason } from '@/lib/citadel-apps/sdk/generated/CloseReason';
-import type { AppTabMount, AppZoneHandle, AppZoneMount, AppZoneRuntime, GlueBound, GlueHandle, GlueTabMount, ZoneHost } from './app-zone-environment';
+import type { AppPageMount, AppTabMount, AppZoneHandle, AppZoneMount, AppZoneRuntime, GlueBound, GlueHandle, GlueTabMount, ZoneHost } from './app-zone-environment';
 
 type Loader = () => Promise<AppZoneRuntime>;
 
@@ -56,6 +56,7 @@ export function lazyRuntime(load: Loader): AppZoneRuntime {
     bindGlue: bindLater,
     mount: (host: ZoneHost, zone: AppZoneMount): AppZoneHandle => later(host, (runtime: AppZoneRuntime): AppZoneHandle => runtime.mount(host, zone)),
     mountPane: (host: ZoneHost, tab: AppTabMount): AppZoneHandle => later(host, (runtime: AppZoneRuntime): AppZoneHandle => runtime.mountPane(host, tab)),
+    mountPage: (host: ZoneHost, page: AppPageMount): AppZoneHandle => later(host, (runtime: AppZoneRuntime): AppZoneHandle => runtime.mountPage(host, page)),
   };
 }
 

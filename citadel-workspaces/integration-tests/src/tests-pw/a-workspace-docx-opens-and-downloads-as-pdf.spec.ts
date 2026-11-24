@@ -35,7 +35,7 @@ const DOCX_MIME: string = 'application/vnd.openxmlformats-officedocument.wordpro
 async function offersDocs(page: Page, name: string): Promise<boolean> {
   const menu: Locator | null = await openItemMenu(page, name);
   if (menu === null) return false;
-  const offered: boolean = await menu.getByTestId('vfs-open-in-docs').isVisible();
+  const offered: boolean = await menu.getByTestId('vfs-open-in-app').isVisible();
   await page.keyboard.press('Escape');
   return offered;
 }
@@ -89,7 +89,7 @@ test.describe.serial('A workspace .docx in Citadel Docs', () => {
   test('opens read-only with its ten pages counted', async () => {
     const menu: Locator | null = await openItemMenu(page, name);
     expect(menu, `the menu of "${name}" should open`).not.toBeNull();
-    const open: Locator = menu!.getByTestId('vfs-open-in-docs');
+    const open: Locator = menu!.getByTestId('vfs-open-in-app');
     await expect(open).toHaveText('Open in Citadel Docs');
     await open.click();
     await expect(page.getByRole('button', { name: /^Back to / })).toBeVisible({ timeout: 15_000 });

@@ -3,4 +3,4 @@
 /**
  * An import group: one `(op, ptr, len) -> handle` function in the ABI namespace.
  */
-export type Group = "canvas" | "ui" | "events" | "navigate" | "nodes" | "md" | "files" | "chat" | "members" | "storage" | "net" | "ihttp" | "clipboard" | "notify" | "documents" | "log" | "topic";
+export type Group = "canvas" | "ui" | "events" | "navigate" | "nodes" | "md" | "files" | "chat" | "members" | "storage" | "net" | "ihttp" | "clipboard" | "notify" | "documents" | "log" | "topic" | "session";

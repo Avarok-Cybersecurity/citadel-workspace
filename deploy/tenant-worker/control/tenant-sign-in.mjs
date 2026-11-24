@@ -13,6 +13,9 @@
  *       `{"username","kind":"SignIn"|"Register"|"Recover","token":string|null,"remote_addr":"100.64.x.y"|null}`.
  *       null admits; `{refuse:"admission_required",challenge?}` / `{refuse:"admission_failed",reason}`,
  *       `challenge` being `{provider:"turnstile",site_key,identity}` (public; admission.mjs `needsToken`).
+ * tenant-node.mjs adds one method to that object before the node gets it:
+ *   openBillingPortal() -> Promise<{portal_url} | {refused}>   this tenant's billing portal (the
+ *       kernel has checked the caller holds EditWorkspaceConfig; control/billing-portal.mjs)
  */
 import { admit, SignInSettings } from "./admission.mjs";
 import { required } from "./http.mjs";
@@ -42,6 +45,19 @@ export function ksfParams(env) {
  */
 export function securityKeyRpId(env) {
   return required(env, "PQ_SECURITY_KEY_RP_ID");
+}
+
+/**
+ * The longest, in seconds, a resume credential may live on every tenant's node: what lets a
+ * dropped connection come back without the account's factors. Required, with no default; 0 is
+ * the explicit "none are issued".
+ */
+export function resumeMaxLifetimeSecs(env) {
+  const n = Number(required(env, "PQ_RESUME_MAX_LIFETIME_SECS"));
+  if (!Number.isInteger(n) || n < 0 || n > 0xffffffff) {
+    throw new Error("PQ_RESUME_MAX_LIFETIME_SECS is a whole number of seconds, 0 for none");
+  }
+  return n;
 }
 
 export class TenantSignIn {

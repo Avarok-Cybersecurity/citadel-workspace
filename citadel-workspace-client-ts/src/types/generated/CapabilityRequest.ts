@@ -32,4 +32,8 @@ targets?: Array<string>,
 /**
  * The app's topic names, 1 to `MAX_TOPICS` of `[a-z0-9-]{1,32}`.
  */
-topics?: Array<string>, };
+topics?: Array<string>, 
+/**
+ * Present exactly for `citadel.session`: 1 to `MAX_SESSION_SERVERS` canonical domains.
+ */
+servers?: Array<string>, };

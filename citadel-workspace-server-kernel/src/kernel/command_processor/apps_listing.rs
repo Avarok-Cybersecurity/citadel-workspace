@@ -1,10 +1,14 @@
 //! The workspace registry: listing it, reading one entry, publishing to it. Uploading an
-//! artifact is `apps_upload`.
+//! artifact is `apps_upload`. The catalogue and a listing read also answer the first-party
+//! releases the workspace was provisioned with (`FirstPartyReleases`), so an app an admin
+//! uninstalled can be found and installed again.
 
 use super::apps::{audit_entry, finish, Answer, Caller, Step};
 use super::apps_gather::holds_at;
-use super::apps_offer::{admitted, commit_artifact, listing_of, obtain_artifact, resolve_offer};
-use crate::kernel::apps::records::{RegistryEntry, ReleaseRef};
+use super::apps_offer::{
+    admitted, audience_admitted, commit_artifact, listing_of, obtain_artifact, resolve_offer,
+};
+use crate::kernel::apps::records::{RegistryEntry, ReleaseRef, StoredRelease};
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::transaction::apps_store::APPS_LOCK;
 use crate::WORKSPACE_ROOT_ID;
@@ -12,6 +16,7 @@ use citadel_app_id::AppVersion;
 use citadel_sdk::prelude::Ratchet;
 use citadel_workspace_types::apps::AppAudience;
 use citadel_workspace_types::apps_install::{AppsRefusal, ListingSource};
+use citadel_workspace_types::apps_manifest::AppManifest;
 use citadel_workspace_types::apps_protocol::ListingOffer;
 use citadel_workspace_types::apps_responses::{AppsAuditEvent, AppsResponse};
 use citadel_workspace_types::structs::Permission;
@@ -44,7 +49,23 @@ async fn catalogue<R: Ratchet + Send + Sync + 'static>(
             listings.push(listing_of(&release, source));
         }
     }
+    for release in backend.first_party_releases().await?.values() {
+        if first_party_admits(kernel, caller, release).await? {
+            listings.push(listing_of(release, ListingSource::FirstParty));
+        }
+    }
     Ok(AppsResponse::Catalogue { listings })
+}
+
+/// Whether a recorded first-party release's audience admits the caller.
+async fn first_party_admits<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    caller: &Caller<'_>,
+    release: &StoredRelease,
+) -> Step<bool> {
+    let manifest = AppManifest::from_bytes(release.manifest.as_bytes())
+        .map_err(|why| AppsRefusal::InvalidManifest(why.to_string()))?;
+    Ok(audience_admitted(kernel, caller, &manifest.audience).await?)
 }
 
 /// `Unavailable` for a listing that is missing and one the caller may not see alike: the same
@@ -72,8 +93,12 @@ pub(super) async fn get_listing<R: Ratchet + Send + Sync + 'static>(
     let release = backend
         .app_release(&checked.release.manifest_sha256)
         .await?;
-    finish(match (entry, visible, release) {
-        (Some(entry), true, Some(release)) => Ok(AppsResponse::Listing {
+    let first_party = match &entry {
+        Some(_) => None,
+        None => backend.first_party_releases().await?.remove(app_id),
+    };
+    let answer = match (entry, visible, release, first_party) {
+        (Some(entry), true, Some(release), _) => Ok(AppsResponse::Listing {
             listing: listing_of(
                 &release,
                 ListingSource::WorkspaceRegistry {
@@ -81,8 +106,17 @@ pub(super) async fn get_listing<R: Ratchet + Send + Sync + 'static>(
                 },
             ),
         }),
+        // In no registry: the release the workspace was provisioned with, if this is one.
+        (None, _, _, Some(release)) => match first_party_admits(kernel, caller, &release).await {
+            Ok(true) => Ok(AppsResponse::Listing {
+                listing: listing_of(&release, ListingSource::FirstParty),
+            }),
+            Ok(false) => Err(AppsRefusal::Unavailable.into()),
+            Err(halt) => Err(halt),
+        },
         _ => Err(AppsRefusal::Unavailable.into()),
-    })
+    };
+    finish(answer)
 }
 
 pub(super) async fn publish<R: Ratchet + Send + Sync + 'static>(

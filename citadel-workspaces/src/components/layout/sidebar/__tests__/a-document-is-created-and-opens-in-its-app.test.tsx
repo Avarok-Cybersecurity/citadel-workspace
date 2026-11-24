@@ -68,7 +68,7 @@ describe('New document', () => {
     await waitFor(() => expect(screen.queryByTestId('new-document-dialog')).toBeNull());
     const create: WorkspaceRequestView['CreateNode'] = sent.find((r: WorkspaceRequestView) => r.CreateNode)?.CreateNode;
     expect(create).toMatchObject({ parent_id: 'alex', entity_type: { Child: 'Floor' }, name: 'Fire plan' });
-    expect(decodeNodeApp(create?.metadata ?? [])).toBe('docs');
+    expect(decodeNodeApp(create?.metadata ?? [])).toEqual({ kind: 'document', app: 'docs' });
   });
 
   it('is offered from the create form too, for the same parent', async () => {

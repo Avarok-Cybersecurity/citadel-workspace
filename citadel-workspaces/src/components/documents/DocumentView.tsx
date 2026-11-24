@@ -7,7 +7,7 @@ import { useSelfName, type SelfName } from '@/hooks/use-self-name';
 import type { ActionGate } from '@/hooks/use-permission-result';
 import { useEditGate } from './use-edit-gate';
 import type { DomainNode } from '@/components/layout/sidebar/tree-node-types';
-import type { NodeAppState } from '@/lib/citadel-apps/node-app-metadata';
+import type { NodeAppBinding } from '@/lib/citadel-apps/node-app-metadata';
 import type { DocumentSource } from '@/lib/cdoc/document-source';
 import { loadCdocRuntime } from '@/lib/cdoc/runtime-loader';
 import { browserDocumentFiles } from '@/lib/document-files';
@@ -20,7 +20,7 @@ const BLANK_DOCUMENT: DocumentSource = { kind: 'blank' };
 
 interface DocumentViewProps {
   node: DomainNode;
-  app: Exclude<NodeAppState, { kind: 'none' }>;
+  app: Extract<NodeAppBinding, { kind: 'document' | 'unreadable' }>;
 }
 
 export function DocumentView({ node, app }: DocumentViewProps): JSX.Element {

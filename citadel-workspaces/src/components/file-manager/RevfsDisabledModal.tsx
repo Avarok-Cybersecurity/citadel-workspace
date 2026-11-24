@@ -36,7 +36,7 @@ export function RevfsDisabledModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="bg-surface border-border text-foreground sm:max-w-md">
+      <DialogContent className="border-border text-foreground sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <AlertTriangle className="h-5 w-5 text-warning-emphasis" />

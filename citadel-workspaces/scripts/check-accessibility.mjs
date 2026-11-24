@@ -177,7 +177,7 @@ async function main() {
       // authenticated Playwright spec, which has a session. What is asserted
       // here instead is the property that matters when they are out of reach:
       // that they say why.
-      ...['General', 'Theme', 'Privacy', 'Security'].map((tab) => [
+      ...['General', 'Theme', 'Privacy', 'Security', 'Advanced'].map((tab) => [
         `settings/${tab}`,
         async () => {
           // From a fresh load every time, and waiting rather than sleeping.
@@ -301,6 +301,7 @@ async function main() {
       'settings/Theme': 'Settings',
       'settings/Privacy': 'Settings',
       'settings/Security': 'Settings',
+      'settings/Advanced': 'Settings',
       'settings/session-gated tabs': 'Settings',
       'join/security': 'Security Settings',
       'join/profile': 'Create Your Profile',

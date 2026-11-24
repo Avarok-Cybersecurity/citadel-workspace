@@ -219,6 +219,12 @@ documents every key; none has a default).
   `kernel.toml` names `localhost`, the development stack's UI, so a deployment
   served from anywhere else must change it before anyone enrols a key. It is
   permanent: a key enrolled under one ID never signs in under another.
+- **`resume_max_lifetime_secs`** is the longest a device may sign in again
+  without the account's factors after a full sign-in, so a dropped connection
+  comes back without a password or a security-key touch. People choose a
+  shorter time per device; none gets longer than this. The shipped value is
+  `604800` (seven days); `0` turns it off. Changing the password, the sign-in
+  policy or the security keys ends every such sign-in at once.
 - **`admission = "none"`** (the shipped value) means no human check, and the
   admin's "Require a human check" switch cannot be turned on. For
   `admission = "turnstile"`, set `turnstile_secret_env` to the NAME of an

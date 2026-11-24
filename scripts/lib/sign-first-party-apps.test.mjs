@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { firstPartyKeys, keyProblem, signFirstPartyApps, SEED_ENV } from './sign-first-party-apps.mjs';
+import { firstPartyKeys, GLUE_ABI, keyProblem, moduleProblem, PROVISIONED_APPS, signFirstPartyApps, SEED_ENV } from './sign-first-party-apps.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const trusted = firstPartyKeys(readFileSync(join(ROOT, 'citadel-workspace-server-kernel/src/kernel/apps/install.rs'), 'utf8'));
@@ -36,4 +36,19 @@ test('without a seed nothing is signed', () => {
   } finally {
     if (had !== undefined) process.env[SEED_ENV] = had;
   }
+});
+
+test('an app-ABI app ships its module and a glue app does not', () => {
+  assert.equal(moduleProblem('synchronized-work', 'citadel-app-abi-1', true), null);
+  assert.match(moduleProblem('synchronized-work', 'citadel-app-abi-1', false), /wrote no module\.wasm/);
+  assert.equal(moduleProblem('calendar', GLUE_ABI, false), null);
+  assert.match(moduleProblem('calendar', GLUE_ABI, true), /in the UI bundle/);
+});
+
+test('every provisioned app is committed with the module the script signs', () => {
+  for (const { app, module } of PROVISIONED_APPS) {
+    const manifest = JSON.parse(readFileSync(join(ROOT, 'apps/first-party', app, 'manifest.json'), 'utf8'));
+    assert.equal(readFileSync(join(ROOT, module)).length, manifest.artifact.bytes, app);
+  }
+  assert.deepEqual(PROVISIONED_APPS.map((a) => a.app), ['calendar', 'synchronized-work']);
 });

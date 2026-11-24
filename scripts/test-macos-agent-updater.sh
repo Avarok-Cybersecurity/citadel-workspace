@@ -13,5 +13,6 @@ out="$(mktemp -d)"
 trap 'rm -rf "$out"' EXIT
 swiftc -swift-version 5 -framework AppKit -framework Security \
   "$SRC/AppUpdater.swift" "$SRC/UpdateSteps.swift" "$SRC/AgentProcess.swift" "$SRC/StartFresh.swift" "$SRC/Support.swift" \
+  "$SRC/SessionDot.swift" "$SRC/tests/SessionDotTests.swift" \
   "$SRC/tests/StartFreshTests.swift" "$SRC/tests/main.swift" -o "$out/test-updater"
 "$out/test-updater" "$@"

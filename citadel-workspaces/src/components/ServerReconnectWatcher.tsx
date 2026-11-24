@@ -1,4 +1,7 @@
 import { useEffect } from 'react';
+import { useNavigate, type NavigateFunction } from 'react-router-dom';
+import { toast } from '@/hooks/use-toast';
+import { readResumeExpired, resumeExpiredNotice, type ResumeExpired, type ResumeExpiredNotice } from '@/lib/resume/expiry-notice';
 import { eventEmitter } from '@/lib/event-emitter';
 import { useLeaveEndedSession, type LeaveEndedSession } from './use-leave-ended-session';
 import { getSelectedUser, type TabUserContext } from '@/lib/tab-context';
@@ -21,6 +24,7 @@ import { supervisedByAgent } from '@/lib/agent-supervisor/supervised';
  */
 export function ServerReconnectWatcher(): null {
   const leave: LeaveEndedSession = useLeaveEndedSession();
+  const navigate: NavigateFunction = useNavigate();
 
   useEffect(() => {
     const io: ServerReconnectIO = {
@@ -52,6 +56,20 @@ export function ServerReconnectWatcher(): null {
     // so a "reconnected" handled before its "lost" would leave the banner up.
     let queue: Promise<void> = Promise.resolve();
     const onMessage = (message: unknown): void => {
+      const expired: ResumeExpired | null = readResumeExpired(message);
+      if (expired) {
+        queue = queue
+          .then(async (): Promise<void> => {
+            const own: OwnSession | null = await io.ownSession();
+            const notice: ResumeExpiredNotice | null = own === null ? null : resumeExpiredNotice(expired, own);
+            if (notice === null) return;
+            // Stays until answered: it is the one time the user is told, and they may be away.
+            toast({ id: notice.id, title: notice.title, description: notice.description, duration: Infinity,
+              action: { label: notice.action, onClick: (): void => { navigate(notice.signInPath); } } });
+          })
+          .catch((error: unknown): void => { debugLog('ServerReconnect', 'Showing the expiry notice failed', error); });
+        return;
+      }
       const event: AgentReconnectEvent | null = readAgentReconnectEvent(message);
       if (!event) return;
       queue = queue
@@ -64,7 +82,7 @@ export function ServerReconnectWatcher(): null {
       reconnectingTo.set(null);
       linkOutage.end();
     };
-  }, [leave]);
+  }, [leave, navigate]);
 
   return null;
 }

@@ -74,7 +74,7 @@ describe('the declaration', () => {
 
     forgetCapabilities();
     let asked: number = 0;
-    registerCapabilityRoute({ isLeader: () => false, askLeader: async () => { asked += 1; return { supervisesP2p: true, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false }; } });
+    registerCapabilityRoute({ isLeader: () => false, askLeader: async () => { asked += 1; return { supervisesP2p: true, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false }; } });
     expect(await agentSupervisesP2p()).toBe(true);
     expect(await agentSupervisesP2p()).toBe(true);
     expect(asked).toBe(1);

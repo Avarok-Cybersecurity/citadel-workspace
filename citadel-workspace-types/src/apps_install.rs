@@ -2,6 +2,7 @@
 //! one is refused.
 
 use crate::apps::{Capability, InstallScope};
+use crate::apps_manifest_session::SessionLimits;
 use crate::structs::Permission;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -58,9 +59,9 @@ pub struct GrantDetails {
 }
 
 /// What the workspace server says one install may reach from one member's machine now. The
-/// member's agent asks for it before every `net.host` fetch it has no fresh answer for, and
-/// takes nothing the page claims beyond it: the page's grant may narrow these hosts, never widen
-/// them.
+/// member's agent asks for it before every `net.host` fetch and `citadel.session` open it has no
+/// fresh answer for, and takes nothing the page claims beyond it: the page's grant may narrow
+/// these hosts and servers, never widen them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct HostNetGrant {
@@ -70,6 +71,13 @@ pub struct HostNetGrant {
     /// `net.host.private` is effective for this member: granted, and its installer still holds
     /// `AppInstallAllowPrivateNetwork`.
     pub private: bool,
+    /// The servers of the running release's `citadel.session` request, when that capability is
+    /// effective for this member (granted, and its installer still holds
+    /// `AppInstallAllowHostNetwork`): the agent opens an app session to no other. Empty when it
+    /// is not.
+    pub servers: Vec<String>,
+    /// The running release's `limits.session`: present exactly when `servers` is answered.
+    pub session: Option<SessionLimits>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

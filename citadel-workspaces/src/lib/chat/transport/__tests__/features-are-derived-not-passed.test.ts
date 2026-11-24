@@ -15,7 +15,7 @@ import { peerOpeningPorts } from '@/components/p2p/chat-document/use-chat-docume
 
 vi.mock('@/lib/p2p/p2p-messenger-manager', () => ({ P2PMessengerManager: { getInstance: (): object => ({}) } }));
 
-const STATED: StatedFeatures = { markdown: true, readReceipts: true, securityLevel: true, retention: true, optimistic: true, namesSenders: false };
+const STATED: StatedFeatures = { markdown: true, readReceipts: true, securityLevel: true, retention: true, optimistic: true, namesSenders: false, deliveryTicks: true };
 const BARE_SEND: ChatTransport['send'] = { text: async (): Promise<void> => undefined, revise: null, react: null, retry: async (): Promise<void> => undefined };
 const NONE: Pick<ChatTransport, 'send' | 'status' | 'files' | 'documents' | 'settings'> = { send: BARE_SEND, status: null, files: null, documents: null, settings: null };
 

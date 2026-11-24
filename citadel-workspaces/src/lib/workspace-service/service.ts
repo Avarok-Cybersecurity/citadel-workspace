@@ -5,7 +5,7 @@
  * Delegates operations to focused sub-modules.
  */
 
-import type { GroupMessageType, NodeEntityType, Permission, SignInSettings, UpdateOperation, WorkspaceProtocolPayload, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
+import type { BillingPortalAnswer, GroupMessageType, NodeEntityType, Permission, SignInSettings, UpdateOperation, WorkspaceProtocolPayload, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { failOnSocketLoss } from '../websocket/request-response';
 import { websocketService } from '@/lib/websocket-service';
 import { eventEmitter } from '@/lib/event-emitter';
@@ -18,8 +18,9 @@ import * as messaging from './messaging-operations';
 import * as signals from './group-chat-signals';
 import * as nodes from './node-operations';
 import * as nodeTabs from './node-tabs-operations';
-import { createDocument, type NewDocument } from './document-operations';
+import { createAppPage, createDocument, type NewAppPage, type NewDocument } from './document-operations';
 import * as signIn from './sign-in-settings';
+import { openBillingPortal } from './billing-portal';
 import { updateWorkspaceProfile, type WorkspaceProfileChange } from './workspace-profile';
 
 export class WorkspaceService implements ProtocolSender {
@@ -106,6 +107,7 @@ export class WorkspaceService implements ProtocolSender {
   public createNode(parentId: string | null, entityType: NodeEntityType, name: string, desc: string, opts?: { metadata?: Uint8Array }): Promise<void> { return nodes.createNode(this, parentId, entityType, name, desc, opts); }
   public updateNode(nodeId: string, updates: { name?: string; description?: string; mdxContent?: string; rules?: string; chatEnabled?: boolean; isDefault?: boolean }): Promise<void> { return nodes.updateNode(this, nodeId, updates); }
   public createDocument(document: NewDocument): Promise<void> { return createDocument(this, document); }
+  public createAppPage(node: NewAppPage): Promise<void> { return createAppPage(this, node); }
   public setMembersVisible(nodeId: string, visible: boolean): Promise<void> { return nodes.setMembersVisible(this, nodeId, visible); }
   public writeNodeTabs(nodeId: string, appIds: readonly string[] | null): Promise<void> { return nodeTabs.writeNodeTabs(this, nodeId, appIds); }
   public setDefaultAppTabs(appIds: readonly string[]): Promise<void> { return nodeTabs.setDefaultAppTabs(this, appIds); }
@@ -117,6 +119,7 @@ export class WorkspaceService implements ProtocolSender {
   public getServerCapabilities(): Promise<void> { return nodes.getServerCapabilities(this); }
   public getSignInSettings(): Promise<SignInSettings> { return signIn.getSignInSettings(this); }
   public updateSignInSettings(settings: SignInSettings): Promise<SignInSettings> { return signIn.updateSignInSettings(this, settings); }
+  public openBillingPortal(): Promise<BillingPortalAnswer> { return openBillingPortal(this); }
 
   public cleanup(): void { /* Any cleanup needed */ }
 

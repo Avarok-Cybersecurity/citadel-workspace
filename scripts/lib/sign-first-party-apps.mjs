@@ -2,7 +2,9 @@
  * Signs the first-party apps every workspace is provisioned with (Calendar design §3.2), for
  * `node scripts/build-first-party-apps.mjs --sign <out>`: each app's committed manifest and module
  * through apps/first-party/signer, into <out>/<app>/{manifest.json,app.mldsa.sig}, the directory
- * the kernel's build.rs embeds (CITADEL_FIRST_PARTY_SIGNED_DIR).
+ * the kernel's build.rs embeds (CITADEL_FIRST_PARTY_SIGNED_DIR). The signer also writes
+ * <out>/<app>/module.wasm for an app whose module the server stores (any ABI but the glue one),
+ * which this holds it to: provisioning lists such an app only with its module.
  *
  * The seed is CITADEL_APP_SIGNING_SEED_HEX, handed to the signer in its environment and nowhere
  * else: this never prints it, writes it or passes it as an argument, and the signer prints only the
@@ -14,7 +16,7 @@
  * secret and proves the path with a seed it makes) it must not be.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const SEED_ENV = 'CITADEL_APP_SIGNING_SEED_HEX';
@@ -22,7 +24,20 @@ export const SEED_ENV = 'CITADEL_APP_SIGNING_SEED_HEX';
 /** The apps provisioned into every workspace, and where each one's module is committed. */
 export const PROVISIONED_APPS = [
   { app: 'calendar', module: 'citadel-workspaces/public/calendar/calendar_glue_bg.wasm' },
+  { app: 'synchronized-work', module: 'apps/first-party/synchronized-work/wasm/synchronized-work.wasm' },
 ];
+
+/** The ABI whose module is in the UI bundle, not the server's (`ABI_FIRST_PARTY_GLUE`). */
+export const GLUE_ABI = 'wasm-bindgen-glue-firstparty';
+/** What the signer writes beside the signature for any other ABI, and build.rs embeds. */
+export const MODULE_FILE = 'module.wasm';
+
+/** Why a signed app's module copy is wrong, or null: present exactly when its ABI is not glue. */
+export function moduleProblem(app, abi, hasModule) {
+  if (abi !== GLUE_ABI && !hasModule) return `${app}: the signer wrote no ${MODULE_FILE} for an ${abi} app`;
+  if (abi === GLUE_ABI && hasModule) return `${app}: a glue app's module is in the UI bundle, not ${MODULE_FILE}`;
+  return null;
+}
 
 /** The first-party keys, read from install.rs. */
 export function firstPartyKeys(installRs) {
@@ -62,9 +77,13 @@ export function signFirstPartyApps(root, out, { throwaway }) {
       problems.push(`${app}: the signer exited ${r.status ?? r.signal}`);
       continue;
     }
-    const key = JSON.parse(readFileSync(join(signed, 'manifest.json'), 'utf8')).publisher.mldsa65_public_key;
-    const problem = keyProblem(app, key, trusted, throwaway);
-    if (problem !== null) problems.push(problem);
+    const manifest = JSON.parse(readFileSync(join(signed, 'manifest.json'), 'utf8'));
+    for (const problem of [
+      keyProblem(app, manifest.publisher.mldsa65_public_key, trusted, throwaway),
+      moduleProblem(app, manifest.sdk.abi, existsSync(join(signed, MODULE_FILE))),
+    ]) {
+      if (problem !== null) problems.push(problem);
+    }
   }
   return problems;
 }
