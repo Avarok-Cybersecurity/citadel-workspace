@@ -1,4 +1,4 @@
-# Contract: VFS wire (kernel protocol, pair and group sync) — FROZEN 2026-11-24
+# Contract: VFS wire (kernel protocol, pair sync, routing) — FROZEN 2026-11-24, revised round 2
 
 Parties: V2 (kernel), V3 (client replicas, pair sync), V8 (group sync), V5 (documents in
 volumes), V6 (the kernel's `fs` arm reads the same store). Ops as bytes: `vfs-ops.md` §2
@@ -10,7 +10,7 @@ volumes), V6 (the kernel's `fs` arm reads the same store). Ops as bytes: `vfs-op
 |---|---|---|
 | Personal, Node | `WorkspaceProtocolRequest::Vfs` / `WorkspaceProtocolResponse::Vfs` (§2, §3) | the workspace protocol's own |
 | Pair | `P2PCommandType.VfsSync` over the reliable P2P channel (§4) | `cbor-x`, as every `P2PCommand` |
-| Group | a group message (`InternalServiceRequest::GroupMessage`) with the envelope of §5 | `cbor-x` |
+| Group | an ordered group broadcast (`vfs-group.md`) | `cbor-x` |
 | Device | nowhere: one replica, the agent's LocalDB | — |
 
 Inside every carrier an op is the same canonical `SignedOp` byte string.
@@ -47,6 +47,10 @@ pub enum VfsCall {
     /// Chunk `index` of the bytes entry `inode` (32 hex) points at now; `sha256` is what the
     /// caller believes that is.
     ReadChunk { inode: String, sha256: String, index: u32 },
+    /// An outsider's calls (vfs-outsiders §5, §6); `root` is the admitted entry (32 hex).
+    OutsideClaim { token: String, claim: Vec<u8>, proof: Vec<u8> },
+    OutsideView { root: String, since_seq: u64 },
+    OutsideAppend { root: String, ops: Vec<Vec<u8>>, client_seq: u64 },
 }
 
 pub struct VfsLogEntry { pub seq: u64, pub op: Vec<u8> }
@@ -61,6 +65,10 @@ pub enum VfsAnswer {
     Chunk { inode: String, sha256: String, index: u32, total_chunks: u32, size_bytes: u64, bytes: Vec<u8> },
     /// PUSH: ops another session appended, to every other session that may read the volume.
     OpsAppended { ops: Vec<VfsLogEntry> },
+    /// The admitted subtree as canonical `Entry` maps (§3.3), then the ops on it after `since_seq`.
+    OutsideViewIs { root: String, upto_seq: u64, entries: Vec<Vec<u8>>, ops: Vec<VfsLogEntry>, has_more: bool },
+    /// The session is now bound to this admission; `nonce` is what a returning guest signs next time.
+    OutsideBound { root: String, nonce: Vec<u8> },
     Refused { client_seq: Option<u64>, index: Option<u32>, refusal: VfsRefusal },
 }
 
@@ -92,7 +100,22 @@ pub enum VfsLimit { Entries, EntriesPerDir, Depth, LogOps, OpsPerMinute, AppendO
   included; a reader that sees a gap in `seq` pulls.
 - A `LiveDoc` pointee in a Node volume is the node's chat document of that id
   (`ChatDocumentsRequest { chat_doc: doc_id, .. }`, unchanged). In a Personal volume a `LiveDoc`
-  is refused `Unsupported` in this release.
+  is refused `Unsupported` unless the optional item below is built.
+- **Optional (V5, only if the kernel address is cheap; otherwise next release):** a document in
+  a Personal volume is addressed `WorkspaceProtocolRequest::VfsDocuments(VfsDocumentsRequest {
+  volume: VfsAddress, doc_id: String, request: DocumentsRequest })`, answered
+  `VfsDocumentsResponse { volume_id, doc_id, answer: DocumentsResponse }`; the request's own
+  `node_id` must be empty; the kernel's document address gains a third form (the volume id and
+  the document id) with its own key prefix; reading needs `may_read_bytes` on the entry whose
+  pointee is `LiveDoc { doc_id }`, writing `bit(W)` and `role.upload`. Until it exists nothing
+  sends `VfsDocuments`.
+- An outsider's calls: `OutsideClaim` carries the link's token and either a `Claim` op (`proof`
+  empty) or, for a guest that claimed before, an empty `claim` and `proof` = its invitation
+  key's signature over `"citadel-vfs-resume-v1" ‖ 0x00 ‖ nonce` for the nonce it was last
+  given. `OutsideView` and `OutsideAppend` are `Pull` and `Append` narrowed to the admitted
+  subtree; a workspace member admitted as kind A calls them on its ordinary session. A
+  transient session is served nothing else: `vfs-outsiders.md` §6
+  (`WorkspaceProtocolResponse::TransientRefused(TransientRefusal)`).
 
 ### 3.2 Bytes: binding an upload to an op, and reading
 - Chunks are `VFS_CHUNK_BYTES = ARTIFACT_CHUNK_BYTES` (256 KiB), the last shorter;
@@ -138,7 +161,11 @@ export type VfsSync =
   | { readonly kind: 'refused'; readonly op_hash: Uint8Array; readonly reason: string }
   | { readonly kind: 'have'; readonly sha256: readonly Uint8Array[] }
   | { readonly kind: 'fetch'; readonly sha256: Uint8Array }
-  | { readonly kind: 'fetch-refused'; readonly sha256: Uint8Array; readonly reason: 'not_held' | 'denied' };
+  | { readonly kind: 'fetch-refused'; readonly sha256: Uint8Array; readonly reason: 'not_held' | 'denied' }
+  | { readonly kind: 'outside-hello'; readonly root: Uint8Array; readonly claim: Uint8Array | null }
+  | { readonly kind: 'outside-view'; readonly root: Uint8Array; readonly entries: readonly Uint8Array[]; readonly index: number; readonly total: number }
+  | { readonly kind: 'outside-ops'; readonly root: Uint8Array; readonly ops: readonly Uint8Array[] }
+  | { readonly kind: 'state'; readonly nonce: Uint8Array; readonly chunk: Uint8Array; readonly index: number; readonly total: number };
 ```
 Everything read came from the peer: every field is checked and every byte string copied, as
 `chat-wire.ts` does; a payload that is not this shape is reported, never guessed at.
@@ -163,35 +190,19 @@ Everything read came from the peer: every field is checked and every byte string
   `citadel-vfs-<64 hex sha256>`. The asker accepts without a prompt only a transfer of that name
   it has a pending `fetch` for from that peer, and keeps it only if it hashes to the name.
   RE-VFS objects use the existing RE-VFS requests between owner and host.
+- **Outsiders** (`vfs-outsiders.md` §5): `outside-hello` opens a P2P conversation between an
+  outsider and a member's device about the admitted entry `root` (with the `Claim` op the first
+  time); the member answers `outside-view` (the subtree's `Entry` maps) and from then on sends
+  `outside-ops` for ops on it; the outsider sends its own ops as `outside-ops`. The member's
+  device judges each with `authorize` before taking it in.
+- `state` carries a group volume's state transfer (`vfs-group.md` §4) between two members.
 - The log, the pending ops and the blob index are kept in the agent's LocalDB under
   `vfs:<account>:<volume>#…` (V3 names the sub-keys; the prefix is frozen).
 
-## 5. Group volumes: the SDK group as carrier
+## 5. Group volumes
 
-Facts of SDK `9ccfb045` this rests on: a group broadcast is relayed by the group's server; a
-member that is away is mailed what fits `GroupMailLimits` (by default a week, 1 000 messages and
-16 MiB per member and group) and nothing beyond; `GroupMessageNotification` carries no sequence
-number, and a sender is not told where its message fell among others'. So a group volume takes
-**no order from the relay**: it is a Merge volume, like a pair with n members.
-
-- A VFS message is a group message whose body is `cbor-x` of
-  `{ t: "citadel-vfs/1", volume: string, sync: VfsSync }` (`VFS_GROUP_ENVELOPE_TAG`). A chat
-  surface ignores a group message with this tag; a VFS reader ignores one without it. A group
-  document's `CdocChatSync` payload travels the same way under `t: "citadel-cdoc/1"`.
-- `sync` is §4's, with these differences: `hello` and `ops` are broadcasts; one group message is
-  at most `VFS_GROUP_MSG_MAX_BYTES = 16_384` bytes, so an `ops` chunk holds as many whole ops as
-  fit (always at least one); every member that holds ops the hello lacks may answer, answers are
-  idempotent, and a responder leaves out ops it has seen another member broadcast since that
-  hello.
-- A member sends `hello` when it opens the volume, on reconnect, and on every
-  `GroupRestoredNotification`; that is how a joiner, and a member whose mail was full
-  (`NotDelivered::BacklogFull`), catches up.
-- An op is ingested only if the group carried it, or a member relayed it in an answer and its
-  signature verifies.
-- **Bytes.** `have` and `fetch` are broadcasts; any holder with a P2P connection to the asker
-  serves it as in §4; the asker keeps the first that verifies. When no answer comes the File
-  Manager says "No one who has this file is online". `Revfs` pointees name one member as host.
-- **Purge.** Each member deletes its copy when it folds the `Purge`.
+`vfs-group.md`: the order (the SDK group's `seq`), judging at a position, the message framing,
+catching up, state transfer, and what lane SDK-ORDER must provide.
 
 ## 6. Routing in the page (`citadel-workspaces/src/lib/multi-instance/routing-rules.ts`)
 
@@ -200,9 +211,10 @@ number, and a sender is not told where its message fell among others'. So a grou
 | a kernel push or answer (`WorkspaceProtocolResponse::Vfs`) | `MessageNotification` | `cid` | none: already a member, fixture exists |
 | a pair `VfsSync` | `MessageNotification` | `cid` | none |
 | a group VFS message | `GroupMessageNotification` | `cid` | none |
+| a group's membership, ownership, fetch and "trimmed" answers | provided by lane SDK-ORDER | `cid` where unsolicited | added by SDK-ORDER with their fixtures (`vfs-group.md` §5, item 11) |
 | a signing answer | `VfsOpsSigned`, `VfsSignFailure` | `request_id` (they answer a request the asking tab issued) | **none: they must not be added** |
 
-This release adds **no** member to `CID_ROUTED_NOTIFICATIONS`. `fixtures/routing/shapes.json`
+The VFS lanes add **no** member to `CID_ROUTED_NOTIFICATIONS`. `fixtures/routing/shapes.json`
 holds the two signing answers' shapes for the test that says so: each has a `request_id`, and
 `routeByRequestId` delivers it to the tab that asked. If a later change makes the agent send an
 unsolicited VFS response, it joins the set with a `SHAPES` entry in
@@ -212,7 +224,7 @@ unsolicited VFS response, it joins the set with a `SHAPES` entry in
 
 | Name | Value | Holds |
 |---|---|---|
-| `SIGNED_OP_MAX_BYTES` | 8 192 | one `SignedOp` |
+| `SIGNED_OP_MAX_BYTES` | 12 288 | one `SignedOp` |
 | `VFS_CHUNK_BYTES` | 262 144 (`ARTIFACT_CHUNK_BYTES`) | one blob chunk to or from the kernel |
 | `VFS_P2P_CHUNK_OPS` | 16 | ops in one pair `ops` message |
 | `VFS_GROUP_MSG_MAX_BYTES` | 16 384 | one group VFS message |
@@ -220,13 +232,11 @@ unsolicited VFS response, it joins the set with a `SHAPES` entry in
 | `VFS_SIGN_MAX_OPS`, `VFS_SIGN_OPS_PER_S` | 64, 256 | the agent's signing request (`vfs-signing.md` §2) |
 | `[vfs] max_append_ops`, `max_ops_per_pull`, `max_ops_per_minute`, `max_blob_bytes`, … | operator's, all required | kernel admission (`vfs-model.md` §7) |
 
-## 8. Reserved: links
+## 8. Links
 
-The name `LinkGrant::VfsEntry` is reserved for a secure link that admits to an entry. Its fields,
-and whether it exists, are pending OUTSIDERS-1124: **no variant is added to `LinkGrant` in this
-release**, and no VFS request reads a link.
+`LinkGrant::VfsEntry { volume, inode, link_id, browser_download }`: `vfs-outsiders.md` §8.
 
-## 9. Tests V2, V3 and V8 owe
+## 9. Tests V2 and V3 owe
 
 Kernel: each row of the admission table refuses with its own refusal (control per row); a
 non-member gets `NoSuchVolume` for every call and learns nothing else; a blob staged by one
@@ -234,6 +244,6 @@ member cannot be named by another's op (control: drop the uploader check → red
 refused the chunk after the mode changes; after `Purge`, the purged name occurs nowhere in the
 stored bytes of the log (control: skip redaction → red). Pair: two replicas that start from
 different op sets converge to one tree after one hello each way, in both arrival orders. Group:
-three replicas, one of which missed messages, converge after its hello. Routing: the written-out
+`vfs-group.md` §6. Routing: the written-out
 list in `cid-routed-notifications.test.ts` is unchanged, and the two signing answers reach the
 asking tab (control: add `VfsOpsSigned` to the set → the asking tab's request times out → red).

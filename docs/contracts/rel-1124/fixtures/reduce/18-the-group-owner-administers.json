@@ -1,0 +1,165 @@
+{
+  "name": "18-the-group-owner-administers",
+  "rule": "Group volume: the group's owner at a position is the volume administrator there; after ownership passes (an event with its own seq) the former owner is an ordinary member",
+  "volume": "group:1001:42",
+  "root": "1fe985c9b9aec94ff2b689481d2f2431",
+  "members": [
+    1001,
+    1002,
+    1003
+  ],
+  "root_owner": [
+    1,
+    1001
+  ],
+  "root_mode": 504,
+  "owner_at_start": 1001,
+  "events": [
+    {
+      "seq": 3,
+      "kind": "owner",
+      "cid": 1003
+    }
+  ],
+  "note": "an ordered volume: each op is folded at its position (seq, index), whatever its stamp; carrier is the cid the relay stamped on the broadcast",
+  "ops": [
+    {
+      "seq": 1,
+      "index": 0,
+      "carrier": 1002,
+      "op_id": "0f000000000000000000000000000001",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 1,
+      "at_ms": 1000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "kind": "dir",
+        "parent": "root",
+        "name": "Mine",
+        "pointee": [
+          0
+        ],
+        "mode": 448,
+        "owner": [
+          1,
+          1002
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "index": 0,
+      "carrier": 1001,
+      "op_id": "0f000000000000000000000000000002",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 2,
+      "at_ms": 2000,
+      "kind": "chmod",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "mode": 504
+      }
+    },
+    {
+      "seq": 4,
+      "index": 0,
+      "carrier": 1001,
+      "op_id": "0f000000000000000000000000000003",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 3,
+      "at_ms": 3000,
+      "kind": "chmod",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "mode": 448
+      }
+    },
+    {
+      "seq": 5,
+      "index": 0,
+      "carrier": 1003,
+      "op_id": "0f000000000000000000000000000004",
+      "author": [
+        1,
+        1003
+      ],
+      "lamport": 4,
+      "at_ms": 4000,
+      "kind": "chmod",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "mode": 488
+      }
+    },
+    {
+      "seq": 6,
+      "index": 0,
+      "carrier": 1001,
+      "op_id": "0f000000000000000000000000000005",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 5,
+      "at_ms": 5000,
+      "kind": "chmod",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "mode": 511
+      }
+    }
+  ],
+  "expect": {
+    "entries": [
+      {
+        "id": "000000000000000000000000000000a1",
+        "kind": "dir",
+        "parent": "root",
+        "name": "Mine",
+        "shown": "Mine",
+        "pointee": [
+          0
+        ],
+        "owner": [
+          1,
+          1002
+        ],
+        "mode": 488,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1002
+          ],
+          "at_ms": 1000
+        }
+      }
+    ],
+    "purged": [],
+    "skipped": [
+      {
+        "op_id": "0f000000000000000000000000000003",
+        "reason": {
+          "Denied": "NotOwner"
+        }
+      },
+      {
+        "op_id": "0f000000000000000000000000000005",
+        "reason": {
+          "Denied": "NotOwner"
+        }
+      }
+    ]
+  }
+}

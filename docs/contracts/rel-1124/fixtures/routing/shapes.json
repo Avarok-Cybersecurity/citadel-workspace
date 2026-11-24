@@ -2,6 +2,31 @@
   "$contract": "docs/contracts/rel-1124/vfs-wire.md §6",
   "note": "Shapes of the agent answers this release adds. Both answer a request and carry its id: they are routed by request_id and are NOT members of CID_ROUTED_NOTIFICATIONS. cid is a bigint on the page; it is a decimal string here because JSON has no bigint.",
   "routed_by_request_id": {
+    "VfsInvitationOpened": {
+      "cid": "1281805798482117626",
+      "request_id": "r3",
+      "link_id": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c",
+      "key_pk": [
+        1,
+        2,
+        3
+      ],
+      "key_fp": "eeeeffffgggghhhh",
+      "link_sig": [
+        4,
+        5,
+        6
+      ]
+    },
+    "VfsInvitationProved": {
+      "cid": "1281805798482117626",
+      "request_id": "r4",
+      "sig": [
+        7,
+        8,
+        9
+      ]
+    },
     "VfsOpsSigned": {
       "cid": "1281805798482117626",
       "request_id": "r1",

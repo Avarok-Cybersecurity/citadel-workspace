@@ -1,6 +1,6 @@
 {
-  "name": "12-authorize-in-the-fold",
-  "rule": "R10 (Merge volume, group): an op the table refuses at its position is skipped by every replica",
+  "name": "12-authorize-at-a-position",
+  "rule": "R10 (Group volume): every member judges each op at its position; an op the table refuses there is skipped by all alike",
   "volume": "group:1001:42",
   "root": "1fe985c9b9aec94ff2b689481d2f2431",
   "members": [
@@ -13,9 +13,14 @@
     1001
   ],
   "root_mode": 504,
-  "note": "ops are listed in arrival order; every permutation must reduce to the same tree",
+  "owner_at_start": 1003,
+  "events": [],
+  "note": "an ordered volume: each op is folded at its position (seq, index), whatever its stamp; carrier is the cid the relay stamped on the broadcast",
   "ops": [
     {
+      "seq": 1,
+      "index": 0,
+      "carrier": 1001,
       "op_id": "0f000000000000000000000000000001",
       "author": [
         1,
@@ -40,6 +45,9 @@
       }
     },
     {
+      "seq": 2,
+      "index": 0,
+      "carrier": 1002,
       "op_id": "0f000000000000000000000000000002",
       "author": [
         1,
@@ -54,6 +62,9 @@
       }
     },
     {
+      "seq": 3,
+      "index": 0,
+      "carrier": 1002,
       "op_id": "0f000000000000000000000000000003",
       "author": [
         1,
@@ -83,6 +94,9 @@
       }
     },
     {
+      "seq": 4,
+      "index": 0,
+      "carrier": 1001,
       "op_id": "0f000000000000000000000000000004",
       "author": [
         1,
@@ -97,6 +111,9 @@
       }
     },
     {
+      "seq": 5,
+      "index": 0,
+      "carrier": 1002,
       "op_id": "0f000000000000000000000000000005",
       "author": [
         1,

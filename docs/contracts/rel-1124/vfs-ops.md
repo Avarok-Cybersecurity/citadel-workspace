@@ -1,4 +1,4 @@
-# Contract: VFS ops, their bytes and the reducer — FROZEN 2026-11-24
+# Contract: VFS ops, their bytes and the reducer — FROZEN 2026-11-24, revised round 2
 
 Parties: V1 (codec, reducer), V2, V3, V8 (they carry and fold ops), V9 (signature).
 Model: `vfs-model.md`. Permission table: `vfs-authorize.md`. Fixtures: `fixtures/reduce/`,
@@ -16,11 +16,12 @@ Model: `vfs-model.md`. Permission table: `vfs-authorize.md`. Fixtures: `fixtures
 | 6 | `Purge` | none | "Delete Forever": the entry leaves the state for good |
 | 7 | `Chmod` | `mode` | write `mode` |
 | 8 | `Chown` | `owner` | write `owner` |
-| 9 | `Admit` | `outsider, expires_ms` | reserved: pending OUTSIDERS-1124 |
-| 10 | `Dismiss` | `outsider` | reserved: pending OUTSIDERS-1124 |
-| 11 | `Claim` | `link, key` | reserved: pending OUTSIDERS-1124 |
+| 9 | `Admit` | `who, expires_ms, caps` | admit an outsider to `target` and what is beneath it |
+| 10 | `Dismiss` | `who, lasts` | end that admission |
+| 11 | `Claim` | `link_id, what` | a link's guest binds its invitation key, or hands its access to an identity |
 
-Every op names one `target` entry and carries a stamp `(lamport, author, op_id)`.
+Every op names one `target` entry and carries a stamp `(lamport, author, op_id)`. Kinds 9..=11:
+`vfs-outsiders.md`.
 
 ## 2. Canonical bytes
 
@@ -35,7 +36,7 @@ encoder and decoder; the P2P envelope that carries these bytes stays `cbor-x` (`
 Header = { 1: v = 1,
            2: volume      tstr                    the volume id (vfs-model §1)
            3: op_id       bstr(16)
-           4: author      Principal               [0] | [1, cid] | [2, bstr]
+           4: author      Principal               [0] | [1, cid] | [2, link_id bstr(16), key_fp tstr(16)]
            5: lamport     uint (1 ..= 2^63 - 1)
            6: prev        bstr(32) | bstr(0)      op_hash of this author's previous op in this volume; empty = none
            7: kind        uint (1 ..= 11)
@@ -50,9 +51,11 @@ Body (by kind; `{}` is the empty map, one byte 0xa0):
   Remove, Restore, Purge   {}
   Chmod      { 1: mode uint }
   Chown      { 1: owner Principal }
-  Admit      { 1: outsider bstr(1..=64), 2: expires_ms uint }       (0 = no expiry)
-  Dismiss    { 1: outsider bstr(1..=64) }
-  Claim      { 1: link bstr(1..=64), 2: key bstr }
+  Admit      { 1: who Admitted, 2: expires_ms uint (0 = until dismissed), 3: caps [max_bytes uint, max_entries uint, max_ops_per_min uint] }
+  Dismiss    { 1: who ([1, cid] | [2, link_id bstr(16)]), 2: lasts [ [author Principal, op_hash bstr(32) | bstr(0)] … ] }
+  Claim      { 1: link_id bstr(16), 2: what ([1, key_pk bstr(1952), link_sig bstr(3309)] | [2, cid uint, id_fp tstr(16)]) }
+
+Admitted   = [1, cid uint, id_fp tstr(16)] | [2, link_id bstr(16), link_pk bstr(1952), max_claims uint (1..=50)]
 
 Pointee    = [0] | [1, sha256 bstr(32), len uint, mime tstr]
            | [2, owner uint, host Principal, virtual_path tstr, len uint, mime tstr] | [3, doc_id tstr]
@@ -64,7 +67,7 @@ op_hash    = SHA3-256(header bytes)
 - `op_id`: 16 random bytes; for a migration op, the first 16 bytes of
   `SHA3-256("citadel-vfs-migrate-v1" ‖ 0x00 ‖ lp(volume) ‖ author bytes ‖ lp(namespace) ‖ lp(key) ‖ u8(kind))`,
   so one importer running twice writes the same op.
-- A `SignedOp` is at most `SIGNED_OP_MAX_BYTES = 8192` bytes.
+- A `SignedOp` is at most `SIGNED_OP_MAX_BYTES = 12_288` bytes (a `Claim` carries a key and two signatures).
 - `body` is the empty byte string only for a **redacted** op (§5); a real body is never empty.
 - `fixtures/codec/` holds headers, bodies and their hashes as `cbor_hex` + `model`.
 
@@ -75,19 +78,27 @@ An op that fails any of these is `Invalid` and is never stored or folded:
 `body_hash`; `name` is a valid `Name`; `mode <= 0o777`; `Create.kind` is 1 or 2; a `Dir` is
 created with pointee `[0]` and a `File` with any other; `SetPointee` never carries `[0]`; field
 bounds of `vfs-model.md` §4 and §7; `target` and `parent` are not equal; `target` is not the
-root; `lamport` is greater than the lamport of the op `prev` names; kinds 9..=11 are well formed
-but refused by `authorize` (`vfs-authorize.md`).
+root; `lamport` is greater than the lamport of the op `prev` names; a `Claim` is authored by a
+`LinkGuest` of its own `link_id`, and no other kind in a Device volume names an outsider.
 
 ## 4. The reducer
 
-`reduce(volume, ops) -> Tree` is a pure, deterministic fold of a **set** of valid ops:
+`reduce(volume, ops) -> Tree` is a pure, deterministic fold of valid ops, each at its
+**position**:
 
-**R1 Order.** Ops are folded in ascending stamp order: `lamport`, then `author` (canonical
-bytes), then `op_id` (bytes). Arrival order never matters: any permutation of one set reduces to
-one tree.
+**R1 Order.** In an Ordered volume the position is the op's place in the sequence: `seq` in a
+Personal or Node volume, `(seq, index)` in a Group volume (`vfs-group.md` §1). In a Merge volume
+(Pair, Device) the position is the stamp: `lamport`, then `author` (canonical bytes), then
+`op_id` (bytes), and arrival order never matters: any permutation of one set reduces to one
+tree. Wherever a rule below says "greater stamp" or "last writer", read "later position".
+`lamport` therefore orders ops only in Merge volumes. In an Ordered volume it is carried, must
+rise along its author's own chain, and decides nothing (the kernel additionally refuses a stale
+one, so there stamp order and `seq` order agree; a group's relay does not, and there a stamp
+has no effect).
 
 **R2 Same `op_id`.** Two ops with one `op_id` and one `op_hash` are one op. With different
-hashes, the one whose `op_hash` is smaller bytewise is kept and the other dropped.
+hashes: in a Merge volume the one whose `op_hash` is smaller bytewise is kept and the other
+dropped; in an Ordered volume the one at the earlier position is kept (`Duplicate`).
 
 **R3 Registers.** `place`, `pointee`, `owner`, `mode`, `removal` and each admission are
 last-writer-wins: the op with the greatest stamp wins. `Remove` and `Restore` write the one
@@ -104,9 +115,9 @@ later `Create` whose `kind` differs from the entry's is skipped (`Duplicate`).
 **R6 Cycles.** A `Place` whose `parent` is `target` or a descendant of `target` at its position
 is skipped (`Cycle`). The result is always a tree.
 
-**R7 Depth and size (Merge volumes only).** A `Create` or `Place` that would put an entry deeper
+**R7 Depth and size (volumes without a kernel: Pair, Device, Group).** A `Create` or `Place` that would put an entry deeper
 than `max_depth`, or a `Create` past `max_entries` or `max_entries_per_dir`
-(`PEER_VOLUME_LIMITS`), is skipped (`Limit`). Ordered volumes refuse these at admission instead.
+(`PEER_VOLUME_LIMITS`), is skipped (`Limit`). The kernel refuses these at admission instead.
 
 **R8 Removed entries.** Any op on an entry in the `removed` state is applied; the entry stays
 removed until a `Restore` wins `removal` on it and on every removed ancestor. `Remove` of a
@@ -119,10 +130,12 @@ leaves the state, a marker holding only its id remains, and every op on that id 
 stamp is skipped (`Purged`); a `Create` or `Place` naming it as `parent` is skipped by R5. Deleting a
 folder for good is therefore one `Purge` per descendant, deepest first, then the folder.
 
-**R10 Authorization in the fold (Merge volumes only).** Each op is checked with `authorize`
-(`vfs-authorize.md`) against the tree at its position; a refused op is skipped (`Denied`) by
-every replica alike. Ordered volumes do not re-run `authorize` for members' ops when folding:
-the authority ran it before the op entered the log. An op authored by `Server` is the exception:
+**R10 Authorization in the fold (volumes without a kernel: Pair, Device, Group).** Each op is
+checked with `authorize` (`vfs-authorize.md`) against the tree at its position; a refused op is
+skipped (`Denied`) by every replica alike. In a Group volume the member set and the
+administrator are those of that position (`vfs-group.md` §2). Personal and Node replicas do not
+re-run `authorize` for members' ops when folding: the kernel ran it before the op entered the
+log. An op authored by `Server` is the exception:
 every replica of every volume checks it with `authorize` and skips it if refused, so a server
 writes only the kinds the table gives it.
 
@@ -140,9 +153,10 @@ stops folding that volume and reports `UpdateNeeded`; it never guesses.
 `Tree` exposes, for every entry: the fields of `vfs-model.md` §4, the stamp that won each
 register, the shown name, the derived state, and the list of skipped ops with their reason
 (`Skipped { op_id, reason }`, reasons exactly: `NoParent`, `Cycle`, `Limit`, `NotEmpty`,
-`Purged`, `Denied(Denied)`, `Duplicate`).
+`Purged`, `Denied(Denied)`, `Duplicate`, and in a Group volume also `Invalid`, `NotAuthor`,
+`KeyChanged`, `BadSignature`, `StalePrev`).
 
-### Ordered volumes: what admission adds (kernel, V2)
+### Personal and Node volumes: what admission adds (kernel, V2)
 
 The kernel admits a batch atomically, in the order given, and refuses the whole batch with the
 first failure (`VfsRefusal`, `vfs-wire.md` §3):
@@ -163,18 +177,22 @@ first failure (`VfsRefusal`, `vfs-wire.md` §3):
 | limits (`[vfs]`) | `Limit(which)` |
 | a `Standard` pointee's blob (`vfs-wire.md` §3.2) | `BlobMissing`, `BlobMismatch` |
 
-So in an Ordered volume stamp order equals `seq` order, no two live siblings ever collide, and
+So in a Personal or Node volume stamp order equals `seq` order, no two live siblings ever collide, and
 every replica folds the same sequence. A client applies its own op at once and removes it if the
 batch is refused.
 
-### Merge volumes: what ingestion adds (client, V3, V8)
+### Pair volumes: what ingestion adds (client, V3)
 
 A replica stores an op only if its signature verifies (`vfs-signing.md`), it is structurally
-valid, and it arrived from a member of the volume (Pair: `author` is one of the two accounts and
-the op came over that pair's channel or was made here; Group: it was carried by the group, or
-relayed by a member in catch-up, `vfs-wire.md` §5). An op whose `prev` it does not hold is kept
-**pending**, not folded, until the gap is filled. Two ops by one author with one `prev` (one
-account on two devices) are both kept and both folded.
+valid, and its author is one of the two accounts and it came over that pair's channel or was
+made here, or its author is an outsider one of them admitted (`vfs-outsiders.md` §5). An op
+whose `prev` it does not hold is kept **pending**, not folded, until the gap is filled. Two ops
+by one author with one `prev` (one account on two devices) are both kept and both folded.
+
+### Group volumes: what each position adds (every member, V8)
+
+`vfs-group.md` §2: the same checks the kernel makes, made by every member at the op's position,
+with a skip where the kernel would refuse.
 
 ## 5. Purge, storage and redaction
 
@@ -194,7 +212,7 @@ already holds the body keeps nothing of it once it folds the `Purge`.
 ## 6. Tests V1 owes (each with its control)
 
 The corpus `fixtures/reduce/` on both targets, byte-identical trees; a property test that any
-permutation of a Merge op set reduces to one tree (control: fold in arrival order → red); cycle,
+permutation of a Pair op set reduces to one tree (control: fold in arrival order → red); cycle,
 purge and name-collision properties; the codec fixtures round-trip through the Rust encoder and
 `cbor.mjs` to the same bytes (control: emit map keys unsorted → red); the redaction rule
 (control: accept an empty body without its `Purge` → red).
