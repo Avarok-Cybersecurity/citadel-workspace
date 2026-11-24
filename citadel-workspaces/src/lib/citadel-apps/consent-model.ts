@@ -86,6 +86,13 @@ export function keyTrustCopy(trust: KeyTrust): string {
   return `Same key as ${trust.apps} ${trust.apps === 1 ? 'app' : 'apps'} you already use.`;
 }
 
+/** Each plane's name, as the member is asked it: the Installed panel and an app's placeholder. */
+export const PLANE_TITLE: Readonly<Record<ConsentPlane, string>> = {
+  serve: 'Answer requests from other members’ copies',
+  call: 'Send requests straight to other members',
+  topics: 'Join this app’s channels',
+};
+
 /** The capabilities each plane of a member's consent covers. */
 export const PLANE_CAPABILITIES: Readonly<Record<ConsentPlane, readonly Capability[]>> = {
   serve: ['ihttp.p2p.serve'],
@@ -131,6 +138,12 @@ export function effectiveForMember(granted: readonly Capability[], consent: Peer
   if (disabledForMe) return [];
   const withheld: Set<Capability> = new Set(PLANES.filter((p: ConsentPlane) => consent === null || !consent[p]).flatMap((p: ConsentPlane) => PLANE_CAPABILITIES[p]));
   return granted.filter((c: Capability) => !withheld.has(c));
+}
+
+/** The whole answer when the member answers every open question at once: what they answered before stays. */
+export function answerOpen(consent: PeerConsent | null, asks: readonly MemberAsk[], allowed: boolean): ConsentChoice {
+  return asks.filter((a: MemberAsk) => a.allowed === null).reduce((c: ConsentChoice, a: MemberAsk): ConsentChoice => ({ ...c, [a.plane]: allowed }),
+    { serve: consent?.serve ?? false, call: consent?.call ?? false, topics: consent?.topics ?? false });
 }
 
 /** The whole answer to send when the member changes one plane; an unanswered plane is sent as not allowed. */

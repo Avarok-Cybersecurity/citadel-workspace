@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { readCatalogue, SIGNATURE_HEX_CHARS, type CatalogueReading } from '../manifest/catalogue-format';
 import { GLOBAL_CATALOGUE_URL, listedApps, loadGlobalCatalogue, searchApps, findListedApp, type GlobalCatalogue, type ListedApp } from '../listing-model';
+import type { AppListing } from 'citadel-workspace-client-ts';
 import { listingOf, manifestJson, type ManifestChanges } from '@/test/app-manifests';
 
 const REPO_CATALOGUE: string = resolve(__dirname, '../../../../../apps/catalogue/catalogue.json');
@@ -80,6 +81,13 @@ describe('listings', () => {
     ]);
     expect(apps.map((a) => [a.origin, a.manifest.version])).toEqual([['global', '2.0.0'], ['workspace', '1.4.0']]);
     expect(findListedApp(apps, 'com.acme.kanban')?.origin).toBe('workspace');
+  });
+
+  it('a first-party release the kernel lists is shown under Global, where an uninstalled one is installed again', () => {
+    const calendar: AppListing = { ...listingOf({ id: 'net.avarok.calendar', name: 'Calendar' }, 'workspace'), source: 'FirstParty' };
+    expect(listedApps([calendar]).map((a: ListedApp) => [a.origin, a.manifest.id])).toEqual([['global', 'net.avarok.calendar']]);
+    // Control: the same listing from the registry is this workspace's.
+    expect(listedApps([listingOf({ id: 'net.avarok.calendar' }, 'workspace')]).map((a: ListedApp) => a.origin)).toEqual(['workspace']);
   });
 
   it('search matches every word against name, summary and category, ignoring case', () => {

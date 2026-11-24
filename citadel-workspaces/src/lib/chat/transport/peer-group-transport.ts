@@ -51,6 +51,7 @@ function peerGroupFiles(io: PeerGroupChatIO, groupName: string): FilePort {
     // Each member's copy is opened from their chat with the sender, where its offer arrived.
     open: async (): Promise<FileOpening> => ({ kind: 'unknown' }),
     read: null,
+    readTransfer: null,
   };
 }
 

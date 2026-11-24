@@ -2757,8 +2757,8 @@ UI interactions** (11 for the first user, who also initialises the workspace)
 across two full page loads, and the suite creates an account for nearly every
 spec, roughly 90 per run.
 
-So the gate is the INVERSE of `isDiagnosticsUiEnabled`: off in development, on
-in production. Diagnostics are for us and hidden from users; onboarding is for
+So the gate is off in development, on in production. Internals are for us and
+hidden from users (behind Dev mode today, `lib/dev-mode.ts`); onboarding is for
 users and hidden from us.
 
 What it fixes is specific, not decorative. "Create Account" against a bare

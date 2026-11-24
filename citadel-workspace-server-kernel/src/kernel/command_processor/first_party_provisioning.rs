@@ -6,6 +6,13 @@
 //! is left as it is, whatever its version (an update is an admin's, as for any install). A release
 //! the decision refuses fails the pass: the deploy checked it, so a refusal here is a release that
 //! should not run, not one to skip.
+//!
+//! Each release is also recorded (`FirstPartyReleases`), the newest the server was built with: it
+//! is what the catalogue lists and an install takes after an admin uninstalled the app
+//! (`apps_listing`, `apps_offer`). An app recorded already was provisioned once, so it is never
+//! installed again here: an uninstall is the admin's, and a restart does not undo it. A workspace
+//! provisioned before the record existed has none; its audit log says whether provisioning
+//! installed the app before (the log is bounded, so a long-busy workspace may get it once more).
 
 use super::apps::audit_entry;
 use crate::kernel::apps::first_party::{plan_provisioning, SignedBundle};
@@ -44,6 +51,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .ok_or_else(|| NetworkError::msg("The workspace scope has no key"))?;
         let backend = &self.domain_operations.backend_tx_manager;
         let _guard = APPS_LOCK.lock().await;
+        let mut recorded = backend.first_party_releases().await?;
+        let audit = backend.apps_audit().await?;
         for (name, bundle) in bundles {
             let plan = plan_provisioning(bundle, trusted).map_err(|why| {
                 NetworkError::msg(format!(
@@ -51,6 +60,19 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 ))
             })?;
             let manifest = &plan.manifest;
+            let manifest_text = std::str::from_utf8(bundle.manifest)
+                .map_err(|_| NetworkError::msg("A signed manifest is not UTF-8"))?;
+            let release = StoredRelease {
+                manifest: manifest_text.to_string(),
+                signature: bundle.signature.trim().to_string(),
+            };
+            let provisioned_before = recorded
+                .insert(manifest.id.clone(), release.clone())
+                .is_some()
+                || audit
+                    .iter()
+                    .any(|e| e.actor == PROVISIONING_INSTALLER && e.app_id == manifest.id);
+            backend.save_first_party_releases(&recorded).await?;
             let mut installed = false;
             for id in backend.app_install_ids_at(&scope_key).await? {
                 installed |= backend
@@ -58,16 +80,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     .await?
                     .is_some_and(|existing| existing.app_id == manifest.id);
             }
-            if installed {
+            if installed || provisioned_before {
                 continue;
             }
-            let manifest_text = std::str::from_utf8(bundle.manifest)
-                .map_err(|_| NetworkError::msg("A signed manifest is not UTF-8"))?;
             let manifest_sha256 = hex::encode(sha256(bundle.manifest));
-            let release = StoredRelease {
-                manifest: manifest_text.to_string(),
-                signature: bundle.signature.trim().to_string(),
-            };
             backend.save_app_release(&manifest_sha256, &release).await?;
             let record = AppInstall {
                 id: uuid::Uuid::new_v4().to_string(),

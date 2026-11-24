@@ -102,6 +102,8 @@ mod kernel_call_tests;
 #[cfg(test)]
 mod kernel_effective_tests;
 #[cfg(test)]
+mod kernel_first_party_artifact_tests;
+#[cfg(test)]
 mod kernel_header_tests;
 #[cfg(test)]
 mod kernel_host_net_grant_tests;

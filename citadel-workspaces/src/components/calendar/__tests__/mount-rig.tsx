@@ -50,10 +50,15 @@ export function mountRig(me: string, store: MemoryStore = new MemoryStore(me), e
 
 /** `mayEditNode`: whether `me` holds EditMdx on n1, as the tab host reads it from the member's permissions. */
 export function mountCalendar(glue: GlueInstance, me: string, mayEditNode: boolean): void {
+  mountCalendarAs(glue, me, mayEditNode, {} as AppInstall, { name: 'Calendar' } as AppManifest);
+}
+
+/** The same, mounted as `install` with its verified `manifest`, for what the manifest decides (`opens`). */
+export function mountCalendarAs(glue: GlueInstance, me: string, mayEditNode: boolean, install: AppInstall, manifest: AppManifest): void {
   const state: WorkspaceState = { nodes: { n1: NODE }, members: {}, workspace: { metadata: [] } } as unknown as WorkspaceState;
   render(
     <WorkspaceContext.Provider value={{ state }}>
-      <CalendarMount glue={glue} install={{} as AppInstall} manifest={{ name: 'Calendar' } as AppManifest} nodeId="n1" me={me} tabId="calendar" mayEditNode={mayEditNode} />
+      <CalendarMount glue={glue} install={install} manifest={manifest} nodeId="n1" me={me} tabId="calendar" mayEditNode={mayEditNode} />
     </WorkspaceContext.Provider>,
   );
 }

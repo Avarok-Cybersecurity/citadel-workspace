@@ -18,7 +18,7 @@ const APPS_SRC = join(ROOT, 'citadel-workspaces/src/lib/citadel-apps');
 /** Every module the catalogue reader reaches, relative to APPS_SRC. A missing one fails loudly. */
 export const RULE_MODULES = [
   'manifest/catalogue-format.ts', 'manifest/manifest-rules.ts', 'manifest/manifest-rules-parts.ts',
-  'manifest/manifest-shape.ts', 'manifest/json-duplicate-keys.ts', 'manifest/net-rules.ts',
+  'manifest/manifest-shape.ts', 'manifest/json-duplicate-keys.ts', 'manifest/net-rules.ts', 'manifest/opens-rules.ts',
   // The P2P and topic capability rules, and the pure limits and topic-name checks they use.
   'manifest/manifest-rules-peer.ts', 'manifest/topic-names.ts', 'host/limits.ts',
   'app-identity.ts', 'icon.ts',

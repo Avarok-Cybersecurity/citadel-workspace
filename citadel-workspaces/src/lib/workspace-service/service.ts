@@ -5,7 +5,7 @@
  * Delegates operations to focused sub-modules.
  */
 
-import type { GroupMessageType, NodeEntityType, Permission, SignInSettings, UpdateOperation, WorkspaceProtocolPayload, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
+import type { BillingPortalAnswer, GroupMessageType, NodeEntityType, Permission, SignInSettings, UpdateOperation, WorkspaceProtocolPayload, WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { failOnSocketLoss } from '../websocket/request-response';
 import { websocketService } from '@/lib/websocket-service';
 import { eventEmitter } from '@/lib/event-emitter';
@@ -20,6 +20,7 @@ import * as nodes from './node-operations';
 import * as nodeTabs from './node-tabs-operations';
 import { createDocument, type NewDocument } from './document-operations';
 import * as signIn from './sign-in-settings';
+import { openBillingPortal } from './billing-portal';
 import { updateWorkspaceProfile, type WorkspaceProfileChange } from './workspace-profile';
 
 export class WorkspaceService implements ProtocolSender {
@@ -117,6 +118,7 @@ export class WorkspaceService implements ProtocolSender {
   public getServerCapabilities(): Promise<void> { return nodes.getServerCapabilities(this); }
   public getSignInSettings(): Promise<SignInSettings> { return signIn.getSignInSettings(this); }
   public updateSignInSettings(settings: SignInSettings): Promise<SignInSettings> { return signIn.updateSignInSettings(this, settings); }
+  public openBillingPortal(): Promise<BillingPortalAnswer> { return openBillingPortal(this); }
 
   public cleanup(): void { /* Any cleanup needed */ }
 

@@ -30,10 +30,12 @@ import { AppZoneContext, zoneClaims, type AppZoneEnvironment } from '@/component
 import { listedApps } from '@/lib/citadel-apps/listing-model';
 import { readAppsAnswer, type AppsAnswer } from '@/lib/citadel-apps/wire/apps-answer';
 import type { AppsTransport } from '@/lib/workspace-service/apps-operations';
+import type { ConsentChoice } from '@/lib/citadel-apps/member-consent-types';
 import { InstanceSlots } from '@/lib/citadel-apps/host/instance-slots';
 import { STANDARD_HOST_POLICY } from '@/lib/citadel-apps/host/limits';
 import { spawnAppWorker } from '@/lib/citadel-apps/host/spawn-app-worker';
 import { createAppZoneRuntime } from '@/lib/citadel-apps/runtime/zone-runtime';
+import { OpenedFiles } from '@/lib/citadel-apps/runtime/opened-files';
 import { animationFrames, type FrameLoop } from '@/lib/citadel-apps/runtime/zone-input';
 import { pageZoneWatchers } from '@/lib/citadel-apps/runtime/zone-watchers';
 import type { ZoneAudit } from '@/lib/citadel-apps/runtime/zone-close';
@@ -128,10 +130,15 @@ async function start(): Promise<void> {
       peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string, detail: unknown): void => console.warn(what, detail),
     }),
     pageUrl: () => window.location.href, locale: () => 'en', dpr: () => window.devicePixelRatio, theme: () => ({}),
+    opened: new OpenedFiles(),
   });
   const env: AppZoneEnvironment = {
     nodeId: 'n-1', me: 'alice', ancestors: [], mayInstall: 'yes', runtime,
-    data: { listing: async () => ({ ok: true, value: listedApps([listing])[0] }), installs: async () => ({ ok: true, value: [install] }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }) },
+    data: { listing: async () => ({ ok: true, value: listedApps([listing])[0] }), installs: async () => ({ ok: true, value: [install] }), setDisabledForMe: async (_i: string, d: boolean) => ({ ok: true, value: d }),
+      // The fixture grants no P2P or topics, so nothing here is asked.
+      setPeerConsentForMe: async (_i: string, c: ConsentChoice) => ({ ok: true, value: { ...c, at_ms: 1n } }) },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: () => undefined, linkUrl: () => '', copyText: async () => undefined, ...zoneClaims(),
   };
   const root: HTMLElement | null = document.getElementById('root');

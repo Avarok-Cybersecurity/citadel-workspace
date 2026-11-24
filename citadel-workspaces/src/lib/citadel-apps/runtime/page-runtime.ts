@@ -30,6 +30,7 @@ import { peerForMe } from '../peer-for-me';
 import { markTopicGroup, markTopicRequest } from '@/lib/group-conversations/app-topic-groups';
 import { p2pRegistrationService } from '@/lib/p2p-registration-service';
 import { pageZoneWatchers } from './zone-watchers';
+import { pageOpenedFiles } from './page-opened-files';
 
 const policy: HostPolicy = validateHostPolicy(STANDARD_HOST_POLICY);
 const verifier: ArtifactVerifierPort = pageArtifactVerifier(crypto.subtle, wasmAppSignatureCheck(loadWasmModule));
@@ -119,4 +120,5 @@ export const pageAppZoneRuntime: AppZoneRuntime = createAppZoneRuntime({
   locale: (): string => navigator.language,
   dpr: (): number => window.devicePixelRatio,
   theme,
+  opened: pageOpenedFiles,
 });

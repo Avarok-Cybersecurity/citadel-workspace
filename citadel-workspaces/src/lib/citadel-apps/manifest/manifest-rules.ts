@@ -11,6 +11,7 @@ import { appIconSrc } from '../icon';
 import { hasManifestShape, NODE_REACHING_SCOPES } from './manifest-shape';
 import { hasDuplicateKeys } from './json-duplicate-keys';
 import { isHttpsUrl } from './net-rules';
+import { opensProblem } from './opens-rules';
 import { artifactProblem, capabilitiesProblem, distinct, limitsProblem, lowerHex, plainText } from './manifest-rules-parts';
 
 export const MAX_MANIFEST_BYTES: number = 192 * 1024;
@@ -20,7 +21,8 @@ export const ABI_FIRST_PARTY_GLUE: string = 'wasm-bindgen-glue-firstparty';
 /** The Rust `ManifestRefusal` variant each refusal corresponds to. */
 export type ManifestField =
   | 'TooLarge' | 'Json' | 'Format' | 'Id' | 'Version' | 'Sdk' | 'Publisher' | 'Name' | 'Summary' | 'Description'
-  | 'Icon' | 'Categories' | 'Audience' | 'Surfaces' | 'Scopes' | 'Capabilities' | 'Limits' | 'Artifact' | 'PreviousVersions';
+  | 'Icon' | 'Categories' | 'Audience' | 'Surfaces' | 'Scopes' | 'Capabilities' | 'Limits' | 'Artifact' | 'PreviousVersions'
+  | 'Opens';
 
 export type ManifestReading = { ok: true; manifest: AppManifest } | { ok: false; field: ManifestField; why: string };
 
@@ -74,6 +76,8 @@ export function validateManifest(m: AppManifest): ManifestReading {
   if (limits !== null) return refuse('Limits', limits);
   const artifact: string | null = artifactProblem(m.artifact);
   if (artifact !== null) return refuse('Artifact', artifact);
+  const opens: string | null = m.opens === undefined ? null : opensProblem(m.opens, m.surfaces);
+  if (opens !== null) return refuse('Opens', opens);
   const previous: string[] | undefined = m.previous_versions;
   if (previous !== undefined) {
     const older = (v: string): boolean => { const p: AppVersion | null = parseAppVersion(v); return p !== null && compareVersions(p, version) < 0; };
@@ -86,7 +90,11 @@ export function validateManifest(m: AppManifest): ManifestReading {
 function asManifest(value: Record<string, unknown>): AppManifest {
   const copy: Record<string, unknown> = JSON.parse(JSON.stringify(value), (_k: string, v: unknown): unknown => (v === null ? undefined : v)) as Record<string, unknown>;
   const icon: { png_base64: string; max_bytes: number } = copy.icon as { png_base64: string; max_bytes: number };
-  return { ...copy, icon: { png_base64: icon.png_base64, max_bytes: BigInt(icon.max_bytes) } } as AppManifest;
+  const opens: { extensions: string[]; surface: string; max_bytes: number } | undefined = copy.opens as { extensions: string[]; surface: string; max_bytes: number } | undefined;
+  return {
+    ...copy, icon: { png_base64: icon.png_base64, max_bytes: BigInt(icon.max_bytes) },
+    ...(opens === undefined ? {} : { opens: { ...opens, max_bytes: BigInt(opens.max_bytes) } }),
+  } as AppManifest;
 }
 
 export function readManifestBytes(bytes: Uint8Array): ManifestReading {

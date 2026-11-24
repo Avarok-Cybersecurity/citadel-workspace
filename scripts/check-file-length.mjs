@@ -80,7 +80,7 @@ const SKIP = new Map([
   // lazy) and revfs-service.ts (it holds a store AND its persistence).
   ['lib/revfs/revfs-retry.ts', 254],
 
-  ['components/ui/sidebar.tsx', 487],
+  ['components/ui/sidebar.tsx', 486],
   ['lib/file-transfer/service.ts', 273],
   // Two data-testid attributes, so the integration suite's readiness probe can
   // stop keying on button copy — see ROBUSTNESS round 168.

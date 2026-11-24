@@ -6,7 +6,7 @@ use super::apps_gather::{gather, members, node_exists, snapshot};
 use super::apps_header::rewrite_mdx;
 use super::apps_offer::{commit_artifact, obtain_artifact, resolve_offer};
 use crate::kernel::apps::facts::{authority_node, ViewsNeeded};
-use crate::kernel::apps::install::{decide_install, InstallInput};
+use crate::kernel::apps::install::{decide_install, stores_module, InstallInput};
 use crate::kernel::apps::md_header::inject;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::transaction::apps_store::APPS_LOCK;
@@ -78,7 +78,13 @@ async fn install_steps<R: Ratchet + Send + Sync + 'static>(
         scope_node_exists: node_exists(kernel, authority).await?,
         facts: &facts,
     })?;
-    let artifact = obtain_artifact(kernel, caller, &manifest.artifact).await?;
+    // A glue release's module is in the UI bundle: there is none to store. Any other release's
+    // is obtained and checked against its sha256, a first-party one's included.
+    let artifact = if stores_module(manifest) {
+        Some(obtain_artifact(kernel, caller, &manifest.artifact).await?)
+    } else {
+        None
+    };
     let scope_key = scope.scope_key().ok_or(AppsRefusal::ScopeNotSupported)?;
 
     let backend = &kernel.domain_operations.backend_tx_manager;
@@ -93,7 +99,9 @@ async fn install_steps<R: Ratchet + Send + Sync + 'static>(
             }
         }
     }
-    commit_artifact(kernel, caller, &manifest.artifact.sha256, artifact).await?;
+    if let Some(artifact) = artifact {
+        commit_artifact(kernel, caller, &manifest.artifact.sha256, artifact).await?;
+    }
     backend
         .save_app_release(&offered.manifest_sha256, &offered.release)
         .await?;

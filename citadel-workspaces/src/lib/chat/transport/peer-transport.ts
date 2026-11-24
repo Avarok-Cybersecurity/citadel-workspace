@@ -17,7 +17,8 @@ import type { GroupRestriction } from '@/components/chat/group-restriction';
 import { chatFeatures } from './features';
 import { peerHistory } from './peer-history';
 import { peerStatus } from './peer-status';
-import { openReceivedFile, type ReceivedFileRead } from '@/lib/received-files/received-file';
+import { openReceivedFile, readReceivedFile, type ReceivedFileRead } from '@/lib/received-files/received-file';
+import { MAX_PULLED_FILE_BYTES } from '@/components/file-manager/pulled-file-reader';
 import { browserReceivedFileIO } from '@/lib/received-files/received-file-io';
 import type { ChatSelf, ChatTransport, DocumentInvitation, DocumentPort, FileOpening, FilePort, FileSendReceipt, SendPort, TextSend } from './chat-transport';
 
@@ -64,6 +65,13 @@ function peerFiles(peer: ChatPeer): FilePort {
       return { kind: 'unreadable', reason: read.reason, details };
     },
     read: null,
+    readTransfer: async (transferId: string): Promise<Uint8Array> => {
+      const transfer: FileTransfer | undefined = fileTransferService.getTransfer(transferId);
+      if (!transfer) throw new Error('This device has no record of this file.');
+      const read: ReceivedFileRead = await readReceivedFile(transfer, browserReceivedFileIO, MAX_PULLED_FILE_BYTES);
+      if (read.kind === 'unreadable') throw new Error(read.reason);
+      return read.file.bytes;
+    },
   };
 }
 

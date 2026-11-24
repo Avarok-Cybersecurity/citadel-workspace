@@ -1,0 +1,5 @@
+{
+  "extensions": ["docx", "dotx", "odt", "md", "txt"],
+  "surface": "canvas_pane",
+  "max_bytes": 268435456
+}

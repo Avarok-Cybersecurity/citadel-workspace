@@ -23,3 +23,12 @@ export function lockedRemovalQuestion(name: string, unsentEdits: boolean): strin
   const loss: string = unsentEdits ? ' Edits to it that were never sent are among them and will be lost.' : '';
   return `The copies of ${name} kept on this device are locked and cannot be opened here.${loss} Remove them?`;
 }
+
+/** The document title bar's lock (AtRestStatus): its name, which its tooltip repeats. */
+export const AT_REST_STATUS_ON: string = 'Encrypted at rest on this device';
+export const AT_REST_STATUS_OFF: string = 'Not encrypted at rest';
+export const AT_REST_STATUS_CHANGING: string = 'Encryption on this device is being changed';
+export const AT_REST_STATUS_UNKNOWN: string = 'Whether this device encrypts your documents is not known yet';
+
+/** Where the lock's setting is changed; the lock opens it there. */
+export const AT_REST_WHERE_TO_CHANGE: string = 'Change it in Settings → Security → Documents on this device.';

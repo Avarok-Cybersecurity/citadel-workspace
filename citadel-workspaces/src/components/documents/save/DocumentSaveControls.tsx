@@ -2,7 +2,7 @@
  * The title bar's save controls for an open document, Word-style: where the edits are (the one
  * place the status is shown, SaveIndicator), what can be done about it (Try again when this
  * device's copy could not be written; Sync or Discard while copies kept here are locked), the
- * AutoSave switch, the account's "Encrypt on this device" switch, and Save. Everything whose width
+ * AutoSave switch, the lock that says whether this device encrypts the account's documents, and Save. Everything whose width
  * changes with the state sits left of the switches, and the group is anchored right, so a change
  * of state never moves a control. Closing the page warns only while some edits are neither
  * acknowledged nor yet written to this device. Nothing renders until the session is open.
@@ -18,7 +18,7 @@ import { useVisibleSave } from './use-visible-save';
 import type { Clock } from '@/lib/cdoc/collab/ports';
 import type { SaveControl } from './save-control';
 import { SaveIndicator, SaveStatusLine, wordsOnTheirOwnRow } from './SaveIndicator';
-import { AtRestSwitch } from './AtRestSwitch';
+import { AtRestStatus } from './AtRestStatus';
 import { LockedCopiesActions } from './LockedCopiesActions';
 
 const useInputs = (control: SaveControl): SaveInputs | null => useSyncExternalStore(control.inputs.subscribe, control.inputs.get);
@@ -80,7 +80,7 @@ function LoadedControls({ control, inputs, clock, timing, compact, switchId }: L
           <Switch id={switchId} checked={inputs.autoSave} data-testid="docs-autosave" onCheckedChange={(on: boolean): void => attempt(control.setAutoSave(on), 'change AutoSave')} />
           <label htmlFor={switchId} className="text-sm text-foreground">AutoSave</label>
         </div>
-        {account !== null && <AtRestSwitch account={account} place="titleBar" />}
+        {account !== null && <AtRestStatus account={account} />}
         <button
           type="button"
           data-testid="docs-save"

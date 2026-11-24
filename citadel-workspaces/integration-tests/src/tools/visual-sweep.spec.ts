@@ -194,11 +194,9 @@ test.describe.serial('visual sweep', () => {
 
   test('nothing overlaps at phone width', async () => {
     test.setTimeout(300_000);
-    // Diagnostics OFF, so this measures what a real user sees: the Leader
-    // indicator is dev-only (isDiagnosticsUiEnabled) and would otherwise crowd
-    // the top bar in a way production never shows.
+    // Dev mode is off on a fresh device, so the Leader indicator is not drawn
+    // and this measures the top bar a real user sees.
     await page.evaluate(() => {
-      localStorage.setItem('citadel:diagnostics', 'false');
       localStorage.setItem('citadel:theme', 'dark');
     });
     // Its own account, so this can run standalone rather than only after the
@@ -408,7 +406,6 @@ test('admin surfaces', async ({ browser }) => {
   try {
     await adminPage.goto(config.BASE_URL, { waitUntil: 'commit', timeout: 60_000 });
     await clearBrowserStorage(adminPage);
-    await adminPage.evaluate(() => localStorage.setItem('citadel:diagnostics', 'false'));
     await adminPage.reload({ waitUntil: 'commit', timeout: 60_000 });
     await waitForAppReady(adminPage, 60_000);
 

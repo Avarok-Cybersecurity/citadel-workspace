@@ -10460,11 +10460,12 @@ find their font size reset and their privacy switches back at the defaults.
 | `citadel:appearance-settings` | a device preference, not an identity |
 | `citadel:privacy-settings` | as above, and its defaults are the safer values |
 | `citadel_recent_servers` | a list the user can see and manage; silently emptying a visible feature is a different bug |
-| `citadel:diagnostics` | a debugging opt-in the user set themselves |
 
 The split is the point: **residue the user cannot see goes, state the user chose
 stays.** A rule that cleared everything would pass the obvious test and lose that
 distinction, which is why the "kept" set is asserted rather than assumed.
+(A fourth kept key, the `citadel:diagnostics` opt-in, was later retired with the
+badge it gated; Dev mode replaced it, and sign-out now clears the old key.)
 
 Three controls. Clearing nothing fails 3 of 5; clearing everything also fails 3
 of 5 — the same count, different tests, which is what makes the pair worth

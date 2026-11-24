@@ -52,6 +52,8 @@ export const SUCCESS_RESPONSES: Record<string, readonly string[]> = {
   Apps: ['Apps'],
   GetSignInSettings: ['SignInSettings'],
   UpdateSignInSettings: ['SignInSettings'],
+  // Plan & billing over the session; a refusal is an Error answer.
+  OpenBillingPortal: ['BillingPortal'],
   DeleteNode: ['NodeDeleted'],
   MoveNode: ['NodeMoved'],
 

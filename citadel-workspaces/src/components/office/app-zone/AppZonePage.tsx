@@ -4,7 +4,7 @@
  * already taken. `runtime` is the runtime stream's seam; it is passed explicitly (null until
  * apps can run), so nothing runs by default.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { eventEmitter } from '@/lib/event-emitter';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { usePermission } from '@/hooks/use-permission';
@@ -38,13 +38,15 @@ export function AppZonePage({ nodeId, runtime, children }: AppZonePageProps): JS
     if (event !== undefined && changesInstalls(event.answer)) setData(zoneDataFrom(sessionAppsTransport));
   }), []);
 
+  const reload: () => void = useCallback((): void => setData(zoneDataFrom(sessionAppsTransport)), []);
+
   const env: AppZoneEnvironment = useMemo((): AppZoneEnvironment => ({
-    nodeId, me, ancestors, mayInstall, data, runtime,
+    nodeId, me, ancestors, mayInstall, data, reload, runtime,
     openLink: (link: AppLink): void => openAppsModal({ kind: 'link', link }),
     linkUrl: (link: AppLink): string => appLinkUrl(window.location.origin, link),
     copyText: (text: string): Promise<void> => navigator.clipboard.writeText(text),
     ...claims,
-  }), [nodeId, me, ancestors, mayInstall, data, runtime, claims]);
+  }), [nodeId, me, ancestors, mayInstall, data, reload, runtime, claims]);
 
   return <AppZoneContext.Provider value={env}>{children}</AppZoneContext.Provider>;
 }

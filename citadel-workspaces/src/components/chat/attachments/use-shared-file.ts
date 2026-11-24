@@ -20,6 +20,8 @@ export interface SharedFileView {
   readonly failure: string | null;
   /** Null where this conversation cannot read the file. */
   readonly download: (() => void) | null;
+  /** The file's bytes (read once, kept), for an app that opens it; null where this conversation cannot read them. */
+  readonly read: (() => Promise<Uint8Array>) | null;
 }
 
 export function useSharedFile(file: SharedFile): SharedFileView {
@@ -63,5 +65,5 @@ export function useSharedFile(file: SharedFile): SharedFileView {
       .finally((): void => setBusy(false));
   }, [io, file, read]);
 
-  return { pictureUrl, busy, failure, download: io === null ? null : download };
+  return { pictureUrl, busy, failure, download: io === null ? null : download, read: io === null ? null : read };
 }

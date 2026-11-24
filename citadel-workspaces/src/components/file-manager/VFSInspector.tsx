@@ -17,7 +17,7 @@ import { formatSize } from './item-format';
 import { folderSummary } from './vfs-item-view';
 import { stateConfig } from './vfs-content-helpers';
 import { canDownload } from './item-permissions';
-import { docsOpenAction } from './docs-file-open';
+import { fileMenuModel, openLabel, type FileMenuModel, type FileOpener } from '@/lib/citadel-apps/openers/openers';
 import type { VFSItemActions } from './vfs-item-actions';
 
 export interface VFSInspectorProps {
@@ -40,11 +40,21 @@ function Row({ label, value }: { label: string; value: string }): JSX.Element {
   );
 }
 
+/** The inspector is where a tapped file's actions are, so each app that opens it is a 44 px button here. */
+function OpenButton({ app, label, onOpen, testId, variant }: { app: FileOpener; label: string; onOpen: (app: FileOpener) => void; testId: string; variant?: 'outline' }): JSX.Element {
+  const Icon: FileOpener['icon'] = app.icon;
+  return (
+    <Button size="sm" variant={variant} className="col-span-2 h-[44px]" data-testid={testId} data-app={app.id} onClick={() => onOpen(app)}>
+      <Icon className="mr-2 h-4 w-4" aria-hidden="true" />{label}
+    </Button>
+  );
+}
+
 function InspectorBody({ node, actions, peerName, storageName, from, modified }: Omit<VFSInspectorProps, 'onClose'>): JSX.Element {
   const isDir: boolean = node.type === 'directory';
   const thumbnail: string | undefined = node.fileMetadata?.thumbnail;
   const state: string | null = node.fileState ? stateConfig[node.fileState].title : null;
-  const openInDocs: (() => void) | null = docsOpenAction(actions, node);
+  const menu: FileMenuModel = fileMenuModel(actions.openersOf(node), canDownload(node));
   return (
     <div className="flex flex-col gap-[16px] p-[16px]" data-testid="vfs-inspector-body">
       <div className="grid h-[136px] place-items-center rounded-[6px] border border-border bg-surface">
@@ -57,9 +67,10 @@ function InspectorBody({ node, actions, peerName, storageName, from, modified }:
         <p className="text-xs text-muted-foreground">{isDir ? 'Folder' : fileKind(node.name)}</p>
       </div>
       <div className="grid grid-cols-2 gap-[8px]">
-        {openInDocs !== null && (
-          <Button size="sm" className="col-span-2 h-[44px]" data-testid="vfs-inspector-open-in-docs" onClick={openInDocs}>Open in Citadel Docs</Button>
-        )}
+        {menu.open !== null && <OpenButton app={menu.open} label={openLabel(menu.open)} onOpen={(app: FileOpener) => actions.openIn(app, node)} testId="vfs-inspector-open-in-app" />}
+        {menu.openWith.slice(1).map((app: FileOpener) => (
+          <OpenButton key={app.name} app={app} label={openLabel(app)} onOpen={(a: FileOpener) => actions.openIn(a, node)} testId="vfs-inspector-open-with-app" variant="outline" />
+        ))}
         {isDir
           ? <Button size="sm" className="h-[32px]" onClick={() => actions.openFolder(node.path)}>Open</Button>
           : <Button size="sm" className="h-[32px]" onClick={() => actions.download(node)} disabled={!canDownload(node)} title={canDownload(node) ? undefined : 'Nothing stored to download: this records a transfer.'}>Download</Button>}

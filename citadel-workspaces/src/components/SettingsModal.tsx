@@ -13,12 +13,13 @@ import {
   PermissionsSettingsTab,
   SecuritySettingsTab,
   NotificationsSettingsTab,
+  AdvancedSettingsTab,
 } from './settings';
-import { Settings, Wifi, Palette, Shield, Lock, KeyRound, Bell } from 'lucide-react';
+import { Settings, Wifi, Palette, Shield, Lock, KeyRound, Bell, Wrench } from 'lucide-react';
 import { connectionManager } from '@/lib/connection';
 import type { CurrentConnectionInfo } from '@/lib/connection/types';
 
-export type SettingsTab = 'general' | 'connections' | 'appearance' | 'privacy' | 'notifications' | 'permissions' | 'security';
+export type SettingsTab = 'general' | 'connections' | 'appearance' | 'privacy' | 'notifications' | 'permissions' | 'security' | 'advanced';
 
 export interface SettingsModalProps {
   open: boolean;
@@ -31,11 +32,11 @@ export function SettingsModal({ open, onOpenChange, tab }: SettingsModalProps): 
   const connectionInfo: CurrentConnectionInfo | null = connectionManager.getConnectionInfo();
   const isConnected: boolean = !!connectionInfo?.cid;
 
-  const tabTriggerClass: "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-muted-foreground gap-1.5 px-1.5 text-xs rounded-lg transition-all data-[state=active]:shadow-md data-[state=active]:shadow-primary-accent/20 [&>svg]:shrink-0" = "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-muted-foreground gap-1.5 px-1.5 text-xs rounded-lg transition-all data-[state=active]:shadow-md data-[state=active]:shadow-primary-accent/20 [&>svg]:shrink-0";
+  const tabTriggerClass: "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-muted-foreground gap-1.5 px-1.5 text-xs rounded-lg transition-all data-[state=active]:shadow-md data-[state=active]:shadow-primary-accent/20 [&>svg]:shrink-0 [&>span]:min-w-0 [&>span]:truncate" = "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-muted-foreground gap-1.5 px-1.5 text-xs rounded-lg transition-all data-[state=active]:shadow-md data-[state=active]:shadow-primary-accent/20 [&>svg]:shrink-0 [&>span]:min-w-0 [&>span]:truncate";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[640px] bg-background border-border shadow-2xl shadow-black/40 sm:max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[720px] bg-background border-border shadow-2xl shadow-black/40 sm:max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
           <DialogTitle className="text-xl font-bold text-foreground">Settings</DialogTitle>
           <p className="text-sm text-muted-foreground mt-1">Configure your workspace preferences</p>
@@ -46,7 +47,7 @@ export function SettingsModal({ open, onOpenChange, tab }: SettingsModalProps): 
             {/* Each trigger's text is hidden below `sm`, which left five
                 icon-only tabs with no accessible name on a phone. aria-label
                 gives them one at every width. */}
-            <TabsList className="grid w-full grid-cols-7 bg-input h-10 rounded-lg p-1">
+            <TabsList className="grid w-full grid-cols-8 bg-input h-10 rounded-lg p-1">
               <TabsTrigger value="general" aria-label="General" className={tabTriggerClass}>
                 <Settings className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">General</span>
@@ -83,10 +84,14 @@ export function SettingsModal({ open, onOpenChange, tab }: SettingsModalProps): 
                 <Lock className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Perms</span>
               </TabsTrigger>
-              {/* Last, so the tabs before it keep their places. */}
+              {/* Appended, so the tabs before them keep their places. */}
               <TabsTrigger value="security" aria-label="Security" className={tabTriggerClass} data-testid="settings-tab-security">
                 <KeyRound className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Security</span>
+              </TabsTrigger>
+              <TabsTrigger value="advanced" aria-label="Advanced" className={tabTriggerClass} data-testid="settings-tab-advanced">
+                <Wrench className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Advanced</span>
               </TabsTrigger>
             </TabsList>
             {/* The reason these two tabs are dimmed was only a hover title; a phone never showed it. */}
@@ -124,6 +129,10 @@ export function SettingsModal({ open, onOpenChange, tab }: SettingsModalProps): 
 
             <TabsContent value="security" className="mt-4 min-h-[300px]">
               <SecuritySettingsTab />
+            </TabsContent>
+
+            <TabsContent value="advanced" className="mt-4 min-h-[300px]">
+              <AdvancedSettingsTab />
             </TabsContent>
           </div>
         </Tabs>

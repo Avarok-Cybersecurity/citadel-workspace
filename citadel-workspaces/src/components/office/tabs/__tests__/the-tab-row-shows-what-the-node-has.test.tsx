@@ -7,6 +7,8 @@
  * I/O boundary, which records what would be sent.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+// Installs not known: every stored tab shows (installed-tabs.ts); these are about the stored list.
+import { INSTALLS_UNKNOWN } from '@/lib/node-tabs/installed-tabs';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { forgetAllTabs, rememberTab } from '@/lib/node-tabs/tab-memory';
@@ -34,7 +36,7 @@ const WRITER: Writer = {
 };
 
 function Pane({ node, workspace, chat }: { node?: Record<string, unknown>; workspace?: Record<string, unknown>; chat: boolean }): JSX.Element {
-  const model: import('../use-node-tabs').NodeTabsModel = useNodeTabs({ nodeId: 'n1', chatEnabled: chat, nodeMetadata: node, workspaceMetadata: workspace, writer: WRITER });
+  const model: import('../use-node-tabs').NodeTabsModel = useNodeTabs({ nodeId: 'n1', chatEnabled: chat, nodeMetadata: node, workspaceMetadata: workspace, here: INSTALLS_UNKNOWN, writer: WRITER });
   return (
     <NodeTabs
       model={model}

@@ -12,12 +12,16 @@ pub mod apps_manifest_check_parts;
 pub mod apps_manifest_check_peer;
 /// A document's hidden required-apps header.
 pub mod apps_md_header;
+/// The files an app opens, and how that declaration is checked.
+pub mod apps_opens;
 /// A member's own peer-to-peer and topic settings, and `AuthorizePeer`'s question.
 pub mod apps_peer;
 /// The apps requests.
 pub mod apps_protocol;
 /// The answers to apps requests, and the apps audit log.
 pub mod apps_responses;
+/// "Plan & billing" over a member's session.
+pub mod billing;
 /// Files shared in a node's chat, kept on the workspace server; see `chat_attachments`.
 pub mod chat_attachments;
 #[cfg(test)]
@@ -348,6 +352,12 @@ pub enum WorkspaceProtocolRequest {
     UpdateSignInSettings {
         settings: SignInSettings,
     },
+
+    // ========== Plan & billing ==========
+    /// Open this workspace's billing portal (`billing`). For whoever holds EditWorkspaceConfig at
+    /// the workspace root, decided from the session's own account; anyone else is refused with
+    /// `Error`. Answered with `BillingPortal`, or `Error` from a server with no billing host.
+    OpenBillingPortal,
 
     // ========== Generic Tree Node Operations ==========
     /// Create a new node in the workspace hierarchy tree.
@@ -728,6 +738,9 @@ pub enum WorkspaceProtocolResponse {
 
     /// This workspace's sign-in settings, as stored now.
     SignInSettings(SignInSettings),
+
+    /// The answer to an admitted `OpenBillingPortal`, to the caller alone.
+    BillingPortal(billing::BillingPortalAnswer),
 
     // ========== Tree Node Responses ==========
     /// Single node response

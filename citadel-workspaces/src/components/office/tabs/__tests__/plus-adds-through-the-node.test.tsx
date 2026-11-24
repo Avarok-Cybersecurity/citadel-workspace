@@ -8,6 +8,8 @@
  * which records what would be sent.
  */
 import { describe, expect, it, vi } from 'vitest';
+// Installs not known: every stored tab shows (installed-tabs.ts); these are about the stored list.
+import { INSTALLS_UNKNOWN } from '@/lib/node-tabs/installed-tabs';
 import { act, renderHook, type RenderHookResult } from '@testing-library/react';
 import type { AppsModalRequest } from '@/lib/citadel-apps/apps-modal-store';
 
@@ -23,7 +25,7 @@ describe('"+" on a node', () => {
     const writes: Array<readonly string[] | null> = [];
     // The node as the server last broadcast it: rerendered with the answer to the write.
     const { result, rerender } = renderHook(({ tabs }: { tabs: string[] }): Model => useNodeTabs({
-      nodeId: 'n1', chatEnabled: false, nodeMetadata: { app_tabs: tabs }, workspaceMetadata: { default_app_tabs: [] },
+      nodeId: 'n1', chatEnabled: false, nodeMetadata: { app_tabs: tabs }, workspaceMetadata: { default_app_tabs: [] }, here: INSTALLS_UNKNOWN,
       writer: { writeNodeTabs: async (_n: string, appIds: readonly string[] | null): Promise<void> => { writes.push(appIds); }, setDefaultAppTabs: async (): Promise<void> => undefined },
     }), { initialProps: { tabs: ['com.acme.kanban'] } });
     const request: AppsModalRequest = addTabRequest('n1', result.current);
@@ -36,7 +38,7 @@ describe('"+" on a node', () => {
     expect(result.current.active).toBe('app:net.avarok.calendar');
 
     const refused: RenderHookResult<Model, unknown> = renderHook((): Model => useNodeTabs({
-      nodeId: 'n2', chatEnabled: false, nodeMetadata: undefined, workspaceMetadata: { default_app_tabs: [] },
+      nodeId: 'n2', chatEnabled: false, nodeMetadata: undefined, workspaceMetadata: { default_app_tabs: [] }, here: INSTALLS_UNKNOWN,
       writer: { writeNodeTabs: (): Promise<void> => Promise.reject(new Error('You may not change this page’s tabs.')), setDefaultAppTabs: async (): Promise<void> => undefined },
     }));
     const nope: AppsModalRequest = addTabRequest('n2', refused.result.current);

@@ -119,7 +119,7 @@ export function MembersSectionModals({
 
       {/* All Members Dialog */}
       <Dialog open={showAllMembersDialog} onOpenChange={onSetShowAllMembersDialog}>
-        <DialogContent className="max-w-2xl bg-surface border-border">
+        <DialogContent className="max-w-2xl border-border">
           <DialogHeader><DialogTitle className="text-foreground">{locationText}</DialogTitle></DialogHeader>
           <ScrollArea className="max-h-[60vh]">
             <div className="space-y-2">

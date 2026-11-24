@@ -11,6 +11,7 @@ import type { CitadelAppId } from './registry';
 import type { ExportFormat } from '../cdoc/editor/file-formats';
 
 import { DOCS_IMPORT_FORMATS, type DocsImportFormat } from './docs-import-formats';
+import { extensionOf } from './openers/file-extension';
 
 export { DOCS_IMPORT_FORMATS, type DocsImportFormat };
 
@@ -52,11 +53,6 @@ export interface RoutableFile {
   readonly mime: string;
   /** The Citadel App the file's record names, or null when it names none. */
   readonly app: CitadelAppId | null;
-}
-
-function extensionOf(name: string): string {
-  const dot: number = name.lastIndexOf('.');
-  return dot <= 0 ? '' : name.slice(dot + 1).toLowerCase();
 }
 
 const isImportFormat = (value: string): value is DocsImportFormat => (DOCS_IMPORT_FORMATS as readonly string[]).includes(value);

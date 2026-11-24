@@ -7,7 +7,7 @@ import { describe, expect, it, vi, type Mock } from 'vitest';
 import { act, render, screen, waitFor, fireEvent, type RenderResult } from '@testing-library/react';
 import type { AppInstall } from 'citadel-workspace-client-ts';
 import { AppZone } from '../AppZone';
-import { NO_GLUE, NO_TABS } from './doubles/no-tabs';
+import { NO_GLUE, NO_TABS, ANSWER_TAKEN } from './doubles/no-tabs';
 import { AppZoneContext, zoneClaims, type AppZoneEnvironment, type AppZoneHandle, type AppZoneRuntime, type ZoneHost } from '../app-zone-environment';
 import { listedApps, type ListedApp } from '@/lib/citadel-apps/listing-model';
 import type { Tri } from '@/lib/citadel-apps/scope-options';
@@ -33,8 +33,10 @@ function env(w: Partial<World> = {}): TestEnvironment {
     data: {
       listing: async () => (world.listing === null ? { ok: false, refusal: 'Unavailable' } : { ok: true, value: world.listing }),
       installs: async () => (world.installs === null ? { ok: false, refusal: 'ServerFeatureUnavailable' } : { ok: true, value: world.installs }),
-      setDisabledForMe: async (_id: string, d: boolean) => ({ ok: true, value: d }),
+      setDisabledForMe: async (_id: string, d: boolean) => ({ ok: true, value: d }), setPeerConsentForMe: ANSWER_TAKEN,
     },
+    // Nothing here presses "Try again": the data never fails to load.
+    reload: (): void => undefined,
     openLink: (link: AppLink): void => { opened.push(link); },
     linkUrl: (link: AppLink): string => `https://work.example/workspace?app=${link.appId}`,
     copyText: async (t: string): Promise<void> => { copied.push(t); },
@@ -72,7 +74,7 @@ describe('an app zone', () => {
   it('a hidden app and a missing one read the same, with no icon of its own', async () => {
     zone(env({ listing: null }));
     const el: HTMLElement = await state('not-available');
-    expect(el.textContent).toBe('This zone needs “com.acme.kanban”, which is not available to you.');
+    expect(el.textContent).toBe('This zone needs “com.acme.kanban”, which is not available to you.Ask a workspace admin whether it can be installed for you.');
     expect(screen.getByTestId('app-icon-generic')).toBeTruthy();
   });
 
@@ -104,7 +106,7 @@ describe('an app zone', () => {
 
   it('installed and active, with no runtime, still runs nothing', async () => {
     zone(env({ installs: [installOf('com.acme.kanban', { SelfOnly: 'alice' }, { id: 'a' })] }));
-    expect((await state('ready-unmounted')).textContent).toContain('It will run here once apps can run on pages.');
+    expect((await state('ready-unmounted')).textContent).toContain('Apps cannot run on this page.');
     expect(screen.queryByTestId('app-zone-host')).toBeNull();
   });
 
@@ -189,7 +191,7 @@ describe('an app zone', () => {
     const pool: AppInstall = installOf('com.acme.kanban', 'Workspace', { id: 'asks-first', granted: ['canvas', 'ihttp.p2p.serve', 'group.topic.publish'] });
     const mount: Mock<AppZoneRuntime['mount']> = vi.fn((): AppZoneHandle => ({ close: async (): Promise<void> => undefined }));
     zone(env({ installs: [pool], runtime: { mount, mountPane: NO_TABS, bindGlue: NO_GLUE } }));
-    expect((await state('needs-answer')).textContent).toContain('Kanban asks you first');
+    expect((await state('needs-answer')).textContent).toContain('Kanban needs your OK first.');
     expect(mount).not.toHaveBeenCalled();
     act(() => recordPeerConsent('asks-first', { serve: true, call: false, topics: true, at_ms: 1n }));
     await waitFor(() => expect(mount).toHaveBeenCalledTimes(1));
