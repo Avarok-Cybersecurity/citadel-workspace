@@ -1,4 +1,4 @@
-# Contract: author-signed VFS ops — FROZEN 2026-11-24
+# Contract: author-signed VFS ops — FROZEN 2026-11-24, revised round 2
 
 Parties: V9 (the `citadel-identity` addition, the agent request, kernel and client
 verification, the key directory), V1 (`SignedOp` codec), V2, V3, V8 (they verify). Needs the
@@ -19,6 +19,8 @@ key      = fingerprint(pk) = base32_lower_nopad(SHA3-256("citadel-identity-fp-v1
   those bytes first and only then decodes them. The header commits to the body (`body_hash`), the
   volume, `op_id`, the stamp, `prev` and `at_ms`, so an op cannot be replayed into another volume
   or twice into one, and the body can later be dropped without unsigning the op (`vfs-ops.md` §5).
+- A link guest signs with the invitation key its agent made for that link (`vfs-outsiders.md` §3);
+  `SignedOp.key` is that key's fingerprint.
 - A member signs with the account's Citadel identity key (the key behind `AccountIdentity.id_fp`).
   The server signs ops it authors (`author = [0]`) with its identity key (`ServerKey`, the key
   behind `AccountIdentity.server_fp`). Device volumes are signed like any other.
@@ -30,6 +32,14 @@ pub fn vfs_op_message(header: &[u8]) -> Vec<u8>;                                
 impl Identity  { pub fn sign_vfs_op(&self, header: &[u8]) -> Vec<u8>; }
 impl ServerKey { pub fn sign_vfs_op(&self, header: &[u8]) -> Vec<u8>; }
 pub fn verify_vfs_op(pk: &MlDsa65Pk, header: &[u8], sig: &[u8]) -> Result<(), SignatureError>;
+// links (vfs-outsiders §1, §3): the link key from the URL's secret, and the claim it signs
+pub const VFS_LINK_LABEL: &[u8] = b"citadel-vfs-link-v1";        pub const VFS_LINK_ID_DOMAIN: &[u8] = b"citadel-vfs-link-id-v1";
+pub const VFS_CLAIM_DOMAIN: &[u8] = b"citadel-vfs-claim-v1";     pub const VFS_RESUME_DOMAIN: &[u8] = b"citadel-vfs-resume-v1";
+pub struct LinkKey; impl LinkKey { pub fn from_secret(secret: &[u8; 32]) -> LinkKey; pub fn public_key(&self) -> &MlDsa65Pk;
+                                   pub fn sign_claim(&self, volume: &str, target: &[u8; 16], key_pk: &MlDsa65Pk) -> Vec<u8>; }
+pub fn link_id(link_pk: &MlDsa65Pk) -> [u8; 16];
+pub fn verify_claim(link_pk: &MlDsa65Pk, volume: &str, target: &[u8; 16], key_pk: &MlDsa65Pk, sig: &[u8]) -> Result<(), SignatureError>;
+pub struct InvitationKey; // from a 32-byte seed the agent draws and seals: sign_vfs_op, sign_resume, public_key
 ```
 `citadel-vfs` depends on `citadel-identity` for `SignedOp::verify(&self, pk: &MlDsa65Pk)`.
 
@@ -41,8 +51,19 @@ what it recognises as a VFS op by the signing account. Added to
 `TYPES_HASH` changes, so this rides the release's one `pkg-rebuilt` round):
 
 ```rust
-InternalServiceRequest::VfsSignOps { request_id: Uuid, cid: u64, ops: Vec<VfsUnsignedOp> }
+InternalServiceRequest::VfsSignOps { request_id: Uuid, cid: u64, signer: VfsSigner, ops: Vec<VfsUnsignedOp> }
 pub struct VfsUnsignedOp { pub header: Vec<u8>, pub body: Vec<u8> }
+pub enum VfsSigner { Identity, Invitation { link_id: String } }      // a link guest signs with its invitation key
+
+/// A link guest's agent: derive the link key from the URL's secret, make (or find) this
+/// invitation's own key in the vault, and sign the claim message. Idempotent per `link_id`.
+InternalServiceRequest::VfsInvitationOpen { request_id: Uuid, cid: u64, volume: String, target: Vec<u8>, link_secret: SecBuffer }
+InternalServiceResponse::VfsInvitationOpened(VfsInvitationOpened)
+pub struct VfsInvitationOpened { pub cid: u64, pub request_id: Option<Uuid>, pub link_id: String,
+                                 pub key_pk: Vec<u8>, pub key_fp: String, pub link_sig: Vec<u8> }
+/// The invitation key's signature over "citadel-vfs-resume-v1" ‖ 0x00 ‖ nonce (vfs-wire §3.1).
+InternalServiceRequest::VfsInvitationProve { request_id: Uuid, cid: u64, link_id: String, nonce: Vec<u8> }
+InternalServiceResponse::VfsInvitationProved(VfsInvitationProved)    // { cid, request_id, sig }
 
 InternalServiceResponse::VfsOpsSigned(VfsOpsSigned)
 pub struct VfsOpsSigned { pub cid: u64, pub request_id: Option<Uuid>, pub key: String, pub sigs: Vec<Vec<u8>> }
@@ -54,7 +75,7 @@ pub struct VfsSignFailure { pub cid: u64, pub request_id: Option<Uuid>, pub inde
 #[serde(rename_all = "snake_case")]
 pub enum VfsSignRefusal {
     NotConfigured, NoIdentity, Locked, NotAnIdentityAccount,   // as `IdentityRefusal`'s of the same names
-    Malformed, NotAuthor, NotYourVolume, Reserved, TooLarge, RateLimited, #[serde(other)] Unknown,
+    Malformed, NotAuthor, NotYourVolume, NotForThisSigner, NoInvitation, TooLarge, RateLimited, #[serde(other)] Unknown,
 }
 ```
 `sigs[i]` signs `ops[i].header`; all or nothing; `index` names the first op refused. The answers
@@ -65,13 +86,14 @@ The agent, in this order, for every op (pure rule module `vfs_sign_rules`, with 
 
 | Check | Refusal |
 |---|---|
-| the agent has an identity store / an identity / it is unlocked | `NotConfigured` / `NoIdentity` / `Locked` |
-| account `cid` is signed in on this agent and was registered with this identity | `NotAnIdentityAccount` |
+| signer `Identity`: the agent has an identity store / an identity / it is unlocked | `NotConfigured` / `NoIdentity` / `Locked` |
+| signer `Identity`: account `cid` is signed in on this agent and was registered with this identity | `NotAnIdentityAccount` |
+| signer `Invitation`: the vault holds that link's invitation key (it needs no identity and no unlock) | `NoInvitation` |
 | 1..=`VFS_SIGN_MAX_OPS = 64` ops; each `header + body <= SIGNED_OP_MAX_BYTES - 3400` | `TooLarge` |
 | the header is canonical CBOR of `Header` with `v == 1`; the body is its kind's canonical map; `SHA3-256(body) == body_hash`; `vfs-ops.md` §3 holds as far as one op alone shows | `Malformed` |
-| `kind` is 1..=8 | `Reserved` |
-| `author == [1, cid]` | `NotAuthor` |
-| the volume is the account's: `personal:<cid>` and `device:<cid>` name it; `pair:` has it as `lo` or `hi`; `group:` is a group this account is in on this agent; `node:` is well formed (its membership is the kernel's to judge) | `NotYourVolume` |
+| `Identity` signs kinds 1..=10; `Invitation` signs `Create`, `Place`, `SetPointee`, `Remove` and `Claim` only | `NotForThisSigner` |
+| `Identity`: `author == [1, cid]`; `Invitation`: `author == [2, link_id, key_fp]` of that key | `NotAuthor` |
+| the volume is the account's: `personal:<cid>` and `device:<cid>` name it; `pair:` has it as `lo` or `hi`; `group:` is a group this account is in on this agent; `node:` is well formed (its membership is the kernel's to judge). In a `personal:`, `pair:` or `group:` volume that is **not** the account's, only what an outsider may write is signed: `Create`, `Place`, `SetPointee`, `Remove` (whether it is admitted is the verifier's to judge) | `NotYourVolume` |
 | at most `VFS_SIGN_OPS_PER_S = 256` ops a second on one connection (token bucket, burst the same) | `RateLimited` |
 
 The unlock password is not asked per signature: a locked identity refuses `Locked`, the page
@@ -87,6 +109,9 @@ A reader needs, for each `author`, the public key behind `SignedOp.key`.
 | a member, any volume | `VfsCall::Keys` (`vfs-wire.md` §3) or a `key` sync message (§4, §5 there): the 1952-byte key, accepted only if `fingerprint(pk)` equals the `key` asked for | per reading account: `author → id_fp`, the first one seen |
 | a member, cross-check | the member's published binding (`User.metadata["identity_binding"]`, `verify_binding`): its `id_fp` must equal the pinned one | — |
 | the peer of a Pair volume | as above, and it must equal the fingerprint the agent pinned for that peer in the P2P key exchange (`GetPeerIdentity` → `PeerIdentityInfo.peer_fingerprint`) | the agent's pin |
+| an outsider of kind A | as a member; the fingerprint is the one its `Admit` names (`[1, cid, id_fp]`), so every verifier pins the same key | the `Admit` |
+| a link guest | its `Claim` carries the key (`key_pk`, whose fingerprint is the author's `key_fp`) and the link's signature over it (`vfs-outsiders.md` §3) | the applied `Claim` |
+| any author in a Group volume | the first applied op of the author binds its fingerprint for that volume (`vfs-group.md` §2), so all members judge by one key; the reader's own pin is compared with it | the log |
 | `Server` | the server key the account pinned (`AccountIdentity.server_fp`; the key itself from `ServerIdentity.pk` or `/.well-known/citadel`) | the account's pin |
 
 - **Kernel.** It verifies a member's op against the key of that member's stored binding
@@ -105,10 +130,11 @@ A reader needs, for each `author`, the public key behind `SignedOp.key`.
 
 `prev` is the `op_hash` of the same author's previous op in the same volume (empty for the
 first), and `lamport` rises along it.
-- Ordered volume: the kernel refuses an op whose `prev` is not the author's latest (`StalePrev`).
+- Personal and Node volumes: the kernel refuses an op whose `prev` is not the author's latest
+  (`StalePrev`). In a Group volume every member skips such an op at its position.
   A reader that pulls an op whose `prev` is not the hash of the previous op it holds by that
   author stops (`ChainBroken`).
-- Merge volume: an op whose `prev` is not held is pending until it arrives (`vfs-ops.md` §4).
+- Pair volume: an op whose `prev` is not held is pending until it arrives (`vfs-ops.md` §4).
 
 What the signatures establish: who wrote each op, that it was written for this volume, and that
 none of an author's ops is missing between two that a reader holds. The order between authors in
@@ -123,7 +149,7 @@ an Ordered volume, and who is a member, are the authority's statements.
 | `NeedsIdentity` | a write was asked and the agent answered `NoIdentity` or `NotAnIdentityAccount` | the write is not made; the person is sent to create or attach an identity |
 | `Locked` | the agent answered `Locked` | the write waits for unlock; reading continues |
 | `KeyChanged { .. }` | §3 | that author's new ops are held back; a full-page notice on the volume |
-| `Unverified { seq_or_hash, reason }` (`BadSignature`, `UnknownKey`, `ChainBroken`, `BadRedaction`) | an op failed | Ordered: the replica stops at the last good `seq`, shows the tree as of it, read-only, full-page state with a retry. Merge: the op is dropped and never relayed, its sender is told (`refused`, `vfs-wire.md` §4), the volume carries on. |
+| `Unverified { seq_or_hash, reason }` (`BadSignature`, `UnknownKey`, `ChainBroken`, `BadRedaction`) | an op failed | Personal, Node: the replica stops at the last good `seq`, shows the tree as of it, read-only, full-page state with a retry. Group: an op that fails at its position is skipped by every member alike and the volume carries on; a failed state transfer leaves the volume here. Pair: the op is dropped and never relayed, its sender is told (`refused`, `vfs-wire.md` §4), the volume carries on. |
 | `UpdateNeeded` | `vfs-ops.md` R12 | read-only; "update Citadel" |
 
 ## 6. Tests V9 owes

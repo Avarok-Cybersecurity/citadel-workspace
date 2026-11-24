@@ -1,8 +1,8 @@
-# Contract: VFS model (`citadel-vfs`) — FROZEN 2026-11-24
+# Contract: VFS model (`citadel-vfs`) — FROZEN 2026-11-24, revised round 2
 
 Parties: V1 (the crate), V2 (kernel), V3 (client), V4 (File Manager), V5 (chat documents), V6
 (`sdk::fs`), V8 (peer groups), V9 (signing). Ops and the reducer: `vfs-ops.md`. Who may do what:
-`vfs-authorize.md`. Bytes on the wire: `vfs-ops.md` §2, `vfs-signing.md`, `vfs-wire.md`.
+`vfs-authorize.md`. Outsiders: `vfs-outsiders.md`. Group volumes: `vfs-group.md`. Bytes on the wire: `vfs-ops.md` §2, `vfs-signing.md`, `vfs-wire.md`.
 
 The crate is `citadel-vfs`, in the agent repository beside `citadel-identity`
 (`citadel-internal-service/citadel-vfs/`), pure (no I/O, no clock, no randomness: all three are
@@ -20,13 +20,16 @@ A volume is one tree, one op log and a derived member set. Its id is derived, ne
 | Pair | `pair:<lo>:<hi>`, `lo < hi` | the two accounts | Merge | none | each agent's LocalDB | Standard: each side's agent; RE-VFS: the host's agent |
 | Node | `node:<node_id>`, `node_id` = 1..=128 of `[A-Za-z0-9_-]` | accounts holding `ViewContent` on the node, as the kernel computes it at the time of each request | Ordered | workspace kernel | kernel | kernel store |
 | Device | `device:<cid>` | that account, on this device | Merge (one replica) | none | agent LocalDB | agent LocalDB |
-| Group | `group:<creator_cid>:<mgid>` (`MessageGroupKey { cid, mgid }`, `mgid` decimal u128) | the SDK group's members at the time a message is carried | Merge | none | each agent's LocalDB | Standard: any holder, pairwise; RE-VFS: the named host |
+| Group | `group:<creator_cid>:<mgid>` (`MessageGroupKey { cid, mgid }`, `mgid` decimal u128) | the SDK group's members at each position, from the group's own membership events | Ordered | the group's relay numbers; every member verifies and authorizes; the group's owner administers | each agent's LocalDB | Standard: any holder, pairwise; RE-VFS: the named host |
 
 - A volume id is at most `VOLUME_ID_MAX_BYTES = 192` bytes. `pair:` with `lo == hi` does not exist
   (a conversation with oneself is the Device volume). Anything else is `VolumeId::Malformed`.
-- **Ordered**: the authority verifies, authorizes and numbers each op (`seq`, from 1). **Merge**:
-  no order exists between replicas; every replica folds the op set it holds (`vfs-ops.md` §4).
-  One reducer serves both.
+- **Ordered**: every op has a position in one sequence and is judged at that position.
+  Personal and Node: the kernel verifies, authorizes and numbers each op (`seq`, from 1). Group:
+  the group's relay numbers each broadcast and every member's replica verifies and authorizes
+  at that position (`vfs-group.md`). **Merge** (Pair, Device): no order exists between replicas;
+  every replica folds the op set it holds in stamp order (`vfs-ops.md` §4). One reducer serves
+  all.
 - A Device volume is never synced: two devices of one account hold two unrelated `device:<cid>`
   trees.
 - `citadel_types::user::username_to_cid` is how a kernel turns a member's username into the
@@ -57,11 +60,12 @@ Known answers: `fixtures/codec/inode-kat.json`. Two importers of one legacy item
 ## 3. Principal
 
 ```rust
-pub enum Principal { Server, Member { cid: u64 }, Outsider { opaque: Vec<u8> } }
+pub enum Principal { Server, Member { cid: u64 }, LinkGuest { link_id: [u8; 16], key_fp: String } }
 ```
-CBOR: `[0]`, `[1, cid]`, `[2, bstr]`. `Outsider` is **reserved** (pending OUTSIDERS-1124): its
-bytes are 1..=64, uninterpreted, and no op by or about one is admitted in this release. Principals
-order by the bytes of their canonical encoding (so `Server < Member < Outsider`, members by `cid`).
+CBOR: `[0]`, `[1, cid]`, `[2, link_id bstr(16), key_fp tstr(16)]`. A `Member` is any account of
+the workspace's server, a member of the volume or an outsider of kind A; a `LinkGuest` is an
+outsider that claimed a link with an invitation key (`vfs-outsiders.md` §1). Principals order by
+the bytes of their canonical encoding (so `Server < Member < LinkGuest`, members by `cid`).
 
 ## 4. Entry
 
@@ -75,7 +79,7 @@ order by the bytes of their canonical encoding (so `Server < Member < Outsider`,
 | `owner` | `Principal` (a member; `Server` only where the server created an entry with no member to name) | LWW | `Create`, `Chown` |
 | `mode` | `Mode` | LWW | `Create`, `Chmod` |
 | `removal` | `Option<{ by: Principal, at_ms: u64 }>` | LWW | `Remove` sets, `Restore` clears |
-| `admissions` | `Map<opaque outsider, { by, expires_ms: Option<u64> }>` | LWW per key | `Admit`, `Dismiss` (reserved) |
+| `admissions` | `Map<Admitted, { by: Principal, expires_ms: u64, caps: [u64; 3], claims: [key_fp] }>`; `Admitted = [1, cid, id_fp] \| [2, link_id, link_pk, max_claims]`, keyed by `[1, cid]` or `[2, link_id]` | LWW per key | `Admit` sets, `Dismiss` clears, `Claim` adds a claim (`vfs-outsiders.md`) |
 
 `modified` is not stored: it is the `at_ms` of the op that last won the `pointee` register (for a
 directory, of the op that last won its `place`). `at_ms` is the author's wall clock, shown to
@@ -122,7 +126,7 @@ pub enum Pointee {
 Reaching an entry needs `x` on every ancestor. Named values a client offers when the person
 states none (an op always carries its mode; nothing is implied by the reducer):
 `DEFAULT_DIR_MODE = 0o770`, `DEFAULT_FILE_MODE = 0o660`, `APP_HOME_MODE = 0o770`. The outsider
-triple is the policy for outsiders at that entry; it has no effect until admissions exist.
+triple is what an outsider admitted to this entry, or to a folder above it, may do here.
 
 ## 6. Name
 
@@ -146,9 +150,9 @@ Fixtures: `fixtures/names/cases.json`.
 ## 7. Limits (named; no implicit value anywhere)
 
 Protocol ceilings (constants of the crate):
-`NAME_MAX_BYTES 255`, `DEPTH_MAX 64` (root is depth 0), `SIGNED_OP_MAX_BYTES 8192`,
+`NAME_MAX_BYTES 255`, `DEPTH_MAX 64` (root is depth 0), `SIGNED_OP_MAX_BYTES 12288`,
 `MIME_MAX_BYTES 127`, `VIRTUAL_PATH_MAX_BYTES 512`, `DOC_ID_MAX_BYTES 128`,
-`VOLUME_ID_MAX_BYTES 192`, `OUTSIDER_MAX_BYTES 64`.
+`VOLUME_ID_MAX_BYTES 192`.
 
 ```rust
 pub struct VolumeLimits {            // every field required wherever the struct is built
@@ -159,14 +163,16 @@ pub struct VolumeLimits {            // every field required wherever the struct
     pub max_blob_bytes: u64,         // one file
 }
 ```
-- **Ordered volumes**: the kernel reads `[vfs]` from `kernel.toml`, every key required
+- **Personal and Node volumes**: the kernel reads `[vfs]` from `kernel.toml`, every key required
   (`max_entries`, `max_entries_per_dir`, `max_depth`, `max_log_ops`, `max_blob_bytes`,
   `max_ops_per_minute`, `max_append_ops`, `max_ops_per_pull`, `staged_blob_grace_ms`,
-  `at_skew_ms`); a missing key stops the kernel at start, as `[documents]` does. The limits are
+  `at_skew_ms`, `outsider_caps_max_bytes`, `outsider_caps_max_entries`,
+  `outsider_caps_max_ops_per_min`, `transient_claims_per_minute`); a missing key stops the kernel at start, as `[documents]` does. The limits are
   admission checks there (`vfs-wire.md` §3), never reducer rules. Retention before automatic
   purge is a workspace setting (`vfs_retention_days`, 1..=365, set by a holder of
-  `ManageFiles` on the workspace root; a workspace is created with 30).
-- **Merge volumes**: every replica must agree, so the limits are one constant of the crate,
+  `ManageFiles` on the workspace root; a workspace is created with 30). `vfs_browser_links`
+  (`vfs-outsiders.md` §7) is set by the same holder; a workspace is created with it off.
+- **Volumes without a kernel** (Pair, Device, Group): every replica must agree, so the limits are one constant of the crate,
   `PEER_VOLUME_LIMITS = VolumeLimits { max_entries: 65_536, max_entries_per_dir: 4_096,
   max_depth: 64, max_log_ops: 1_048_576, max_blob_bytes: 4 GiB }`, and
   `PEER_RETENTION_MS = 30 days`. They are reducer rules there (`vfs-ops.md` §4, rule R7).
@@ -177,7 +183,7 @@ pub struct VolumeLimits {            // every field required wherever the struct
 |---|---|
 | `/Applications` | one `AppLink` per install that reaches the viewer (`AppsRequest::ListInstalls` and the listing's icon). Read-only. Its `x` bit is "the install reaches me"; changing it is the install's scope control. Each link has one derived child `Settings` (the install's KV: size, last change, "Reset"), read-only. |
 | `/Recycle Bin` | the top-most removed entries of every volume the viewer is in, each with its original parent path, `removal.by` and `removal.at_ms`. Every member of a volume sees every removed entry of that volume. |
-| `/Shared with me` | entries the viewer is admitted to from volumes they are not in. **Empty in this release** (pending OUTSIDERS-1124). |
+| `/Shared with me` | one item per live admission of the viewer (`[1, me, …]`) in a volume they are not a member of, rooted at the admitted entry: nothing above it is shown (`vfs-outsiders.md` §5). |
 
 `/.apps/<app_id>/` is **not** derived: it is an ordinary directory (ids of namespaces `seed` and
 `app-home`), created by the kernel as a `Server` op the first time the install uses `fs.app`. It

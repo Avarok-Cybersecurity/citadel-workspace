@@ -1,0 +1,177 @@
+{
+  "name": "17-a-backdated-stamp-has-no-effect",
+  "rule": "R1 (Group volume): the position is the seq. A lower lamport does not put an op earlier: seq 3 wins the name over seq 2 although its lamport is lower, and a first op stamped lamport 1 is still judged after the Chmod at seq 4",
+  "volume": "group:1001:42",
+  "root": "1fe985c9b9aec94ff2b689481d2f2431",
+  "members": [
+    1001,
+    1002,
+    1003
+  ],
+  "root_owner": [
+    1,
+    1001
+  ],
+  "root_mode": 504,
+  "owner_at_start": 1002,
+  "events": [],
+  "note": "an ordered volume: each op is folded at its position (seq, index), whatever its stamp; carrier is the cid the relay stamped on the broadcast",
+  "ops": [
+    {
+      "seq": 1,
+      "index": 0,
+      "carrier": 1001,
+      "op_id": "0f000000000000000000000000000001",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 5,
+      "at_ms": 5000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "kind": "file",
+        "parent": "root",
+        "name": "a.txt",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "index": 0,
+      "carrier": 1002,
+      "op_id": "0f000000000000000000000000000002",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 9,
+      "at_ms": 9000,
+      "kind": "place",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "parent": "root",
+        "name": "b.txt"
+      }
+    },
+    {
+      "seq": 3,
+      "index": 0,
+      "carrier": 1001,
+      "op_id": "0f000000000000000000000000000003",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 6,
+      "at_ms": 6000,
+      "kind": "place",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "parent": "root",
+        "name": "c.txt"
+      }
+    },
+    {
+      "seq": 4,
+      "index": 0,
+      "carrier": 1001,
+      "op_id": "0f000000000000000000000000000004",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 7,
+      "at_ms": 7000,
+      "kind": "chmod",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "mode": 384
+      }
+    },
+    {
+      "seq": 5,
+      "index": 0,
+      "carrier": 1003,
+      "op_id": "0f000000000000000000000000000005",
+      "author": [
+        1,
+        1003
+      ],
+      "lamport": 1,
+      "at_ms": 1000,
+      "kind": "set_pointee",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          99,
+          "text/plain"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "entries": [
+      {
+        "id": "000000000000000000000000000000a1",
+        "kind": "file",
+        "parent": "root",
+        "name": "c.txt",
+        "shown": "c.txt",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 384,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1001
+          ],
+          "at_ms": 5000
+        }
+      }
+    ],
+    "purged": [],
+    "skipped": [
+      {
+        "op_id": "0f000000000000000000000000000005",
+        "reason": {
+          "Denied": {
+            "Mode": {
+              "need": "W",
+              "at": "000000000000000000000000000000a1"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

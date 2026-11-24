@@ -1,4 +1,4 @@
-# Contract: `sdk::fs` and `sdk::vfs` (the guest surface) — FROZEN 2026-11-24
+# Contract: `sdk::fs` and `sdk::vfs` (the guest surface) — FROZEN 2026-11-24, revised round 2
 
 Parties: V6. The ABI beneath: `fs-abi.md`. The list of `std::fs` items is taken from the
 standard library source of Rust **1.100.0** (the toolchain `scripts/wasm-toolchain.env` pins;
@@ -54,7 +54,7 @@ returns one `Io`.
 Errors: `FsError { kind, detail }` becomes `io::Error::new(kind, detail)` with the `ErrorKind`
 of the same name. A `Refused` becomes: `Ungranted`, `Policy(_)` → `PermissionDenied`;
 `Limit("fs_rate")` → `ResourceBusy`; `Limit("fs_io_bytes" | "fs_open_files")` →
-`QuotaExceeded`; `Unavailable("retired" | "outsiders_pending")` → `Unsupported`; any other
+`QuotaExceeded`; `Unavailable("retired")` → `Unsupported`; any other
 `Unavailable` → `NotConnected`; anything else → `Other`. The original `Refused` is the error's
 source.
 
@@ -168,7 +168,8 @@ vfs::move_across(&Place, P, &Place, Q) -> Io<()>                 // copy, then t
 vfs::watch(&Place, P) -> Io<Watch>                               // AppEvent::Vfs { watch, event }; dropped → unwatched
 vfs::pick(Pick::file().extensions(&["ics"]).writable()) -> Io<Option<(Grant, Entry)>>
 vfs::open_in_app(&Entry) -> Io<()>      vfs::applications() -> Io<Vec<AppLink>>      vfs::reveal(&Entry) -> Io<()>
-vfs::admit(..), vfs::dismiss(..)                                 // reserved (pending OUTSIDERS-1124): `Unsupported`
+vfs::admit(&Entry, Admit::member(cid).can_change(false).until(ms).caps(c)) -> Io<Option<String>>   // or Admit::link(max_claims); the host's dialog confirms; Some(url) for a link
+vfs::dismiss(&Entry, Admitted) -> Io<()>
 ```
 `delete_forever` on a directory purges what is beneath it first (`vfs-ops.md` R9). Every call
 is the op the File Manager would send for the same member.

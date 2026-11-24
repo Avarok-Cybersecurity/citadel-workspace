@@ -1,4 +1,4 @@
-# Contract: the File Manager on volumes (links, badges, behaviour, words) — FROZEN 2026-11-24
+# Contract: the File Manager on volumes (links, badges, behaviour, words) — FROZEN 2026-11-24, revised round 2
 
 Parties: V4 (File Manager), V5 (chat documents and files, "Navigate to Folder"), V3 (the
 replica the UI reads). Model: `vfs-model.md` §8, §9. Geometry assertions follow the repository's
@@ -100,7 +100,8 @@ Layout:
 - [ ] a details pane: kind, size, owner, mode in plain words ("Members can: view, change"),
       storage ("Shared" / "Encrypted, stored with <name>"), where it is stored, created, modified
 - [ ] Properties: owner (Chown, to a member), two rows of toggles (Owner, Members) with plain
-      words; the outsiders row is not shown in this release
+      words, and a third row, "People outside", shown with the list of who is admitted
+      ("Outside access", §7)
 - [ ] `/Applications` tiles open the app; their Properties link to the install's scope
 
 Touch (390 wide):
@@ -142,7 +143,28 @@ Recycle Bin:
 
 Every such notice is in the page flow (it never covers the list it describes).
 
-## 7. Tests V4 and V5 owe
+## 7. Everyone in a place sees its names; people outside it see only what they were let into
+
+| Where | Words |
+|---|---|
+| Properties, under the "Members" row | "Everyone in <place> can see the names of all files and folders here. These settings decide who can open and change them." |
+| Turning off "view" for members on a folder | "Members will still see this folder's name and what is in it by name. They will not be able to open the files." |
+| Invite dialog, title | "Share <name> with someone outside <place>" |
+| Invite dialog, choices | "A member of this workspace" (pick) / "Anyone with the link who has Citadel" (how many people, 1 to 50) / "Anyone with the link can download" (shown only where the workspace allows it and the item is not encrypted storage) |
+| Invite dialog, rights | "Can view" / "Can view and change"; then "Until" (a date, at most 30 days for a link) and "Limits" (space, number of items, changes a minute) |
+| Invite dialog, footnote | "They will see only this item and what is inside it. Ending access stops the next download; it cannot take back what was already downloaded." |
+| A link, once made | "Copy this link now. It is shown once." |
+| In a pair or group, link to a browser | "People without Citadel can only download from the server. Copy to My files and share from there? The server will then hold this file." |
+| An outsider, nobody online (pair, group) | "No one who can share this is online" |
+| Properties → "Outside access" | one row per admission: who (or "Link, 2 of 5 used"), by whom, what they may do, until when, limits used, downloads (count and last time), "End access" |
+| An outsider's own view, header | "<owner> shared this with you" and, for a link guest, "Keep this access: create your identity" |
+| The download page (nothing installed) | the item's name and size, "<name> shared this with you", "Download", "Get Citadel to do more" |
+
+An outsider's File Manager shows one item under `/Shared with me` per admission, never a
+Recycle Bin for it, never `/Applications` entries for it, and names of people only as authors
+of what it can see.
+
+## 8. Tests V4, V5 and V7 owe
 
 `check:ui-sweep` scenarios for the root, a pair volume with all three badges, the Recycle Bin,
 Properties and each state of §6; one geometry assertion per box of §4; the legacy-link table of

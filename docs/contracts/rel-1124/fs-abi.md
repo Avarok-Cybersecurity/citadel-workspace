@@ -1,4 +1,4 @@
-# Contract: apps ABI group 19 `fs` — FROZEN 2026-11-24
+# Contract: apps ABI group 19 `fs` — FROZEN 2026-11-24, revised round 2
 
 Parties: V6 (SDK types, guest SDK, ABI inspector, host port, kernel check), V2 (`via` on
 `VfsRequest`), V4 (picker, open-with). The guest-facing surface (`sdk::fs`, `sdk::vfs`):
@@ -134,8 +134,8 @@ meaning (the install lacks the capability, the host cannot serve it, a host limi
 | 27 | `VfsOpenInApp` | `entry` | `()` |
 | 28 | `VfsApplications` | — | `AppLinkList { apps: Vec<AppLink { app_id, install_id, name, runnable: bool }> }` |
 | 29 | `VfsReveal` | `entry` | `()` (opens the File Manager at it) |
-| 30 | `VfsAdmit` | `entry, outsider: Bytes, expires_ms: Option<u64>` | reserved: always `Refused::Unavailable("outsiders_pending")` |
-| 31 | `VfsDismiss` | `entry, outsider: Bytes` | reserved: always `Refused::Unavailable("outsiders_pending")` |
+| 30 | `VfsAdmit` | `entry, who: AdmitWho` (`member { cid }` \| `link { max_claims: u32, browser_download: bool }`), `write: bool, expires_ms: u64, caps: AdmitCaps { max_bytes: u64, max_entries: u32, max_ops_per_min: u32 }` | `AdmitResult { link: Option<String> }` (the link URL, this once). Always behind the host's own invite dialog, which the member confirms; needs `fs.volume.write` or a writable pick of `entry` |
+| 31 | `VfsDismiss` | `entry, who: DismissWho` (`member { cid }` \| `link { link_id: String }`) | `()`; the same capability |
 
 Events (`event.rs`), both ABI minor 2 and delivered only to a guest whose `events` subscription
 is open, as topics are:
