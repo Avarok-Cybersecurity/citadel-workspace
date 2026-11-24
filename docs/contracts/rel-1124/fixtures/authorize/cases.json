@@ -1,0 +1,1674 @@
+{
+  "$contract": "docs/contracts/rel-1124/vfs-authorize.md",
+  "notation": "expect is \"ok\" or the Denied value; a principal is [0] (Server) or [1, cid]; \"root\" is the volume root; modes are decimal (0o770 = 504); a missing role table means the volume kind consults none",
+  "trees": {
+    "node": {
+      "volume": "node:n1",
+      "kind": "node",
+      "root": {
+        "owner": [
+          0
+        ],
+        "mode": 504
+      },
+      "retention_ms": 2592000000,
+      "members": [
+        1001,
+        1002,
+        1003,
+        1004,
+        1005
+      ],
+      "roles": {
+        "1001": {
+          "view": true,
+          "upload": true,
+          "download": true,
+          "manage_files": false
+        },
+        "1002": {
+          "view": true,
+          "upload": true,
+          "download": true,
+          "manage_files": false
+        },
+        "1003": {
+          "view": true,
+          "upload": true,
+          "download": true,
+          "manage_files": false
+        },
+        "1004": {
+          "view": true,
+          "upload": false,
+          "download": false,
+          "manage_files": false
+        },
+        "1005": {
+          "view": true,
+          "upload": true,
+          "download": true,
+          "manage_files": true
+        }
+      },
+      "entries": [
+        {
+          "id": "000000000000000000000000000000d1",
+          "kind": "dir",
+          "parent": "root",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 488,
+          "pointee": [
+            0
+          ],
+          "removal": null
+        },
+        {
+          "id": "000000000000000000000000000000f1",
+          "kind": "file",
+          "parent": "000000000000000000000000000000d1",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 416,
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "removal": null
+        },
+        {
+          "id": "000000000000000000000000000000d2",
+          "kind": "dir",
+          "parent": "root",
+          "owner": [
+            1,
+            1002
+          ],
+          "mode": 504,
+          "pointee": [
+            0
+          ],
+          "removal": null
+        },
+        {
+          "id": "000000000000000000000000000000f2",
+          "kind": "file",
+          "parent": "000000000000000000000000000000d2",
+          "owner": [
+            1,
+            1002
+          ],
+          "mode": 432,
+          "pointee": [
+            2,
+            1002,
+            [
+              0
+            ],
+            "r/00000000000000000000000000000002",
+            10,
+            ""
+          ],
+          "removal": null
+        },
+        {
+          "id": "000000000000000000000000000000f3",
+          "kind": "file",
+          "parent": "000000000000000000000000000000d2",
+          "owner": [
+            1,
+            1002
+          ],
+          "mode": 432,
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "removal": {
+            "by": [
+              1,
+              1003
+            ],
+            "at_ms": 5000
+          }
+        },
+        {
+          "id": "000000000000000000000000000000d3",
+          "kind": "dir",
+          "parent": "root",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 448,
+          "pointee": [
+            0
+          ],
+          "removal": null
+        },
+        {
+          "id": "000000000000000000000000000000f4",
+          "kind": "file",
+          "parent": "000000000000000000000000000000d3",
+          "owner": [
+            1,
+            1003
+          ],
+          "mode": 432,
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "removal": null
+        }
+      ]
+    },
+    "pair": {
+      "volume": "pair:1001:1002",
+      "kind": "pair",
+      "root": {
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 504
+      },
+      "retention_ms": 2592000000,
+      "members": [
+        1001,
+        1002
+      ],
+      "roles": null,
+      "entries": [
+        {
+          "id": "000000000000000000000000000000d1",
+          "kind": "dir",
+          "parent": "root",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 448,
+          "pointee": [
+            0
+          ],
+          "removal": null
+        },
+        {
+          "id": "000000000000000000000000000000f1",
+          "kind": "file",
+          "parent": "root",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 384,
+          "pointee": [
+            2,
+            1001,
+            [
+              1,
+              1002
+            ],
+            "r/00000000000000000000000000000001",
+            10,
+            ""
+          ],
+          "removal": {
+            "by": [
+              1,
+              1002
+            ],
+            "at_ms": 1000
+          }
+        },
+        {
+          "id": "000000000000000000000000000000f2",
+          "kind": "file",
+          "parent": "root",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 384,
+          "pointee": [
+            2,
+            1001,
+            [
+              1,
+              1002
+            ],
+            "r/00000000000000000000000000000003",
+            10,
+            ""
+          ],
+          "removal": {
+            "by": [
+              1,
+              1001
+            ],
+            "at_ms": 1000
+          }
+        }
+      ]
+    },
+    "device": {
+      "volume": "device:1001",
+      "kind": "device",
+      "root": {
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 504
+      },
+      "retention_ms": 2592000000,
+      "members": [
+        1001
+      ],
+      "roles": null,
+      "entries": [
+        {
+          "id": "000000000000000000000000000000d1",
+          "kind": "dir",
+          "parent": "root",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 320,
+          "pointee": [
+            0
+          ],
+          "removal": null
+        },
+        {
+          "id": "000000000000000000000000000000f1",
+          "kind": "file",
+          "parent": "root",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 432,
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "removal": null
+        }
+      ]
+    },
+    "group": {
+      "volume": "group:1001:42",
+      "kind": "group",
+      "root": {
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 504
+      },
+      "retention_ms": 2592000000,
+      "members": [
+        1001,
+        1002,
+        1003
+      ],
+      "roles": null,
+      "entries": [
+        {
+          "id": "000000000000000000000000000000d1",
+          "kind": "dir",
+          "parent": "root",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 504,
+          "pointee": [
+            0
+          ],
+          "removal": null
+        },
+        {
+          "id": "000000000000000000000000000000f1",
+          "kind": "file",
+          "parent": "000000000000000000000000000000d1",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 432,
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "removal": {
+            "by": [
+              1,
+              1002
+            ],
+            "at_ms": 1000
+          }
+        }
+      ]
+    },
+    "personal": {
+      "volume": "personal:1001",
+      "kind": "personal",
+      "root": {
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 504
+      },
+      "retention_ms": 2592000000,
+      "members": [
+        1001
+      ],
+      "roles": null,
+      "entries": [
+        {
+          "id": "000000000000000000000000000000f1",
+          "kind": "file",
+          "parent": "root",
+          "owner": [
+            1,
+            1001
+          ],
+          "mode": 432,
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "removal": null
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "N01",
+      "tree": "node",
+      "cell": "4.1 Create / Owner",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "000000000000000000000000000000d1",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1001
+          ]
+        }
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "N02",
+      "tree": "node",
+      "cell": "4.1 Create / Member",
+      "op": {
+        "author": [
+          1,
+          1003
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "000000000000000000000000000000d1",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1003
+          ]
+        }
+      },
+      "expect": {
+        "Mode": {
+          "need": "W",
+          "at": "000000000000000000000000000000d1"
+        }
+      }
+    },
+    {
+      "id": "N03",
+      "tree": "node",
+      "cell": "4.1 Create / role.upload",
+      "op": {
+        "author": [
+          1,
+          1004
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "000000000000000000000000000000d2",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1004
+          ]
+        }
+      },
+      "expect": {
+        "Role": {
+          "need": "Upload"
+        }
+      }
+    },
+    {
+      "id": "N04",
+      "tree": "node",
+      "cell": "4.1 Create / Administrator",
+      "op": {
+        "author": [
+          1,
+          1005
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "000000000000000000000000000000d1",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1005
+          ]
+        }
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "N05",
+      "tree": "node",
+      "cell": "§3 Create.owner is the author",
+      "op": {
+        "author": [
+          1,
+          1003
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "000000000000000000000000000000d2",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1001
+          ]
+        }
+      },
+      "expect": "OwnerNotAuthor"
+    },
+    {
+      "id": "N06",
+      "tree": "node",
+      "cell": "4.1 Place / Owner of O, Member of N",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "place",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "parent": "000000000000000000000000000000d2",
+          "name": "moved.txt"
+        },
+        "at_ms": 10000
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "N07",
+      "tree": "node",
+      "cell": "4.1 Place / Member",
+      "op": {
+        "author": [
+          1,
+          1003
+        ],
+        "kind": "place",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "parent": "000000000000000000000000000000d2",
+          "name": "moved.txt"
+        },
+        "at_ms": 10000
+      },
+      "expect": {
+        "Mode": {
+          "need": "W",
+          "at": "000000000000000000000000000000d1"
+        }
+      }
+    },
+    {
+      "id": "N08",
+      "tree": "node",
+      "cell": "4.1 SetPointee / Member",
+      "op": {
+        "author": [
+          1,
+          1003
+        ],
+        "kind": "set_pointee",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ]
+        },
+        "at_ms": 10000
+      },
+      "expect": {
+        "Mode": {
+          "need": "W",
+          "at": "000000000000000000000000000000f1"
+        }
+      }
+    },
+    {
+      "id": "N09",
+      "tree": "node",
+      "cell": "4.1 SetPointee / Administrator, §3 RE-VFS",
+      "op": {
+        "author": [
+          1,
+          1005
+        ],
+        "kind": "set_pointee",
+        "target": "000000000000000000000000000000f2",
+        "body": {
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ]
+        },
+        "at_ms": 10000
+      },
+      "expect": "RevfsOwnerOnly"
+    },
+    {
+      "id": "N10",
+      "tree": "node",
+      "cell": "§3 SetPointee targets a File",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "set_pointee",
+        "target": "000000000000000000000000000000d1",
+        "body": {
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ]
+        },
+        "at_ms": 10000
+      },
+      "expect": "NotAFile"
+    },
+    {
+      "id": "N11",
+      "tree": "node",
+      "cell": "4.1 Remove / Member",
+      "op": {
+        "author": [
+          1,
+          1003
+        ],
+        "kind": "remove",
+        "target": "000000000000000000000000000000f1",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": {
+        "Mode": {
+          "need": "W",
+          "at": "000000000000000000000000000000d1"
+        }
+      }
+    },
+    {
+      "id": "N12",
+      "tree": "node",
+      "cell": "4.1 Remove / Administrator",
+      "op": {
+        "author": [
+          1,
+          1005
+        ],
+        "kind": "remove",
+        "target": "000000000000000000000000000000f1",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "N13",
+      "tree": "node",
+      "cell": "4.1 Restore / Member",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "restore",
+        "target": "000000000000000000000000000000f3",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "N14",
+      "tree": "node",
+      "cell": "§3 Restore needs its own removal",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "restore",
+        "target": "000000000000000000000000000000f1",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "NotRemoved"
+    },
+    {
+      "id": "N15",
+      "tree": "node",
+      "cell": "4.1 Purge / Member who removed it",
+      "op": {
+        "author": [
+          1,
+          1003
+        ],
+        "kind": "purge",
+        "target": "000000000000000000000000000000f3",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "N16",
+      "tree": "node",
+      "cell": "4.1 Purge / Member who did not",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "purge",
+        "target": "000000000000000000000000000000f3",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "NotOwner"
+    },
+    {
+      "id": "N17",
+      "tree": "node",
+      "cell": "§3 Purge needs the removed state",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "purge",
+        "target": "000000000000000000000000000000f1",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "NotRemoved"
+    },
+    {
+      "id": "N18",
+      "tree": "node",
+      "cell": "4.1 Chmod / Member",
+      "op": {
+        "author": [
+          1,
+          1003
+        ],
+        "kind": "chmod",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "mode": 438
+        },
+        "at_ms": 10000
+      },
+      "expect": "NotOwner"
+    },
+    {
+      "id": "N19",
+      "tree": "node",
+      "cell": "4.1 Chmod / Administrator",
+      "op": {
+        "author": [
+          1,
+          1005
+        ],
+        "kind": "chmod",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "mode": 438
+        },
+        "at_ms": 10000
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "N20",
+      "tree": "node",
+      "cell": "§3 Chown to a non-member",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "chown",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "owner": [
+            1,
+            1999
+          ]
+        },
+        "at_ms": 10000
+      },
+      "expect": "NewOwnerNotMember"
+    },
+    {
+      "id": "N21",
+      "tree": "node",
+      "cell": "4.1 Chown / Owner",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "chown",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "owner": [
+            1,
+            1002
+          ]
+        },
+        "at_ms": 10000
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "N22",
+      "tree": "node",
+      "cell": "4.1 Create / Outsider (pending OUTSIDERS-1124)",
+      "op": {
+        "author": [
+          1,
+          1999
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "000000000000000000000000000000d2",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1999
+          ]
+        }
+      },
+      "expect": "OutsidersPending"
+    },
+    {
+      "id": "N23",
+      "tree": "node",
+      "cell": "4.1 Admit / Owner (pending OUTSIDERS-1124)",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "admit",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "outsider": {
+            "$hex": "01"
+          },
+          "expires_ms": 0
+        },
+        "at_ms": 10000
+      },
+      "expect": "OutsidersPending"
+    },
+    {
+      "id": "N24",
+      "tree": "node",
+      "cell": "4.1 Create / Server",
+      "op": {
+        "author": [
+          0
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "dir",
+          "parent": "root",
+          "name": "new.txt",
+          "pointee": [
+            0
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1001
+          ]
+        }
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "N25",
+      "tree": "node",
+      "cell": "4.1 Chmod / Server",
+      "op": {
+        "author": [
+          0
+        ],
+        "kind": "chmod",
+        "target": "000000000000000000000000000000d1",
+        "body": {
+          "mode": 448
+        },
+        "at_ms": 10000
+      },
+      "expect": "ServerOpKind"
+    },
+    {
+      "id": "N26",
+      "tree": "node",
+      "cell": "4.1 Purge / Server",
+      "op": {
+        "author": [
+          0
+        ],
+        "kind": "purge",
+        "target": "000000000000000000000000000000f3",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "N27",
+      "tree": "node",
+      "cell": "4.1 Purge / Server, not removed",
+      "op": {
+        "author": [
+          0
+        ],
+        "kind": "purge",
+        "target": "000000000000000000000000000000f1",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "NotRemoved"
+    },
+    {
+      "id": "N28",
+      "tree": "node",
+      "cell": "§2 reach: x on every ancestor",
+      "op": {
+        "author": [
+          1,
+          1003
+        ],
+        "kind": "set_pointee",
+        "target": "000000000000000000000000000000f4",
+        "body": {
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ]
+        },
+        "at_ms": 10000
+      },
+      "expect": {
+        "Mode": {
+          "need": "X",
+          "at": "000000000000000000000000000000d3"
+        }
+      }
+    },
+    {
+      "id": "N29",
+      "tree": "node",
+      "cell": "4.1 Chmod / Member without upload",
+      "op": {
+        "author": [
+          1,
+          1004
+        ],
+        "kind": "chmod",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "mode": 438
+        },
+        "at_ms": 10000
+      },
+      "expect": "NotOwner"
+    },
+    {
+      "id": "R01",
+      "tree": "node",
+      "cell": "§5 read bytes / Member",
+      "read": {
+        "fn": "may_read_bytes",
+        "actor": [
+          1,
+          1003
+        ],
+        "target": "000000000000000000000000000000f1"
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "R02",
+      "tree": "node",
+      "cell": "§5 read bytes / role.download",
+      "read": {
+        "fn": "may_read_bytes",
+        "actor": [
+          1,
+          1004
+        ],
+        "target": "000000000000000000000000000000f1"
+      },
+      "expect": {
+        "Role": {
+          "need": "Download"
+        }
+      }
+    },
+    {
+      "id": "R03",
+      "tree": "node",
+      "cell": "§5 read bytes / RE-VFS by an administrator",
+      "read": {
+        "fn": "may_read_bytes",
+        "actor": [
+          1,
+          1005
+        ],
+        "target": "000000000000000000000000000000f2"
+      },
+      "expect": "RevfsOwnerOnly"
+    },
+    {
+      "id": "R04",
+      "tree": "node",
+      "cell": "§5 list / Member",
+      "read": {
+        "fn": "may_list",
+        "actor": [
+          1,
+          1002
+        ],
+        "target": "000000000000000000000000000000d3"
+      },
+      "expect": {
+        "Mode": {
+          "need": "R",
+          "at": "000000000000000000000000000000d3"
+        }
+      }
+    },
+    {
+      "id": "R05",
+      "tree": "node",
+      "cell": "§5 read bytes / RE-VFS by its owner",
+      "read": {
+        "fn": "may_read_bytes",
+        "actor": [
+          1,
+          1002
+        ],
+        "target": "000000000000000000000000000000f2"
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "R06",
+      "tree": "node",
+      "cell": "§5 list / Outsider (pending OUTSIDERS-1124)",
+      "read": {
+        "fn": "may_list",
+        "actor": [
+          1,
+          1999
+        ],
+        "target": "000000000000000000000000000000d1"
+      },
+      "expect": "OutsidersPending"
+    },
+    {
+      "id": "P01",
+      "tree": "pair",
+      "cell": "4.3 Create: the mode is not consulted for members",
+      "op": {
+        "author": [
+          1,
+          1002
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "000000000000000000000000000000d1",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1002
+          ]
+        }
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "P02",
+      "tree": "pair",
+      "cell": "§3 Create.owner may be either member",
+      "op": {
+        "author": [
+          1,
+          1002
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "root",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1001
+          ]
+        }
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "P03",
+      "tree": "pair",
+      "cell": "§3 the host waits",
+      "op": {
+        "author": [
+          1,
+          1002
+        ],
+        "kind": "purge",
+        "target": "000000000000000000000000000000f1",
+        "body": {},
+        "at_ms": 2000
+      },
+      "expect": "HostCannotPurge"
+    },
+    {
+      "id": "P04",
+      "tree": "pair",
+      "cell": "§3 the owner removed it",
+      "op": {
+        "author": [
+          1,
+          1002
+        ],
+        "kind": "purge",
+        "target": "000000000000000000000000000000f2",
+        "body": {},
+        "at_ms": 2000
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "P05",
+      "tree": "pair",
+      "cell": "§3 an RE-VFS pointee is written by its owner",
+      "op": {
+        "author": [
+          1,
+          1002
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "root",
+          "name": "new.txt",
+          "pointee": [
+            2,
+            1001,
+            [
+              1,
+              1002
+            ],
+            "r/00000000000000000000000000000009",
+            10,
+            ""
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1002
+          ]
+        }
+      },
+      "expect": "RevfsOwnerOnly"
+    },
+    {
+      "id": "P06",
+      "tree": "pair",
+      "cell": "§3 the host is the other member",
+      "op": {
+        "author": [
+          1,
+          1002
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "root",
+          "name": "new.txt",
+          "pointee": [
+            2,
+            1002,
+            [
+              1,
+              1002
+            ],
+            "r/00000000000000000000000000000009",
+            10,
+            ""
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1002
+          ]
+        }
+      },
+      "expect": "RevfsHost"
+    },
+    {
+      "id": "P07",
+      "tree": "pair",
+      "cell": "4.3 Create / Server",
+      "op": {
+        "author": [
+          0
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "dir",
+          "parent": "root",
+          "name": "new.txt",
+          "pointee": [
+            0
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1001
+          ]
+        }
+      },
+      "expect": "NoServerHere"
+    },
+    {
+      "id": "P08",
+      "tree": "pair",
+      "cell": "§3 Chown to a non-member",
+      "op": {
+        "author": [
+          1,
+          1002
+        ],
+        "kind": "chown",
+        "target": "000000000000000000000000000000d1",
+        "body": {
+          "owner": [
+            1,
+            1003
+          ]
+        },
+        "at_ms": 10000
+      },
+      "expect": "NewOwnerNotMember"
+    },
+    {
+      "id": "P09",
+      "tree": "pair",
+      "cell": "4.3 Create / Outsider (pending OUTSIDERS-1124)",
+      "op": {
+        "author": [
+          1,
+          1003
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "root",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1003
+          ]
+        }
+      },
+      "expect": "OutsidersPending"
+    },
+    {
+      "id": "D01",
+      "tree": "device",
+      "cell": "§3 no RE-VFS on a device volume",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "root",
+          "name": "new.txt",
+          "pointee": [
+            2,
+            1001,
+            [
+              0
+            ],
+            "r/00000000000000000000000000000009",
+            10,
+            ""
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1001
+          ]
+        }
+      },
+      "expect": "RevfsHost"
+    },
+    {
+      "id": "D02",
+      "tree": "device",
+      "cell": "4.4 Chown",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "chown",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "owner": [
+            1,
+            1002
+          ]
+        },
+        "at_ms": 10000
+      },
+      "expect": "NewOwnerNotMember"
+    },
+    {
+      "id": "D03",
+      "tree": "device",
+      "cell": "4.4 Create: the owner triple is consulted",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "000000000000000000000000000000d1",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1001
+          ]
+        }
+      },
+      "expect": {
+        "Mode": {
+          "need": "W",
+          "at": "000000000000000000000000000000d1"
+        }
+      }
+    },
+    {
+      "id": "G01",
+      "tree": "group",
+      "cell": "4.5 Purge / Member who removed it",
+      "op": {
+        "author": [
+          1,
+          1002
+        ],
+        "kind": "purge",
+        "target": "000000000000000000000000000000f1",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "G02",
+      "tree": "group",
+      "cell": "4.5 Purge / Member who did not",
+      "op": {
+        "author": [
+          1,
+          1003
+        ],
+        "kind": "purge",
+        "target": "000000000000000000000000000000f1",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "NotOwner"
+    },
+    {
+      "id": "G03",
+      "tree": "group",
+      "cell": "4.5 Chmod / Member",
+      "op": {
+        "author": [
+          1,
+          1002
+        ],
+        "kind": "chmod",
+        "target": "000000000000000000000000000000d1",
+        "body": {
+          "mode": 511
+        },
+        "at_ms": 10000
+      },
+      "expect": "NotOwner"
+    },
+    {
+      "id": "G04",
+      "tree": "group",
+      "cell": "4.5 Purge / Server",
+      "op": {
+        "author": [
+          0
+        ],
+        "kind": "purge",
+        "target": "000000000000000000000000000000f1",
+        "body": {},
+        "at_ms": 10000
+      },
+      "expect": "NoServerHere"
+    },
+    {
+      "id": "E01",
+      "tree": "personal",
+      "cell": "4.2 Create / Server",
+      "op": {
+        "author": [
+          0
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "dir",
+          "parent": "root",
+          "name": "new.txt",
+          "pointee": [
+            0
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1001
+          ]
+        }
+      },
+      "expect": "ok"
+    },
+    {
+      "id": "E02",
+      "tree": "personal",
+      "cell": "4.2 Chown",
+      "op": {
+        "author": [
+          1,
+          1001
+        ],
+        "kind": "chown",
+        "target": "000000000000000000000000000000f1",
+        "body": {
+          "owner": [
+            1,
+            1002
+          ]
+        },
+        "at_ms": 10000
+      },
+      "expect": "NewOwnerNotMember"
+    },
+    {
+      "id": "E03",
+      "tree": "personal",
+      "cell": "4.2 Create / Outsider (pending OUTSIDERS-1124)",
+      "op": {
+        "author": [
+          1,
+          1002
+        ],
+        "kind": "create",
+        "target": "00000000000000000000000000000099",
+        "at_ms": 10000,
+        "body": {
+          "kind": "file",
+          "parent": "root",
+          "name": "new.txt",
+          "pointee": [
+            1,
+            {
+              "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            12,
+            "text/plain"
+          ],
+          "mode": 432,
+          "owner": [
+            1,
+            1002
+          ]
+        }
+      },
+      "expect": "OutsidersPending"
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+{
+  "name": "04-cycle-is-skipped",
+  "rule": "R6: two concurrent moves into each other; the later in stamp order would close a cycle and is skipped",
+  "volume": "pair:1001:1002",
+  "root": "1eb150d45dac09cacf9f8234c1ec4e90",
+  "members": [
+    1001,
+    1002
+  ],
+  "note": "ops are listed in arrival order; every permutation must reduce to the same tree",
+  "ops": [
+    {
+      "op_id": "0f000000000000000000000000000001",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 1,
+      "at_ms": 1000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "kind": "dir",
+        "parent": "root",
+        "name": "A",
+        "pointee": [
+          0
+        ],
+        "mode": 504,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000002",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 2,
+      "at_ms": 2000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a2",
+      "body": {
+        "kind": "dir",
+        "parent": "root",
+        "name": "B",
+        "pointee": [
+          0
+        ],
+        "mode": 504,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000004",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 3,
+      "at_ms": 3000,
+      "kind": "place",
+      "target": "000000000000000000000000000000a2",
+      "body": {
+        "parent": "000000000000000000000000000000a1",
+        "name": "B"
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000003",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 3,
+      "at_ms": 3000,
+      "kind": "place",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "parent": "000000000000000000000000000000a2",
+        "name": "A"
+      }
+    }
+  ],
+  "expect": {
+    "entries": [
+      {
+        "id": "000000000000000000000000000000a1",
+        "kind": "dir",
+        "parent": "000000000000000000000000000000a2",
+        "name": "A",
+        "shown": "A",
+        "pointee": [
+          0
+        ],
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 504,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1001
+          ],
+          "at_ms": 1000
+        }
+      },
+      {
+        "id": "000000000000000000000000000000a2",
+        "kind": "dir",
+        "parent": "root",
+        "name": "B",
+        "shown": "B",
+        "pointee": [
+          0
+        ],
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 504,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1001
+          ],
+          "at_ms": 2000
+        }
+      }
+    ],
+    "purged": [],
+    "skipped": [
+      {
+        "op_id": "0f000000000000000000000000000004",
+        "reason": "Cycle"
+      }
+    ]
+  }
+}

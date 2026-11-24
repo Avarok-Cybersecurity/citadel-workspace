@@ -1,0 +1,309 @@
+{
+  "name": "07-names-shown",
+  "rule": "R11: equal fold keys; the earliest place keeps its name, later ones get the first free \" (n)\"; stored names never change",
+  "volume": "pair:1001:1002",
+  "root": "1eb150d45dac09cacf9f8234c1ec4e90",
+  "members": [
+    1001,
+    1002
+  ],
+  "note": "ops are listed in arrival order; every permutation must reduce to the same tree",
+  "ops": [
+    {
+      "op_id": "0f000000000000000000000000000001",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 1,
+      "at_ms": 1000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "kind": "file",
+        "parent": "root",
+        "name": "Report.md",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000002",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 2,
+      "at_ms": 2000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a2",
+      "body": {
+        "kind": "file",
+        "parent": "root",
+        "name": "report.md",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1002
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000003",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 3,
+      "at_ms": 3000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a3",
+      "body": {
+        "kind": "file",
+        "parent": "root",
+        "name": "report (2).md",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000004",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 4,
+      "at_ms": 4000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a4",
+      "body": {
+        "kind": "file",
+        "parent": "root",
+        "name": ".env",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000005",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 5,
+      "at_ms": 5000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a5",
+      "body": {
+        "kind": "file",
+        "parent": "root",
+        "name": ".ENV",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1002
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "entries": [
+      {
+        "id": "000000000000000000000000000000a1",
+        "kind": "file",
+        "parent": "root",
+        "name": "Report.md",
+        "shown": "Report.md",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 432,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1001
+          ],
+          "at_ms": 1000
+        }
+      },
+      {
+        "id": "000000000000000000000000000000a2",
+        "kind": "file",
+        "parent": "root",
+        "name": "report.md",
+        "shown": "report (3).md",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "owner": [
+          1,
+          1002
+        ],
+        "mode": 432,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1002
+          ],
+          "at_ms": 2000
+        }
+      },
+      {
+        "id": "000000000000000000000000000000a3",
+        "kind": "file",
+        "parent": "root",
+        "name": "report (2).md",
+        "shown": "report (2).md",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 432,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1001
+          ],
+          "at_ms": 3000
+        }
+      },
+      {
+        "id": "000000000000000000000000000000a4",
+        "kind": "file",
+        "parent": "root",
+        "name": ".env",
+        "shown": ".env",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 432,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1001
+          ],
+          "at_ms": 4000
+        }
+      },
+      {
+        "id": "000000000000000000000000000000a5",
+        "kind": "file",
+        "parent": "root",
+        "name": ".ENV",
+        "shown": ".ENV (2)",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "owner": [
+          1,
+          1002
+        ],
+        "mode": 432,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1002
+          ],
+          "at_ms": 5000
+        }
+      }
+    ],
+    "purged": [],
+    "skipped": []
+  }
+}

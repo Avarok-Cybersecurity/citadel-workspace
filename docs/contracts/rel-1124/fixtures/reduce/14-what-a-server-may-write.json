@@ -1,0 +1,133 @@
+{
+  "name": "14-what-a-server-may-write",
+  "rule": "R10: in an Ordered volume members' ops are not re-judged, but a Server op of a kind the table does not give it is skipped by every reader",
+  "volume": "node:n1",
+  "root": "d7d22241185eee99b4ddfc842f09001c",
+  "members": [
+    1001,
+    1002
+  ],
+  "note": "ops are listed in arrival order; every permutation must reduce to the same tree",
+  "ops": [
+    {
+      "op_id": "0f000000000000000000000000000001",
+      "author": [
+        0
+      ],
+      "lamport": 1,
+      "at_ms": 1000,
+      "kind": "create",
+      "target": "c9bfd0027a7f79859bf59cf32610f004",
+      "body": {
+        "kind": "dir",
+        "parent": "root",
+        "name": "Documents",
+        "pointee": [
+          0
+        ],
+        "mode": 504,
+        "owner": [
+          0
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000002",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 2,
+      "at_ms": 2000,
+      "kind": "create",
+      "target": "0b1dc47ebbde9e2a9c492b0e1b05f928",
+      "body": {
+        "kind": "file",
+        "parent": "c9bfd0027a7f79859bf59cf32610f004",
+        "name": "Plan",
+        "pointee": [
+          3,
+          "cdoc-3f2a9c1e-7b4d-4e8a-9f01-2c3d4e5f6a7b"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000003",
+      "author": [
+        0
+      ],
+      "lamport": 3,
+      "at_ms": 3000,
+      "kind": "chmod",
+      "target": "c9bfd0027a7f79859bf59cf32610f004",
+      "body": {
+        "mode": 448
+      }
+    }
+  ],
+  "expect": {
+    "entries": [
+      {
+        "id": "0b1dc47ebbde9e2a9c492b0e1b05f928",
+        "kind": "file",
+        "parent": "c9bfd0027a7f79859bf59cf32610f004",
+        "name": "Plan",
+        "shown": "Plan",
+        "pointee": [
+          3,
+          "cdoc-3f2a9c1e-7b4d-4e8a-9f01-2c3d4e5f6a7b"
+        ],
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 432,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1001
+          ],
+          "at_ms": 2000
+        }
+      },
+      {
+        "id": "c9bfd0027a7f79859bf59cf32610f004",
+        "kind": "dir",
+        "parent": "root",
+        "name": "Documents",
+        "shown": "Documents",
+        "pointee": [
+          0
+        ],
+        "owner": [
+          0
+        ],
+        "mode": 504,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            0
+          ],
+          "at_ms": 1000
+        }
+      }
+    ],
+    "purged": [],
+    "skipped": [
+      {
+        "op_id": "0f000000000000000000000000000003",
+        "reason": {
+          "Denied": "ServerOpKind"
+        }
+      }
+    ]
+  }
+}
