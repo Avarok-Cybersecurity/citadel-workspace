@@ -1056,6 +1056,7 @@ dependencies = [
 name = "citadel-internal-service-test-common"
 version = "0.1.0"
 dependencies = [
+ "citadel-app-net-policy",
  "citadel-identity",
  "citadel-internal-service",
  "citadel-internal-service-connector",

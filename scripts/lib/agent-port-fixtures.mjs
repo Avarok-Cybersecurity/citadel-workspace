@@ -26,6 +26,7 @@ const entries = [
   [`${UPDATER}watchdog_tests.rs`, 6, 'the watchdog against a fake WatchIo, which records each spawn and health probe instead of performing it'],
   [`${A}citadel-internal-service/tests/updater_launch_settings.rs`, 4, "the old agent's command, given to a shell-script stand-in that writes its plan down and exits; nothing is supervised or probed"],
   [`${A}citadel-internal-service/tests/updater_platforms.rs`, 1, 'an UpdaterConfig the installer choice reads; nothing is started'],
+  [`${A}citadel-internal-service/tests/common/src/ports.rs`, 2, 'the compile-time guard that refuses a test port range containing the agent port; nothing binds or dials it'],
   ['citadel-workspace-internal-service/src/app_net.rs', 1, 'a pure config function, asserted on'],
   ['citadel-workspace-internal-service/src/update_setup.rs', 3, 'a pure config function, asserted on'],
   ['citadel-workspaces/src/components/agent-setup/__tests__/AgentSetup.test.tsx', 3, URL_TEXT],
