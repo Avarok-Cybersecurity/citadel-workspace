@@ -902,6 +902,9 @@ jobs:
         run: node scripts/check-preflight-runs-what-ci-runs.mjs
       - name: The agent binds loopback wherever the network can reach it
         run: node scripts/check-agent-binds-loopback.mjs
+      - name: Tests never bind or dial the agent's own port
+        # A developer's installed agent listens on it while the hooks run cargo test and the gates.
+        run: node scripts/check-tests-never-use-the-agent-port.mjs
       - name: The agent's TLS mode matches every proxy that fronts it
         run: node scripts/check-agent-tls-matches-its-proxies.mjs
       - name: The shipped agent verifies every server's certificate

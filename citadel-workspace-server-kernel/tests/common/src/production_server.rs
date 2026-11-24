@@ -3,6 +3,7 @@
 //! Built through `run_server_with_base_path` rather than a test node, so a
 //! test against it proves something about the shipped wiring.
 
+use citadel_internal_service_test_common::get_free_port;
 use citadel_workspace_server_kernel::config::ServerConfig;
 use citadel_workspace_server_kernel::kernel::server_identity::config::IdentityConfig;
 use citadel_workspace_server_kernel::kernel::server_identity::key_file::{
@@ -10,7 +11,7 @@ use citadel_workspace_server_kernel::kernel::server_identity::key_file::{
 };
 use citadel_workspace_server_kernel::kernel::sign_in::native::init_sign_in_seed;
 use citadel_workspace_server_kernel::kernel::sign_in::turnstile::SiteVerify;
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -82,8 +83,7 @@ pub fn pinned_identity_toml(dir: &Path, canonical_domain: &str, names: &str) -> 
 }
 
 fn free_addr() -> SocketAddr {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
-    listener.local_addr().expect("addr")
+    SocketAddr::from(([127, 0, 0, 1], get_free_port()))
 }
 
 /// A directory of its own for one server's sign-in files, holding a seed made the way an
@@ -145,10 +145,7 @@ pub async fn start_server_named_localhost_taking(names: &str) -> (String, String
         .expect("resolve localhost")
         .next()
         .expect("localhost resolves to nothing");
-    let addr = TcpListener::bind(first)
-        .expect("bind")
-        .local_addr()
-        .expect("addr");
+    let addr = SocketAddr::new(first.ip(), get_free_port());
     let name = format!("localhost:{}", addr.port());
     let dir = sign_in_dir();
     let identity = pinned_identity_toml(&dir, &name, names);

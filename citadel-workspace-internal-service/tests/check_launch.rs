@@ -11,6 +11,7 @@ use citadel_internal_service::updater::io::{Installer, Staged};
 use citadel_internal_service::updater::launch_check::CHECK_LAUNCH_FLAG;
 use citadel_internal_service::updater::launch_settings::{self, LaunchSettings};
 use citadel_internal_service::updater::swap::SelfReplace;
+use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 
 const STUN_REFUSAL: &str = "no STUN servers configured";
@@ -31,11 +32,11 @@ fn a_command_without_the_stun_servers_is_answered_with_the_refusal() {
     assert!(stderr.contains(STUN_REFUSAL), "{stderr}");
 }
 
-fn installer_relaunching_with(args: Vec<String>, dir: &Path) -> SelfReplace {
+fn installer_relaunching_with(args: Vec<String>, health: SocketAddr, dir: &Path) -> SelfReplace {
     SelfReplace::new(
         dir.join("installed"),
         args,
-        "127.0.0.1:12345".parse().unwrap(),
+        health,
         dir.to_path_buf(),
         || unreachable!("nothing is installed"),
     )
@@ -57,16 +58,22 @@ fn an_agent_whose_command_lacks_a_setting_will_not_install_this_version() {
         path,
         launch: Some(release_launch_settings()),
     };
-    let complete = support::launcher("127.0.0.1:12345", &dir.join("data"));
+    // The agent's command names an address this test holds for the whole check: answering
+    // `--check-launch` binds nothing, and a version that bound it anyway fails here, on a port of
+    // ours, rather than reaching one another agent on this machine is listening on.
+    let held = TcpListener::bind("127.0.0.1:0").unwrap();
+    let bind = held.local_addr().unwrap();
+    let complete = support::launcher(&bind.to_string(), &dir.join("data"));
     let incomplete = support::without_stun(complete.clone());
-    let before_identity = support::launcher_0_10_6("127.0.0.1:12345", &dir.join("data"));
+    let before_identity = support::launcher_0_10_6(&bind.to_string(), &dir.join("data"));
 
-    let refused = installer_relaunching_with(incomplete, &dir).can_install(&staged);
+    let refused = installer_relaunching_with(incomplete, bind, &dir).can_install(&staged);
     let refused_old =
-        installer_relaunching_with(before_identity.clone(), &dir).can_install(&staged);
+        installer_relaunching_with(before_identity.clone(), bind, &dir).can_install(&staged);
     let updated_old =
-        installer_relaunching_with(before_identity, &dir).can_install(&with_release_settings);
-    let accepted = installer_relaunching_with(complete, &dir).can_install(&staged);
+        installer_relaunching_with(before_identity, bind, &dir).can_install(&with_release_settings);
+    let accepted = installer_relaunching_with(complete, bind, &dir).can_install(&staged);
+    drop(held);
     std::fs::remove_dir_all(&dir).unwrap();
 
     let why = refused.unwrap_err();

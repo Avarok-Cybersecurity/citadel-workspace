@@ -12,7 +12,8 @@
 mod support;
 
 use citadel_internal_service::data_format::{AGENT_DATA_FORMAT, FORMAT_MARKER as MARKER};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use citadel_internal_service_test_common::get_free_port;
+use std::net::{SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -188,10 +189,7 @@ fn start_fresh_moves_the_directory_to_the_trash_and_the_agent_starts() {
 }
 
 fn free_loopback() -> SocketAddr {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
+    SocketAddr::from(([127, 0, 0, 1], get_free_port()))
 }
 
 fn wait_for(addr: SocketAddr, agent: &mut std::process::Child) -> bool {
