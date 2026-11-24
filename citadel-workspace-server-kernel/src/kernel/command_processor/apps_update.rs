@@ -2,7 +2,7 @@
 //! signed by another key, waits for consent while the installed version keeps running.
 
 use super::apps::{audit_entry, finish, Answer, Caller, Halt, Step};
-use super::apps_gather::{gather, snapshot};
+use super::apps_gather::{gather, installer_snapshot, snapshot};
 use super::apps_ihttp_end::end_install_relay;
 use super::apps_install::people;
 use super::apps_lifecycle::{authorised, reread};
@@ -193,8 +193,9 @@ pub(super) async fn consent<R: Ratchet + Send + Sync + 'static>(
         }
         let authority = authority_node(&install.scope, WORKSPACE_ROOT_ID);
         let first_party = is_first_party(&pending.publisher_key);
-        for who in BTreeSet::from([install.installed_by.as_str(), caller.user]) {
-            let held = snapshot(kernel, who, authority).await?;
+        let installer = installer_snapshot(kernel, &install, authority).await?;
+        let acting = snapshot(kernel, caller.user, authority).await?;
+        for held in [installer, acting] {
             check_grant(
                 &manifest.capabilities,
                 &granted,
