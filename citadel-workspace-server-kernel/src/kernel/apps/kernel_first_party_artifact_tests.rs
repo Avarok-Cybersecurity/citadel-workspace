@@ -3,7 +3,8 @@
 //! glue ABI's module is in the UI bundle (`install::stores_module`).
 //!
 //! The release is seeded into the workspace's record (`save_first_party_releases`, crate-private)
-//! because provisioning, the record's only public writer, takes glue bundles alone.
+//! without its module, so the install has to obtain it; provisioning an app-ABI release stores its
+//! module first (`kernel_first_party_listed_tests`).
 
 use super::install::stores_module;
 use super::records::{FirstPartyReleases, StoredRelease};

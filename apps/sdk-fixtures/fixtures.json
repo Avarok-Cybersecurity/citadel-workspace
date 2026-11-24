@@ -96,7 +96,8 @@
         "notifications",
         "documents",
         "group.topic.subscribe",
-        "group.topic.publish"
+        "group.topic.publish",
+        "citadel.session"
       ],
       "inspect": {"accepted": true},
       "run": {"granted": [], "host": {"max_memory_pages": 64, "close_grace_ms": 500}, "init": 0},

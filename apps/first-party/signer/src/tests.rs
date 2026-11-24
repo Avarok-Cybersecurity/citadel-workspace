@@ -13,6 +13,7 @@ fn key() -> AppSigningKey {
 #[test]
 fn the_committed_app_signs_and_the_signature_verifies_under_the_signers_key() {
     let signed = sign(MANIFEST, WASM, &key()).unwrap();
+    assert!(signed.ships_module, "the server stores an ABI-1 module");
     let m: Value = serde_json::from_slice(&signed.manifest).unwrap();
     let public = key().public_key_hex();
     assert_eq!(m["publisher"]["mldsa65_public_key"], public.as_str());
@@ -63,6 +64,7 @@ const CALENDAR_GLUE: &[u8] =
 #[test]
 fn a_glue_app_signs_without_the_abi_1_inspector_and_verifies() {
     let signed = sign(CALENDAR, CALENDAR_GLUE, &key()).unwrap();
+    assert!(!signed.ships_module, "a glue module is in the UI bundle");
     let digests = ArtifactDigests::of(&signed.manifest, CALENDAR_GLUE);
     verify(
         &key().public_key_hex(),

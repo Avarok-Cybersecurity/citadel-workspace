@@ -5,7 +5,7 @@
 //! Frames are `WorkspaceProtocolPayload` as JSON, the encoding the server kernel reads on every
 //! C2S message, as telemetry/codec.rs's are.
 
-use citadel_internal_service::{AuthoritySignal, HostNetAuthority, KernelGrant};
+use citadel_internal_service::{AuthoritySignal, HostNetAuthority, KernelGrant, SessionLimits};
 use citadel_workspace_types::apps_protocol::AppsRequest;
 use citadel_workspace_types::apps_responses::AppsResponse;
 use citadel_workspace_types::{
@@ -63,14 +63,11 @@ impl HostNetAuthority for WorkspaceHostNetAuthority {
                     app_id: g.app_id,
                     hosts: g.hosts,
                     private: g.private,
-                    // No install holds `citadel.session` yet: the SDK's closed capability list
-                    // (`citadel-app-sdk-types`) has no such capability, so no manifest can ask
-                    // for it, no installer can grant it, and `HostNetGrant` carries no
-                    // `servers` or `limits.session` to read (`citadel-session-abi.md` §1-2,
-                    // lane H2's host part). This is the server's whole answer, not a fallback:
-                    // the agent refuses every `AppSessionOpen` as ungranted.
-                    servers: Vec::new(),
-                    session: None,
+                    servers: g.servers,
+                    session: g.session.map(|limits| SessionLimits {
+                        max_msg_bytes: limits.max_msg_bytes,
+                        max_msgs_per_s: limits.max_msgs_per_s,
+                    }),
                 }),
             },
             // What the server said about the member's installs may no longer hold.

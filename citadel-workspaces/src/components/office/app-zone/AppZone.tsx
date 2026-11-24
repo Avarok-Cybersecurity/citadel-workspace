@@ -50,7 +50,7 @@ function RuntimeHost({ runtime, view, reasonFor, props, nodeId, me }: RuntimeHos
 }
 
 function PlacedZone({ props, env }: { props: ZoneProps; env: AppZoneEnvironment }): JSX.Element {
-  const { facts, view, waiting, reasonFor, actions }: PlacedApp = usePlacedApp(props, env, 'zone');
+  const { facts, view, waiting, reasonFor, actions }: PlacedApp = usePlacedApp(props, env, 'zone', null);
   // `ready` is only decided once `me` is known (zone-state.ts).
   if (view.kind === 'ready' && !waiting && env.runtime !== null && env.me !== null) {
     return <RuntimeHost runtime={env.runtime} view={view} reasonFor={reasonFor} props={props} nodeId={env.nodeId} me={env.me} />;

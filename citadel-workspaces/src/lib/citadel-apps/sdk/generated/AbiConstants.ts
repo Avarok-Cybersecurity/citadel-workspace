@@ -69,6 +69,10 @@ import type { RequestFrames } from "./RequestFrames";
 import type { RequestHeight } from "./RequestHeight";
 import type { ServeOn } from "./ServeOn";
 import type { ServerFetch } from "./ServerFetch";
+import type { SessionClose } from "./SessionClose";
+import type { SessionOpen } from "./SessionOpen";
+import type { SessionSend } from "./SessionSend";
+import type { SessionState } from "./SessionState";
 import type { SetToolbar } from "./SetToolbar";
 import type { ShowDialog } from "./ShowDialog";
 import type { ShowToast } from "./ShowToast";
@@ -151,6 +155,7 @@ export const GROUPS: Readonly<Record<Group, number>> = {
   documents: 14,
   log: 15,
   topic: 16,
+  session: 18,
 };
 
 /** The group each capability opens. */
@@ -188,6 +193,7 @@ export const CAPABILITY_GROUP: Readonly<Record<Capability, Group>> = {
   "documents": "documents",
   "group.topic.subscribe": "topic",
   "group.topic.publish": "topic",
+  "citadel.session": "session",
 };
 
 /** The capability a Kv* op needs, by its `backend` tag. */
@@ -223,6 +229,19 @@ export const TOPIC_ENVELOPE_OVERHEAD = 66 as const;
 export const LIMIT_TOPIC_RATE = "topic_rate" as const;
 export const LIMIT_TOPIC_BYTES = "topic_bytes" as const;
 export const TOPIC_ENVELOPE_TAG = "citadel-topic/1" as const;
+export const ABI_MINOR = 1 as const;
+export const ABI_MINOR_CANVAS_EXT = 1 as const;
+export const MAX_SESSION_SERVERS = 2 as const;
+export const SESSION_MAX_MSG_BYTES_CEILING = 1048576 as const;
+export const SESSION_MAX_MSGS_PER_S_CEILING = 64 as const;
+export const PATH_MIN_POINTS = 2 as const;
+export const PATH_MAX_POINTS = 256 as const;
+export const REGION_ID_MAX_LEN = 64 as const;
+export const REGION_LABEL_MAX_CHARS = 256 as const;
+export const MAX_REGIONS_PER_FRAME = 512 as const;
+export const LIMIT_SESSION_BYTES = "session_bytes" as const;
+export const LIMIT_SESSION_RATE = "session_rate" as const;
+export const LIMIT_CANVAS_DRAW = "canvas_draw" as const;
 
 /** Every op. `granted_by`: holding ANY ONE of these admits the call; null = decided by the arguments (KV_BACKEND_CAPABILITY). */
 export const OPS = [
@@ -284,6 +303,9 @@ export const OPS = [
   { group: "topic", op: 1, name: "TopicOpen", granted_by: ["group.topic.subscribe", "group.topic.publish"] },
   { group: "topic", op: 2, name: "TopicPublish", granted_by: ["group.topic.publish"] },
   { group: "topic", op: 3, name: "TopicClose", granted_by: ["group.topic.subscribe", "group.topic.publish"] },
+  { group: "session", op: 1, name: "SessionOpen", granted_by: ["citadel.session"] },
+  { group: "session", op: 2, name: "SessionSend", granted_by: ["citadel.session"] },
+  { group: "session", op: 3, name: "SessionClose", granted_by: ["citadel.session"] },
 ] as const satisfies readonly { group: Group; op: number; name: string; granted_by: readonly Capability[] | null }[];
 
 /** Op name -> its argument struct. */
@@ -346,6 +368,9 @@ export type OpArgs = {
   TopicOpen: TopicOpen;
   TopicPublish: TopicPublish;
   TopicClose: TopicClose;
+  SessionOpen: SessionOpen;
+  SessionSend: SessionSend;
+  SessionClose: SessionClose;
 };
 
 /** Op name -> the `ok` payload of its HostReply. */
@@ -408,6 +433,9 @@ export type OpReplies = {
   TopicOpen: TopicOpened;
   TopicPublish: null;
   TopicClose: null;
+  SessionOpen: SessionState;
+  SessionSend: null;
+  SessionClose: null;
 };
 
 /** THE lifecycle transition table (citadel-app-sdk-types lifecycle.rs): state -> step -> next. A step not listed is illegal. */

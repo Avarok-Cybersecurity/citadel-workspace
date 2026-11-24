@@ -15,15 +15,15 @@ import type { DispatchClock } from '../host/dispatch';
 import { launchAppInstance, type AppInstance, type InstanceState, type Launch } from '../host/instance';
 import type { InstanceSlots } from '../host/instance-slots';
 import { instanceLimits, type HostPolicy } from '../host/limits';
-import type { TopicArrival } from '../host/ports';
+import type { SessionArrival, TopicArrival } from '../host/ports';
 import type { HostChannel } from '../host/worker-protocol';
 import type { ArtifactVerifierPort } from '../host/verify-artifact';
 import type { CloseReason } from '../sdk/generated/CloseReason';
 import type { SuspendReason } from '../sdk/generated/SuspendReason';
-import { hostPortsFor, type BoundPorts, type PortWorld } from './host-ports';
+import { hostPortsFor, sessionBindingOf, type BoundPorts, type PortWorld } from './host-ports';
 import type { InstallPlaneRegistry } from './install-plane-registry';
 import { takeDeclared, type OpenedFile, type OpenedFiles } from './opened-files';
-import { placementId, runsOn, sizeIn, surfaceKind, surfaceOf, type PlacedSize, type Placement } from './placement';
+import { placementId, placementPhrase, runsOn, sizeIn, surfaceKind, surfaceOf, type PlacedSize, type Placement } from './placement';
 import { loadRelease, type LoadedRelease } from './release-loader';
 import { closeZone, type ZoneCloseDeps } from './zone-close';
 import { stoppedCopy, failureCopy } from './zone-copy';
@@ -78,7 +78,9 @@ export function mountPlaced(slots: ZoneHost, placed: PlacedMount, deps: ZoneRunt
   const { install, name, placement } = placed;
   const dpr: number = deps.dpr();
   let size: PlacedSize = sizeIn(placement, measure(host));
-  const surface: ZoneSurface = zoneSurface(host, name, { ...size, dpr }, placement.kind === 'tab');
+  const surface: ZoneSurface = zoneSurface(host, name, { ...size, dpr }, placement.kind !== 'zone', (id: string): void => {
+    if (closing === null && instance?.state === 'running') instance.postEvent({ activate: { id } });
+  });
   const input: ZoneInput = zoneInput(deps.frames);
   const presence: ZonePresence = new ZonePresence();
   let closing: Promise<void> | null = null;
@@ -156,13 +158,15 @@ export function mountPlaced(slots: ZoneHost, placed: PlacedMount, deps: ZoneRunt
     }
     // The verified release's own manifest decides, not the listing the page was shown.
     if (!runsOn(loaded.manifest, placement.kind)) {
-      surface.show({ kind: 'stopped', why: `${name} cannot run ${placement.kind === 'zone' ? 'in a page' : 'in a tab'}, so it was not started.` });
+      surface.show({ kind: 'stopped', why: `${name} cannot run ${placementPhrase(placement.kind)}, so it was not started.` });
       return;
     }
     const world: PortWorld = { ...(await deps.portWorld()), policy: deps.policy };
     const scopeKey: string = await scopeKeyOf(install.scope, world.sha256Hex);
     if (closing !== null) return;
-    bound = hostPortsFor(install, loaded.manifest.limits, deps.newInstanceId(), scopeKey, { events: input.port, ui: zoneUiPort(toolbar) }, planes.attach(install.id, install.app_id), world);
+    bound = hostPortsFor(install, loaded.manifest.limits, deps.newInstanceId(), scopeKey, { events: input.port, ui: zoneUiPort(toolbar) }, planes.attach(install.id, install.app_id), world, sessionBindingOf(loaded.manifest, placed.me), {
+      id: loaded.manifest.id, name: loaded.manifest.name, nodeId: placed.nodeId,
+    });
     const closeGraceMs: number = loaded.manifest.limits.close_grace_ms;
     const launch: Launch = launchAppInstance({
       appId: install.app_id, module: loaded.module, granted: bound.held, memory: loaded.memory, closeGraceMs,
@@ -181,6 +185,11 @@ export function mountPlaced(slots: ZoneHost, placed: PlacedMount, deps: ZoneRunt
       if (closing === null && running.state === 'running') running.postEvent({ topic: { name: a.name, event: a.event } });
     });
     if (offTopic !== undefined) watching.push(offTopic);
+    const offSession: (() => void) | undefined = bound.ports.session?.onEvent((a: SessionArrival): void => {
+      if (closing === null && running.state === 'running') running.postEvent({ session: { session: a.session, event: a.event } });
+    });
+    if (offSession !== undefined) watching.push(offSession);
+    watching.push(running.onRegions(surface.regions));
     running.attachCanvas(deps.offscreen(surface.canvas), dpr);
     running.onState((state: InstanceState): void => {
       if (state === 'running') {

@@ -5,7 +5,6 @@
  */
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { pageAppNotices } from '@/lib/citadel-apps/app-notices';
 import type { RosterMember } from '@/lib/citadel-apps/runtime/first-party-ports';
 import type { PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
 import type { AppTabMount, AppZoneRuntime, GlueBound, GlueHandle } from './app-zone-environment';
@@ -25,7 +24,7 @@ export function useGlueBinding(runtime: AppZoneRuntime, tab: AppTabMount): GlueB
     setBinding({ kind: 'binding' });
     const handle: GlueHandle = runtime.bindGlue({
       install, manifest, tabId, nodeId, me,
-      firstParty: { tree: () => tree.current, roster: () => roster.current, notices: pageAppNotices },
+      firstParty: { tree: () => tree.current, roster: () => roster.current },
     });
     void handle.ready.then((bound: GlueBound): void => { if (live) setBinding(bound); });
     return (): void => {

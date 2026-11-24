@@ -95,6 +95,11 @@ export const CID_ROUTED_NOTIFICATIONS: Set<ResponseType> = new Set<ResponseType>
   // it. Unsolicited (request_id null): without cid routing no tab would raise the changed-key
   // screen, and the peer would stay refused with nobody told why.
   'PeerIdentityKeyChangedNotification',
+  // cid = the member session whose app holds the citadel.session (citadel-session-abi §3). A
+  // message and a later state change are unsolicited (request_id null): without cid routing no
+  // tab would hear them. An open's answer is cid-routed too, and reaches the tab of that session.
+  'AppSessionState',
+  'AppSessionMessage',
 ]);
 
 /**

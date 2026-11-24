@@ -4,9 +4,10 @@ import type { Caller } from "./Caller";
 import type { IhttpFrame } from "./IhttpFrame";
 import type { KeyEvent } from "./KeyEvent";
 import type { PointerEvent } from "./PointerEvent";
+import type { SessionEvent } from "./SessionEvent";
 import type { StorageBackend } from "./StorageBackend";
 import type { SuspendReason } from "./SuspendReason";
 import type { TopicEvent } from "./TopicEvent";
 import type { WheelEvent } from "./WheelEvent";
 
-export type AppEvent = "init" | { "suspend": { reason: SuspendReason, } } | "resume" | { "resize": { width: number, height: number, dpr: number, } } | { "pointer": PointerEvent } | { "key": KeyEvent } | { "wheel": WheelEvent } | { "focus": { focused: boolean, } } | { "visibility": { visible: boolean, } } | { "node_changed": { node_id: string, } } | { "storage_changed": { backend: StorageBackend, key: string, } } | { "ui_action": { id: string, } } | { "deep_link": { query: string, } } | { "frame": { dt_ms: number, } } | { "reply_ready": { handle: number, } } | { "ihttp": { from: Caller, frame: IhttpFrame, } } | { "topic": { name: string, event: TopicEvent, } } | { "open_file": { name: string, mime: string, bytes: Bytes, } };
+export type AppEvent = "init" | { "suspend": { reason: SuspendReason, } } | "resume" | { "resize": { width: number, height: number, dpr: number, } } | { "pointer": PointerEvent } | { "key": KeyEvent } | { "wheel": WheelEvent } | { "focus": { focused: boolean, } } | { "visibility": { visible: boolean, } } | { "node_changed": { node_id: string, } } | { "storage_changed": { backend: StorageBackend, key: string, } } | { "ui_action": { id: string, } } | { "deep_link": { query: string, } } | { "frame": { dt_ms: number, } } | { "reply_ready": { handle: number, } } | { "ihttp": { from: Caller, frame: IhttpFrame, } } | { "topic": { name: string, event: TopicEvent, } } | { "open_file": { name: string, mime: string, bytes: Bytes, } } | { "session": { session: number, event: SessionEvent, } } | { "activate": { id: string, } };

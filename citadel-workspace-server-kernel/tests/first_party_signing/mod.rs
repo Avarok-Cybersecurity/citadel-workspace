@@ -23,6 +23,9 @@ pub struct Signed {
     pub manifest: Vec<u8>,
     pub signature: String,
     pub key: String,
+    /// The module the bundle carries: what the signer writes beside a release whose module the
+    /// server stores. None unless `signed_with_module` made it.
+    pub module: Option<Vec<u8>>,
 }
 
 impl Signed {
@@ -30,6 +33,7 @@ impl Signed {
         SignedBundle {
             manifest: &self.manifest,
             signature: &self.signature,
+            module: self.module.as_deref(),
         }
     }
 }
@@ -65,6 +69,17 @@ pub fn signed(manifest: &str, module: &str, seed_byte: &str) -> Signed {
         manifest: bytes,
         signature,
         key: key.public_key_hex(),
+        module: None,
+    }
+}
+
+/// `signed`, the bundle carrying the module as the signer's output does for an app-ABI app.
+pub fn signed_with_module(manifest: &str, module: &str, seed_byte: &str) -> Signed {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let wasm = std::fs::read(root.join(module)).unwrap_or_else(|e| panic!("{module}: {e}"));
+    Signed {
+        module: Some(wasm),
+        ..signed(manifest, module, seed_byte)
     }
 }
 

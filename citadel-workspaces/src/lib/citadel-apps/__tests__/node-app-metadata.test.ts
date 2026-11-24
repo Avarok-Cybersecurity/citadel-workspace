@@ -1,65 +1,98 @@
 /**
- * The app a document node opens in, stored in node metadata: it round-trips, it is MERGED into
- * whatever else the metadata holds, a node without one is "no app" (never a default app), and
- * an app record this client cannot read is a loud failure rather than a guess.
+ * What a node opens in, stored in node metadata (node-page-abi.md §2): the frozen contract's own
+ * fixtures (docs/contracts/batch-1116/fixtures/node-page-envelope) decode as the contract says,
+ * v1's three document apps exactly as they always did, v2 to an installed app's page, and every
+ * `invalid-*` to `unreadable` with a reason; a node without one is "no app" (never a default); the
+ * writers MERGE into whatever else the metadata holds.
  *
- * No mocks: pure encode/decode over bytes.
+ * No mocks: pure encode/decode over bytes. Negative controls (each applied, seen red, reverted):
+ * dropping the unknown-field check fails `invalid-unknown-field`, `invalid-v1-with-install` and
+ * `invalid-v2-unknown-payload-field`; dropping the v1-id refusal fails "never writes a page it would
+ * refuse to read" (the fixture `invalid-v2-first-party-id` stays refused: "pdf" is not an app id either);
+ * assigning over the document instead of spreading it fails both merge cases.
  */
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import {
-  decodeNodeApp,
-  encodeNodeApp,
-  nodeAppState,
-  NodeAppMetadataError,
-  NODE_APP_METADATA_KEY,
-} from '../node-app-metadata';
+import { decodeNodeApp, encodeNodeApp, encodeNodeAppPage, NODE_APP_METADATA_KEY, type NodeAppBinding } from '../node-app-metadata';
+
+/** vitest runs from citadel-workspaces/; the contracts are beside it. */
+const FIXTURES: string = resolve(process.cwd(), '../docs/contracts/batch-1116/fixtures/node-page-envelope');
+const fixture = (name: string): unknown => JSON.parse(readFileSync(join(FIXTURES, name), 'utf8'));
+const names: string[] = readdirSync(FIXTURES).filter((n: string) => n.endsWith('.json')).sort();
 
 const bytesOf = (document: unknown): number[] => Array.from(new TextEncoder().encode(JSON.stringify(document)));
 const documentOf = (bytes: Uint8Array): Record<string, unknown> => JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
+const asNode = (envelope: unknown): number[] => bytesOf({ [NODE_APP_METADATA_KEY]: envelope });
+const PAGE: { app: string; installId: string } = { app: 'work.synchronized.app', installId: 'inst_8f3a2c9d1e4b7a60' };
 
-describe('node app metadata', () => {
-  it('round-trips every app id, as the bytes the wire carries and as a typed array', () => {
+describe('the contract fixtures, as a node carries them', () => {
+  const expected: Readonly<Record<string, NodeAppBinding>> = {
+    'valid-v1-docs.json': { kind: 'document', app: 'docs' },
+    'valid-v1-pdf.json': { kind: 'document', app: 'pdf' },
+    'valid-v1-latex.json': { kind: 'document', app: 'latex' },
+    'valid-v2-installed.json': { kind: 'installed', ...PAGE },
+  };
+
+  it('has the fixtures this table names, and invalid ones besides', () => {
+    expect(names.filter((n: string) => n.startsWith('valid')).sort()).toEqual(Object.keys(expected).sort());
+    expect(names.filter((n: string) => n.startsWith('invalid-')).length).toBeGreaterThanOrEqual(9);
+  });
+
+  it.each(names.filter((n: string) => n.startsWith('valid')))('%s decodes to what it names', (name: string) => {
+    expect(decodeNodeApp(asNode(fixture(name)))).toEqual(expected[name]);
+  });
+
+  it.each(names.filter((n: string) => n.startsWith('invalid-')))('%s is unreadable, with a reason to show', (name: string) => {
+    const read: NodeAppBinding = decodeNodeApp(asNode(fixture(name)));
+    expect(read.kind).toBe('unreadable');
+    if (read.kind === 'unreadable') expect(read.reason).toMatch(/^This node.{10,}\.$/);
+  });
+
+  it('v1 is written byte for byte as it always was', () => {
     for (const app of ['docs', 'pdf', 'latex'] as const) {
-      const encoded: Uint8Array = encodeNodeApp(null, app);
-      expect(decodeNodeApp(encoded)).toBe(app);
-      expect(decodeNodeApp(Array.from(encoded))).toBe(app);
+      expect(new TextDecoder().decode(encodeNodeApp(null, app))).toBe(`{"${NODE_APP_METADATA_KEY}":{"v":1,"kind":"citadel-app","payload":{"app":"${app}"}}}`);
+      expect(documentOf(encodeNodeApp(null, app))[NODE_APP_METADATA_KEY]).toEqual(fixture(`valid-v1-${app}.json`));
     }
   });
 
-  it('keeps every other key the metadata already had', () => {
-    const existing: number[] = bytesOf({ pinned: true, theme: { v: 1, kind: 'theme', payload: { hue: 210 } } });
-    const merged: Record<string, unknown> = documentOf(encodeNodeApp(existing, 'docs'));
-    expect(merged.pinned).toBe(true);
-    expect(merged.theme).toEqual({ v: 1, kind: 'theme', payload: { hue: 210 } });
-    expect(decodeNodeApp(Array.from(encodeNodeApp(existing, 'docs')))).toBe('docs');
+  it('v2 is written as the contract fixture, and reads back as the page it names', () => {
+    const encoded: Uint8Array = encodeNodeAppPage(null, PAGE);
+    expect(documentOf(encoded)[NODE_APP_METADATA_KEY]).toEqual(fixture('valid-v2-installed.json'));
+    expect(decodeNodeApp(encoded)).toEqual({ kind: 'installed', ...PAGE });
+    expect(decodeNodeApp(Array.from(encoded))).toEqual({ kind: 'installed', ...PAGE });
   });
 
-  it('replaces only its own key when the app changes', () => {
-    const once: Uint8Array = encodeNodeApp(bytesOf({ pinned: true }), 'docs');
-    const twice: Record<string, unknown> = documentOf(encodeNodeApp(once, 'latex'));
-    expect(Object.keys(twice).sort()).toEqual([NODE_APP_METADATA_KEY, 'pinned'].sort());
-    expect(decodeNodeApp(encodeNodeApp(once, 'latex'))).toBe('latex');
+  it('never writes a page it would refuse to read', () => {
+    expect(() => encodeNodeAppPage(null, { app: 'pdf', installId: 'i' })).toThrow(/document app/);
+    expect(() => encodeNodeAppPage(null, { app: 'Work.App', installId: 'i' })).toThrow(/not an app id/);
+    expect(() => encodeNodeAppPage(null, { app: 'work.app', installId: '' })).toThrow(/no install/);
+  });
+});
+
+describe('a node’s other metadata', () => {
+  const existing: number[] = bytesOf({ initialized: true, pinned: true, theme: { v: 1, kind: 'theme', payload: { hue: 210 } } });
+
+  it('survives writing a document app or an app page, and only the app key changes', () => {
+    for (const encoded of [encodeNodeApp(existing, 'docs'), encodeNodeAppPage(existing, PAGE)]) {
+      const merged: Record<string, unknown> = documentOf(encoded);
+      expect([merged.initialized, merged.pinned, merged.theme]).toEqual([true, true, { v: 1, kind: 'theme', payload: { hue: 210 } }]);
+      expect(Object.keys(merged).sort()).toEqual([NODE_APP_METADATA_KEY, 'initialized', 'pinned', 'theme'].sort());
+    }
   });
 
-  it('is null, not a default app, for a node that names none', () => {
-    expect(decodeNodeApp([])).toBeNull();
-    expect(decodeNodeApp(null)).toBeNull();
-    expect(decodeNodeApp(bytesOf({ pinned: true }))).toBeNull();
-    expect(decodeNodeApp([0xff, 0x00, 0x13])).toBeNull();
-    expect(nodeAppState([])).toEqual({ kind: 'none' });
+  it('keeps its keys when a document node becomes a page', () => {
+    const page: Uint8Array = encodeNodeAppPage(encodeNodeApp(existing, 'latex'), PAGE);
+    expect(documentOf(page).initialized).toBe(true);
+    expect(decodeNodeApp(page)).toEqual({ kind: 'installed', ...PAGE });
   });
 
-  it('fails loudly on an envelope version it does not know', () => {
-    const newer: number[] = bytesOf({ [NODE_APP_METADATA_KEY]: { v: 2, kind: 'citadel-app', payload: { app: 'docs' } } });
-    expect(() => decodeNodeApp(newer)).toThrow(NodeAppMetadataError);
-    expect(() => decodeNodeApp(newer)).toThrow(/version 2/);
-    expect(nodeAppState(newer)).toMatchObject({ kind: 'unreadable' });
+  it('is "none", never a default app, when it names no app or is not a JSON object', () => {
+    for (const metadata of [[], null, bytesOf({ pinned: true }), [0xff, 0x00, 0x13]]) expect(decodeNodeApp(metadata)).toEqual({ kind: 'none' });
   });
 
-  it('fails loudly on an app id it does not know, and on a malformed record', () => {
-    const unknownApp: number[] = bytesOf({ [NODE_APP_METADATA_KEY]: { v: 1, kind: 'citadel-app', payload: { app: 'sheets' } } });
-    expect(() => decodeNodeApp(unknownApp)).toThrow(/sheets/);
-    expect(() => decodeNodeApp(bytesOf({ [NODE_APP_METADATA_KEY]: 'docs' }))).toThrow(NodeAppMetadataError);
-    expect(() => decodeNodeApp(bytesOf({ [NODE_APP_METADATA_KEY]: { v: 1, kind: 'other', payload: { app: 'docs' } } }))).toThrow(/kind other/);
+  it('is unreadable, not "none", when its app record is malformed', () => {
+    expect(decodeNodeApp(asNode('docs'))).toMatchObject({ kind: 'unreadable' });
+    expect(decodeNodeApp(asNode({ v: 1, kind: 'citadel-app' }))).toEqual({ kind: 'unreadable', reason: 'This node\'s app record has no “payload”.' });
   });
 });

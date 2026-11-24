@@ -15,6 +15,7 @@ import { getListing, listInstalls, setDisabledForMe, type AppsResult, type AppsT
 import { getRelease, type Release } from '@/lib/workspace-service/apps-runtime-operations';
 import { adoptDisabledForMe } from '@/lib/citadel-apps/disabled-for-me';
 import { adoptPeerForMe } from '@/lib/citadel-apps/peer-for-me';
+import { recordAppIcon } from '@/lib/citadel-apps/installed-app-icons';
 import { listedApps, type ListedApp } from '@/lib/citadel-apps/listing-model';
 import { readAppsAnswer, type AppsAnswer } from '@/lib/citadel-apps/wire/apps-answer';
 import type { ZoneDataPort } from './app-zone-environment';
@@ -35,7 +36,10 @@ export function zoneDataFrom(transport: AppsTransport): ZoneDataPort {
 
   const listed = (listing: AppListing): AppsResult<ListedApp> => {
     const [app] = listedApps([listing]);
-    return app === undefined ? { ok: false, refusal: 'Unavailable' } : { ok: true, value: app };
+    if (app === undefined) return { ok: false, refusal: 'Unavailable' };
+    // The tree draws an app page's node with this icon (node-icon.ts); the listing is where it is known.
+    recordAppIcon(app.manifest.id, app.manifest.icon);
+    return { ok: true, value: app };
   };
 
   /** The release an install of `appId` that reaches this person runs; the registry's refusal when there is none. */

@@ -96,7 +96,7 @@ const SKIP = new Map([
   // 430: storage.node.authored, its KV_BACKEND_CAPABILITY row and the KvListAuthored op
   // (Calendar design §3.3.1).
   // 434: HTTP_METHODS, rendered from HttpMethod::ALL so the host stops restating the methods.
-  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 434],
+  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 462],
 ]);
 
 /**

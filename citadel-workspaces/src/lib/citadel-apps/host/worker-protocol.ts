@@ -8,6 +8,7 @@
 import type { AbiGroup } from './abi';
 import { isCborMap, type CborMap } from './cbor';
 import type { Capability } from './capabilities';
+import type { CanvasRegion } from './canvas-limits';
 import type { Address } from '../sdk/generated/Address';
 import type { Caller } from '../sdk/generated/Caller';
 import type { CloseReason } from '../sdk/generated/CloseReason';
@@ -62,10 +63,14 @@ export type FromWorker =
   /** A frame on a call whose server has not answered yet, so only its address is known. */
   | { readonly kind: 'ihttp_call_out'; readonly to: Address; readonly frame: IhttpFrame; readonly transport: Transport }
   | { readonly kind: 'closing'; readonly result: number }
+  /** The last painted frame's `Region`s in draw order (an empty list clears), sent when they change. */
+  | { readonly kind: 'regions'; readonly regions: readonly CanvasRegion[] }
   | { readonly kind: 'settled' };
 
 const TO_WORKER: ReadonlySet<string> = new Set<ToWorker['kind']>(['load', 'event', 'frame', 'port_reply', 'ihttp', 'canvas', 'resize', 'close']);
-const FROM_WORKER: ReadonlySet<string> = new Set<FromWorker['kind']>(['done', 'busy', 'loaded', 'trapped', 'log', 'port_call', 'ihttp_out', 'ihttp_call_out', 'closing', 'settled']);
+const FROM_WORKER: ReadonlySet<string> = new Set<FromWorker['kind']>(['done', 'busy', 'loaded', 'trapped', 'log', 'port_call', 'ihttp_out', 'ihttp_call_out', 'closing', 'settled',
+  'regions',
+]);
 
 export function isToWorker(value: unknown): value is ToWorker {
   return isCborMap(value) && typeof value.kind === 'string' && TO_WORKER.has(value.kind);

@@ -22,7 +22,7 @@ function recordingRuntime(): { runtime: AppZoneRuntime; binds: Bind[] } {
   const binds: Bind[] = [];
   const unused = (): never => { throw new Error('a glue tab draws nothing'); };
   const runtime: AppZoneRuntime = {
-    mount: unused, mountPane: unused,
+    mount: unused, mountPane: unused, mountPage: unused,
     bindGlue: (tab: GlueTabMount) => {
       let bound: (b: GlueBound) => void = () => {};
       const ready: Promise<GlueBound> = new Promise<GlueBound>((r) => { bound = r; });

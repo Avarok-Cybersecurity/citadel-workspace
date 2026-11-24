@@ -90,9 +90,10 @@ export function FocusedTree({ nodes, root, selectedId, isMobile, actions, canAdd
       ...actions,
       onNodeCreate: canAdd ? actions.onNodeCreate : undefined,
       onNewDocument: canAdd ? actions.onNewDocument : undefined,
+      onNewAppPage: canAdd ? actions.onNewAppPage : undefined,
     };
     if (node.id !== root.id || isStoredRoot) return withAdd;
-    return { onAdminSettings: withAdd.onAdminSettings, onNodeCreate: withAdd.onNodeCreate, onNewDocument: withAdd.onNewDocument };
+    return { onAdminSettings: withAdd.onAdminSettings, onNodeCreate: withAdd.onNodeCreate, onNewDocument: withAdd.onNewDocument, onNewAppPage: withAdd.onNewAppPage };
   };
 
   return (

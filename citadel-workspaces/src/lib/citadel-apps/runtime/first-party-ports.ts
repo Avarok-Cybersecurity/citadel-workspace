@@ -1,7 +1,9 @@
 /**
  * The ports only a first-party glue app is bound to, beside nodes-port.ts: `members.list` from the
- * roster this page already holds, and `notifications` as an entry in the page's notification list
- * badged with the app's name, so a reminder can never pass for the workspace's own message.
+ * roster this page already holds; and `notifications`, which every instance granted it is given
+ * (host-ports.ts), as an entry in the page's notification list badged with the app's name, so a
+ * reminder can never pass for the workspace's own message, and opening the node the instance is
+ * mounted on: the host names the node, never the app.
  *
  * Both are pure over what they are handed (SBIO): the roster read and the notification sink are
  * the page's, injected by the mount.
@@ -31,20 +33,28 @@ export function rosterMembersPort(read: RosterRead): MembersPort {
   };
 }
 
-/** One notification as the page's list shows it: who it is from, its title and its text. */
+/** Where an instance's notifications come from: the app by id and name, and the node it is mounted on. */
+export interface NoticeOrigin {
+  readonly id: string;
+  readonly name: string;
+  readonly nodeId: string;
+}
+
+/** One notification as the page's list shows it: who it is from, its title and its text, and the node it opens. */
 export interface AppNotice {
   readonly from: string;
   readonly appId: string;
+  readonly nodeId: string;
   readonly title: string;
   readonly body: string;
 }
 
 export type NoticeSink = (notice: AppNotice) => void;
 
-export function badgedNotifyPort(app: { readonly id: string; readonly name: string }, sink: NoticeSink): NotifyPort {
+export function badgedNotifyPort(origin: NoticeOrigin, sink: NoticeSink): NotifyPort {
   return {
     Notify: ({ title, body }): ReturnType<NotifyPort['Notify']> => {
-      sink({ from: app.name, appId: app.id, title, body });
+      sink({ from: origin.name, appId: origin.id, nodeId: origin.nodeId, title, body });
       return { ok: null };
     },
   };

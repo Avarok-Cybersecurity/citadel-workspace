@@ -36,6 +36,8 @@ export interface TreeNodesSectionProps {
   onNodeCreate?: (parentId: string | null) => void;
   /** Open "New document" under a node; the workspace root is WORKSPACE_ROOT_ID. */
   onNewDocument?: (parentId: string) => void;
+  /** Open "New app page" under a node, as onNewDocument. */
+  onNewAppPage?: (parentId: string) => void;
   onAdminSettings?: (node: DomainNode) => void;
   onSetDefault?: (node: DomainNode) => void;
   onMoveNode?: (node: DomainNode) => void;
@@ -69,6 +71,7 @@ export function TreeNodesSection({
   onNodeDelete,
   onNodeCreate,
   onNewDocument,
+  onNewAppPage,
   onAdminSettings,
   onSetDefault,
   onMoveNode,
@@ -212,7 +215,7 @@ export function TreeNodesSection({
                           root={root}
                           selectedId={selected.id}
                           isMobile={isMobile}
-                          actions={{ onNodeEdit, onNodeDelete: onNodeDelete ? setNodeToDelete : undefined, onNodeCreate: createUnder, onNewDocument, onAdminSettings, onSetDefault, onMoveNode }}
+                          actions={{ onNodeEdit, onNodeDelete: onNodeDelete ? setNodeToDelete : undefined, onNodeCreate: createUnder, onNewDocument, onNewAppPage, onAdminSettings, onSetDefault, onMoveNode }}
                           // "Add Child" and the Add rows are the same request; not offered when it would be refused.
                           canAdd={Boolean(onNodeCreate) && createBlockedReason === null}
                           onSelect={handleNodeSelect}

@@ -28,6 +28,7 @@ import { AppZone } from '@/components/office/app-zone/AppZone';
 import { AppTabPane } from '@/components/office/app-zone/AppTabPane';
 import { AppZoneContext, zoneClaims, type AppZoneEnvironment } from '@/components/office/app-zone/app-zone-environment';
 import { listedApps } from '@/lib/citadel-apps/listing-model';
+import type { AppNotice } from '@/lib/citadel-apps/runtime/first-party-ports';
 import { readAppsAnswer, type AppsAnswer } from '@/lib/citadel-apps/wire/apps-answer';
 import type { AppsTransport } from '@/lib/workspace-service/apps-operations';
 import type { ConsentChoice } from '@/lib/citadel-apps/member-consent-types';
@@ -128,6 +129,7 @@ async function start(): Promise<void> {
       log: { LogWrite: () => ({ ok: null }) }, pushes: () => () => undefined, sha256Hex: verifier.sha256Hex, nowMs: () => Date.now(), every: () => () => undefined,
       // No agent session here, so no peer plane: nobody to reach and no answer of one's own.
       peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string, detail: unknown): void => console.warn(what, detail),
+      notices: (n: AppNotice): void => console.info(`[harness] ${n.from} notified: ${n.title}`),
     }),
     pageUrl: () => window.location.href, locale: () => 'en', dpr: () => window.devicePixelRatio, theme: () => ({}),
     opened: new OpenedFiles(),

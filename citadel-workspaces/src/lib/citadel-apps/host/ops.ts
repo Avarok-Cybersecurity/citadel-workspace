@@ -58,6 +58,8 @@ const BINDINGS: { readonly [N in OpName]: Binding } = {
   Notify: local('notify'),
   DocOpen: server('documents'), DocApply: server('documents'), DocPull: server('documents'),
   TopicOpen: server('topic'), TopicPublish: server('topic'), TopicClose: server('topic'),
+  // The agent dials the external server on the first open, so the open has the host-net clock.
+  SessionOpen: { port: 'session', server: false, clock: 'host_net' }, SessionSend: local('session'), SessionClose: local('session'),
   LogWrite: local('log'),
 };
 

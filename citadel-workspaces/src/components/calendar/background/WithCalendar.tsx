@@ -68,7 +68,7 @@ function Bound({ runtime, tab, children }: { runtime: AppZoneRuntime; tab: AppTa
 function Placed({ me, purpose, children }: WithCalendarProps): JSX.Element {
   const env: AppZoneEnvironment | null = useContext(AppZoneContext);
   if (env === null) throw new Error('WithCalendar renders its own zone environment');
-  const { view, waiting, actions, facts }: PlacedApp = usePlacedApp({ app: CALENDAR_APP_ID, zone: purpose, height: 0, floor: null }, env, 'tab');
+  const { view, waiting, actions, facts }: PlacedApp = usePlacedApp({ app: CALENDAR_APP_ID, zone: purpose, height: 0, floor: null }, env, 'tab', null);
   if (view.kind === 'loading') return <>{children({ kind: 'waiting' })}</>;
   // Not running here, for the reason an app tab would show (AppZoneRequired.placeholderFor).
   if (view.kind !== 'ready' || waiting || env.runtime === null) {

@@ -58,7 +58,7 @@ export type ZoneView =
   /** The listing or the installs could not be read (no answer, or one that did not read): try again. */
   | { kind: 'failed' }
   | { kind: 'not-available' }
-  /** The app's manifest does not list the surface it is placed on (`md_zone` for a zone, `node_tab` for a tab). */
+  /** The app's manifest does not list the surface it is placed on (`md_zone` for a zone, `node_tab` for a tab, `node_page` for a page). */
   | { kind: 'wrong-surface'; name: string }
   /** `elsewhere`: installed in this workspace, but no install reaches this person here. */
   | { kind: 'install'; name: string; elsewhere: boolean }
@@ -73,6 +73,16 @@ export type ZoneView =
    */
   | { kind: 'needs-answer'; name: string; install: AppInstall; asks: readonly MemberAsk[] }
   | { kind: 'ready'; app: ListedApp; install: AppInstall };
+
+/**
+ * The facts as a placement bound to one install sees them (a node's page names its install,
+ * node-page-abi.md §2): only that install may run there, never another install of the same app.
+ * Null: any install of the app that covers this person here (a zone, a tab).
+ */
+export function boundTo(f: ZoneFacts, installId: string | null): ZoneFacts {
+  if (installId === null || typeof f.installs === 'string') return f;
+  return { ...f, installs: f.installs.filter((i: AppInstall): boolean => i.id === installId) };
+}
 
 export function zoneView(props: ZoneProps, f: ZoneFacts, placed: Placement['kind']): ZoneView {
   if (f.listing === 'failed' || f.installs === 'failed') return { kind: 'failed' };

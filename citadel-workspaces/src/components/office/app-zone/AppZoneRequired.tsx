@@ -10,6 +10,7 @@ import { versionFloorLabel, type AppVersion } from '@/lib/citadel-apps/app-ident
 import { AppIconImage } from '@/components/citadel-apps/marketplace/AppIconImage';
 import type { ZoneView } from './zone-state';
 import { MemberAnswerPrompt } from './MemberAnswerPrompt';
+import type { Placement as Placed } from '@/lib/citadel-apps/runtime/placement';
 
 /**
  * A view that is not a running app: one zoneView decided, an app ready where apps cannot run
@@ -21,11 +22,11 @@ export type PlaceholderView = Exclude<ZoneView, { kind: 'ready' }> | { kind: 're
 export const placeholderFor = (view: ZoneView, waiting: boolean): PlaceholderView =>
   view.kind !== 'ready' ? view : { kind: waiting ? 'answering' : 'ready-unmounted', name: view.app.manifest.name };
 
-/** Where the app would run: a zone in a page, a tab of the node's pane, or a page of settings. */
-export type Placement = 'zone' | 'tab' | 'setting';
+/** Where the app would run: a zone in a page, a tab of the node's pane, the node's page itself, or a page of settings. */
+export type Placement = Placed['kind'] | 'setting';
 
-const SURFACE: Readonly<Record<Placement, string>> = { zone: 'a page zone', tab: 'a tab', setting: 'these settings' };
-const GROUP: Readonly<Record<Placement, string>> = { zone: 'App zone', tab: 'App tab', setting: 'App settings' };
+const SURFACE: Readonly<Record<Exclude<Placement, 'page'>, string>> = { zone: 'a page zone', tab: 'a tab', setting: 'these settings' };
+const GROUP: Readonly<Record<Placement, string>> = { zone: 'App zone', tab: 'App tab', page: 'App page', setting: 'App settings' };
 
 interface AppZoneRequiredProps {
   placement: Placement;
@@ -40,6 +41,12 @@ interface AppZoneRequiredProps {
   onOpenApps: () => void;
   onRetry: () => void;
   onAnswer: (allowed: boolean) => Promise<void>;
+}
+
+/** A page's release can stop offering a page after its content was made with it, so its refusal says what to do instead. */
+function wrongSurface(placement: Placement, name: string): [string, string] {
+  if (placement === 'page') return [`${name} can no longer be shown as a page.`, 'The release installed here does not offer a page. A workspace admin can install one that does, or move this node’s content elsewhere.'];
+  return [`${name} cannot be shown in ${SURFACE[placement]}.`, 'Its developer did not make it for this place.'];
 }
 
 const needs = (placement: Placement, name: string, floor: AppVersion | null): string => `This ${placement} requires ${name}${floor === null ? '' : ` ${versionFloorLabel(floor)}`}`;
@@ -57,7 +64,7 @@ export function AppZoneRequired({ placement, appId, floor, height, view, icon, o
     case 'loading': title = `Loading this ${placement}’s app…`; break;
     case 'failed': title = `This ${placement}’s app could not be loaded.`; detail = 'The server did not answer, or its answer could not be read.'; action = button('Try again', onRetry, 'app-zone-retry'); break;
     case 'not-available': title = `This ${placement} needs “${appId}”, which is not available to you.`; detail = 'Ask a workspace admin whether it can be installed for you.'; break;
-    case 'wrong-surface': title = `${view.name} cannot be shown in ${SURFACE[placement]}.`; detail = 'Its developer did not make it for this place.'; break;
+    case 'wrong-surface': [title, detail] = wrongSurface(placement, view.name); break;
     case 'install': title = needs(placement, view.name, floor); detail = view.elsewhere ? NOT_HERE : null; action = button(`Install ${view.name}`, onInstall, 'app-zone-install'); break;
     case 'ask-admin':
       title = needs(placement, view.name, floor);

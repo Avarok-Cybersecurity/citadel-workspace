@@ -64,6 +64,9 @@ tempfile = "3.10.1"
 # workspace server ships only as a Linux image, and its native sign-in files set Unix modes
 # (kernel/sign_in/native/{seed,settings}_file.rs), so the kernel does not build for Windows.
 citadel-workspace-server-kernel-test-common = { workspace = true }
+# apps_authority_session_tests.rs: the kernel's own `HostNetGrant` decision, read as the agent
+# reads it. Unix only, for the reason above.
+citadel-workspace-server-kernel = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 tray-icon = { version = "0.21", default-features = false }

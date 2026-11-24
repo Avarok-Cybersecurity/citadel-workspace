@@ -27,5 +27,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "scripts/lib/docs-harness", "scripts/lib/bench-harness", "scripts/lib/app-zone-harness"]
+  "include": ["src", "scripts/lib/docs-harness", "scripts/lib/bench-harness", "scripts/lib/app-zone-harness", "scripts/lib/app-page-harness"]
 }

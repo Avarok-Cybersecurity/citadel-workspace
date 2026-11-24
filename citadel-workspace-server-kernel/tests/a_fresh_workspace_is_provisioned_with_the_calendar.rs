@@ -108,7 +108,7 @@ async fn a_first_party_release_the_server_cannot_run_is_not_provisioned() {
         .await;
     assert!(
         refused.is_err(),
-        "its module is not in the UI bundle, and the server carries none"
+        "its module is not in the UI bundle, and this bundle carries none"
     );
     assert!(workspace_installs(&kernel).await.is_empty());
 }

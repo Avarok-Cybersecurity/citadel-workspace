@@ -239,6 +239,14 @@ jobs:
           cargo fmt --all --check
           cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
           cargo test --locked -p compute-pool-core
+      # synchronized.work: the app is sw-app at a pinned commit; natively, the module crate is
+      # the test that the manifest's id, servers, hosts and limits.session are sw-app's own.
+      - name: First-party synchronized.work - fmt, clippy for wasm32, and the manifest against sw-app
+        working-directory: apps/first-party/synchronized-work
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
+          cargo test --locked -p synchronized-work
       # The Calendar (Calendar design 3.2): its core is pure and runs natively for its tests,
       # including the sweep over every IANA zone's transitions, and builds for the page's wasm32.
       - name: First-party Calendar - fmt, clippy native and wasm32, and its core's tests
@@ -279,6 +287,9 @@ jobs:
           CITADEL_APP_SIGNING_SEED_HEX="$(openssl rand -hex 32)" \
             node scripts/build-first-party-apps.mjs --sign "$RUNNER_TEMP/first-party-signed" --throwaway-key
           test -s "$RUNNER_TEMP/first-party-signed/calendar/app.mldsa.sig"
+          test -s "$RUNNER_TEMP/first-party-signed/synchronized-work/app.mldsa.sig"
+          test -s "$RUNNER_TEMP/first-party-signed/synchronized-work/module.wasm"
+          test ! -e "$RUNNER_TEMP/first-party-signed/calendar/module.wasm"
       - name: Reference host - fmt, clippy, every fixture judged and run as fixtures.json says
         working-directory: apps/sdk-fixtures/harness
         run: |
@@ -1765,6 +1776,9 @@ jobs:
           - { name: Docs text crispness, run: 'npm run check:docs-crispness' }
           - { name: Docs pane states, run: 'npm run check:docs-pane-states' }
           - { name: App zone geometry, run: 'npm run check:app-zone' }
+          # An installed synchronized.work app as a node's page: the committed module, the real session port and notify path,
+          # the agent a script of the transcript recorded from the real node; at 390x844 too.
+          - { name: App page session, run: 'npm run check:app-page' }
           # The Calendar's grids and views on the shipped engine: every day reached by keyboard through
           # one roving tab stop, 44px targets and no sideways scroll at 375px, axe clean at rest.
           - { name: Calendar grid and views, run: 'npm run check:calendar-grid' }

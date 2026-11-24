@@ -5,7 +5,7 @@
  */
 import { MessageChannel, type MessagePort } from 'node:worker_threads';
 import type { DispatchClock } from '../dispatch';
-import { startWorkerHost } from '../worker-host';
+import { startWorkerHost, type SurfaceOf } from '../worker-host';
 import type { FromWorker, HostChannel, ToWorker } from '../worker-protocol';
 
 export const realClock: DispatchClock = {
@@ -22,7 +22,11 @@ export interface InProcess {
   readonly close: () => void;
 }
 
-export function inProcess(): InProcess {
+/**
+ * `surfaceOf`: what the worker draws on once a canvas is attached. Most tests are about anything but
+ * painting, so the default draws nothing (CanvasDraw answers `unavailable`), as before the canvas tests.
+ */
+export function inProcess(surfaceOf: SurfaceOf = () => null): InProcess {
   const ports: MessagePort[] = [];
   let terminated: number = 0;
   const spawn = (): HostChannel => {
@@ -31,7 +35,7 @@ export function inProcess(): InProcess {
     startWorkerHost(
       { post: (m: FromWorker): void => port2.postMessage(m), listen: (h: (m: unknown) => void): void => { port2.on('message', h); } },
       realClock,
-      () => null,
+      surfaceOf,
     );
     return {
       postMessage: (message: ToWorker): void => port1.postMessage(message),

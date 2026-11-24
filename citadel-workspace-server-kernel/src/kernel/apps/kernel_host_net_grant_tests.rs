@@ -28,7 +28,7 @@ fn host_net_spec() -> Spec {
 }
 
 /// `installer`'s role gains (`on`) or loses `permission`.
-async fn set_installer_holds(kernel: &Kernel, permission: Permission, on: bool) {
+pub(super) async fn set_installer_holds(kernel: &Kernel, permission: Permission, on: bool) {
     let backend = &kernel.domain_operations.backend_tx_manager;
     let mut roles = backend.get_roles(WORKSPACE_ROOT_ID).await.unwrap();
     for role in roles.roles.iter_mut().filter(|r| r.id == "installer") {
@@ -68,7 +68,11 @@ async fn installed_at(scope: InstallScope) -> (Kernel, String) {
 }
 
 /// The grant the kernel answers `user` about `install_id`, its tag and id checked.
-async fn grant_for(kernel: &Kernel, user: &str, install_id: &str) -> Option<HostNetGrant> {
+pub(super) async fn grant_for(
+    kernel: &Kernel,
+    user: &str,
+    install_id: &str,
+) -> Option<HostNetGrant> {
     let tag = 7;
     let request = AppsRequest::HostNetGrant {
         install_id: install_id.to_string(),
@@ -89,6 +93,8 @@ fn full(private: bool) -> Option<HostNetGrant> {
         app_id: "com.acme.kanban".to_string(),
         hosts: HOSTS.map(str::to_string).to_vec(),
         private,
+        servers: Vec::new(),
+        session: None,
     })
 }
 

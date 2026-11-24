@@ -83,6 +83,9 @@ pub(crate) async fn run() -> Result<(), Box<dyn Error>> {
     // Whether it reaches a member's private network is that member's own grant, made on the
     // agent page (citadel-internal-service's kernel/apps/settings.rs), not a flag.
     let app_net = app_net::app_net_config(&origins, opts.bind.port());
+    // Which app servers are pinned rather than discovered (app_net.rs): none, validated here so
+    // a launch check refuses a configuration the agent could not start with.
+    let app_sessions = app_net::app_session_config()?;
 
     // Backend selection precedence:
     //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
@@ -193,7 +196,7 @@ pub(crate) async fn run() -> Result<(), Box<dyn Error>> {
         app_net,
         std::sync::Arc::new(apps_authority::WorkspaceHostNetAuthority),
     )
-    .with_app_sessions(app_net::app_session_config());
+    .with_app_sessions(app_sessions);
     // Each account's RE-VFS key, from a seed sealed under a vault that follows the backend.
     let revfs_keys = service.revfs_key_source(revfs_seed::vault_for(&backend_type)?)?;
     // Each identity session signs its P2P key exchanges, and peers' keys are pinned.

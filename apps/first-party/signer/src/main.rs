@@ -1,7 +1,9 @@
 //! `CITADEL_APP_SIGNING_SEED_HEX=<64 hex> sign-first-party-app <app dir> <out dir> [<module>]`:
 //! writes `<out>/manifest.json` and `<out>/app.mldsa.sig` for the app in `<app dir>` (its
 //! manifest.json, and its module: `<module>` when given, else wasm/<name>.wasm, as for a glue app
-//! whose binary the UI serves). Prints the public key's fingerprint, never the key or the seed.
+//! whose binary the UI serves), and `<out>/module.wasm`, the module checked against the manifest,
+//! for an app whose module the server stores (`Signed::ships_module`): what the kernel's build.rs
+//! embeds beside the signature. Prints the public key's fingerprint, never the key or the seed.
 
 use citadel_app_signature::{fingerprint, AppSigningKey, SIGNATURE_FILE_NAME};
 use first_party_signer::sign;
@@ -9,6 +11,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 const SEED_ENV: &str = "CITADEL_APP_SIGNING_SEED_HEX";
+/// The kernel's build.rs reads it by this name (`MODULE`).
+const MODULE_FILE: &str = "module.wasm";
 
 fn run() -> Result<String, String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -38,6 +42,9 @@ fn run() -> Result<String, String> {
         out.join(SIGNATURE_FILE_NAME),
         format!("{}\n", signed.signature).as_bytes(),
     )?;
+    if signed.ships_module {
+        write(out.join(MODULE_FILE), &wasm)?;
+    }
     fingerprint(&key.public_key_hex()).map_err(|e| e.to_string())
 }
 

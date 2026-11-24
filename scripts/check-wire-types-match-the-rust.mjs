@@ -91,12 +91,24 @@ if (!existsSync(RUST) || !existsSync(TYPES)) {
   process.exit(1);
 }
 
-const exported = exportedTypes(
-  readdirSync(RUST, { recursive: true })
-    .filter((f) => f.endsWith('.rs'))
-    .map((f) => readFileSync(join(RUST, f), 'utf8'))
-    .join('\n'),
-);
+const rustSource = readdirSync(RUST, { recursive: true })
+  .filter((f) => f.endsWith('.rs'))
+  .map((f) => readFileSync(join(RUST, f), 'utf8'))
+  .join('\n');
+const exported = exportedTypes(rustSource);
+// A wire type the crate carries unchanged from the app SDK's types (one definition, there) is
+// exported under its name too: counted only when the SDK crate really defines it, so a stale
+// generated file is still an orphan.
+const SDK_TYPES = join(ROOT, 'citadel-internal-service', 'citadel-app-sdk-types', 'src');
+const sdkSource = existsSync(SDK_TYPES)
+  ? readdirSync(SDK_TYPES, { recursive: true })
+      .filter((f) => f.endsWith('.rs'))
+      .map((f) => readFileSync(join(SDK_TYPES, f), 'utf8'))
+      .join('\n')
+  : '';
+for (const m of rustSource.matchAll(/^pub use citadel_app_sdk_types::(?:\w+::)*(\w+);$/gm)) {
+  if (new RegExp(`pub (?:struct|enum) ${m[1]}\\b`).test(sdkSource)) exported.add(m[1]);
+}
 const generated = new Set(
   readdirSync(TYPES)
     .filter((f) => f.endsWith('.ts') && f !== 'index.ts')

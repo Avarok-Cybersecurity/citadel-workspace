@@ -21,4 +21,9 @@ node_id: string,
  * How long `app_close` and the replies it waits on may take before the host ends the
  * instance: the manifest's `limits.close_grace_ms`, at most `abi::MAX_CLOSE_GRACE_MS`.
  */
-close_grace_ms: number, };
+close_grace_ms: number, 
+/**
+ * The host's ABI minor (`abi::ABI_MINOR` of the host's build). Absent from a host that
+ * predates minors, which is minor 0: that is what `default` decodes it as.
+ */
+sdk_abi_minor: number, };

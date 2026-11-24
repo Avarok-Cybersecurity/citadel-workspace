@@ -23,9 +23,9 @@ describe('the op table', () => {
     expect(Object.keys(OP_ARGS).sort()).toEqual(OPS.map((o) => o.name).sort());
   });
 
-  it('indexes the groups canvas 0 ... log 15, topic 16', () => {
-    expect(ABI_GROUPS.map(groupIndex)).toEqual(Array.from({ length: 17 }, (_, i: number) => i));
-    expect([ABI_GROUPS[0], ABI_GROUPS[15], ABI_GROUPS[16]]).toEqual(['canvas', 'log', 'topic']);
+  it('indexes the groups canvas 0 ... log 15, topic 16, then session 18 (17 is reserved for identity)', () => {
+    expect(ABI_GROUPS.map(groupIndex)).toEqual([...Array.from({ length: 17 }, (_, i: number) => i), 18]);
+    expect([ABI_GROUPS[0], ABI_GROUPS[15], ABI_GROUPS[16], ABI_GROUPS[17]]).toEqual(['canvas', 'log', 'topic', 'session']);
   });
 
   it('numbers ops from 1 within each group, each bound and found', () => {
@@ -37,8 +37,9 @@ describe('the op table', () => {
     expect(findOp('canvas', 0)).toBeUndefined();
   });
 
-  it('carries the SDK capability list: 33, storage.files and the P2P and topic planes in, presence out', () => {
-    expect(CAPABILITIES.length).toBe(33);
+  it('carries the SDK capability list: 34, storage.files, the P2P and topic planes and citadel.session in, presence out', () => {
+    expect(CAPABILITIES.length).toBe(34);
+    expect(CAPABILITIES).toContain('citadel.session');
     expect(CAPABILITIES).toEqual(expect.arrayContaining(['ihttp.p2p.serve', 'ihttp.p2p.call', 'group.topic.subscribe', 'group.topic.publish']));
     expect(CAPABILITIES).toContain('storage.files');
     expect(CAPABILITIES as readonly string[]).not.toContain('presence');

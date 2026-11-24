@@ -1073,6 +1073,7 @@ name = "citadel-internal-service-types"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "citadel-app-sdk-types",
  "citadel-internal-service-macros",
  "citadel_types",
  "custom_debug",
@@ -1125,6 +1126,7 @@ dependencies = [
  "citadel-internal-service-connector",
  "citadel-internal-service-test-common",
  "citadel-internal-service-types",
+ "citadel-workspace-server-kernel",
  "citadel-workspace-server-kernel-test-common",
  "citadel-workspace-types",
  "citadel_logging",
@@ -1234,6 +1236,7 @@ dependencies = [
  "citadel-app-id",
  "citadel-app-net-policy",
  "citadel-app-sdk-types",
+ "citadel-identity",
  "citadel-ihttp-types",
  "citadel-internal-service-types",
  "citadel_user",

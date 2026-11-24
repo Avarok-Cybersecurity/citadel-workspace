@@ -59,6 +59,7 @@ fn every_group() -> Vec<(Group, Option<Result<(), Refused>>)> {
             Group::Topic,
             now(topic::open("pool", |_: &mut UngrantedCalls, _| {})),
         ),
+        (Group::Session, now(session::open("example.com"))),
     ]
 }
 

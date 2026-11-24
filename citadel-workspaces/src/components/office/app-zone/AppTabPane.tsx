@@ -77,7 +77,7 @@ function GlueTabHost({ runtime, load, tab }: { runtime: AppZoneRuntime; load: Gl
 
 function PlacedTab({ appId, tabId, env }: AppTabPaneProps & { env: AppZoneEnvironment }): JSX.Element {
   const props: ZoneProps = { app: appId, zone: tabId, height: PLACEHOLDER_HEIGHT, floor: null };
-  const { facts, view, waiting, reasonFor, actions }: PlacedApp = usePlacedApp(props, env, 'tab');
+  const { facts, view, waiting, reasonFor, actions }: PlacedApp = usePlacedApp(props, env, 'tab', null);
   if (view.kind === 'ready' && !waiting && env.me !== null) {
     const mounts: ReturnType<typeof mountFor> = mountFor(view.app.manifest.sdk.abi);
     if (mounts === 'worker' && env.runtime !== null) {

@@ -53,7 +53,12 @@ export const CAPABILITY_COPY: Record<Capability, CapabilityCopy> = {
   'ihttp.p2p.call': { label: 'Send requests straight to other members’ devices', risk: 'medium', installerNeeds: 'AppInstallAllowPeerCall' },
   'group.topic.subscribe': { label: 'Listen on this app’s own channels', risk: 'medium', installerNeeds: 'AppInstallAllowGroupTopics' },
   'group.topic.publish': { label: 'Post on this app’s own channels', risk: 'medium', installerNeeds: 'AppInstallAllowGroupTopics' },
+  // Mirrors rules.rs: the member's agent reaches the named server for the app, as for net.host.
+  'citadel.session': { label: 'Keep a connection to a Citadel server through your Citadel agent', risk: 'high', installerNeeds: 'AppInstallAllowHostNetwork' },
 };
+
+/** `citadel.session`'s consent label with the manifest's own servers named. */
+export const sessionLabel = (servers: readonly string[]): string => `Keep a connection to ${servers.join(' and ')} through your Citadel agent`;
 
 /** What the workspace server sees of P2P traffic, said wherever a member is asked to allow it. */
 export const PEER_METADATA_DISCLOSURE: string =
@@ -73,6 +78,6 @@ export const MEMBER_CONSENT_COPY: Partial<Record<Capability, string>> = {
 /** Granted only to an app signed by the first-party key (`first_party_only` in rules.rs). */
 export const FIRST_PARTY_ONLY: ReadonlySet<Capability> = new Set<Capability>(['documents']);
 
-export const NETWORK_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>(['net.host', 'net.host.private', 'net.server']);
+export const NETWORK_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>(['net.host', 'net.host.private', 'net.server', 'citadel.session']);
 
 export const RISK_LABEL: Record<Risk, string> = { low: 'Low risk', medium: 'Medium risk', high: 'High risk', critical: 'Critical risk' };

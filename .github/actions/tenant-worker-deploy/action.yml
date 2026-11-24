@@ -62,10 +62,11 @@ runs:
     - name: UI dependencies
       shell: bash
       run: timeout 15m npm ci --no-audit --no-fund
-    # The apps every workspace is provisioned with (the Calendar), signed with the first-party
-    # key: the one step the seed is in. Only the signer reads it, from its environment, and prints
-    # the key's fingerprint, never the key or the seed. The script refuses a key the kernel does
-    # not list as first-party. deploy.sh refuses to build without what this writes.
+    # The apps every workspace is provisioned with (the Calendar, synchronized.work), signed with
+    # the first-party key: the one step the seed is in. Only the signer reads it, from its
+    # environment, and prints the key's fingerprint, never the key or the seed. The script refuses
+    # a key the kernel does not list as first-party. deploy.sh refuses to build without what this
+    # writes.
     - name: Sign the provisioned first-party apps
       shell: bash
       env:

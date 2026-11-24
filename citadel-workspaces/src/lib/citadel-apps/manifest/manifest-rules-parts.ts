@@ -7,6 +7,7 @@ import { isAppId } from '../app-identity';
 import { HTTP_METHODS, MAX_CLOSE_GRACE_MS } from '../sdk/generated/AbiConstants';
 import { isHostList, isHttpsUrl } from './net-rules';
 import { peerCapabilitiesProblem, peerLimitsProblem, takesRoutes, takesTargets, takesTopics } from './manifest-rules-peer';
+import { sessionCapabilitiesProblem, sessionLimitsProblem } from './manifest-rules-session';
 
 const MAX_WHY_CHARS: number = 200;
 const MAX_CALL_TARGETS: number = 16;
@@ -59,7 +60,7 @@ export function capabilitiesProblem(appId: string, requests: readonly Capability
   }
   const has = (cap: string): boolean => requests.some((r: CapabilityRequest) => r.cap === cap);
   if (has('net.host.private') && !has('net.host')) return 'net.host.private without net.host';
-  return peerCapabilitiesProblem(requests);
+  return peerCapabilitiesProblem(requests) ?? sessionCapabilitiesProblem(requests);
 }
 
 export function limitsProblem(limits: AppLimits, requests: readonly CapabilityRequest[]): string | null {
@@ -73,7 +74,7 @@ export function limitsProblem(limits: AppLimits, requests: readonly CapabilityRe
     ['storage_node_authored_bytes', limits.storage_node_authored_bytes === undefined || limits.storage_node_authored_bytes <= MAX_STORAGE_NODE_AUTHORED_BYTES],
     ['close_grace_ms', within(limits.close_grace_ms, MAX_CLOSE_GRACE_MS)],
   ];
-  return checks.find(([, ok]) => !ok)?.[0] ?? peerLimitsProblem(limits, requests);
+  return checks.find(([, ok]) => !ok)?.[0] ?? peerLimitsProblem(limits, requests) ?? sessionLimitsProblem(limits, requests);
 }
 
 const githubPart = (part: string): boolean => part.length >= 1 && part.length <= 100 && part !== '.' && part !== '..' && /^[A-Za-z0-9._-]+$/.test(part);

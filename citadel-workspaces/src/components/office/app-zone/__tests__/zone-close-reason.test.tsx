@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { act, render, waitFor, type RenderResult } from '@testing-library/react';
 import type { AppInstall } from 'citadel-workspace-client-ts';
 import { AppZone } from '../AppZone';
-import { NO_GLUE, NO_TABS, ANSWER_TAKEN } from './doubles/no-tabs';
+import { NO_GLUE, NO_PAGES, NO_TABS, ANSWER_TAKEN } from './doubles/no-tabs';
 import { AppZoneContext, zoneClaims, type AppZoneEnvironment, type AppZoneHandle, type AppZoneMount, type AppZoneRuntime, type ZoneHost } from '../app-zone-environment';
 import { closeReasonFor } from '../zone-close-reason';
 import type { ZoneFacts, ZoneView } from '../zone-state';
@@ -61,7 +61,7 @@ function recordingRuntime(): AppZoneRuntime & Recorded {
   const mounts: AppInstall[] = [];
   const closes: CloseReason[] = [];
   return {
-    mounts, closes, mountPane: NO_TABS, bindGlue: NO_GLUE,
+    mounts, closes, mountPane: NO_TABS, mountPage: NO_PAGES, bindGlue: NO_GLUE,
     mount: (_host: ZoneHost, zone: AppZoneMount): AppZoneHandle => {
       mounts.push(zone.install);
       return { close: async (reason: CloseReason): Promise<void> => { closes.push(reason); } };
