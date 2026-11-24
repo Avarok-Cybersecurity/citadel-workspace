@@ -65,7 +65,7 @@ export function ServerReconnectWatcher(): null {
             if (notice === null) return;
             // Stays until answered: it is the one time the user is told, and they may be away.
             toast({ id: notice.id, title: notice.title, description: notice.description, duration: Infinity,
-              action: { label: notice.action, onClick: (): void => { navigate(notice.signInPath); } } });
+              action: { label: notice.action, onClick: (): void => { void navigate(notice.signInPath); } } });
           })
           .catch((error: unknown): void => { debugLog('ServerReconnect', 'Showing the expiry notice failed', error); });
         return;

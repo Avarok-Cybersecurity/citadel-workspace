@@ -64,7 +64,7 @@ export function useGroupSettingsActions(deps: {
       // and the user was navigated away as though it had worked. The group
       // still existed, for everyone.
       await sendGroupEnd(groupId);
-      navigate('/workspace');
+      void navigate('/workspace');
     } catch (error) {
       debugLog('GroupChatPage', 'Failed to delete group:', error);
       toast({

@@ -25,7 +25,7 @@ export function useGuardedNavigate(): GuardedNavigate {
   const confirm: ReturnType<typeof useConfirm> = useConfirm();
   return useCallback(
     async (to: To, options?: NavigateOptions): Promise<void> => {
-      if (await mayLeaveEditor(confirm)) navigate(to, options);
+      if (await mayLeaveEditor(confirm)) void navigate(to, options);
     },
     [navigate, confirm],
   );

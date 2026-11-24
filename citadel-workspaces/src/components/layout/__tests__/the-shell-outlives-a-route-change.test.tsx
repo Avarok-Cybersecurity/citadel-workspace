@@ -58,7 +58,7 @@ vi.mock('@/components/terms/TermsGate', () => ({ TermsGate: (): null => null }))
 vi.mock('@/components/calendar/background/CalendarInBackground', () => ({ CalendarInBackground: (): null => null }));
 vi.mock('@/components/layout/use-remember-location', () => ({ useRememberLocation: (): void => {} }));
 
-import { AppRoutes, ROUTER_FUTURE } from '@/app-routes';
+import { AppRoutes } from '@/app-routes';
 
 const navigateRef: { current: NavigateFunction | null } = { current: null };
 function CaptureNavigate(): null {
@@ -70,7 +70,7 @@ describe('the workspace shell across a route change', () => {
   it('keeps focus on the skip link a Tab reached while the next route was still rendering', async () => {
     const user: ReturnType<typeof userEvent.setup> = userEvent.setup();
     render(
-      <MemoryRouter initialEntries={['/directory']} future={ROUTER_FUTURE}>
+      <MemoryRouter initialEntries={['/directory']}>
         <CaptureNavigate />
         <AppRoutes />
       </MemoryRouter>,
@@ -78,7 +78,7 @@ describe('the workspace shell across a route change', () => {
     await screen.findByRole('heading', { name: 'Directory page' });
 
     // The test's own move: navigate, then Tab while the incoming route has not committed.
-    await act(async (): Promise<void> => { navigateRef.current?.('/workspace'); });
+    await act(async (): Promise<void> => { void navigateRef.current?.('/workspace'); });
     expect(screen.getByRole('heading', { name: 'Directory page' }), 'the hold must keep the outgoing route on screen').toBeTruthy();
 
     await user.tab();

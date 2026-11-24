@@ -20,7 +20,7 @@ export function useLeaveEndedSession(): LeaveEndedSession {
   return useCallback((path: string, message: string): Promise<void> => {
     const io: LeaveIO = {
       mayLeave: () => mayLeaveEditor(confirm),
-      navigate: (to: string): void => { navigate(to); },
+      navigate: (to: string): void => { void navigate(to); },
       tell: (text: string): void => { toast({ title: 'Signed out', description: text, variant: 'destructive' }); },
     };
     return leaveEndedSession(io, path, message);

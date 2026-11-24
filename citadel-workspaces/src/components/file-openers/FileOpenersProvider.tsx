@@ -44,7 +44,7 @@ export function FileOpenersProvider({ children }: { children: ReactNode }): JSX.
   }, [generation, me]);
   const fallbackNode: string | null = useMemo((): string | null => topLevelTrees(Object.values(state.nodes))[0]?.node.id ?? null, [state.nodes]);
   const available: readonly FileOpener[] = useMemo((): readonly FileOpener[] => [...BUILT_IN_OPENERS, ...installed], [installed]);
-  const opening: InstalledOpening = useMemo((): InstalledOpening => ({ inbox: pageOpenedFiles, go: (path: string): void => { navigate(path); }, fallbackNode }), [navigate, fallbackNode]);
+  const opening: InstalledOpening = useMemo((): InstalledOpening => ({ inbox: pageOpenedFiles, go: (path: string): void => { void navigate(path); }, fallbackNode }), [navigate, fallbackNode]);
   const value: FileOpeners = useMemo((): FileOpeners => ({ available, lastChoices: deviceLastChoices, installed: opening }), [available, opening]);
   return <FileOpenersContext.Provider value={value}>{children}</FileOpenersContext.Provider>;
 }

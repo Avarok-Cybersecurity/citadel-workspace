@@ -67,7 +67,7 @@ describe('the address of an opened file', () => {
     const opened: FileManagerPlace = result.current.place;
     expect(opened.path).toBe('/Reports/plan.docx');
     expect(new URLSearchParams(result.current.search).get('path')).toBe('/Reports/plan.docx');
-    act(() => result.current.navigate(-1));
+    void act(() => result.current.navigate(-1));
     expect(result.current.place.path).toBe('/Reports');
   });
 });
