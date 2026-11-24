@@ -23,6 +23,7 @@ import type { ChatSecurityLevel } from '@/lib/p2p/chat-advanced-settings';
 import type { SendDelivery } from '@/lib/p2p/send-failure';
 import type { SignInFactors } from '@/lib/sign-in/types';
 import { pageTypesHash } from '@/lib/agent-update/types-step';
+import { refuseSelfSend } from '@/lib/scratchpad/self-conversation';
 
 export class WebSocketServiceCore {
   client: WorkspaceClient | null = null;
@@ -105,7 +106,7 @@ export class WebSocketServiceCore {
   // ============== P2P ==============
 
   // Direct sends have no queue behind them, so a paused contact's are refused.
-  async sendP2PMessage(cid: bigint, targetCid: bigint, message: string): Promise<void> { await this.outbox.refuseIfPaused(cid, targetCid); return this.modules.p2pOps.sendP2PMessage(cid, targetCid, message) }
+  async sendP2PMessage(cid: bigint, targetCid: bigint, message: string): Promise<void> { refuseSelfSend(cid, targetCid, 'sendP2PMessage'); await this.outbox.refuseIfPaused(cid, targetCid); return this.modules.p2pOps.sendP2PMessage(cid, targetCid, message) }
 
   /**
    * Send a raw `Uint8Array` over the P2P channel without `stringToBytes`-
@@ -114,9 +115,9 @@ export class WebSocketServiceCore {
    * `sendP2PMessage` above would otherwise round-trip the bytes through
    * `stringToBytes` which assumes UTF-8 and corrupts binary payloads.
    */
-  async sendP2PMessageBytes(cid: bigint, targetCid: bigint, message: Uint8Array, delivery: SendDelivery): Promise<void> { await this.outbox.refuseIfPaused(cid, targetCid); return this.modules.p2pOps.sendP2PMessageBytes(cid, targetCid, message, delivery) }
+  async sendP2PMessageBytes(cid: bigint, targetCid: bigint, message: Uint8Array, delivery: SendDelivery): Promise<void> { refuseSelfSend(cid, targetCid, 'sendP2PMessageBytes'); await this.outbox.refuseIfPaused(cid, targetCid); return this.modules.p2pOps.sendP2PMessageBytes(cid, targetCid, message, delivery) }
 
-  async openP2PConnection(cid: bigint, targetCid: bigint): Promise<void> { return this.modules.p2pOps.openP2PConnection(cid, targetCid) }
+  async openP2PConnection(cid: bigint, targetCid: bigint): Promise<void> { refuseSelfSend(cid, targetCid, 'openP2PConnection'); return this.modules.p2pOps.openP2PConnection(cid, targetCid) }
 
   async acceptPeerConnect(cid: bigint, peerCid: bigint, notification: Record<string, unknown> | null): Promise<void> { return this.modules.p2pOps.acceptPeerConnect(cid, peerCid, notification) }
   async declinePeerConnect(cid: bigint, peerCid: bigint, notification: Record<string, unknown> | null): Promise<void> { return this.modules.p2pOps.declinePeerConnect(cid, peerCid, notification) }
@@ -131,6 +132,7 @@ export class WebSocketServiceCore {
   ): Promise<void> {
     // The one road into the ILM. A paused contact's messages, edits, reactions
     // and receipts wait in the outbox instead; see p2p-pause/outbox.ts.
+    refuseSelfSend(localCid, peerCid, 'sendP2PMessageReliable');
     await this.outbox.sendOrHold(localCid, peerCid, message, { securityLevel, compressionHint },
       () => this.modules.messengerOps.sendP2PMessageReliable(localCid, peerCid, message, securityLevel, compressionHint));
   }

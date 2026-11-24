@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { ConversationEvent } from 'citadel-internal-service-wasm-client';
 import { sendThroughAgent, reactThroughAgent, type AgentActionDeps } from '../agent-actions';
 import { registerConversationSender } from '../requests';
+import { NotesNeedAgentUpdate } from '../../scratchpad/self-conversation';
 import { eventEmitter } from '../../event-emitter';
 import type { P2PMessage } from '../../p2p/p2p-types';
 
@@ -32,8 +33,11 @@ function appended(requestId: string): ConversationEvent {
 
 const respond = (variant: string, body: Record<string, unknown>): void => { eventEmitter.emit('websocket-message', { [variant]: body }); };
 
-function deps(found: P2PMessage | null = null): AgentActionDeps {
+// Default true: an agent that keeps notes unsent, as every one with this window's version does;
+// the scratchpad cases below say false where the older agent is the point.
+function deps(found: P2PMessage | null = null, keepsNotesToSelf: boolean = true): AgentActionDeps {
   return {
+    keepsNotesToSelf: async () => keepsNotesToSelf,
     ownCid: async () => ME,
     securityLevel: async () => 'Reinforced',
     findMessage: async () => found,
@@ -115,5 +119,20 @@ describe('reacting through the agent', () => {
   it('refuses a message it cannot find, without asking', async () => {
     await expect(reactThroughAgent(deps(null), BOB, 'gone', '👍')).rejects.toThrow('not in this conversation');
     expect(asked).toEqual([]);
+  });
+});
+
+describe('the scratchpad, on an agent that would send its notes', () => {
+  it('asks that agent nothing at all, and says the agent needs updating', async () => {
+    answer = (): void => { throw new Error('the agent was asked'); };
+    await expect(sendThroughAgent(deps(null, false), ME, 'buy oat milk', {})).rejects.toBeInstanceOf(NotesNeedAgentUpdate);
+    await expect(reactThroughAgent(deps(stored('m1', { recipient_cid: ME }), false), ME, 'm1', '👍')).rejects.toBeInstanceOf(NotesNeedAgentUpdate);
+    expect(asked).toEqual([]);
+  });
+
+  it('still reaches someone else on that same agent', async () => {
+    answer = (_v: string, body: Record<string, unknown>): void => respond('ConversationUpdated', { request_id: body.request_id, cid: ME, peer_cid: BOB, message: stored('m1') });
+    await sendThroughAgent(deps(null, false), BOB, 'hi', {});
+    expect(asked.map(([variant]) => variant)).toEqual(['ConversationSend']);
   });
 });

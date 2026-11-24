@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { AxeBuilder } from '@axe-core/playwright';
 import { MOTION_CHECKS } from './checks-motion.mjs';
+import { SCRATCHPAD_CHECKS } from './checks-scratchpad.mjs';
 
 const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
@@ -176,4 +177,4 @@ async function aDropThatCannotLandSaysWhy({ page, url }) {
   assert.equal(await page.getByRole('dialog').count(), 0, 'a drop that cannot land opened a dialog');
 }
 
-export const CHECKS = { aDropThatCannotLandSaysWhy, chatTextIsReadable, tooltipLeavesNeighboursReachable, messageRowsAreSeparated, nodeChatRowsAreSeparated, aDroppedFileGoesToTheSendPath, theHeaderDrawsThePeersPicture, ...MOTION_CHECKS };
+export const CHECKS = { aDropThatCannotLandSaysWhy, chatTextIsReadable, tooltipLeavesNeighboursReachable, messageRowsAreSeparated, nodeChatRowsAreSeparated, aDroppedFileGoesToTheSendPath, theHeaderDrawsThePeersPicture, scratchpadRowsAreSeparated: rowsAreSeparated('scratchpad', 5), ...SCRATCHPAD_CHECKS, ...MOTION_CHECKS };

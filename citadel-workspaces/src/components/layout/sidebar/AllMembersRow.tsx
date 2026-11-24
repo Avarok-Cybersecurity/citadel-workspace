@@ -10,6 +10,7 @@ import { MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MemberAvatar } from '@/components/shared/MemberAvatar';
+import { OwnScratchpadHint } from '@/components/scratchpad/OwnScratchpadHint';
 import { MemberRoleBadge } from '@/components/shared/MemberRoleBadge';
 import { blocksForMember } from '@/lib/member-access';
 import type { WorkspaceMember } from '@/types/workspace-entities';
@@ -25,7 +26,7 @@ interface AllMembersRowProps {
   onManagePermissions: () => void;
   onEditMember: () => void;
   onRemoveMember: () => void;
-  /** Opens the chat with this member; null for yourself. */
+  /** Opens the chat with this member; on your own row, your scratchpad. */
   onOpenChat: (() => void) | null;
   /** Opens the storage you share with this member; null for yourself. */
   onOpenFiles: (() => void) | null;
@@ -46,7 +47,7 @@ export function AllMembersRow({ member, currentUsername, blocks, nameOfLevel, on
         type="button"
         onClick={onOpenChat ?? undefined}
         disabled={onOpenChat === null}
-        aria-label={onOpenChat === null ? undefined : `Message ${member.displayName || member.username}`}
+        aria-label={onOpenChat === null ? undefined : hasMenu ? `Message ${member.displayName || member.username}` : 'Open your scratchpad'}
         data-testid={`all-members-open-${member.username}`}
         className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
       >
@@ -55,6 +56,7 @@ export function AllMembersRow({ member, currentUsername, blocks, nameOfLevel, on
         <p className="text-foreground font-medium">{member.displayName || member.username}</p>
         {member.accessVia !== undefined && <p className="text-xs text-muted-foreground" data-testid="member-access-via">via {nameOfLevel(member.accessVia)}</p>}
         {member.username && <p className="text-sm text-muted-foreground">@{member.username}</p>}
+        {!hasMenu && <OwnScratchpadHint />}
         {member.title && <p className="text-xs text-foreground/80" data-testid="member-title">{member.title}</p>}
         {member.email && <p className="text-xs text-muted-foreground" data-testid="member-email">{member.email}</p>}
       </div>

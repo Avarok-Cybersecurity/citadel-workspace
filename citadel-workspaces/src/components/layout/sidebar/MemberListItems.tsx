@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/tooltip";
 import { RoleIcon, RoleName } from '@/components/shared/RoleIcon';
 import { MemberAvatar } from '@/components/shared/MemberAvatar';
+import { OwnScratchpadHint } from '@/components/scratchpad/OwnScratchpadHint';
 import { MemberActionItems } from './MemberActionItems';
 import type { MemberActionBlocks } from './member-actions-gate';
 import { blocksForMember } from '@/lib/member-access';
@@ -37,7 +38,7 @@ interface MemberListItemsProps {
   blocks: MemberActionBlocks;
   /** Names a member's `accessVia` level; see hooks/use-level-name. */
   nameOfLevel: (levelId: string) => string;
-  /** Opens the chat with this member, connected or not; null on your own row. */
+  /** Opens the chat with this member, connected or not; on your own row, your scratchpad. */
   openChatWith: (member: WorkspaceMember) => (() => void) | null;
   /** Opens the storage you share with this member; null on your own row. */
   openFilesOf: (member: WorkspaceMember) => (() => void) | null;
@@ -91,6 +92,7 @@ export function MemberListItems({
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="min-w-0 truncate">{member.displayName || member.username}</span>
                       {via !== null && <span className="min-w-0 truncate text-xs text-muted-foreground" data-testid="member-access-via">via {via}</span>}
+                      {!hasMenu && <OwnScratchpadHint />}
                     </span>
                     <RoleIcon holder={member} />
                   </div>

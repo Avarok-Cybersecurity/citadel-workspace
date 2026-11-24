@@ -25,6 +25,8 @@ export interface StatedFeatures {
   readonly optimistic: boolean;
   /** Each message shows who wrote it (a channel), rather than a two-party thread. */
   readonly namesSenders: boolean;
+  /** The reader's own messages carry sent/delivered/read ticks; false where nobody receives them (the scratchpad). */
+  readonly deliveryTicks: boolean;
 }
 
 export interface ChatFeatures extends StatedFeatures {

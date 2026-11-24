@@ -46,9 +46,9 @@ describe('opening a colleague from the member list', () => {
     expect(agent.refreshes()).toBe(1);
   });
 
-  it('opens nothing, and asks nothing, for your own row', async () => {
+  it('opens your scratchpad, and asks nothing, for your own row', async () => {
     const agent: FakeListing = listing({}, { alice: 7n });
-    expect(await resolveMemberChat('alice', 'alice', [], agent.lookup, agent.refresh)).toBeNull();
+    expect(await resolveMemberChat('alice', 'alice', [], agent.lookup, agent.refresh)).toEqual({ kind: 'scratchpad' });
     expect(agent.refreshes()).toBe(0);
   });
 });

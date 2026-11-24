@@ -49,7 +49,7 @@ function fakeAgentSocket(): DeclaringClient {
 
 export async function installHostingAgent(): Promise<HostingAgent> {
   forgetCapabilities();
-  registerCapabilityRoute({ isLeader: () => true, askLeader: async () => ({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, noticesHeard: false, servesApps: false }) });
+  registerCapabilityRoute({ isLeader: () => true, askLeader: async () => ({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, noticesHeard: false, servesApps: false, notesToSelf: false }) });
   const greeting: Greeting = watchGreeting();
   greeting.observe({ ServiceConnectionAccepted: { cid: 0n, request_id: null } } as never);
   await declareOnLeaderSocket(fakeAgentSocket(), greeting);

@@ -21,6 +21,7 @@ function io(): AttachmentIO & { saved: SavedFile[]; reads: number } {
     saved: [], reads: 0,
     read: async (): Promise<Uint8Array> => { value.reads++; return BYTES; },
     files: { save: (file: SavedFile): void => { value.saved.push(file); } },
+    where: 'on the workspace server',
   };
   return value;
 }

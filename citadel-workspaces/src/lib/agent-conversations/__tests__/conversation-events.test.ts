@@ -131,6 +131,21 @@ describe('applying the agent\'s conversation events', () => {
     expect(w.emitted).toEqual([]);
   });
 
+  it('shows a note in this account\'s scratchpad as its own, without a toast', async () => {
+    const w: World = world();
+    await w.apply(event('Appended', { peer_cid: ME, peer_username: 'me', message: message('n1', ME, { recipient_cid: ME, status: 'sent' }) }));
+    expect((w.conversations.getConversation(ME)?.messages ?? []).map((m) => m.id)).toEqual(['n1']);
+    expect(w.toasts).toEqual([]);
+    expect(names(w)).toEqual(['p2p:message-sent', 'p2p:conversation-updated']);
+  });
+
+  it('keeps another account\'s scratchpad on the same agent out of this window', async () => {
+    const w: World = world();
+    await w.apply(event('Appended', { cid: 99n, peer_cid: 99n, message: message('n2', 99n, { recipient_cid: 99n }) }));
+    expect(w.conversations.getConversation(99n)).toBeUndefined();
+    expect(w.emitted).toEqual([]);
+  });
+
   it('re-reads after a gap in the sequence, and only then', async () => {
     const w: World = world();
     await w.apply(event('MetadataChanged'));

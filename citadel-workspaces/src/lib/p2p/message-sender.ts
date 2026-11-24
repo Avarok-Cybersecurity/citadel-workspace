@@ -20,6 +20,7 @@ import {
 import { debugLog } from '@/lib/debug-config';
 import type { CompressionHint } from 'citadel-workspace-client-ts';
 import { sendThroughAgent, resendThroughAgent } from '../agent-conversations/agent-actions';
+import { isSelfConversation } from '../scratchpad/self-conversation';
 
 export type { MessageSenderConfig, SendMessageOptions } from './message-sender-types';
 
@@ -37,9 +38,11 @@ export class MessageSender {
   ): Promise<P2PMessage> {
     debugLog('MessageSender', `[P2P] *** sendMessage ENTRY *** recipient_cid=${recipient_cid?.toString().slice(0, 8)}..., content="${content.slice(0, 20)}..."`);
 
-    // No PeerRegister from here -- the connect banner owns that request.
-    const isAlreadyConnected: boolean = await p2pAutoConnectService.isPeerConnected(recipient_cid) || this.config.isConnected(recipient_cid);
-    if (p2pRegistrationService.isPeerRegistered(recipient_cid) || isAlreadyConnected) {
+    // No PeerRegister from here -- the connect banner owns that request. A note to yourself (the
+    // scratchpad) has no peer to connect to, so it asks for no connection at all.
+    const toSelf: boolean = isSelfConversation(await this.config.getCurrentCid(), recipient_cid);
+    const isAlreadyConnected: boolean = !toSelf && (await p2pAutoConnectService.isPeerConnected(recipient_cid) || this.config.isConnected(recipient_cid));
+    if (!toSelf && (p2pRegistrationService.isPeerRegistered(recipient_cid) || isAlreadyConnected)) {
       void p2pAutoConnectService.ensurePeerConnectedInBackground(recipient_cid);
       const peerReady: boolean = await this.config.tryEnsurePeerReady(recipient_cid);
       if (!peerReady) {
