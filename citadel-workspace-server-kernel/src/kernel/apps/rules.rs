@@ -41,6 +41,15 @@ pub fn required_installer_permission(cap: Capability) -> Permission {
     }
 }
 
+/// What provisioning holds as an install's installer: every permission some capability needs of
+/// an installer (`required_installer_permission`), and nothing else. No member made such an
+/// install, so no member's role narrows it.
+pub fn provisioning_holds(permission: Permission) -> bool {
+    Capability::ALL
+        .iter()
+        .any(|cap| required_installer_permission(*cap) == permission)
+}
+
 /// Granted only to an app signed by the first-party publisher key.
 pub fn first_party_only(cap: Capability) -> bool {
     matches!(cap, Capability::Documents)
