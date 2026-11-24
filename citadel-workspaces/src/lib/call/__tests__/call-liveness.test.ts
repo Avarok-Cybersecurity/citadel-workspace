@@ -7,7 +7,7 @@
  * drive the REAL wiring (manager → signal handling → liveness binding) with an
  * injected clock, so the far side is proven to end the call on silence alone.
  */
-import { describe, it, expect, vi, beforeEach   } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { CallManager } from '../call-manager';
 import { CALL_HEARTBEAT_TIMEOUT_MS } from '../call-constants';
 import type { CallTransport } from '../call-transport';
@@ -25,10 +25,10 @@ const SILENT: number = CALL_HEARTBEAT_TIMEOUT_MS + 1_000;
 /** Lets already-resolved sends inside fire-and-forget handlers settle. */
 const flush: () => Promise<unknown> = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 0));
 
-function harness(): { manager: CallManager; transport: { openSession: ReturnType<typeof vi.fn>; closeSession: ReturnType<typeof vi.fn>; sendFrame: ReturnType<typeof vi.fn>; sendSignal: ReturnType<typeof vi.fn>; }; setNow: (ms: number) => void; tick: () => number; heartbeatsTo: (cid: bigint) => number; beat: (from: bigint, callId?: string) => Promise<void>; accept: (from: bigint) => Promise<void>; } {
+function harness(): { manager: CallManager; transport: { openSession: Mock; closeSession: Mock; sendFrame: Mock; sendSignal: Mock; }; setNow: (ms: number) => void; tick: () => number; heartbeatsTo: (cid: bigint) => number; beat: (from: bigint, callId?: string) => Promise<void>; accept: (from: bigint) => Promise<void>; } {
   let now: number = 0;
   const timers: Array<{ fn: () => void; cancelled: boolean; fired: boolean }> = [];
-  const transport: { openSession: ReturnType<typeof vi.fn>; closeSession: ReturnType<typeof vi.fn>; sendFrame: ReturnType<typeof vi.fn>; sendSignal: ReturnType<typeof vi.fn> } = {
+  const transport: { openSession: Mock; closeSession: Mock; sendFrame: Mock; sendSignal: Mock } = {
     openSession: vi.fn().mockResolvedValue(undefined),
     closeSession: vi.fn().mockResolvedValue(undefined),
     sendFrame: vi.fn(),

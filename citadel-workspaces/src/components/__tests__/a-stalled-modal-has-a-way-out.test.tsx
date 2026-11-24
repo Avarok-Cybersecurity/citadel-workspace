@@ -12,7 +12,7 @@
  * wait that has already outlasted its budget. Not beside a spinner that is
  * working, where it would invite people to abandon something about to succeed.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DisconnectLoadingModal } from '../LoadingModalConfigs';
@@ -42,7 +42,7 @@ describe('a modal over a stalled operation', () => {
 
   it('offers a way out once the wait has outlasted its budget', async (): Promise<void> => {
     vi.useFakeTimers();
-    const onCancel: ReturnType<typeof vi.fn> = vi.fn();
+    const onCancel: Mock = vi.fn();
     show('disconnecting', onCancel);
 
     await act(async (): Promise<void> => { vi.advanceTimersByTime(61_000); });

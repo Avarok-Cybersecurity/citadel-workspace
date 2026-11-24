@@ -3,7 +3,7 @@
  * server filled in. Its parameters stay while the wizard is open, so a reload
  * reopens it, and are cleared once it closes.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -13,11 +13,11 @@ function at(url: string): (p: { children: ReactNode }) => JSX.Element {
   return ({ children }: { children: ReactNode }): JSX.Element => <MemoryRouter initialEntries={[url]}>{children}</MemoryRouter>;
 }
 
-interface Run { open: ReturnType<typeof vi.fn>; fill: ReturnType<typeof vi.fn>; search: () => string; setWizardOpen: (open: boolean) => void }
+interface Run { open: Mock; fill: Mock; search: () => string; setWizardOpen: (open: boolean) => void }
 
 function run(url: string): Run {
-  const open: ReturnType<typeof vi.fn> = vi.fn();
-  const fill: ReturnType<typeof vi.fn> = vi.fn();
+  const open: Mock = vi.fn();
+  const fill: Mock = vi.fn();
   const { result, rerender } = renderHook(({ wizardOpen }: { wizardOpen: boolean }) => {
     useJoinLink(open, fill, wizardOpen);
     return useLocation().search;

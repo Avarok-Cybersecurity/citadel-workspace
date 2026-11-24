@@ -8,7 +8,7 @@
  * peer that was never reached. Only the camera asked whether the call was live
  * — which is what let the other two drift.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import type React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -61,7 +61,7 @@ describe('controls on a call that never connected', () => {
   beforeEach((): void => { vi.clearAllMocks(); });
 
   it('refuses the microphone, and says why', async () => {
-    const onToggleMic: ReturnType<typeof vi.fn> = vi.fn();
+    const onToggleMic: Mock = vi.fn();
     render(<CallStage call={callState('failed')} {...stageProps({ onToggleMic })} />);
 
     const mic: HTMLElement = screen.getByRole('button', { name: 'Microphone' });
@@ -72,7 +72,7 @@ describe('controls on a call that never connected', () => {
   });
 
   it('refuses to capture a screen for a call that does not exist', async () => {
-    const onToggleScreenShare: ReturnType<typeof vi.fn> = vi.fn();
+    const onToggleScreenShare: Mock = vi.fn();
     render(<CallStage call={callState('failed')} {...stageProps({ onToggleScreenShare })} />);
 
     const share: HTMLElement = screen.getByRole('button', { name: 'Screen share' });
@@ -84,7 +84,7 @@ describe('controls on a call that never connected', () => {
   it('still lets a share of its own be stopped', async () => {
     // The one exception: a screen already captured must always have a control
     // that gives it back, whatever happened to the call underneath it.
-    const onToggleScreenShare: ReturnType<typeof vi.fn> = vi.fn();
+    const onToggleScreenShare: Mock = vi.fn();
     render(
       <CallStage call={callState('failed', SHARING)} {...stageProps({ onToggleScreenShare })} />,
     );
@@ -94,7 +94,7 @@ describe('controls on a call that never connected', () => {
   });
 
   it('leaves every control live on a call that is connecting', async () => {
-    const onToggleMic: ReturnType<typeof vi.fn> = vi.fn();
+    const onToggleMic: Mock = vi.fn();
     render(<CallStage call={callState('connecting')} {...stageProps({ onToggleMic })} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Microphone' }));

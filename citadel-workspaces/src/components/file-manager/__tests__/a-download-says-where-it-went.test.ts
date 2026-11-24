@@ -8,7 +8,7 @@
  * Stubbed: sonner (the output being observed) and the history's storage (I/O).
  * `downloadVisibly` and `RevfsDownloadHistory` are the real ones.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { RevfsFileState, type RevfsNode } from '@/types/revfs-types';
 import {
   RevfsDownloadHistory, withRecord, MAX_DOWNLOAD_RECORDS, REVFS_DOWNLOAD_EVENTS,
@@ -94,7 +94,7 @@ describe('downloading a stored file', () => {
   });
 
   it('asks the uploader for a file the peer uploaded, instead of pulling what it cannot open', async () => {
-    const pull: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<string> => 'never');
+    const pull: Mock = vi.fn(async (): Promise<string> => 'never');
     const d: Parameters<typeof downloadVisibly>[1] = deps(pull);
     const asked: RevfsNode[] = [];
     d.requestShare = async (node: RevfsNode): Promise<string> => { asked.push(node); return '/data/transfers/2/notes.txt'; };
@@ -106,7 +106,7 @@ describe('downloading a stored file', () => {
   });
 
   it('opens a Received file where it already is, without pulling it', async () => {
-    const pull: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<string> => 'never');
+    const pull: Mock = vi.fn(async (): Promise<string> => 'never');
     await downloadVisibly(file(RevfsFileState.Received, '/data/downloads/notes.txt'), deps(pull));
     expect(pull).not.toHaveBeenCalled();
     expect(shown[0].savedTo).toBe('/data/downloads/notes.txt');

@@ -17,13 +17,13 @@
  * reported a connection timeout for a login that had in fact happened.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { passwordOnly } from '@/lib/sign-in/factors';
 
-const sendRequest: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
-const claimSession: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
-const disconnect: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
-const getActiveSessions: ReturnType<typeof vi.fn> = vi.fn();
+const sendRequest: Mock = vi.fn().mockResolvedValue(undefined);
+const claimSession: Mock = vi.fn().mockResolvedValue(undefined);
+const disconnect: Mock = vi.fn().mockResolvedValue(undefined);
+const getActiveSessions: Mock = vi.fn();
 
 vi.mock('../../connection', () => ({
   connectionManager: {

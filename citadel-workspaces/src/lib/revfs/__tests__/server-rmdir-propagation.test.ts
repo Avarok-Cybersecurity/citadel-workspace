@@ -6,7 +6,7 @@
  * The IO router is the only I/O here and it is injected, so these drive the real
  * operation and assert on the intents it emits.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { serverRmdir, peerRmdir , type DirOpsContext } from '../revfs-dir-ops';
 import { collectFiles } from '../tree-queries';
 import { markTreeRead } from '../persist-tree';
@@ -45,7 +45,7 @@ function setup(tree: RevfsNode): { ctx: DirOpsContext; executed: Record<string, 
   // caller that started checking its result would fail against a working
   // backend — which is exactly what happened when serverRmdir began reporting
   // files it could not delete.
-  const io: { execute: ReturnType<typeof vi.fn> } = {
+  const io: { execute: Mock } = {
     execute: vi.fn((intent: Record<string, unknown>) => {
       executed.push(intent);
       return Promise.resolve({ type: intent.type, success: true });
@@ -142,7 +142,7 @@ describe('serverRmdir', () => {
     // tree by this point, so the user must be told which files are still
     // consuming server storage — otherwise they are unreferenceable and
     // invisible.
-    (ctx.ensureIO() as unknown as { execute: ReturnType<typeof vi.fn> }).execute =
+    (ctx.ensureIO() as unknown as { execute: Mock }).execute =
       vi.fn((intent: Record<string, unknown>) =>
         Promise.resolve(
           intent.type === 'backend-delete-file'

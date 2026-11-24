@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 /**
@@ -56,7 +56,7 @@ describe('the intent dialog and the unreachable agent', () => {
   });
 
   it('opens when the agent is reachable', () => {
-    const beginWizard: ReturnType<typeof vi.fn> = vi.fn();
+    const beginWizard: Mock = vi.fn();
     const { result } = renderHook(() => useOnboardingIntent(beginWizard, vi.fn()));
 
     act(() => result.current.request());
@@ -68,7 +68,7 @@ describe('the intent dialog and the unreachable agent', () => {
 
   it('does not open while the agent is unreachable', () => {
     health.isHealthy = false;
-    const beginWizard: ReturnType<typeof vi.fn> = vi.fn();
+    const beginWizard: Mock = vi.fn();
     const { result } = renderHook(() => useOnboardingIntent(beginWizard, vi.fn()));
 
     act(() => result.current.request());
@@ -80,7 +80,7 @@ describe('the intent dialog and the unreachable agent', () => {
   });
 
   it('closes an open dialog when the agent goes away', () => {
-    const beginWizard: ReturnType<typeof vi.fn> = vi.fn();
+    const beginWizard: Mock = vi.fn();
     const { result, rerender } = renderHook(() => useOnboardingIntent(beginWizard, vi.fn()));
 
     act(() => result.current.request());
@@ -93,7 +93,7 @@ describe('the intent dialog and the unreachable agent', () => {
   });
 
   it('still runs the wizard after an answer', () => {
-    const beginWizard: ReturnType<typeof vi.fn> = vi.fn();
+    const beginWizard: Mock = vi.fn();
     const { result } = renderHook(() => useOnboardingIntent(beginWizard, vi.fn()));
 
     act(() => result.current.request());

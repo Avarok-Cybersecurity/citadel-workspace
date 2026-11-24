@@ -8,7 +8,7 @@
  * Nobody wired it. The tree changed on screen, the write failed, and the only
  * record was a debug line.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { render, act, cleanup } from '@testing-library/react';
 import { PersistFailureNotice } from '../PersistFailureNotice';
 import { eventEmitter } from '@/lib/event-emitter';
@@ -19,9 +19,9 @@ import {
   type NoticeState,
 } from '@/lib/persist-failure-notice';
 
-const toast: ReturnType<typeof vi.fn> = vi.fn();
+const toast: Mock = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({
-  useToast: (): { toast: ReturnType<typeof vi.fn> } => ({ toast }),
+  useToast: (): { toast: Mock } => ({ toast }),
 }));
 
 afterEach((): void => { cleanup(); toast.mockClear(); });

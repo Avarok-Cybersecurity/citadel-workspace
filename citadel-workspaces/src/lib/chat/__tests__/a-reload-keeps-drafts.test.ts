@@ -5,7 +5,7 @@
  * reload after a superseded chunk, used to discard every half-written message.
  * jsdom's real sessionStorage is used; nothing is mocked.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { clearAllDraftsForTests, loadDraft, saveDraft } from '../draft-store';
 import {
   DRAFT_HANDOFF_KEY,
@@ -23,7 +23,7 @@ describe('a reload the app starts', () => {
   it('carries every draft across it, and leaves nothing behind afterwards', () => {
     saveDraft('peer:alice', 'half a thought');
     saveDraft('group:7', 'another');
-    const reload: ReturnType<typeof vi.fn> = vi.fn();
+    const reload: Mock = vi.fn();
 
     reloadKeepingDrafts(window.sessionStorage, reload);
     expect(reload).toHaveBeenCalledOnce();
@@ -45,7 +45,7 @@ describe('a reload the app starts', () => {
   });
 
   it('still reloads when there is no storage to carry them in', () => {
-    const reload: ReturnType<typeof vi.fn> = vi.fn();
+    const reload: Mock = vi.fn();
     reloadKeepingDrafts(null, reload);
     expect(reload).toHaveBeenCalledOnce();
   });

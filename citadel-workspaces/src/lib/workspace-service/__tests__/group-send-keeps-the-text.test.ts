@@ -8,7 +8,7 @@
  * every message, so type-only matching would let someone else's message resolve
  * this write. These pin both halves.
  */
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
 import { awaitWriteResponse } from '../await-write-response';
 
@@ -36,7 +36,7 @@ describe('a gated group send', () => {
     vi.useFakeTimers();
     try {
       const pending: Promise<void> = awaitWriteResponse('SendGroupMessage', async () => {}, matcher);
-      const settled: ReturnType<typeof vi.fn> = vi.fn();
+      const settled: Mock = vi.fn();
       void pending.then(settled, settled);
 
       await vi.advanceTimersByTimeAsync(0);

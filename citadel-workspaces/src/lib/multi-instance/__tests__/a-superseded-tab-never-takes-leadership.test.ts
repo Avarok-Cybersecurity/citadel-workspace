@@ -5,7 +5,7 @@
  * Real: the election, the version admission, the staleness store and sendToLeader, in one tab.
  * Stood in: the channel, as a recorder of what this tab would post.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import type { LeaderElectionState } from '../channel-leader-election';
 import type { ChannelMessage } from '../channel-types';
 import type { ChannelEnvelope } from '../channel-envelope';
@@ -93,7 +93,7 @@ describe('a stale tab', () => {
   });
 
   it('refuses to open a socket, giving its leadership up first', () => {
-    const relinquish: ReturnType<typeof vi.fn> = vi.fn();
+    const relinquish: Mock = vi.fn();
     staleness.assertMayOpenSocket(relinquish);
     expect(relinquish).not.toHaveBeenCalled();
 
@@ -107,7 +107,7 @@ describe('an inert tab', () => {
   it('sends nothing to the leader and says why', async () => {
     const { sendToLeader } = await import('../send-to-leader');
     staleness.markInert();
-    const channel: { send: ReturnType<typeof vi.fn> } = { send: vi.fn() };
+    const channel: { send: Mock } = { send: vi.fn() };
     const answer: AckResult = await sendToLeader(channel, { GetSessions: { request_id: 'x' } });
     expect(answer.status).toBe('error');
     expect(answer.error).toMatch(/out of date/);

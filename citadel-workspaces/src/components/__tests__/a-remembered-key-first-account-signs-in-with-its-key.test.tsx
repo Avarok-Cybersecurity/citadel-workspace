@@ -5,7 +5,7 @@
  *
  * Doubled at the I/O seams, through login-world.ts (see its header).
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { FakeAccount } from '@/lib/sign-in/__tests__/fake-agent';
@@ -25,7 +25,7 @@ import { enrolKey, world } from '@/lib/sign-in/__tests__/helpers';
 import { saveHint } from '@/lib/sign-in/hints';
 import { loginWorld as h } from './login-world';
 
-let onNext: ReturnType<typeof vi.fn>;
+let onNext: Mock;
 function renderLogin(): void {
   onNext = vi.fn();
   render(<MemoryRouter><Login onNext={onNext} onCancel={() => {}} initialUsername={undefined} /><SecurityKeyPrompt /></MemoryRouter>);

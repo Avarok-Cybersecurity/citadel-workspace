@@ -8,7 +8,7 @@
  * Mocked: the WebSocket service singleton, which is the socket itself. The
  * request/response plumbing and the event emitter run as in production.
  */
-import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance, type Mock } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
 
 interface MediaOpenRequest { MediaOpen: { request_id: string } }
@@ -26,7 +26,7 @@ vi.mock('@/lib/websocket-service', (): { websocketService: { sendRequest: (reque
     },
   },
 }));
-vi.mock('@/lib/p2p/message-send-operations', (): { sendP2PCommand: ReturnType<typeof vi.fn> } => ({ sendP2PCommand: vi.fn() }));
+vi.mock('@/lib/p2p/message-send-operations', (): { sendP2PCommand: Mock } => ({ sendP2PCommand: vi.fn() }));
 
 import { WebSocketCallTransport } from '../websocket-call-transport';
 import type { MessageSenderConfig } from '@/lib/p2p/message-sender-types';

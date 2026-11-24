@@ -14,14 +14,14 @@
  * session-it-names: there is no second tab here, so they are where a routing
  * decision is observed.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { eventEmitter } from '../../event-emitter';
 
-const channel: { requestCidReport: ReturnType<typeof vi.fn>; forwardToInstance: ReturnType<typeof vi.fn>; broadcast: ReturnType<typeof vi.fn> } =
+const channel: { requestCidReport: Mock; forwardToInstance: Mock; broadcast: Mock } =
   vi.hoisted(() => ({ requestCidReport: vi.fn(), forwardToInstance: vi.fn(), broadcast: vi.fn() }));
 const manager: {
-  instanceId: string; isLeader: boolean; findInstanceByCid: ReturnType<typeof vi.fn>; findInstancesByCid: () => string[];
-  getAllInstances: ReturnType<typeof vi.fn>; registerInstance: ReturnType<typeof vi.fn>;
+  instanceId: string; isLeader: boolean; findInstanceByCid: Mock; findInstancesByCid: () => string[];
+  getAllInstances: Mock; registerInstance: Mock;
 } = vi.hoisted(() => ({
   instanceId: 'leader-tab', isLeader: true, /* the router reads leadership here, not from the event */ findInstanceByCid: vi.fn(() => null), findInstancesByCid: (): string[] => [],
   getAllInstances: vi.fn(() => []), registerInstance: vi.fn(),

@@ -12,13 +12,13 @@
  * mocked are the socket to the agent (I/O boundary) and the tab's session
  * lookup (IndexedDB).
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { render, screen, cleanup, act } from '@testing-library/react';
 
 vi.mock('@/lib/tab-context', () => ({
   getSelectedUser: async (): Promise<{ selectedCid: bigint }> => ({ selectedCid: 7n }),
 }));
-const sendRequest: ReturnType<typeof vi.fn> = vi.fn(async (_request: unknown): Promise<void> => undefined);
+const sendRequest: Mock = vi.fn(async (_request: unknown): Promise<void> => undefined);
 vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
     sendRequest: (r: unknown): Promise<void> => sendRequest(r),

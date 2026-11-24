@@ -6,11 +6,11 @@
  * PeerRegister send over the agent's socket) and the bound trust request (the workspace
  * server). The banner, the hook and the fail-closed check between them are the production code.
  */
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach, type Mock } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PeerTrust } from '@/lib/workspace-service/messaging-trust-operations';
 
-const h: { trust: PeerTrust; registerWithPeer: ReturnType<typeof vi.fn>; checkPeer: ReturnType<typeof vi.fn> } = vi.hoisted(() => ({
+const h: { trust: PeerTrust; registerWithPeer: Mock; checkPeer: Mock } = vi.hoisted(() => ({
   trust: { trusted: false, peerTrustsCaller: false },
   registerWithPeer: vi.fn(async (): Promise<boolean> => true),
   checkPeer: vi.fn(),

@@ -12,7 +12,7 @@
  * as a consequence — TreeNodesSection's delete dialog closes only on success and
  * renders its own role="alert", and neither could ever fire.
  */
-import { describe, it, expect, vi, beforeEach, afterEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
 import {
   awaitWriteResponse,
@@ -29,7 +29,7 @@ describe('a write', () => {
   afterEach(() => vi.useRealTimers());
 
   it('resolves when the server accepts it', async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<void> => {
+    const send: Mock = vi.fn(async (): Promise<void> => {
       serverAnswers({ NodeDeleted: { node_id: 'n1' } });
     });
 
@@ -38,7 +38,7 @@ describe('a write', () => {
   });
 
   it('REJECTS when the server refuses it, carrying the reason', async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<void> => {
+    const send: Mock = vi.fn(async (): Promise<void> => {
       serverAnswers({ Error: 'Permission denied: EditTreeStructure required' });
     });
 
@@ -48,7 +48,7 @@ describe('a write', () => {
   });
 
   it("does not accept another write's success as its own", async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<void> => {
+    const send: Mock = vi.fn(async (): Promise<void> => {
       // A Node response cannot satisfy a delete.
       serverAnswers({ Node: { id: 'n1' } });
       setTimeout(() => eventEmitter.emit('workspace:raw-response', { Error: 'nope' }), 5);
@@ -59,7 +59,7 @@ describe('a write', () => {
 
   it('fails rather than hanging when the server never answers', async () => {
     vi.useFakeTimers();
-    const send: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<undefined> => undefined);
+    const send: Mock = vi.fn(async (): Promise<undefined> => undefined);
 
     const pending: Promise<void> = awaitWriteResponse('DeleteNode', send);
     const assertion: Promise<void> = expect(pending).rejects.toThrow(/did not answer/);
@@ -68,7 +68,7 @@ describe('a write', () => {
   });
 
   it('surfaces a send failure as itself', async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<never> => {
+    const send: Mock = vi.fn(async (): Promise<never> => {
       throw new Error('socket is closed');
     });
 

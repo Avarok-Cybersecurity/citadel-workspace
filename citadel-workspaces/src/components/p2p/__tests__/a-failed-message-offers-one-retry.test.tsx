@@ -3,7 +3,7 @@
  * refresh icon in the footer, both wired to the same handler. There is one now, in the footer, which
  * is also the only one live-document and file bubbles have.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TextBubble } from '../bubbles/TextBubble';
 import type { P2PMessage } from '@/lib/p2p';
@@ -12,7 +12,7 @@ const FAILED: P2PMessage = { id: 'm', content: 'hello', sender_cid: 1n, recipien
 
 describe('a failed message', () => {
   it('offers exactly one Retry, and it retries', () => {
-    const onRetry: ReturnType<typeof vi.fn> = vi.fn();
+    const onRetry: Mock = vi.fn();
     render(<TextBubble message={FAILED} isOwn quoted={null} onRetry={onRetry} />);
     const retries: HTMLElement[] = screen.getAllByRole('button', { name: /retry/i });
     expect(retries).toHaveLength(1);

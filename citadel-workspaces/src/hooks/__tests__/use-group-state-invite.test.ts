@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach      } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 /**
  * Unit tests for `buildGroupFromInvite` / `applyGroupInvite`. Focus is on
@@ -13,11 +13,11 @@ import { describe, it, expect, vi, beforeEach      } from 'vitest';
  */
 
 const spies: {
-  getConnectionInfo: ReturnType<typeof vi.fn>;
-  getTabSelectedSession: ReturnType<typeof vi.fn>;
-  emit: ReturnType<typeof vi.fn>;
-  toast: ReturnType<typeof vi.fn>;
-  respond: ReturnType<typeof vi.fn>;
+  getConnectionInfo: Mock;
+  getTabSelectedSession: Mock;
+  emit: Mock;
+  toast: Mock;
+  respond: Mock;
 } = vi.hoisted(() => ({
   getConnectionInfo: vi.fn(() => null as unknown),
   getTabSelectedSession: vi.fn(async () => null),
@@ -149,7 +149,7 @@ describe('buildGroupFromInvite', () => {
 describe('applyGroupInvite', () => {
   // Runs on ACCEPT now, not on arrival -- the arrival notice is bind-group-invites'.
   it('appends the new group and says it was joined on the happy path', async () => {
-    const setGroups: ReturnType<typeof vi.fn> = vi.fn();
+    const setGroups: Mock = vi.fn();
     await applyGroupInvite(
       { groupId: 'g-1', groupName: 'X', inviterId: '5', inviterUsername: 'alice' },
       setGroups,
@@ -175,7 +175,7 @@ describe('applyGroupInvite', () => {
   });
 
   it('reports a failure to the user rather than dropping the invite silently', async () => {
-    const setGroups: ReturnType<typeof vi.fn> = vi.fn((): never => {
+    const setGroups: Mock = vi.fn((): never => {
       throw new Error('store rejected the invite');
     });
 
@@ -195,7 +195,7 @@ describe('applyGroupInvite', () => {
     // try/catch, which turns the failure into a toast — so removing the dedupe
     // left this test green while it reported "Group Invitation Failed".
     let next: unknown[] | undefined;
-    const setGroups: ReturnType<typeof vi.fn> = vi.fn((updater: (prev: unknown[]) => unknown[]): void => {
+    const setGroups: Mock = vi.fn((updater: (prev: unknown[]) => unknown[]): void => {
       next = updater([{ id: 'g-dup' }]);
     });
 
@@ -217,7 +217,7 @@ describe('applyGroupInvite', () => {
   });
 
   it('does NOT throw and does NOT fire a "Group Invitation" notification for a malformed payload', async () => {
-    const setGroups: ReturnType<typeof vi.fn> = vi.fn();
+    const setGroups: Mock = vi.fn();
     await applyGroupInvite(
       { groupId: 'g', groupName: 'X', inviterId: 'garbage', inviterUsername: 'c' },
       setGroups,
@@ -234,7 +234,7 @@ describe('applyGroupInvite', () => {
     // (not void). Static reviewers and downstream code rely on this
     // to chain failure handling (analytics, retry queues, etc.)
     // without re-implementing the IIFE wrapper at every call site.
-    const setGroups: ReturnType<typeof vi.fn> = vi.fn();
+    const setGroups: Mock = vi.fn();
     const result: Promise<void> = applyGroupInvite(
       { groupId: 'g-promise', groupName: 'X', inviterId: '7', inviterUsername: 'd' },
       setGroups,

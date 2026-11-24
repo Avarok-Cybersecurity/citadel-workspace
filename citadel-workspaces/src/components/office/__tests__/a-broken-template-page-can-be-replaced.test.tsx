@@ -8,7 +8,7 @@
  *
  * No mocks: the error view, the hash map and the real hashing of the real old bodies' hashes.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DocumentRenderError } from '../DocumentRenderError';
 import { SUPERSEDED_TEMPLATE_HASHES, supersededTemplateId } from '@/lib/mdx-templates/superseded';
@@ -30,7 +30,7 @@ describe('the superseded-template map', () => {
 
 describe('a page that cannot be displayed', () => {
   it('offers an editor the fixed template, and hands it over on press', () => {
-    const onReplace: ReturnType<typeof vi.fn> = vi.fn();
+    const onReplace: Mock = vi.fn();
     render(<DocumentRenderError message="could not be displayed" storedHash={ENGINEERING_OLD_HASH} canEdit onReplace={onReplace} />);
     fireEvent.click(screen.getByTestId('replace-with-fixed-template'));
     expect(onReplace).toHaveBeenCalledWith(getTemplateById('office-engineering'));

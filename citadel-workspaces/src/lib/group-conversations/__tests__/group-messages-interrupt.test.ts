@@ -9,11 +9,11 @@
  * sidebar.
  */
 
-import { describe, it, expect, vi, beforeEach    } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
-const addMessageNotification: ReturnType<typeof vi.fn> = vi.fn();
+const addMessageNotification: Mock = vi.fn();
 vi.mock('@/lib/notification-service', () => ({
-  default: { getInstance: (): { addMessageNotification: ReturnType<typeof vi.fn> } => ({ addMessageNotification }) },
+  default: { getInstance: (): { addMessageNotification: Mock } => ({ addMessageNotification }) },
   NotificationPriority: { HIGH: 'high', NORMAL: 'normal' },
 }));
 

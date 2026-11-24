@@ -15,7 +15,7 @@
  *
  * Drives the real manager and its real liveness binding with an injected clock.
  */
-import { describe, it, expect, vi, beforeEach   } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { CallManager } from '../call-manager';
 import { RING_TIMEOUT_MS } from '../call-constants';
 import type { CallTransport } from '../call-transport';
@@ -29,10 +29,10 @@ const CAROL: bigint = 3n;
 
 const flush: () => Promise<unknown> = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 0));
 
-function harness(): { manager: CallManager; transport: { openSession: ReturnType<typeof vi.fn>; closeSession: ReturnType<typeof vi.fn>; sendFrame: ReturnType<typeof vi.fn>; sendSignal: ReturnType<typeof vi.fn>; }; setNow: (ms: number) => void; tick: () => number; accept: (from: bigint) => Promise<void>; beat: (from: bigint) => Promise<void>; bye: (from: bigint) => Promise<void>; } {
+function harness(): { manager: CallManager; transport: { openSession: Mock; closeSession: Mock; sendFrame: Mock; sendSignal: Mock; }; setNow: (ms: number) => void; tick: () => number; accept: (from: bigint) => Promise<void>; beat: (from: bigint) => Promise<void>; bye: (from: bigint) => Promise<void>; } {
   let now: number = 0;
   const timers: Array<{ fn: () => void; cancelled: boolean; fired: boolean }> = [];
-  const transport: { openSession: ReturnType<typeof vi.fn>; closeSession: ReturnType<typeof vi.fn>; sendFrame: ReturnType<typeof vi.fn>; sendSignal: ReturnType<typeof vi.fn> } = {
+  const transport: { openSession: Mock; closeSession: Mock; sendFrame: Mock; sendSignal: Mock } = {
     openSession: vi.fn().mockResolvedValue(undefined),
     closeSession: vi.fn().mockResolvedValue(undefined),
     sendFrame: vi.fn(),

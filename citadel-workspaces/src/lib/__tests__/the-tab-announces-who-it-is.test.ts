@@ -17,7 +17,7 @@
  * other half, and without it removing the emit breaks nothing that any test
  * would notice.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { setSelectedUser } from '../tab-context';
 import { eventEmitter } from '../event-emitter';
 
@@ -53,7 +53,7 @@ describe('recording who this tab is using', () => {
     // there. Announcing first would have every listener read the old value and
     // conclude nothing had changed.
     const order: string[] = [];
-    const storage: { dbPut: ReturnType<typeof vi.fn> } = await import('../storage-utils') as never;
+    const storage: { dbPut: Mock } = await import('../storage-utils') as never;
     storage.dbPut.mockImplementation(async (): Promise<void> => { order.push('write'); });
     const listener = (): void => { order.push('announce'); };
     eventEmitter.on('tab:selected-user-changed', listener);

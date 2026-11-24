@@ -17,7 +17,7 @@
  * explains why a stale selection is destructive. The filter was simply never
  * added to the same treatment.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { render, screen } from '@testing-library/react';
 import { VFSContentGrid } from '../VFSContentGrid';
@@ -53,7 +53,7 @@ describe('the file grid with nothing to show', () => {
   });
 
   it('offers to clear a filter that matched nothing', async () => {
-    const onClearFilter: ReturnType<typeof vi.fn> = vi.fn();
+    const onClearFilter: Mock = vi.fn();
     render(<VFSContentGrid {...gridProps(treeWith([file('a.pdf')]), { currentPath: '/docs', filterText: 'zzz', onClearFilter })} />);
     await userEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
     expect(onClearFilter).toHaveBeenCalledTimes(1);

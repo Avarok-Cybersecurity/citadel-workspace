@@ -13,11 +13,11 @@
  * same bug in `fetchActiveSessions`. The rule existed; this caller never got it.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import type { ServiceHealth } from '@/lib/health-check';
 
-const isConnected: ReturnType<typeof vi.fn> = vi.fn();
-const canSendRequests: ReturnType<typeof vi.fn> = vi.fn();
+const isConnected: Mock = vi.fn();
+const canSendRequests: Mock = vi.fn();
 
 vi.mock('@/lib/websocket-service', () => ({
   websocketService: {

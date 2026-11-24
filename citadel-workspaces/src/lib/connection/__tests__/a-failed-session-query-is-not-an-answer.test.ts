@@ -14,7 +14,7 @@
  * which is the SessionAlreadyActive churn the backend notes warn about.
  */
 
-import { describe, it, expect, vi, beforeEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { getActiveSessionsResult } from '../queries';
 import { pickSessionToClaim , type SessionChoice } from '@/lib/sessions/pick-session-to-claim';
 import type { ActiveSessionsResult } from '@/lib/connection/queries';
@@ -87,7 +87,7 @@ describe('asking which sessions exist', () => {
       waitForWebSocketInit: (): Promise<void> => Promise.resolve(),
       sendWebSocketMessage: vi.fn().mockImplementation(() => {
         // Resolve the pending request the way the response handler would.
-        const call: unknown[] = (state.setPendingRequest as ReturnType<typeof vi.fn>).mock.calls[0];
+        const call: unknown[] = (state.setPendingRequest as Mock).mock.calls[0];
         (call[1] as { resolve: (v: unknown) => void }).resolve({ sessions: [], signed_out: [] });
         return Promise.resolve();
       }),

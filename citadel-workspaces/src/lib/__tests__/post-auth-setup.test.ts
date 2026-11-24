@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import type { WorkspaceRoles } from 'citadel-workspace-client-ts';
 
 /**
@@ -18,11 +18,11 @@ import type { WorkspaceRoles } from 'citadel-workspace-client-ts';
 // is itself hoisted) evaluates its factory.
 const spies: {
   calls: { name: string; args: unknown[] }[];
-  setConnectionIdSpy: ReturnType<typeof vi.fn>;
-  loadWorkspaceSpy: ReturnType<typeof vi.fn>;
-  listNodesSpy: ReturnType<typeof vi.fn>;
-  listMembersSpy: ReturnType<typeof vi.fn>;
-  getTreeSchemaSpy: ReturnType<typeof vi.fn>;
+  setConnectionIdSpy: Mock;
+  loadWorkspaceSpy: Mock;
+  listNodesSpy: Mock;
+  listMembersSpy: Mock;
+  getTreeSchemaSpy: Mock;
 } = vi.hoisted(() => {
   const calls: { name: string; args: unknown[] }[] = [];
   return {

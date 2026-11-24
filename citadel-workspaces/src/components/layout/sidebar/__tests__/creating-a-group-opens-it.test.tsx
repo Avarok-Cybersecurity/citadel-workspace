@@ -7,7 +7,7 @@
  * `peer-group`'s first check waits thirty seconds for `/groups/:id` before
  * falling back to that row.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -16,7 +16,7 @@ import type { UsePermissionResult } from '@/hooks/use-permission-result';
 import { MembersSection } from '../MembersSection';
 
 const navigated: string[] = [];
-const createGroup: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<string> => 'group-77');
+const createGroup: Mock = vi.fn(async (): Promise<string> => 'group-77');
 
 // The members header asks AddUsers through `usePermission`, whose fetch is agent
 // I/O and not what this file is about; answered "yes" so the header renders.

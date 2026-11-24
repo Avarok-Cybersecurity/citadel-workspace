@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { persistTree, markTreeRead, resetTreeReadTracking } from '../persist-tree';
 import type { RevfsIO } from '../revfs-io';
 import type { RevfsNode } from '@/types/revfs-types';
@@ -28,7 +28,7 @@ import type { RevfsNode } from '@/types/revfs-types';
  */
 function io(): { io: RevfsIO; writes: string[] } {
   const writes: string[] = [];
-  const fake: { execute: ReturnType<typeof vi.fn> } = {
+  const fake: { execute: Mock } = {
     execute: vi.fn(async (intent: { type: string; treeKey?: string }) => {
       if (intent.type === 'persist-tree') {
         writes.push(intent.treeKey ?? '<none>');

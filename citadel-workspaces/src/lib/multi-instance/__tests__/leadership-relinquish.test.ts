@@ -10,9 +10,9 @@
  * self-demotion path: the yield branch only fires on a competing heartbeat,
  * which never arrives while this tab is broadcasting its own.
  */
-import { describe, it, expect, vi, beforeEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
-const setLeader: ReturnType<typeof vi.fn> = vi.fn();
+const setLeader: Mock = vi.fn();
 let isLeader: boolean = true;
 vi.mock('@/lib/multi-instance/instance-manager', async (importOriginal: () => Promise<typeof import('@/lib/multi-instance/instance-manager')>) => {
   const { instanceManagerWith } = await import('@/test/instance-manager-double');

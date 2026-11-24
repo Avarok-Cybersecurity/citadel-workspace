@@ -6,7 +6,7 @@
  * an assistive technology actually sees. A control styled as a button but
  * rendered as a div passes every visual check and fails this one.
  */
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Badge } from '@/components/ui/badge';
@@ -41,7 +41,7 @@ describe('pending connection requests badge', () => {
 
   it('opens the modal from the keyboard alone', async () => {
     const user: UserEvent = userEvent.setup();
-    const onOpen: ReturnType<typeof vi.fn> = vi.fn();
+    const onOpen: Mock = vi.fn();
     render(<PendingBadge count={1} onOpen={onOpen} />);
 
     // Tab to it and press Enter — no pointer involved. A clickable <div> takes
@@ -58,7 +58,7 @@ describe('pending connection requests badge', () => {
     // render. If Badge ever starts rendering a <button>, this fails and the
     // tests above stop proving anything.
     const user: UserEvent = userEvent.setup();
-    const onOpen: ReturnType<typeof vi.fn> = vi.fn();
+    const onOpen: Mock = vi.fn();
     render(<Badge onClick={onOpen} title="3 pending connection requests">3</Badge>);
 
     expect(screen.queryByRole('button')).toBeNull();

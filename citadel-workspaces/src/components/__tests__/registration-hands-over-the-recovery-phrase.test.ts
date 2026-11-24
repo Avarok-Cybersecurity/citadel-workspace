@@ -6,18 +6,18 @@
  *
  * No doubles: the handler is driven directly.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { createRegistrationResponseHandler } from '../registration-response-handler';
 import { AdmissionRefusal, RegisteredAwaitingSignIn } from '@/lib/admission/refusal';
 
 const REQ: 'req-1' = 'req-1';
 const PHRASE: string[] = Array.from({ length: 24 }, (_v: unknown, i: number) => `word${i}`);
 
-function harness(): { handler: (raw: unknown) => void; resolve: ReturnType<typeof vi.fn>; reject: ReturnType<typeof vi.fn>; cleanup: ReturnType<typeof vi.fn>; secret: ReturnType<typeof vi.fn> } {
-  const resolve: ReturnType<typeof vi.fn> = vi.fn();
-  const reject: ReturnType<typeof vi.fn> = vi.fn();
-  const cleanup: ReturnType<typeof vi.fn> = vi.fn();
-  const secret: ReturnType<typeof vi.fn> = vi.fn();
+function harness(): { handler: (raw: unknown) => void; resolve: Mock; reject: Mock; cleanup: Mock; secret: Mock } {
+  const resolve: Mock = vi.fn();
+  const reject: Mock = vi.fn();
+  const cleanup: Mock = vi.fn();
+  const secret: Mock = vi.fn();
   const handler: (raw: unknown) => void = createRegistrationResponseHandler(REQ, resolve, reject, cleanup, {
     handleConnectSuccess: async (payload, res) => { res({ cid: String(payload.cid) }); },
     setShowNotInitializedModal: vi.fn(),

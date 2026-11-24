@@ -5,7 +5,7 @@
  * forever. The deadline makes the UI fall back to the empty state — a statement
  * the user can act on — instead.
  */
-import { describe, it, expect, vi, afterEach  } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import {
   armLoadingDeadline,
   cancelLoadingDeadline,
@@ -17,7 +17,7 @@ afterEach(() => vi.useRealTimers());
 describe('loading deadline', () => {
   it('fires when the response never arrives', () => {
     vi.useFakeTimers();
-    const expired: ReturnType<typeof vi.fn> = vi.fn();
+    const expired: Mock = vi.fn();
 
     armLoadingDeadline('nodes', expired);
     vi.advanceTimersByTime(LOADING_DEADLINE_MS + 1);
@@ -27,7 +27,7 @@ describe('loading deadline', () => {
 
   it('does not fire once the response arrives', () => {
     vi.useFakeTimers();
-    const expired: ReturnType<typeof vi.fn> = vi.fn();
+    const expired: Mock = vi.fn();
 
     armLoadingDeadline('nodes', expired);
     cancelLoadingDeadline('nodes');
@@ -38,8 +38,8 @@ describe('loading deadline', () => {
 
   it('keeps separate surfaces independent', () => {
     vi.useFakeTimers();
-    const nodesExpired: ReturnType<typeof vi.fn> = vi.fn();
-    const membersExpired: ReturnType<typeof vi.fn> = vi.fn();
+    const nodesExpired: Mock = vi.fn();
+    const membersExpired: Mock = vi.fn();
 
     armLoadingDeadline('nodes', nodesExpired);
     armLoadingDeadline('members', membersExpired);
@@ -53,7 +53,7 @@ describe('loading deadline', () => {
 
   it('re-arming replaces the previous deadline rather than stacking', () => {
     vi.useFakeTimers();
-    const expired: ReturnType<typeof vi.fn> = vi.fn();
+    const expired: Mock = vi.fn();
 
     armLoadingDeadline('nodes', expired);
     armLoadingDeadline('nodes', expired);

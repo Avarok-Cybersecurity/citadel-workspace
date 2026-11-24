@@ -6,21 +6,21 @@
  * WebCodecs and MediaStreamTrackGenerator have no jsdom implementation, so they
  * are stubbed; what is under test is our own lifecycle logic around them.
  */
-import { describe, it, expect, vi, beforeEach, afterEach   } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { PeerReceiver } from '../peer-receiver';
 import { CALL_FLAG_KEYFRAME, CALL_KIND_AUDIO, CALL_KIND_VIDEO } from '@/types/p2p-commands';
 import type { WireFrame } from '../frame-codec';
 
-const decoderInstances: Array<{ close: ReturnType<typeof vi.fn>; decode: ReturnType<typeof vi.fn> }> = [];
+const decoderInstances: Array<{ close: Mock; decode: Mock }> = [];
 
 function stubCodec(): new (...args: unknown[]) => unknown {
   return class {
     state: string = 'configured';
-    decode: ReturnType<typeof vi.fn> = vi.fn();
-    close: ReturnType<typeof vi.fn> = vi.fn((): void => { this.state = 'closed'; });
-    configure: ReturnType<typeof vi.fn> = vi.fn();
+    decode: Mock = vi.fn();
+    close: Mock = vi.fn((): void => { this.state = 'closed'; });
+    configure: Mock = vi.fn();
     constructor() {
-      decoderInstances.push(this as unknown as { close: ReturnType<typeof vi.fn>; decode: ReturnType<typeof vi.fn> });
+      decoderInstances.push(this as unknown as { close: Mock; decode: Mock });
     }
     static isConfigSupported: () => Promise<{ supported: boolean; }> = async (): Promise<{ supported: boolean; }> => ({ supported: true });
   };
@@ -36,9 +36,9 @@ beforeEach(() => {
     'MediaStreamTrackGenerator',
     class {
       kind: string;
-      writable: { getWriter: () => { write: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> } } =
-        { getWriter: (): { write: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> } => ({ write: vi.fn().mockResolvedValue(undefined), close: vi.fn().mockResolvedValue(undefined) }) };
-      stop: ReturnType<typeof vi.fn> = vi.fn();
+      writable: { getWriter: () => { write: Mock; close: Mock } } =
+        { getWriter: (): { write: Mock; close: Mock } => ({ write: vi.fn().mockResolvedValue(undefined), close: vi.fn().mockResolvedValue(undefined) }) };
+      stop: Mock = vi.fn();
       constructor(init: { kind: string }) { this.kind = init.kind; }
     },
   );
@@ -52,7 +52,7 @@ function frame(kind: number, flags: number = CALL_FLAG_KEYFRAME): WireFrame {
 }
 
 describe('PeerReceiver', () => {
-  const options: { videoCodec: string; onNeedKeyframe: ReturnType<typeof vi.fn> } = { videoCodec: 'vp09.00.31.08', onNeedKeyframe: vi.fn() };
+  const options: { videoCodec: string; onNeedKeyframe: Mock } = { videoCodec: 'vp09.00.31.08', onNeedKeyframe: vi.fn() };
 
   it('creates no decoder until a frame actually arrives', () => {
     // A peer who never turns their camera on should not cost a decoder and a
@@ -118,7 +118,7 @@ describe('PeerReceiver', () => {
   });
 
   it('asks for a keyframe after a video gap', () => {
-    const onNeedKeyframe: ReturnType<typeof vi.fn> = vi.fn();
+    const onNeedKeyframe: Mock = vi.fn();
     const receiver: PeerReceiver = new PeerReceiver({ ...options, onNeedKeyframe });
 
     receiver.handleGap(1, true);
@@ -129,7 +129,7 @@ describe('PeerReceiver', () => {
   it('does not ask for a keyframe after an audio gap', () => {
     // Opus frames decode independently; the missing ones are simply gone, and
     // requesting a keyframe would be asking for something meaningless.
-    const onNeedKeyframe: ReturnType<typeof vi.fn> = vi.fn();
+    const onNeedKeyframe: Mock = vi.fn();
     const receiver: PeerReceiver = new PeerReceiver({ ...options, onNeedKeyframe });
 
     receiver.handleGap(0, false);

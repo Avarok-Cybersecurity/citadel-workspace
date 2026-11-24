@@ -9,7 +9,7 @@
  * These drive the real wiring — manager, signal handling, liveness binding —
  * to prove the loop closes in both directions.
  */
-import { describe, it, expect, vi, beforeEach    } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { CallManager } from '../call-manager';
 import type { CallTransport } from '../call-transport';
 import type { CallCodecCapabilities, CallMediaKinds, CallSignalPayload } from '@/types/p2p-commands';
@@ -21,10 +21,10 @@ const BOB: bigint = 2n;
 
 type Link = 'good' | 'fair' | 'poor' | 'lost';
 
-function harness(observed?: (cid: bigint) => Link | undefined): { manager: CallManager; transport: { openSession: ReturnType<typeof vi.fn>; closeSession: ReturnType<typeof vi.fn>; sendFrame: ReturnType<typeof vi.fn>; sendSignal: ReturnType<typeof vi.fn>; }; reported: Link[]; tick: () => void; heartbeats: () => { kind: "CallHeartbeat"; call_id: string; link?: "good" | "fair" | "poor" | "lost"; }[]; active: () => Promise<void>; } {
+function harness(observed?: (cid: bigint) => Link | undefined): { manager: CallManager; transport: { openSession: Mock; closeSession: Mock; sendFrame: Mock; sendSignal: Mock; }; reported: Link[]; tick: () => void; heartbeats: () => { kind: "CallHeartbeat"; call_id: string; link?: "good" | "fair" | "poor" | "lost"; }[]; active: () => Promise<void>; } {
   const timers: Array<() => void> = [];
   const reported: Link[] = [];
-  const transport: { openSession: ReturnType<typeof vi.fn>; closeSession: ReturnType<typeof vi.fn>; sendFrame: ReturnType<typeof vi.fn>; sendSignal: ReturnType<typeof vi.fn> } = {
+  const transport: { openSession: Mock; closeSession: Mock; sendFrame: Mock; sendSignal: Mock } = {
     openSession: vi.fn().mockResolvedValue(undefined),
     closeSession: vi.fn().mockResolvedValue(undefined),
     sendFrame: vi.fn(),
