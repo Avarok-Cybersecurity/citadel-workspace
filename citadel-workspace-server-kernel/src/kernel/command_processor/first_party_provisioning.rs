@@ -33,6 +33,12 @@ use citadel_workspace_types::apps_responses::AppsAuditEvent;
 /// Who a provisioned install names as its installer: no member made it.
 pub const PROVISIONING_INSTALLER: &str = "workspace-provisioning";
 
+/// Whether provisioning made `install`: it names the marker and came from a first-party release
+/// the server was built with. An install a member made names that member.
+pub(super) fn made_by_provisioning(install: &AppInstall) -> bool {
+    install.installed_by == PROVISIONING_INSTALLER && install.source == ListingSource::FirstParty
+}
+
 impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Installs each of `bundles` the workspace does not have yet, `trusted` being the first-party
     /// keys (`FIRST_PARTY_PUBLISHER_KEYS` in production).

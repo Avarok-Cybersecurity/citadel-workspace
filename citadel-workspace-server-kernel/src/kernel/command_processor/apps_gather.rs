@@ -3,11 +3,12 @@
 //! `check_entity_permission`, so a node grant, an ancestor's grant and the role count exactly as
 //! everywhere else.
 
+use super::first_party_provisioning::made_by_provisioning;
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::kernel::apps::audience::scope_reaches;
 use crate::kernel::apps::facts::{authority_node, GatheredFacts, PermissionSnapshot, ViewsNeeded};
 use crate::kernel::apps::peer_rules::with_consent;
-use crate::kernel::apps::rules::effective_capabilities;
+use crate::kernel::apps::rules::{effective_capabilities, provisioning_holds};
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::WORKSPACE_ROOT_ID;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
@@ -30,6 +31,22 @@ pub(super) async fn snapshot<R: Ratchet + Send + Sync + 'static>(
         }
     }
     Ok(PermissionSnapshot::of(held))
+}
+
+/// What `install`'s installer may still grant on `authority`, read now: the member's permissions,
+/// or, for an install provisioning made, what provisioning granted with (`provisioning_holds`).
+pub(super) async fn installer_snapshot<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    install: &AppInstall,
+    authority: &str,
+) -> Result<PermissionSnapshot, NetworkError> {
+    if made_by_provisioning(install) {
+        let held = Permission::ALL_VARIANTS
+            .into_iter()
+            .filter(|p| provisioning_holds(*p));
+        return Ok(PermissionSnapshot::of(held));
+    }
+    snapshot(kernel, &install.installed_by, authority).await
 }
 
 pub(super) async fn holds_at<R: Ratchet + Send + Sync + 'static>(
@@ -137,7 +154,7 @@ pub async fn effective_for<R: Ratchet + Send + Sync + 'static>(
     target: &str,
 ) -> Result<BTreeSet<Capability>, NetworkError> {
     let authority = authority_node(&install.scope, WORKSPACE_ROOT_ID);
-    let installer = snapshot(kernel, &install.installed_by, authority).await?;
+    let installer = installer_snapshot(kernel, install, authority).await?;
     let acting = snapshot(kernel, acting_user, target).await?;
     let mut needed = ViewsNeeded::default();
     needed.scope(&install.scope);

@@ -14,7 +14,7 @@
 
 use super::artifact::check_artifact_bytes;
 use super::install::{grant_details, is_first_party_in, stores_module, verify_listing_with};
-use super::rules::check_grant;
+use super::rules::{check_grant, provisioning_holds};
 use citadel_workspace_types::apps::{Capability, ScopeKind};
 use citadel_workspace_types::apps_install::{AppsRefusal, GrantDetails};
 use citadel_workspace_types::apps_manifest::AppManifest;
@@ -82,7 +82,7 @@ pub fn plan_provisioning<'a>(
         .filter(|r| !r.optional)
         .map(|r| r.cap)
         .collect();
-    check_grant(&manifest.capabilities, &granted, &|_| true, true)?;
+    check_grant(&manifest.capabilities, &granted, &provisioning_holds, true)?;
     Ok(Provisioning::Install(ProvisionPlan {
         details: grant_details(&manifest, &granted),
         granted,

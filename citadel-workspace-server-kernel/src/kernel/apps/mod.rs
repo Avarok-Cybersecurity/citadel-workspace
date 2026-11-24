@@ -126,6 +126,8 @@ mod kernel_notice_tests;
 #[cfg(test)]
 mod kernel_peer_tests;
 #[cfg(test)]
+mod kernel_provisioned_tests;
+#[cfg(test)]
 mod kernel_purge_tests;
 #[cfg(test)]
 mod kernel_release_change_tests;
