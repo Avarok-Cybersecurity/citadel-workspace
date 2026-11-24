@@ -257,8 +257,33 @@ const dist = join(root, 'dist');
  * 344 with no headroom left, and the batch tipped it over by under 0.05 KB. What it adds runs
  * on the landing page's agent setup: the run command now carries the identity's required
  * --identity-unlock-idle-secs (lib/agent-download.ts, UI commits b4fd4fb7 + df22eee0).
+ *
+ * 345 -> 348 (2026-11-23), for release 0.15.3 (PR #294), four lanes folded into one branch.
+ * Master measured 340.2 (#289's run). Each lane fitted the headroom alone: the live fixes 344.9
+ * (#290), the scratchpad 340.7 (#291), resume credentials 341.7 (#292); the synchronized.work
+ * app (#293) was never measured, its job having been skipped. Together they measure 347.5 in CI
+ * (run 45316205339) and 347.6 on a Mac. No lane's import is new to the fold; the sum is. What
+ * each puts on the path, by source map (raw bytes of the new modules; the rest is growth in
+ * modules already there, the service's operations, the generated variant handlers and
+ * AbiConstants chief among them):
+ *  - live fixes: the file openers mounted for every page (file-openers/FileOpenersProvider.tsx
+ *    1,019, citadel-apps/runtime/opened-files.ts 784, openers/* 641), the session's billing
+ *    portal request (workspace-service/billing-portal.ts 591), the empty workspace's root
+ *    (tree-node-utils.ts) and the manifest's `opens` rule (manifest-shape.ts).
+ *  - synchronized.work app: the node envelope that names an installed app
+ *    (citadel-apps/node-app-envelope.ts 1,536) and the two session notifications' routing.
+ *  - scratchpad: the refusal to send to your own account on every P2P road
+ *    (scratchpad/self-conversation.ts 569, websocket-service/core.ts) and the agent's
+ *    `notes_to_self` capability (agent-conversations/capabilities.ts).
+ *  - resume credentials: the lifetime a sign-in carries and the expiry notice a connected tab
+ *    raises (resume/lifetime.ts 966, expiry-notice.ts 610, copy.ts 581), with the reconnect's
+ *    two credential reasons (reconnect/server-reconnect.ts, types/agent-reconnect.ts).
+ * Nothing was moved off the path in the fold, which adds no feature work of its own. Candidates,
+ * each loadable with the surface that uses it: the file openers (with the file browser and a
+ * chat's files), the billing portal request (with its dialog), the node envelope (with a node's
+ * page) and the expiry notice's copy.
  */
-const BUDGET_KB = 345;
+const BUDGET_KB = 348;
 
 /**
  * Modules that must stay OFF the critical path, checked against the source
