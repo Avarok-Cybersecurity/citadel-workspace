@@ -1,0 +1,206 @@
+{
+  "name": "12-authorize-in-the-fold",
+  "rule": "R10 (Merge volume, group): an op the table refuses at its position is skipped by every replica",
+  "volume": "group:1001:42",
+  "root": "1fe985c9b9aec94ff2b689481d2f2431",
+  "members": [
+    1001,
+    1002,
+    1003
+  ],
+  "root_owner": [
+    1,
+    1001
+  ],
+  "root_mode": 504,
+  "note": "ops are listed in arrival order; every permutation must reduce to the same tree",
+  "ops": [
+    {
+      "op_id": "0f000000000000000000000000000001",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 1,
+      "at_ms": 1000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "kind": "dir",
+        "parent": "root",
+        "name": "Plans",
+        "pointee": [
+          0
+        ],
+        "mode": 488,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000002",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 2,
+      "at_ms": 2000,
+      "kind": "chmod",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "mode": 511
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000003",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 3,
+      "at_ms": 3000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a2",
+      "body": {
+        "kind": "file",
+        "parent": "000000000000000000000000000000a1",
+        "name": "early.txt",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1002
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000004",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 4,
+      "at_ms": 4000,
+      "kind": "chmod",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "mode": 504
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000005",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 5,
+      "at_ms": 5000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a3",
+      "body": {
+        "kind": "file",
+        "parent": "000000000000000000000000000000a1",
+        "name": "later.txt",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1002
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "entries": [
+      {
+        "id": "000000000000000000000000000000a1",
+        "kind": "dir",
+        "parent": "root",
+        "name": "Plans",
+        "shown": "Plans",
+        "pointee": [
+          0
+        ],
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 504,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1001
+          ],
+          "at_ms": 1000
+        }
+      },
+      {
+        "id": "000000000000000000000000000000a3",
+        "kind": "file",
+        "parent": "000000000000000000000000000000a1",
+        "name": "later.txt",
+        "shown": "later.txt",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "owner": [
+          1,
+          1002
+        ],
+        "mode": 432,
+        "removal": null,
+        "state": "shared",
+        "created": {
+          "by": [
+            1,
+            1002
+          ],
+          "at_ms": 5000
+        }
+      }
+    ],
+    "purged": [],
+    "skipped": [
+      {
+        "op_id": "0f000000000000000000000000000002",
+        "reason": {
+          "Denied": "NotOwner"
+        }
+      },
+      {
+        "op_id": "0f000000000000000000000000000003",
+        "reason": {
+          "Denied": {
+            "Mode": {
+              "need": "W",
+              "at": "000000000000000000000000000000a1"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

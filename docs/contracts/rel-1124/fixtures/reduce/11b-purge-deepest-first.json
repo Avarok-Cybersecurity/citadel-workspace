@@ -1,0 +1,127 @@
+{
+  "name": "11b-purge-deepest-first",
+  "rule": "R9: deleting a folder for good is one Purge per descendant, deepest first, then the folder",
+  "volume": "pair:1001:1002",
+  "root": "1eb150d45dac09cacf9f8234c1ec4e90",
+  "members": [
+    1001,
+    1002
+  ],
+  "note": "ops are listed in arrival order; every permutation must reduce to the same tree",
+  "ops": [
+    {
+      "op_id": "0f000000000000000000000000000001",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 1,
+      "at_ms": 1000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "kind": "dir",
+        "parent": "root",
+        "name": "Folder",
+        "pointee": [
+          0
+        ],
+        "mode": 504,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000002",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 2,
+      "at_ms": 2000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a2",
+      "body": {
+        "kind": "file",
+        "parent": "000000000000000000000000000000a1",
+        "name": "inside.txt",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000003",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 3,
+      "at_ms": 3000,
+      "kind": "remove",
+      "target": "000000000000000000000000000000a1",
+      "body": {}
+    },
+    {
+      "op_id": "0f000000000000000000000000000004",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 4,
+      "at_ms": 4000,
+      "kind": "purge",
+      "target": "000000000000000000000000000000a1",
+      "body": {}
+    },
+    {
+      "op_id": "0f000000000000000000000000000005",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 5,
+      "at_ms": 5000,
+      "kind": "purge",
+      "target": "000000000000000000000000000000a2",
+      "body": {}
+    },
+    {
+      "op_id": "0f000000000000000000000000000006",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 6,
+      "at_ms": 6000,
+      "kind": "purge",
+      "target": "000000000000000000000000000000a1",
+      "body": {}
+    }
+  ],
+  "expect": {
+    "entries": [],
+    "purged": [
+      "000000000000000000000000000000a1",
+      "000000000000000000000000000000a2"
+    ],
+    "skipped": [
+      {
+        "op_id": "0f000000000000000000000000000004",
+        "reason": "NotEmpty"
+      }
+    ]
+  }
+}

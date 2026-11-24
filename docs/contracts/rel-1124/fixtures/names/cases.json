@@ -1,0 +1,107 @@
+{
+  "$contract": "docs/contracts/rel-1124/vfs-model.md §6 (Unicode 17.0.0)",
+  "note": "Written from the Unicode data rules by hand. V1 runs these against the data files it compiles in; if a line and the data disagree, the data wins and V0 is told before anything ships.",
+  "valid": [
+    "Report.md",
+    "résumé.txt",
+    ".env",
+    "a b",
+    "name (2).txt",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "文書.txt"
+  ],
+  "invalid": [
+    {
+      "name": "",
+      "why": "empty"
+    },
+    {
+      "name": ".",
+      "why": "dot"
+    },
+    {
+      "name": "..",
+      "why": "dot-dot"
+    },
+    {
+      "name": "a/b",
+      "why": "slash"
+    },
+    {
+      "name": "a\u0000b",
+      "why": "Cc"
+    },
+    {
+      "name": "tab\tname",
+      "why": "Cc"
+    },
+    {
+      "name": "del",
+      "why": "Cc"
+    },
+    {
+      "name": "c1",
+      "why": "Cc"
+    },
+    {
+      "name": "résumé.txt",
+      "why": "not NFC (e + U+0301)"
+    },
+    {
+      "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "why": "over NAME_MAX_BYTES"
+    },
+    {
+      "name": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "why": "256 bytes of UTF-8"
+    },
+    {
+      "name": "x͸",
+      "why": "U+0378 is unassigned in Unicode 17.0.0"
+    }
+  ],
+  "collide": [
+    [
+      "Report.md",
+      "report.md"
+    ],
+    [
+      "REPORT.MD",
+      "report.md"
+    ],
+    [
+      "STRAẞE",
+      "straße"
+    ],
+    [
+      "ΌΣΟΣ",
+      "όσος"
+    ],
+    [
+      "K.txt",
+      "k.txt"
+    ]
+  ],
+  "distinct": [
+    [
+      "strasse",
+      "straße",
+      "the full folding of U+00DF is not used"
+    ],
+    [
+      "İ",
+      "i",
+      "U+0130 has only F and T foldings"
+    ],
+    [
+      "I",
+      "ı",
+      "the Turkic foldings are not used"
+    ],
+    [
+      "report.md",
+      "report (2).md",
+      "different names"
+    ]
+  ]
+}

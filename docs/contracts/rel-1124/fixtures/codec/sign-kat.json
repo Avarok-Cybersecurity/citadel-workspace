@@ -1,0 +1,10 @@
+{
+  "$contract": "docs/contracts/rel-1124/vfs-signing.md",
+  "identity": "docs/contracts/batch-1116/identity-kat.json identities.A (id_fp 3foriftckvpoy2rh); a published test seed, never a production key",
+  "domain": "citadel-vfs-op-v1",
+  "header_hex": "aa0101026e706169723a313030313a3130303203500f0000000000000000000000000000010482011903e90501064007010850000000000000000000000000000000a109582056f968693bc9dedc8c72a228e44332e533f7c58059344417bded4f9dea009b3e0a1b0000018bcfe56800",
+  "message_hex": "6369746164656c2d7666732d6f702d763100aa0101026e706169723a313030313a3130303203500f0000000000000000000000000000010482011903e90501064007010850000000000000000000000000000000a109582056f968693bc9dedc8c72a228e44332e533f7c58059344417bded4f9dea009b3e0a1b0000018bcfe56800",
+  "key": "3foriftckvpoy2rh",
+  "sig_hex": "",
+  "sig_note": "ML-DSA-65 signing is deterministic: V9 records the 3309-byte signature of message_hex under identity A here, from the crate test that also verifies it. The contracts gate recomputes message_hex."
+}
