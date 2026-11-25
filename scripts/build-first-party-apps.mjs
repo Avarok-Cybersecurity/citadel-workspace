@@ -7,10 +7,12 @@
  *
  *   node scripts/build-first-party-apps.mjs            rebuild; write wasm/ and the manifest's artifact
  *   node scripts/build-first-party-apps.mjs --check    rebuild and compare; write nothing
- *   node scripts/build-first-party-apps.mjs --sign <out> [--throwaway-key]
+ *   node scripts/build-first-party-apps.mjs --sign <out> [--throwaway-key | --ci-key]
  *        sign the apps every workspace is provisioned with into <out> (lib/sign-first-party-apps.mjs),
  *        with the seed in CITADEL_APP_SIGNING_SEED_HEX; --throwaway-key for a seed that is not
- *        first-party (PR CI). Builds nothing: it signs the committed manifests and modules.
+ *        first-party (PR CI); --ci-key with the published CI seed instead, for the integration
+ *        image's kernel (the only one that trusts it). Builds nothing: it signs the committed
+ *        manifests and modules.
  *
  * The reproducibility rules are build-app-fixtures.mjs's, for the same reason (committed bytes
  * are trustworthy only if anyone can rebuild them): the compiler is pinned by each app's
@@ -42,7 +44,13 @@ if (signAt !== -1) {
     console.error('build-first-party-apps: --sign takes the directory to write the signed apps to.');
     process.exit(1);
   }
-  const problems = signFirstPartyApps(ROOT, resolve(out), { throwaway: process.argv.includes('--throwaway-key') });
+  const flags = ['--throwaway-key', '--ci-key'].filter((f) => process.argv.includes(f));
+  if (flags.length > 1) {
+    console.error('build-first-party-apps: --throwaway-key and --ci-key are two different seeds; pass one.');
+    process.exit(1);
+  }
+  const mode = { '--throwaway-key': 'throwaway', '--ci-key': 'ci' }[flags[0]] ?? 'deploy';
+  const problems = signFirstPartyApps(ROOT, resolve(out), mode);
   if (problems.length) {
     console.error(`build-first-party-apps: not signed:\n  ${problems.join('\n  ')}`);
     process.exit(1);

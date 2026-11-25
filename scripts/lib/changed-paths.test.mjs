@@ -5,25 +5,29 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pushedPaths } from './changed-paths.mjs';
+import { adoptScratchEnv, scratchGit } from './scratch-git.mjs';
 
-const run = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+// Every repository here is scratch: no outer -c, global config or credential helper reaches them (lib/scratch-git.mjs).
+adoptScratchEnv(process.env);
+const SCRATCH = realpathSync(mkdtempSync(join(tmpdir(), 'changed-paths-')));
+process.on('exit', () => rmSync(SCRATCH, { recursive: true, force: true }));
+const { git: run } = scratchGit(SCRATCH);
 
 function commit(repo, path, text) {
   mkdirSync(dirname(join(repo, path)), { recursive: true });
   writeFileSync(join(repo, path), text);
   run(repo, 'add', path);
-  run(repo, '-c', 'commit.gpgsign=false', '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', path);
+  run(repo, 'commit', '-q', '-m', path);
   return run(repo, 'rev-parse', 'HEAD');
 }
 
 /** origin: master, and release (master + an agent change), both pushed; `work` is a clone of it. */
 function world(t) {
-  const root = mkdtempSync(join(tmpdir(), 'changed-paths-'));
+  const root = mkdtempSync(join(SCRATCH, 'world-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const origin = join(root, 'origin.git');
   const work = join(root, 'work');
@@ -89,4 +93,20 @@ test('a branch with no remote ancestor falls back to the remote default and does
   commit(work, 'citadel-internal-service/src/lib.rs', 'unrelated');
   const stdin = `refs/heads/lonely ${run(work, 'rev-parse', 'HEAD')} refs/heads/lonely ${ZERO}\n`;
   assert.throws(() => pushedPaths(work, '', 'origin', stdin), /merge-base/);
+});
+
+test('a push to the remote\'s URL (git passes the URL as $1) judges what the push by name judges', (t) => {
+  const work = world(t);
+  commit(work, 'citadel-workspaces/src/App.tsx', 'ui');
+  const url = run(work, 'remote', 'get-url', 'origin');
+  assert.deepEqual(pushedPaths(work, '', url, newBranch(work)).paths, ['citadel-workspaces/src/App.tsx']);
+});
+
+test('a remote without a recorded default branch compares a new branch with origin\'s', (t) => {
+  const work = world(t);
+  run(work, 'remote', 'add', 'mirror', run(work, 'remote', 'get-url', 'origin'));
+  commit(work, 'citadel-workspaces/src/App.tsx', 'ui');
+  // mirror has no fetched refs and no HEAD: every commit is new to it, so the base is the merge base with origin's default
+  assert.deepEqual(pushedPaths(work, '', 'mirror', newBranch(work)).paths.sort(),
+    ['citadel-internal-service/src/lib.rs', 'citadel-workspaces/src/App.tsx']);
 });

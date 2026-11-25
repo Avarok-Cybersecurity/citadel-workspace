@@ -92,8 +92,21 @@ The hooks run tiers of it, installed by the root \`prepare\` script (\`npm insta
 
 | hook | runs |
 |---|---|
-| pre-commit | static gates whose source reads the staged paths, eslint on staged files, \`cargo fmt\` for touched crates |
-| pre-push | by what the pushed commits change: UI -> typecheck, eslint, vitest, UI gates; Rust -> fmt, clippy, tests of that workspace; scripts/workflows -> every parent gate. Always: submodule work committed, pointers pushed |
+| pre-commit, pre-merge-commit | static gates whose source reads the staged paths, eslint on staged files, \`cargo fmt\` for touched crates. Not the gates that drive a browser or a built bundle: pre-push and CI run those |
+| pre-push | by what the pushed commits change: UI -> typecheck, eslint, vitest, the browser gates, UI gates; Rust -> fmt, clippy, tests of that workspace; scripts/workflows -> every parent gate. Always: submodule work committed, pointers pushed |
+
+**Pushing.** Inside \`git push\` the pre-push hook only VERIFIES: git holds the connection to the
+remote open for the whole hook, and GitHub drops it during a long one. Run the tier first, with no
+push in flight, then push; the hook passes in seconds, or fails at once naming what has not passed:
+
+    node scripts/pre-push-tier.mjs --remote origin   # runs the pre-push hook itself, via git hook run
+    git push
+
+Every check passed is stamped over its exact inputs (every file, the installs, the toolchain, the
+environment; \`scripts/lib/preflight-stamp.mjs\`), so a retried push or a second tier run over the
+same tree is instant, and any changed input runs that check again. Variables are inputs: run the
+tier and the push with the same \`CARGO_*\`, \`RUSTFLAGS\`, \`NODE_OPTIONS\`. Heavy runs on one machine
+queue on one lock (\`~/.cache/citadel-preflight/hook.lock\`, times in \`hook-times.tsv\` beside it).
 
 The only bypass is git's own, \`--no-verify\`, for one commit or push.
 

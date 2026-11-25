@@ -51,7 +51,7 @@ export function ZoneQuestion({ deviceZone, saving, error, onChoose }: ZoneQuesti
         </div>
       )}
       {error !== null && <p role="alert" className="text-sm text-destructive-emphasis">{error}</p>}
-      <Button type="submit" className="min-h-[44px] self-start" disabled={saving}>{saving ? 'Saving…' : 'Show my Calendar'}</Button>
+      <Button type="submit" className="min-h-[44px] self-start" disabled={saving} data-testid="calendar-zone-save">{saving ? 'Saving…' : 'Show my Calendar'}</Button>
     </form>
   );
 }

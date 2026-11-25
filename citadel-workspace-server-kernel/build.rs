@@ -11,6 +11,10 @@
 //! which the signer writes exactly then. Whether one is required is the manifest's ABI to say,
 //! which this does not parse: the signer always writes it for such an app, and provisioning
 //! refuses such a release without it (`apps::first_party`), so a dir lacking it fails the deploy.
+//!
+//! The `ci-first-party-root` feature (`kernel::apps::ci_first_party_root`) is refused here for any
+//! build that could ship: one with `CITADEL_DEPLOY` set (the deploy sets it, to any value) and any
+//! wasm32 build (the hosted server's target).
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -19,6 +23,23 @@ const DIR_ENV: &str = "CITADEL_FIRST_PARTY_SIGNED_DIR";
 const MANIFEST: &str = "manifest.json";
 const SIGNATURE: &str = "app.mldsa.sig";
 const MODULE: &str = "module.wasm";
+const DEPLOY_ENV: &str = "CITADEL_DEPLOY";
+const CI_ROOT_FEATURE_ENV: &str = "CARGO_FEATURE_CI_FIRST_PARTY_ROOT";
+
+/// Why this build may not have the CI first-party root, if it has it and is one that could ship.
+fn ci_root_refusal() -> Option<String> {
+    std::env::var_os(CI_ROOT_FEATURE_ENV)?;
+    if let Some(deploy) = std::env::var_os(DEPLOY_ENV) {
+        return Some(format!(
+            "the ci-first-party-root feature is for the integration image only, and {DEPLOY_ENV}={} marks a deploy",
+            deploy.to_string_lossy()
+        ));
+    }
+    let arch = std::env::var("CARGO_CFG_TARGET_ARCH").expect("CARGO_CFG_TARGET_ARCH");
+    (arch == "wasm32").then(|| {
+        "the ci-first-party-root feature is for the integration image only, and wasm32 is the hosted server's target".to_string()
+    })
+}
 
 fn bundles(dir: &Path) -> Vec<(String, PathBuf, PathBuf, Option<PathBuf>)> {
     let mut apps: Vec<PathBuf> = std::fs::read_dir(dir)
@@ -58,6 +79,10 @@ fn bundles(dir: &Path) -> Vec<(String, PathBuf, PathBuf, Option<PathBuf>)> {
 
 fn main() {
     println!("cargo:rerun-if-env-changed={DIR_ENV}");
+    println!("cargo:rerun-if-env-changed={DEPLOY_ENV}");
+    if let Some(why) = ci_root_refusal() {
+        panic!("{why}");
+    }
     let mut code = String::from("&[\n");
     if let Some(dir) = std::env::var_os(DIR_ENV) {
         let dir = PathBuf::from(dir);

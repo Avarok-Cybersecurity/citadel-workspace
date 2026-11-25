@@ -30,9 +30,16 @@
 # the fix had changed.
 #
 # Then the tier the pushed commits need, decided from what they change relative to the remote
-# (scripts/lib/change-tiers.mjs): UI paths -> typecheck, eslint, vitest and the UI's static
-# gates; Rust -> fmt, clippy and tests for that workspace; scripts and workflows -> the parent's
-# script gates. The pointer check above (#1) runs inside it, on every push.
+# (scripts/lib/change-tiers.mjs): UI paths -> typecheck, eslint, vitest, the browser gates and the
+# UI's static gates; Rust -> fmt, clippy and tests for that workspace; scripts and workflows ->
+# the parent's script gates. The pointer check above (#1) runs inside it, on every push.
+#
+# Inside `git push` the tier is VERIFIED, not run: git holds the connection open for the whole
+# hook and GitHub drops it, so a long hook lost the push. The hook passes in seconds when every
+# check already passed over these exact inputs, and otherwise fails at once, pushing nothing,
+# naming the one command that runs the tier (this hook, through `git hook run`):
+#
+#   node scripts/pre-push-tier.mjs --remote origin
 #
 # To skip it for one push, deliberately: git push --no-verify
 node scripts/check-submodule-work-is-committed.mjs || exit 1

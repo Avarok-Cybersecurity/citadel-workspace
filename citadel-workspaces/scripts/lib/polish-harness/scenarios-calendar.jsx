@@ -49,7 +49,7 @@ function Calendar({ view, zone }) {
   );
 }
 
-/** The page's own clock, as the glue instance of a mounted tab is given it (glue-steps.ts). */
+/** The page's clocks, as the glue instance of a mounted tab is given them (glue-steps.ts): pinned, it stands for both the date and the time waited on. */
 const PAGE_CLOCK = pinnedClock();
 const NODE = { id: 'n1', name: 'Platform', parent_id: 'company', children: [], metadata: [...new TextEncoder().encode(JSON.stringify({ time_zone: 'America/New_York' }))] };
 const COMPANY = { id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: [] };
@@ -78,7 +78,7 @@ function MountedCalendar({ engine }) {
     return glueInstance({
       appId: 'net.avarok.calendar', ports: { storage: store.port(), nodes: treeNodesPort('Workspace', () => TREE) },
       held: new Set(['storage.user', 'storage.node', 'storage.node.authored', 'nodes.read']),
-      policy: STANDARD_HOST_POLICY, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, pageUrl: window.location.href, storageChanges: () => () => {},
+      policy: STANDARD_HOST_POLICY, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, wallNow: PAGE_CLOCK.now, pageUrl: window.location.href, storageChanges: () => () => {},
     });
   });
   const state = { nodes: TREE, members: {}, workspace: { metadata: [] } };

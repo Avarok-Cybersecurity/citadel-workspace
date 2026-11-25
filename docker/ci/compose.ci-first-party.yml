@@ -1,0 +1,13 @@
+# CI only: the pull-request integration image's server, which provisions the first-party apps
+# (the Calendar, synchronized.work) as production does, signed by the CI job with the published CI
+# seed and trusted only by this kernel (`builder-ci-first-party` in docker/workspace-server/Dockerfile,
+# the `ci-first-party-root` feature). Merged over docker-compose.yml by `scripts/ci-stack.sh build
+# server` alone; nothing that publishes or deploys reads it
+# (scripts/check-ci-first-party-root-stays-in-ci.mjs).
+services:
+  server:
+    build:
+      args:
+        KERNEL_BUILDER: builder-ci-first-party
+      additional_contexts:
+        first-party-signed: ${CI_FIRST_PARTY_SIGNED_DIR:?set by the integration job's signing step}

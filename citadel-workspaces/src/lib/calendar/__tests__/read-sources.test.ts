@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import type { Capability } from '@/lib/citadel-apps/host/capabilities';
 import { glueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY } from '@/lib/citadel-apps/host/limits';
-import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
+import { ManualClock, oneClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { calendarPorts, type CalendarPorts } from '../ports';
 import { readSource, sourceOfChange } from '../read-sources';
 import { entryKey } from '../store';
@@ -24,7 +24,7 @@ function rig(me: string): { store: MemoryStore; ports: CalendarPorts } {
   const store: MemoryStore = new MemoryStore(me);
   const ports: CalendarPorts = calendarPorts(glueInstance({
     appId: 'net.avarok.calendar', ports: { storage: store.port() }, held: new Set<Capability>(HELD), policy: STANDARD_HOST_POLICY,
-    limits: { topics: null, p2p: null }, clock: new ManualClock(), pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
+    limits: { topics: null, p2p: null }, ...oneClock(new ManualClock()), pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
   }));
   return { store, ports };
 }

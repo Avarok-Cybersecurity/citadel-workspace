@@ -16,7 +16,7 @@ import { saveTeamType } from '@/lib/calendar/team-types';
 import type { Capability } from '@/lib/citadel-apps/host/capabilities';
 import { glueInstance, type StorageChange } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY } from '@/lib/citadel-apps/host/limits';
-import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
+import { ManualClock, oneClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { rosterMembersPort } from '@/lib/citadel-apps/runtime/first-party-ports';
 import { RoutingFormsSetup } from '../RoutingFormsSetup';
 import type { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
@@ -39,7 +39,7 @@ function editorRig(): Rig {
     appId: 'net.avarok.calendar', policy: STANDARD_HOST_POLICY,
     ports: { storage: store.port(), members: rosterMembersPort(() => [{ username: 'ana', displayName: 'Ana', isOnline: true }]) },
     held: new Set<Capability>(['storage.node', 'members.list']), limits: { topics: null, p2p: null },
-    clock: new ManualClock(), pageUrl: 'https://w.example/n1',
+    ...oneClock(new ManualClock()), pageUrl: 'https://w.example/n1',
     storageChanges: (l) => { listeners.add(l); return () => listeners.delete(l); },
   }));
   return { ports, change: (c: StorageChange): void => { for (const l of listeners) l(c); } };

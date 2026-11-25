@@ -175,10 +175,12 @@ jobs:
         include:
           - image: server
             dockerfile: ./docker/workspace-server/Dockerfile
-            # The server Dockerfile declares no build args. Passing an ARG a Dockerfile does not
-            # declare is a silent no-op that Docker only warns about, so build args are scoped
-            # per-image here rather than passed globally to both.
-            build_args: ""
+            # Build args are scoped per-image here rather than passed globally: passing an ARG a
+            # Dockerfile does not declare is a silent no-op that Docker only warns about.
+            # CITADEL_DEPLOY marks a published build: the kernel's build.rs then refuses the
+            # test-only CI first-party root.
+            build_args: |
+              CITADEL_DEPLOY=1
 
             # Smoke-test config. The server refuses to start without a master
             # password, and we exercise the filesystem backend because that is

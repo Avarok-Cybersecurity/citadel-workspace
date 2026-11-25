@@ -5,6 +5,7 @@
  * with `citadel-workspaces/`, so one set of tier rules serves both repos.
  */
 import { git } from './overlay.mjs';
+import { defaultBranchOf, pushRemote } from './push-remote.mjs';
 
 const ZERO = /^0+$/;
 
@@ -17,12 +18,33 @@ export function stagedPaths(repo, prefix) {
 
 /** The branch a new remote branch is compared against: the remote's default, which a clone records. */
 export function remoteDefault(repo, remote) {
+  const names = new Set([remote, 'origin']);
+  const heads = new Map([...names].map((name) => [name, symbolicRef(repo, `refs/remotes/${name}/HEAD`)]));
+  return defaultBranchOf(remote, heads);
+}
+
+function symbolicRef(repo, ref) {
   try {
-    return git(repo, 'symbolic-ref', '--quiet', `refs/remotes/${remote}/HEAD`);
+    return git(repo, 'symbolic-ref', '--quiet', ref);
   } catch {
-    throw new Error(`refs/remotes/${remote}/HEAD is not set in ${repo}, so a new branch has nothing to be compared with.\n` +
-      `  fix: git -C ${repo} remote set-head ${remote} --auto`);
+    return null;
   }
+}
+
+/** Every configured remote with its url and pushurls (`remote.<name>.url`, `remote.<name>.pushurl`). */
+function remotesOf(repo) {
+  let config = '';
+  try {
+    config = git(repo, 'config', '--get-regexp', '^remote\\..*\\.(url|pushurl)$');
+  } catch {
+    return [];
+  }
+  const byName = new Map();
+  for (const line of list(config)) {
+    const m = /^remote\.(.+)\.(?:url|pushurl) (.+)$/.exec(line);
+    if (m) byName.set(m[1], [...(byName.get(m[1]) ?? []), m[2]]);
+  }
+  return [...byName].map(([name, urls]) => ({ name, urls }));
 }
 
 /**
@@ -48,8 +70,10 @@ function newCommits(repo, remote, localSha) {
  * were judged again as this push's: a UI-only branch ran the whole agent test suite. A branch
  * whose history the remote has none of still falls back to the merge base with the remote's
  * default branch. A deletion, or a push of commits the remote already has, changes nothing.
+ * `remoteArg` is git's `$1`: a remote name, or the URL of a push to a URL (lib/push-remote.mjs).
  */
-export function pushedPaths(repo, prefix, remote, stdin) {
+export function pushedPaths(repo, prefix, remoteArg, stdin) {
+  const { remote } = pushRemote(remoteArg, remotesOf(repo));
   const paths = new Set();
   const refs = [];
   for (const line of list(stdin)) {
