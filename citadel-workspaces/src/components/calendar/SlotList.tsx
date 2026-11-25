@@ -25,7 +25,7 @@ const CHOICE: string = cn(
   'min-h-[44px] min-w-[44px] rounded-md border px-3 text-sm font-medium',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
 );
-const choiceState = (on: boolean): string => (on ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-foreground hover:bg-muted');
+const choiceState = (on: boolean): string => (on ? 'border-primary bg-primary text-primary-foreground' : 'border-control-border bg-background text-foreground hover:bg-muted');
 
 export const slotName = (slot: Interval, zone: string): string =>
   `${formatTimeIn(slot.start_ms, zone)} to ${formatTimeIn(slot.end_ms, zone)} ${zoneAbbreviation(zone, slot.start_ms)}`;

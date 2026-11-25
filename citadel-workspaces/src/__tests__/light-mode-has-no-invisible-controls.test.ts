@@ -31,6 +31,18 @@ import { stripComments } from '@/test-utils/strip-comments';
  */
 const src = (p: string): string => stripComments(readFileSync(join(process.cwd(), 'src', p), 'utf8'));
 
+/** Every file under `dir` whose name matches `ext`, tests and node_modules left out. */
+function shipped(dir: string, ext: RegExp): string[] {
+  const files: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const full: string = join(dir, name);
+    if (name === '__tests__' || name === 'node_modules') continue;
+    if (statSync(full).isDirectory()) files.push(...shipped(full, ext));
+    else if (ext.test(name)) files.push(full);
+  }
+  return files;
+}
+
 describe('selection and loading indicators use theme tokens', () => {
   it('the role-colour ring is not white on a white background', () => {
     // The swatches moved to RoleColorPicker when GroupRoleEditor was split.
@@ -115,17 +127,7 @@ describe('text fields keep a visible edge', () => {
 
   it('no call site overrides a field border with a faint colour', () => {
     const root: string = join(process.cwd(), 'src');
-    const files: string[] = [];
-    const walk = (dir: string): void => {
-      for (const name of readdirSync(dir)) {
-        const full: string = join(dir, name);
-        if (name === '__tests__' || name === 'node_modules') continue;
-        if (statSync(full).isDirectory()) walk(full);
-        else if (name.endsWith('.tsx')) files.push(full);
-      }
-    };
-    walk(join(root, 'components'));
-    walk(join(root, 'pages'));
+    const files: string[] = [...shipped(join(root, 'components'), /\.tsx$/), ...shipped(join(root, 'pages'), /\.tsx$/)];
     const FIELD_WITH_FAINT_BORDER: RegExp = /<(?:Input|Textarea|SelectTrigger)\b[^>]*?className=(?:"|\{`|\{cn\()[^>]*?\bborder-(?:surface|border|input|transparent)(?:\/\d+)?\b/gs;
     const offenders: string[] = [];
     for (const file of files) {
@@ -134,6 +136,29 @@ describe('text fields keep a visible edge', () => {
         offenders.push(`${file.slice(root.length + 1)}: ${match[0].slice(0, 90).replace(/\s+/g, ' ')}`);
       }
     }
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Every control's edge, not only a text field's (owner, 2026-11-25): the Calendar's outline buttons
+ * (Book with someone, Polls, Today...) drew theirs with `border-input`, about 1.1:1 on the page in
+ * both themes, so they read as bare text. The field guard above named three primitives and the
+ * token gate (scripts/check-token-contrast.mjs) measures `--control-border`, so neither saw the
+ * Button. `--input` is a fill; as an edge it is invisible, wherever it is used.
+ */
+describe('every control keeps a visible edge', () => {
+  it("the Button's outline variant rests on the control border", () => {
+    const outline: RegExpMatchArray | null = src('components/ui/button.tsx').match(/outline:\s*"([^"]*)"/);
+    expect(outline, 'the outline variant was not found').not.toBeNull();
+    expect(outline?.[1]).toMatch(/\bborder-control-border\b/);
+  });
+
+  it('nothing shipped draws an edge with the input fill', () => {
+    const root: string = join(process.cwd(), 'src');
+    const files: string[] = shipped(root, /\.tsx?$/);
+    expect(files.length, 'the walk found no sources').toBeGreaterThan(100);
+    const offenders: string[] = files.filter((f: string) => /\bborder-input\b/.test(stripComments(readFileSync(f, 'utf8')))).map((f: string) => f.slice(root.length + 1));
     expect(offenders).toEqual([]);
   });
 });
