@@ -117,7 +117,7 @@ export function VFSContentGrid(props: VFSContentGridProps): JSX.Element {
           ? <VFSNoMatches filterText={filterText} onClearFilter={onClearFilter} />
           : <VFSEmptyFolder folder={currentPath} upload={upload} onUpload={() => actions.upload(currentPath)} />)}
         {items.length > 0 && view === 'list' && (
-          <div className="overflow-hidden rounded-[6px] border border-border bg-card" aria-label="Items in this folder" role="group">
+          <div className="shrink-0 overflow-hidden rounded-[6px] border border-border bg-card" aria-label="Items in this folder" role="group">
             <ListHeader />
             {items.map((node: RevfsNode) => <VFSListRow key={node.path} {...itemProps(node)} />)}
           </div>

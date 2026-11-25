@@ -64,7 +64,7 @@ export function EventChip({ chip, displayZone, nodeName, density, inGrid, onOpen
         'flex w-full min-w-0 overflow-hidden rounded-sm border-l-4 text-left text-xs text-foreground',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         density === 'cell' && 'items-center gap-1 px-1 py-0.5',
-        density === 'column' && 'flex-col items-start px-1.5 py-1',
+        density === 'column' && 'flex-col items-stretch px-1.5 py-1',
         density === 'row' && 'min-h-[44px] items-center gap-3 px-3 py-2 text-sm',
         TONE[chip.origin],
         className,

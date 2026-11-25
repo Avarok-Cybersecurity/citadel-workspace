@@ -12,6 +12,7 @@ import { AppPagePane } from '../office/app-zone/AppPagePane';
 import { useChatSurface, type ChatSurface } from '../office/chat-surface';
 import { OfficeBreadcrumbs } from '../office/OfficeBreadcrumbs';
 import { NodePane } from '../office/tabs/NodePane';
+import { SCROLLING_PANE } from '../office/tabs/panel-overflow';
 
 interface AppNodePageProps {
   node: DomainNode;
@@ -29,7 +30,7 @@ export function AppNodePage({ node, page }: AppNodePageProps): JSX.Element {
       <div className="flex min-h-[44px] items-center border-b border-border bg-card px-4 py-2">
         <OfficeBreadcrumbs nodeId={node.id} current={node.name} />
       </div>
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className={SCROLLING_PANE}>
         <NodePane
           nodeId={node.id}
           node={node}

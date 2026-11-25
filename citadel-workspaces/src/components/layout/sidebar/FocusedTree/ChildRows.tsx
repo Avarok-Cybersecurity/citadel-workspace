@@ -77,7 +77,7 @@ const ChildRow: ForwardRefExoticComponent<ChildRowProps & RefAttributes<HTMLLIEl
         testId={`tree-node-${node.id}`}
         title={node.name}
         onActivate={() => onSelect(node.id)}
-        className={cn('gap-2 px-1.5 text-foreground transition-colors [&>svg]:size-[13px] hover:bg-primary-accent/15 hover:text-foreground', isMobile ? 'h-[44px]' : 'h-[28px]')}
+        className={cn('gap-2 px-1.5 text-foreground transition-colors [&>svg]:size-[13px] hover:bg-primary-accent/15 hover:text-foreground', 'py-0', isMobile ? 'min-h-[44px]' : 'min-h-[28px]')}
       >
         <Icon className="h-[13px] w-[13px] shrink-0" />
         <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -119,7 +119,7 @@ const AddRow: ForwardRefExoticComponent<AddRowProps & RefAttributes<HTMLLIElemen
         testId={`add-child-row-${parent.id}`}
         title={`${label} to ${parent.name}`}
         onActivate={() => onAdd(parent.id)}
-        className={cn('gap-2 px-1.5 text-xs text-muted-foreground hover:bg-primary-accent/15 hover:text-foreground [&>svg]:size-3', isMobile ? 'h-[44px]' : 'h-[26px]')}
+        className={cn('gap-2 px-1.5 text-xs text-muted-foreground hover:bg-primary-accent/15 hover:text-foreground [&>svg]:size-3', 'py-0', isMobile ? 'min-h-[44px]' : 'min-h-[26px]')}
       >
         <Plus className="h-3 w-3 shrink-0" aria-hidden="true" />
         <span className="truncate">{label}</span>
