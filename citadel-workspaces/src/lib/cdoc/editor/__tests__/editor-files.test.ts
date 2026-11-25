@@ -11,11 +11,12 @@ import type { EditorOrigin } from '../controller';
 import type { ConversionLoss, ExportedFile } from '../file-formats';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { NO_PICTURES } from '../../__tests__/no-pictures';
 
 function opener(): (from: EditorOrigin) => Promise<EditorSession> {
   let next: number = 1;
   const runtime: TestRuntime = inProcessRuntime('worker');
-  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff));
+  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff));
 }
 
 const utf8: TextDecoder = new TextDecoder();

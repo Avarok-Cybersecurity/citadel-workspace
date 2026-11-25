@@ -10,13 +10,14 @@ import { inProcessRuntime, type TestRuntime } from '../../../__tests__/wasm-rig'
 import { createEditorOpener } from '../../editor-opener';
 import type { EditorSession } from '../../editor-session';
 import { attachPointer, type PagePoint } from '../pointer';
+import { NO_PICTURES } from '../../../__tests__/no-pictures';
 
 const START_OF_FIRST_LINE: PagePoint = { page: 0, x: 0, y: 7300 };
 
 async function editorHolding(text: string): Promise<EditorSession> {
   const runtime: TestRuntime = inProcessRuntime('main-thread');
   let n: number = 1;
-  const editor: EditorSession = await createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => b.map((): number => n++))({ kind: 'blank' });
+  const editor: EditorSession = await createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => b.map((): number => n++))({ kind: 'blank' });
   await editor.execute({ name: 'insertText', text });
   return editor;
 }

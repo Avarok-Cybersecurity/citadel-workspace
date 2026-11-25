@@ -8,7 +8,8 @@ import type { EditorEngine } from '../engine/editor-engine';
 import { PENDING_LIMITS } from '../engine/engine-limits';
 import type { EditorRequestBody, EditorResults } from './editor-protocol';
 
-export type EditorSessionRequest = Exclude<EditorRequestBody, { kind: 'editorOpen' } | { kind: 'invalidatePages' }>;
+/** The kinds answered from the engine alone; the host answers the picture kinds (its ledger of misses). */
+export type EditorSessionRequest = Exclude<EditorRequestBody, { kind: 'editorOpen' | 'invalidatePages' | 'image' | 'pictureMissing' | 'pictureIds' }>;
 
 export async function openEditor(engine: CdocEngine, req: Extract<EditorRequestBody, { kind: 'editorOpen' }>): Promise<{ readonly editor: EditorEngine; readonly result: EditorResults['editorOpen'] }> {
   const editor: EditorEngine = await engine.openEditor(req.client, req.from);
@@ -34,7 +35,6 @@ export function serveEditor(engine: CdocEngine, editor: EditorEngine, req: Edito
     case 'addImage': return { record: editor.addImage(req.bytes, req.maxBytes) };
     case 'selectionText': return { text: editor.selectionText() };
     case 'styles': return { record: editor.styles() };
-    case 'image': return { record: editor.image(req.contentId) };
     case 'exportAs':
       if (req.target.format === 'pdf') return engine.writePdf(editor, req.target.nowRfc3339).then((bytes: Uint8Array) => ({ bytes, reportJson: null }));
       return editor.exportAs(req.target);

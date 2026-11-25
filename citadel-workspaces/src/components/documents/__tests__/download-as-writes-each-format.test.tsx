@@ -17,12 +17,13 @@ import { DocumentHost } from '../DocumentHost';
 import { keepBlankReplica } from '../blank-replica';
 import type { DocumentEditing } from '../use-docs-document';
 import { DownloadAsMenu } from '../page-view/DownloadAsMenu';
+import { memoryPicturePlan, memoryPictures } from '@/lib/cdoc/pictures/__tests__/doubles/memory-pictures';
 
 const FILE: DocumentSource = { kind: 'file', format: 'md', bytes: new TextEncoder().encode('# Quarterly plan\n\nShip **open** and *export*.\n') };
 
 /** A file opens as the file manager opens it, read only; a blank document is edited through a kept replica. */
 const READ_ONLY: DocumentEditing = { kind: 'readOnly', reason: 'Read only here.' };
-const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: null };
+const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }) };
 
 function host(files: RecordingDocumentFiles, documentSource: DocumentSource = FILE): void {
   const editing: DocumentEditing = documentSource.kind === 'blank' ? EDIT_BLANK : READ_ONLY;

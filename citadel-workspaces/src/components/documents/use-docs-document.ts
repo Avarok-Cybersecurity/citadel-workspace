@@ -15,6 +15,11 @@ import type { ImportReport } from '@/lib/cdoc/editor/file-formats';
 import type { EditorOrigin } from '@/lib/cdoc/editor/controller';
 import { createEditorOpener } from '@/lib/cdoc/editor/editor-opener';
 import { refusedMacros } from '@/lib/cdoc/conversion-report';
+import type { PicturePlan } from '@/lib/cdoc/pictures/picture-plan';
+import type { PictureAccess } from '@/lib/cdoc/pictures/document-pictures';
+
+/** A document only read keeps no pictures of its own: what its file brought is all it shows. */
+const READ_ONLY_PICTURES: PictureAccess = { kind: 'none', reason: 'This document is open read-only.' };
 
 /**
  * Opens and keeps the page's replica: calls `open` (this runtime's EditorOpener) as often as it
@@ -34,9 +39,9 @@ export type ReplicaKeeper = (
 export type DocumentEditing =
   /**
    * `save`: the title bar's controls for where its edits are; null for a replica nobody keeps
-   * anywhere. `pictures`: why a picture cannot be inserted here, or null where it can.
+   * anywhere. `pictures`: where its pictures are kept, or why it keeps none.
    */
-  | { readonly kind: 'replica'; readonly keep: ReplicaKeeper; readonly save: SaveControl | null; readonly pictures: string | null }
+  | { readonly kind: 'replica'; readonly keep: ReplicaKeeper; readonly save: SaveControl | null; readonly pictures: PicturePlan }
   | { readonly kind: 'readOnly'; readonly reason: string };
 
 export type DocsDocument =
@@ -67,9 +72,11 @@ export function useDocsDocument(loadRuntime: CdocRuntimeFactory, source: Documen
       if (!live) return runtime.client.dispose();
       if (isStaticSource(source)) return set({ kind: 'static', runtime });
       set({ kind: 'opening', runtime });
-      const open: (from: EditorOrigin) => Promise<EditorSession> = createEditorOpener(
-        { client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => crypto.getRandomValues(b),
-      );
+      const plan: PicturePlan | null = editing.kind === 'replica' ? editing.pictures : null;
+      const pictures: Promise<PictureAccess> = plan === null ? Promise.resolve(READ_ONLY_PICTURES) : plan.kind === 'none' ? Promise.resolve(plan) : plan.load();
+      const open = async (from: EditorOrigin): Promise<EditorSession> => createEditorOpener(
+        { client: runtime.client, renderer: runtime.renderer, pictures: await pictures }, (b: Uint8Array): Uint8Array => crypto.getRandomValues(b),
+      )(from);
       if (editing.kind === 'replica') {
         release = editing.keep(open, (editor: EditorSession): void => set({ kind: 'replica', runtime, editor, editable: true }), (error: unknown): void => set({ kind: 'failed', stage: 'open', message: messageOf(error) }));
         return;

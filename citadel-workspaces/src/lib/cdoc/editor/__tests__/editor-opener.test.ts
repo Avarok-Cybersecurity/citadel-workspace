@@ -11,6 +11,12 @@ import type { EditorSession } from '../editor-session';
 import type { AddedImage, EditorOrigin } from '../controller';
 import { createHash } from 'node:crypto';
 import { decodeAwareness, type Collected } from '../wire/decode-records';
+import { storedAccess } from '../../pictures/__tests__/picture-rig';
+import { memoryPictures } from '../../pictures/__tests__/doubles/memory-pictures';
+import type { PictureAccess } from '../../pictures/document-pictures';
+
+/** addImage stores what it holds: this document's pictures are kept in memory. */
+const STORED: PictureAccess = storedAccess(memoryPictures(), { kind: 'page', nodeId: 'opener-test' });
 
 /** The smallest PNG: a 1x1 transparent pixel. */
 const PNG_1X1: Uint8Array = Uint8Array.from(Buffer.from(
@@ -19,7 +25,7 @@ const PNG_1X1: Uint8Array = Uint8Array.from(Buffer.from(
 
 async function opened(random: (bytes: Uint8Array) => Uint8Array, from: EditorOrigin): Promise<EditorSession> {
   const runtime: TestRuntime = inProcessRuntime('worker');
-  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, random)(from);
+  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: STORED }, random)(from);
 }
 
 /** A deterministic source standing in for crypto.getRandomValues: the id it yields is known. */
@@ -40,7 +46,7 @@ describe('the editor opener', () => {
 
   it('opens every replica with a fresh client id, which the engine then reports as its own', async () => {
     const runtime: TestRuntime = inProcessRuntime('worker');
-    const open: (from: EditorOrigin) => Promise<EditorSession> = createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, counting());
+    const open: (from: EditorOrigin) => Promise<EditorSession> = createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: STORED }, counting());
     const first: EditorSession = await open({ kind: 'blank' });
     const firstId: bigint = decodeAwareness(await first.awareness()).client;
     const second: EditorSession = await open({ kind: 'blank' });

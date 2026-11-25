@@ -54,7 +54,7 @@ function fileEditing(file: Opened): DocumentEditing {
       held?.dispose();
     };
   };
-  return { kind: 'replica', keep, save: null, pictures: null };
+  return { kind: 'replica', keep, save: null, pictures: { kind: 'none', reason: 'The bench measures typing and paint, not stored pictures.' } };
 }
 
 export function BenchHarness(): JSX.Element {

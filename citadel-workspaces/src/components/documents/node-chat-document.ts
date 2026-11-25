@@ -16,7 +16,6 @@ import type { ChatDocument, ChatDocumentRequest } from './chat-replica';
 import type { ReplicaKeeper } from './use-docs-document';
 import { limitNoticeDetail } from '@/lib/chat/chat-document-limit';
 
-export const CHANNEL_PICTURES_UNAVAILABLE: string = 'Pictures cannot be added to a chat document yet: the channel\'s readers would see an empty box where the picture is.';
 
 /** A document of `nodeId`'s chat. `managesSubscription` is read when a notice is shown: whether to say where packs are bought. */
 export function openNodeChatDocument(nodeId: string, request: ChatDocumentRequest, managesSubscription: () => boolean): ChatDocument {
@@ -52,7 +51,7 @@ export function openNodeChatDocument(nodeId: string, request: ChatDocumentReques
     };
   };
   return {
-    editing: { kind: 'replica', keep, save: null, pictures: CHANNEL_PICTURES_UNAVAILABLE },
+    editing: { kind: 'replica', keep, save: null, pictures: { kind: 'stored', load: () => import('@/lib/cdoc/pictures/app-pictures').then((m) => m.serverPictures({ kind: 'nodeChat', nodeId, chatDoc: request.docId })) } },
     title: createValueStore<string>(`node-chat-document-title:${request.docId}`, request.title),
     rename: null,
   };

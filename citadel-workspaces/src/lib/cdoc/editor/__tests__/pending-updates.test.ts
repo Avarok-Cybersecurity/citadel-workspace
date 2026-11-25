@@ -8,13 +8,14 @@ import { inProcessRuntime, type TestRuntime } from '../../__tests__/wasm-rig';
 import { createEditorOpener } from '../editor-opener';
 import type { EditorSession } from '../editor-session';
 import type { EditorOrigin, RemoteApplied } from '../controller';
+import { NO_PICTURES } from '../../__tests__/no-pictures';
 
 /** The author's CRDT client: the opener's eight random bytes, all 0x11, read as a u64. */
 const AUTHOR_CLIENT: bigint = 0x1111_1111_1111_1111n;
 
 async function opened(seed: number, from: EditorOrigin): Promise<EditorSession> {
   const runtime: TestRuntime = inProcessRuntime('worker');
-  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (bytes: Uint8Array): Uint8Array => bytes.fill(seed))(from);
+  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (bytes: Uint8Array): Uint8Array => bytes.fill(seed))(from);
 }
 
 async function text(editor: EditorSession): Promise<string> {
