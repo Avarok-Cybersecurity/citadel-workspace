@@ -19,7 +19,7 @@
  * `ready` hangs — these tests encode that documented platform behavior in
  * stubs and prove OUR code survives it.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import {
   showBrowserNotification,
   SERVICE_WORKER_READY_TIMEOUT_MS,
@@ -37,12 +37,12 @@ const sample: AppNotification = {
   timestamp: 0,
 };
 
-const constructed: ReturnType<typeof vi.fn> = vi.fn();
+const constructed: Mock = vi.fn();
 
 /** A platform where the constructor works (desktop). */
 class WorkingNotification {
   static permission: NotificationPermission = 'granted';
-  static requestPermission: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<NotificationPermission> => 'granted');
+  static requestPermission: Mock = vi.fn(async (): Promise<NotificationPermission> => 'granted');
   constructor(title: string, options?: NotificationOptions) {
     constructed(title, options);
   }
@@ -51,7 +51,7 @@ class WorkingNotification {
 /** Chromium for Android: the constructor throws instead of no-opping. */
 class AndroidNotification {
   static permission: NotificationPermission = 'default';
-  static requestPermission: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<NotificationPermission> => {
+  static requestPermission: Mock = vi.fn(async (): Promise<NotificationPermission> => {
     AndroidNotification.permission = 'granted';
     return 'granted';
   });
@@ -80,7 +80,7 @@ afterEach(() => {
 
 describe('the first notification after granting permission (defect A)', () => {
   it('reaches the service worker on a platform whose constructor throws', async () => {
-    const showNotification: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
+    const showNotification: Mock = vi.fn(async () => undefined);
     stubServiceWorker(Promise.resolve({ showNotification }));
     vi.stubGlobal('Notification', AndroidNotification);
 
@@ -131,7 +131,7 @@ describe('a service worker that never becomes ready (defect B)', () => {
   });
 
   it('prefers the service worker when it IS ready (opposite direction)', async () => {
-    const showNotification: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
+    const showNotification: Mock = vi.fn(async () => undefined);
     stubServiceWorker(Promise.resolve({ showNotification }));
     vi.stubGlobal('Notification', WorkingNotification);
 

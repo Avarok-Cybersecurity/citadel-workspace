@@ -2,7 +2,7 @@
  * "Send to their storage" is its own action, not a transfer mode: it places the
  * file in the peer-pair shared tree, within that route's own size ceiling.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import {
   sendToTheirStorage, sharedStorageRefusal, SHARED_STORAGE_DIR, SHARED_STORAGE_LIMIT_BYTES,
   type SharedStoragePorts,
@@ -11,7 +11,7 @@ import {
 const ME: bigint = 7n;
 const PEER: bigint = 42n;
 
-function ports(): SharedStoragePorts & { upload: ReturnType<typeof vi.fn> } {
+function ports(): SharedStoragePorts & { upload: Mock } {
   return {
     currentCid: async (): Promise<bigint> => ME,
     newFileId: (): string => 'file-1',

@@ -16,9 +16,9 @@
  * transient leader's side by this tab activating and receiving the replay.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 
-const channelSend: ReturnType<typeof vi.fn> = vi.fn();
+const channelSend: Mock = vi.fn();
 
 vi.mock('../instance-channel', () => ({
   instanceChannel: {

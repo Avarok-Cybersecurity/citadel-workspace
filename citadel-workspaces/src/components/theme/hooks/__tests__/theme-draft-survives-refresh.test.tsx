@@ -7,20 +7,20 @@
  *
  * The admin tabs already carry this dirty guard; this hook never got it.
  */
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 const themeRef: { current: Record<string, string>; } = { current: { primary: 'blue' } as Record<string, string> };
-const previewTheme: ReturnType<typeof vi.fn> = vi.fn();
+const previewTheme: Mock = vi.fn();
 
 vi.mock('@/lib/theme/workspace-theme-context', () => ({
-  useWorkspaceTheme: (): { savedTheme: Record<string, string>; previewTheme: ReturnType<typeof vi.fn> } =>
+  useWorkspaceTheme: (): { savedTheme: Record<string, string>; previewTheme: Mock } =>
     ({ savedTheme: themeRef.current, previewTheme }),
 }));
 
 import { useAppearanceDraft } from '../useAppearanceDraft';
 
-const params: { open: boolean; onOpenChange: ReturnType<typeof vi.fn>; onSave: ReturnType<typeof vi.fn> } = { open: true, onOpenChange: vi.fn(), onSave: vi.fn() };
+const params: { open: boolean; onOpenChange: Mock; onSave: Mock } = { open: true, onOpenChange: vi.fn(), onSave: vi.fn() };
 
 describe('useAppearanceDraft', () => {
   it('keeps an unsaved edit when the workspace object is re-minted', () => {

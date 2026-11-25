@@ -18,7 +18,7 @@
  * `RevfsIO.loadPendingOps` IS called — by the intent switch. It is the INTENT
  * that is never dispatched.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { retryPendingOps } from '../revfs-retry';
 import { RevfsState } from '../revfs-state';
 import type { RevfsPendingOp, TreeKey } from '@/types/revfs-types';
@@ -35,12 +35,12 @@ function queuedOp(opId: string): RevfsPendingOp {
 
 function deps(persisted: RevfsPendingOp[]): {
   state: RevfsState;
-  io: { execute: ReturnType<typeof vi.fn> };
-  sendOp: ReturnType<typeof vi.fn>;
+  io: { execute: Mock };
+  sendOp: Mock;
   sent: string[];
 } {
   const sent: string[] = [];
-  const io: { execute: ReturnType<typeof vi.fn> } = {
+  const io: { execute: Mock } = {
     execute: vi.fn(async (intent: { type: string }) => {
       if (intent.type === 'load-pending-ops') {
         return { type: 'load-pending-ops', ops: persisted };
@@ -51,7 +51,7 @@ function deps(persisted: RevfsPendingOp[]): {
   const state: RevfsState = new RevfsState();
   // Acks as soon as it sends: the drain awaits a registered ack, and resolving
   // it from the test body raced the async queue restore that now runs first.
-  const sendOp: ReturnType<typeof vi.fn> = vi.fn(async (_p: bigint, op: { op_id: string }) => {
+  const sendOp: Mock = vi.fn(async (_p: bigint, op: { op_id: string }) => {
     sent.push(op.op_id);
     state.resolveAck(op.op_id, true);
     return true;

@@ -13,7 +13,7 @@
  * with the click suppressed: the control stays reachable and hoverable, and it
  * announces the reason.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CallControls } from '../CallControls';
@@ -27,9 +27,9 @@ const MEDIA: { audio: boolean; video: boolean; screen: boolean } = {
 
 function renderControls(
   overrides: Partial<React.ComponentProps<typeof CallControls>> = {},
-): { onToggleScreenShare: ReturnType<typeof vi.fn>; onToggleCamera: ReturnType<typeof vi.fn> } {
-  const onToggleScreenShare: ReturnType<typeof vi.fn> = vi.fn();
-  const onToggleCamera: ReturnType<typeof vi.fn> = vi.fn();
+): { onToggleScreenShare: Mock; onToggleCamera: Mock } {
+  const onToggleScreenShare: Mock = vi.fn();
+  const onToggleCamera: Mock = vi.fn();
   render(
     <CallControls
       media={MEDIA}

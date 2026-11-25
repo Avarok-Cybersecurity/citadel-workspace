@@ -5,12 +5,12 @@
  * is about. Real tab, row, dialog and editor; the workspace service (the wire)
  * is the only stand-in, and answers arrive on the event emitter as the server's do.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const getUserPermissions: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+const getUserPermissions: Mock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/lib/workspace-service', () => ({
   default: {
     listMembers: async (): Promise<void> => {},

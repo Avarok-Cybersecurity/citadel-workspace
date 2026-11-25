@@ -85,8 +85,8 @@ function dispatch(variant: string): { events: string[]; handled: boolean } {
     // WorkspaceProtocolResponse.
     eventEmitter.emit('websocket-message', { Response: { [variant]: PAYLOADS[variant] } });
     const events: string[] = spy.mock.calls
-      .map((c) => String(c[0]))
-      .filter((n) => n !== 'websocket-message');
+      .map((c: unknown[]) => String(c[0]))
+      .filter((n: string) => n !== 'websocket-message');
     return {
       events,
       // A real variant handler emits at least one domain event of its own.

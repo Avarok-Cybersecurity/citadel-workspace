@@ -24,14 +24,14 @@
  * agent (an I/O boundary; the agent's frames are replayed from the Rust source
  * above) and the tab's session lookup (IndexedDB).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 
 vi.mock('@/lib/tab-context', () => ({
   getSelectedUser: async (): Promise<{ selectedCid: bigint }> => ({ selectedCid: 7n }),
 }));
 
-const sendRequest: ReturnType<typeof vi.fn> = vi.fn(async (_request: unknown): Promise<void> => undefined);
-const sendP2PMessageReliable: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<void> => undefined);
+const sendRequest: Mock = vi.fn(async (_request: unknown): Promise<void> => undefined);
+const sendP2PMessageReliable: Mock = vi.fn(async (): Promise<void> => undefined);
 vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
     sendRequest: (r: unknown): Promise<void> => sendRequest(r),

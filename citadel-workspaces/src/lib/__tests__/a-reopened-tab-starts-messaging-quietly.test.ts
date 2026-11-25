@@ -13,7 +13,7 @@
  * is a recorder. Real: the startup sequence, the registration service and its gate, the
  * CID resolver, the instance manager and the (empty) connection manager.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 
 const toasts: Array<{ title?: string }> = [];
 vi.mock('@/hooks/use-toast', () => ({ toast: (t: { title?: string }): void => { toasts.push(t); } }));
@@ -61,7 +61,7 @@ describe('reopening a session in a tab that never logged in', () => {
 describe('two activations landing together', () => {
   it('start one registration poll, not two', async () => {
     instanceManager.setCid(CLAIMED);
-    const started: ReturnType<typeof vi.fn> = vi.fn();
+    const started: Mock = vi.fn();
     const { eventEmitter } = await import('../event-emitter');
     eventEmitter.on('p2p:registration-service-started', started);
     await Promise.all([p2pRegistrationService.start(), p2pRegistrationService.start()]);

@@ -219,7 +219,7 @@ export function P2PPeerList({ onSelectPeer, selectedPeerCid }: P2PPeerListProps)
           </div>
         </ScrollArea>
       </div>
-      <PeerDiscoveryModal isOpen={showDiscovery} onClose={() => setShowDiscovery(false)} onOpenDirectory={() => { setShowDiscovery(false); navigate('/directory'); }} />
+      <PeerDiscoveryModal isOpen={showDiscovery} onClose={() => setShowDiscovery(false)} onOpenDirectory={() => { setShowDiscovery(false); void navigate('/directory'); }} />
     </div>
   );
 }

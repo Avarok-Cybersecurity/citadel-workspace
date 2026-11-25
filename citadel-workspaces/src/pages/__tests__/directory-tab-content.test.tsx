@@ -8,7 +8,7 @@
  */
 
 import type { ComponentProps } from 'react';
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DirectoryTabContent } from '../DirectoryTabContent';
 import type { MemberDisplay } from '../MemberListItem';
@@ -16,7 +16,7 @@ import type { MemberDisplay } from '../MemberListItem';
 const member = (id: string, isOnline: boolean): MemberDisplay =>
   ({ id, displayName: `User ${id}`, banned: false, isOnline, isSelf: false, isContact: false });
 
-const noop: ReturnType<typeof vi.fn> = vi.fn();
+const noop: Mock = vi.fn();
 const handlers: Pick<ComponentProps<typeof DirectoryTabContent>, 'onSendMessage' | 'onInvite' | 'onSelect'> =
   { onSendMessage: noop, onInvite: noop, onSelect: noop };
 

@@ -9,14 +9,14 @@
  * the only way out was to navigate away and come back.
  */
 
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ErrorScreen } from '../FileManagerStatusScreens';
 
 describe('file manager error screen', () => {
   it('offers a control that re-fetches the tree', async () => {
-    const onRetry: ReturnType<typeof vi.fn> = vi.fn();
+    const onRetry: Mock = vi.fn();
     render(<ErrorScreen error="Request timed out" onRetry={onRetry} />);
 
     const button: HTMLElement = screen.getByRole('button');

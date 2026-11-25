@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 // The registration roster is a network-backed singleton; this is the seam
 // between the resolver's rule (which record wins, what happens when none does)
 // and the service that supplies the records. Mocking it keeps the rule
 // testable without standing up a peer registration.
-const getPeers: ReturnType<typeof vi.fn> = vi.fn();
+const getPeers: Mock = vi.fn();
 vi.mock('@/lib/p2p-registration-service', () => ({
   p2pRegistrationService: { getPeers: (): unknown => getPeers() },
 }));

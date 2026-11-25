@@ -14,7 +14,6 @@ import { describe, it, expect } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter, useNavigate, type NavigateFunction } from 'react-router-dom';
 import { SidebarProvider, useSidebar } from '@/components/ui/sidebar';
-import { ROUTER_FUTURE } from '@/app-routes';
 import { CloseMobileSidebarOnPageChange } from '../close-mobile-sidebar-on-page-change';
 
 const handles: { navigate: NavigateFunction | null; open: ((open: boolean) => void) | null } = { navigate: null, open: null };
@@ -28,7 +27,7 @@ function Probe(): JSX.Element {
 
 function renderShell(): void {
   render(
-    <MemoryRouter initialEntries={['/workspace?nodeId=a']} future={ROUTER_FUTURE}>
+    <MemoryRouter initialEntries={['/workspace?nodeId=a']}>
       <SidebarProvider>
         <CloseMobileSidebarOnPageChange />
         <Probe />
@@ -38,7 +37,7 @@ function renderShell(): void {
 }
 
 async function go(to: string): Promise<void> {
-  await act(async (): Promise<void> => { handles.navigate?.(to); });
+  await act(async (): Promise<void> => { void handles.navigate?.(to); });
 }
 
 describe('the mobile navigation sheet', () => {

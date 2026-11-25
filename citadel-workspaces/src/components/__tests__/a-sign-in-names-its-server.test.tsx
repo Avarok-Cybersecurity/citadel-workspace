@@ -11,7 +11,7 @@
  * rule: a Connect naming another server than the account's is refused, typed),
  * IndexedDB and the workspace work a signed-in session starts.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -31,7 +31,7 @@ import { loginWorld as h } from './login-world';
 
 const BENCH: string = 'bench.work.avarok.net';
 const ACME: string = 'acme.work.avarok.net';
-let onNext: ReturnType<typeof vi.fn>;
+let onNext: Mock;
 const connects = (): Record<string, unknown>[] => h.w.agent.sent.filter(([v]) => v === 'Connect').map(([, b]) => b);
 const type = (id: string, value: string): void => { fireEvent.change(document.getElementById(id) as HTMLElement, { target: { value } }); };
 

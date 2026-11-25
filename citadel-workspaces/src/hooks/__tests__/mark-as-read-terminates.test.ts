@@ -15,9 +15,9 @@
  * for the wrong reason.
  */
 
-import { describe, it, expect, vi, beforeEach   } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
-const persistGroups: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+const persistGroups: Mock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/lib/group-conversations/group-persistence', () => ({
   persistGroups: (...args: unknown[]): unknown => persistGroups(...args),
   restoreGroups: vi.fn().mockResolvedValue([]),
@@ -60,7 +60,7 @@ describe('marking a group read', () => {
 
   it('the store treats an unchanged array as nothing to do', async () => {
     const store: typeof import('@/lib/group-conversations/group-store') = await import('@/lib/group-conversations/group-store');
-    const listener: ReturnType<typeof vi.fn> = vi.fn();
+    const listener: Mock = vi.fn();
     const unsubscribe: () => void = store.subscribeToGroups(listener);
 
     store.updateGroups((prev) => prev);

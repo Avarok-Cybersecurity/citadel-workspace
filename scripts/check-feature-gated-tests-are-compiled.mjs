@@ -116,7 +116,9 @@ function ciFeatures() {
         const m = line.match(/--features[=\s]+([A-Za-z0-9_,\-]+)/);
         const own = new Set();
         if (m) for (const name of m[1].split(',')) { enabled.add(name.trim()); own.add(name.trim()); }
-        commands.push({ where: `${dir.includes('citadel-internal-service') ? 'agent' : 'parent'}/${f}`, line: line.trim().slice(0, 90), features: own });
+        // `-p X` builds X's test targets only, so only modules X owns can be missing from it.
+        const packages = new Set([...line.matchAll(/(?:^|\s)(?:-p|--package)[=\s]+([A-Za-z0-9_-]+)/g)].map((p) => p[1]));
+        commands.push({ where: `${dir.includes('citadel-internal-service') ? 'agent' : 'parent'}/${f}`, line: line.trim().slice(0, 90), features: own, packages });
       }
     }
   }
@@ -219,6 +221,8 @@ for (let grew = true; grew; ) {
 const problems = [];
 const gatingFeatures = new Set();
 const gatedOwners = new Set();
+/** `owner/feature` for every gated module with tests: what a `-p owner` command must enable. */
+const gatedBy = new Set();
 let gatedModsSeen = 0;
 let filesRead = 0;
 
@@ -240,7 +244,7 @@ for (const file of rustFiles(join(AGENT))) {
     gatedModsSeen += 1;
     gatingFeatures.add(feature);
     const owner = owningCrate(file);
-    if (owner) gatedOwners.add(owner);
+    if (owner) { gatedOwners.add(owner); gatedBy.add(`${owner}/${feature}`); }
     if (enabled.has(feature)) continue;
     if (owner && viaManifest.has(`${owner}/${feature}`)) continue;
     problems.push(
@@ -275,7 +279,9 @@ for (const file of rustFiles(join(AGENT))) {
   });
   for (const c of commands) {
     if (!c.where.startsWith('agent/')) continue; // the gated modules are the agent's
-    const missing = required.filter((f) => !c.features.has(f));
+    // A command naming packages compiles only their tests; one naming none compiles the workspace's.
+    const owns = (f) => c.packages.size === 0 || [...c.packages].some((p) => gatedBy.has(`${p}/${f}`));
+    const missing = required.filter((f) => owns(f) && !c.features.has(f));
     if (missing.length === 0) continue;
     problems.push(
       `${c.where}: \`${c.line}\` compiles the agent's tests without --features ` +

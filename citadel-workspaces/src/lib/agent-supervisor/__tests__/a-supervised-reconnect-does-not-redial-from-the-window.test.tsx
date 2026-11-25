@@ -9,12 +9,12 @@
  * service (recorded: its dials are agent requests). The watcher, reader,
  * handler and the capability read from the greeting are real.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { act, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-const resetConnectionState: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
-const connectToAllRegisteredPeers: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
+const resetConnectionState: Mock = vi.fn(async () => undefined);
+const connectToAllRegisteredPeers: Mock = vi.fn(async () => undefined);
 vi.mock('@/lib/post-auth-setup', () => ({ postAuthSetup: async (): Promise<void> => undefined }));
 vi.mock('@/lib/p2p-auto-connect-service', () => ({
   p2pAutoConnectService: {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { MDXToolbar } from '../MDXToolbar';
 
@@ -12,8 +12,8 @@ import { MDXToolbar } from '../MDXToolbar';
  */
 afterEach(cleanup);
 
-function renderToolbar(): { onBold: ReturnType<typeof vi.fn>; onItalic: ReturnType<typeof vi.fn>; onUnderline: ReturnType<typeof vi.fn>; onHeading: ReturnType<typeof vi.fn>; onList: ReturnType<typeof vi.fn>; onBlockquote: ReturnType<typeof vi.fn>; onCode: ReturnType<typeof vi.fn>; onLink: ReturnType<typeof vi.fn>; onImage: ReturnType<typeof vi.fn>; } {
-  const handlers: { onBold: ReturnType<typeof vi.fn>; onItalic: ReturnType<typeof vi.fn>; onUnderline: ReturnType<typeof vi.fn>; onHeading: ReturnType<typeof vi.fn>; onList: ReturnType<typeof vi.fn>; onBlockquote: ReturnType<typeof vi.fn>; onCode: ReturnType<typeof vi.fn>; onLink: ReturnType<typeof vi.fn>; onImage: ReturnType<typeof vi.fn> } = {
+function renderToolbar(): { onBold: Mock; onItalic: Mock; onUnderline: Mock; onHeading: Mock; onList: Mock; onBlockquote: Mock; onCode: Mock; onLink: Mock; onImage: Mock; } {
+  const handlers: { onBold: Mock; onItalic: Mock; onUnderline: Mock; onHeading: Mock; onList: Mock; onBlockquote: Mock; onCode: Mock; onLink: Mock; onImage: Mock } = {
     onBold: vi.fn(), onItalic: vi.fn(), onUnderline: vi.fn(),
     onHeading: vi.fn(), onList: vi.fn(), onBlockquote: vi.fn(),
     onCode: vi.fn(), onLink: vi.fn(), onImage: vi.fn(),

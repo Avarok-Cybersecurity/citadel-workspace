@@ -6,7 +6,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
-import { AppRoutes, ROUTER_FUTURE } from "./app-routes";
+import { AppRoutes } from "./app-routes";
 import { FileOpenersProvider } from "@/components/file-openers/FileOpenersProvider";
 import WorkspaceApp from "./components/WorkspaceApp";
 import { DocumentTitle } from './components/DocumentTitle';
@@ -83,9 +83,7 @@ const App: () => JSX.Element = (): JSX.Element => {
                 survive navigating between rooms rather than dying with the
                 page that started it. */}
             <CallLayer>
-            <BrowserRouter
-              future={ROUTER_FUTURE}
-            >
+            <BrowserRouter>
               <DocumentTitle />
               <Suspense fallback={null}><ServerReconnectWatcher /><SessionEndedWatcher /><SignInNeededWatcher /><AgentUpdateWatcher /></Suspense>
               {/* Inside the router because its Return button navigates, above

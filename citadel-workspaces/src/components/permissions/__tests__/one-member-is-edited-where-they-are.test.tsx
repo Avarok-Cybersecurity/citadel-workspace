@@ -5,13 +5,13 @@
  * stand-in is the workspace service — the wire — whose answers arrive the way
  * the server's do, on the event emitter.
  */
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { EMPTY_DOCUMENT_HASH } from '@/lib/mdx-integrity';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const getUserPermissions: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
-const updateMemberPermissions: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+const getUserPermissions: Mock = vi.fn().mockResolvedValue(undefined);
+const updateMemberPermissions: Mock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/lib/workspace-service', () => ({
   default: {
     getUserPermissions: (...args: unknown[]): unknown => getUserPermissions(...args),
@@ -62,7 +62,7 @@ function answerEveryLevel(): void {
   answer('standup', ['ViewContent', 'SendMessages', 'UploadFiles']);
 }
 
-const onClose: ReturnType<typeof vi.fn> = vi.fn();
+const onClose: Mock = vi.fn();
 const open = (): void => {
   render(<WorkspaceProvider state={STATE}><MemberPermissionsDialog open onClose={onClose} member={ADA} domainId="standup" /></WorkspaceProvider>);
 };

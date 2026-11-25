@@ -8,7 +8,7 @@
  *
  * These assert at the send points, which is where the promise is kept or broken.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import type { PrivacySettings } from '@/lib/privacy-settings';
 import { PresenceManager } from '@/lib/p2p/presence-manager';
 import {
@@ -100,9 +100,9 @@ describe('privacy settings storage', () => {
 });
 
 describe('typing indicators', () => {
-  async function makeManager(showTypingIndicators: boolean): Promise<{ manager: PresenceManager; sendCommand: ReturnType<typeof vi.fn>; }> {
+  async function makeManager(showTypingIndicators: boolean): Promise<{ manager: PresenceManager; sendCommand: Mock; }> {
     savePrivacySettings({ ...DEFAULT_PRIVACY_SETTINGS, showTypingIndicators });
-    const sendCommand: ReturnType<typeof vi.fn> = vi.fn((): Promise<void> => Promise.resolve());
+    const sendCommand: Mock = vi.fn((): Promise<void> => Promise.resolve());
     const manager: PresenceManager = new PresenceManager({
       sendCommand,
       getConnectedPeers: () => [7n],

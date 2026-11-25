@@ -11,7 +11,7 @@
  * Mocked: the agent's ClaimSession answers, and the session-selection I/O the
  * switch would run after a successful claim.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 const h: { holder: 'orphan' | 'this-connection' | 'another-connection'; claims: boolean[]; selected: number } = vi.hoisted(
   (): { holder: 'orphan' | 'this-connection' | 'another-connection'; claims: boolean[]; selected: number } =>
@@ -73,8 +73,8 @@ describe('switching to it', () => {
 
   it('asks, and on yes starts the sign-in that moves it', async () => {
     h.holder = 'another-connection';
-    const confirm: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<boolean> => true);
-    const signInAs: ReturnType<typeof vi.fn> = vi.fn();
+    const confirm: Mock = vi.fn(async (): Promise<boolean> => true);
+    const signInAs: Mock = vi.fn();
     await switchToSession(target, { navigate: vi.fn(), toast: vi.fn(), confirm, signInAs, signInAgain: vi.fn() });
 
     expect(confirm).toHaveBeenCalledWith(takeoverPrompt('alice0924'));
@@ -85,7 +85,7 @@ describe('switching to it', () => {
 
   it('does nothing further on no', async () => {
     h.holder = 'another-connection';
-    const signInAs: ReturnType<typeof vi.fn> = vi.fn();
+    const signInAs: Mock = vi.fn();
     await switchToSession(target, { navigate: vi.fn(), toast: vi.fn(), confirm: async (): Promise<boolean> => false, signInAs, signInAgain: vi.fn() });
     expect(signInAs).not.toHaveBeenCalled();
     expect(h.selected).toBe(0);
@@ -99,8 +99,8 @@ describe('switching between two accounts in this browser', () => {
     // agent's answer and the switch must go ahead rather than stop there.
     h.holder = 'this-connection';
     instanceManager.setCid(8n);
-    const navigate: ReturnType<typeof vi.fn> = vi.fn();
-    const signInAs: ReturnType<typeof vi.fn> = vi.fn();
+    const navigate: Mock = vi.fn();
+    const signInAs: Mock = vi.fn();
     await switchToSession(
       { cid: 7n, username: 'mia0924', server_address: 'bench.work.avarok.net', workspaceName: 'Bench', storedSessionIndex: -1 },
       { navigate, toast: vi.fn(), confirm: async (): Promise<boolean> => false, signInAs, signInAgain: vi.fn() },

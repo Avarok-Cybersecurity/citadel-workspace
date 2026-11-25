@@ -5,7 +5,7 @@
  * The decision is driven with its effects injected as recorders, as the stranger suite does; the
  * trust check is driven against a stub of its one I/O boundary, the bound workspace request.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import {
   decideIncomingRequest, handleIncomingRegistration, type IncomingRegistrationDeps, type IncomingRequestAction,
 } from '../incoming-request-policy';
@@ -84,7 +84,7 @@ describe('asking the server about a peer', () => {
   });
 
   it('is not asked as another session, nor without a name', async () => {
-    const checkPeer: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<PeerTrust> => YES);
+    const checkPeer: Mock = vi.fn(async (): Promise<PeerTrust> => YES);
     expect(await askPeerTrust(api(checkPeer, 8n), 7n, 'colleague')).toEqual(UNTRUSTED);
     expect(await askPeerTrust(api(checkPeer, null), 7n, 'colleague')).toEqual(UNTRUSTED);
     expect(await askPeerTrust(api(checkPeer), 7n, undefined)).toEqual(UNTRUSTED);

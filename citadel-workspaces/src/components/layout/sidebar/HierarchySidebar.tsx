@@ -65,7 +65,7 @@ export function HierarchySidebar(): JSX.Element {
 
       // If we're currently viewing the deleted node, navigate away
       if (selectedNodeId === node.id) {
-        navigate(getWorkspacePath());
+        void navigate(getWorkspacePath());
       }
 
       const typeName: string = getEntityTypeString(node.entity_type);

@@ -12,11 +12,11 @@
  * the IndexedDB request store, the BroadcastChannel, and the toast sink, which
  * is where the answer is read.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import type { Peer } from '../usePeerDiscovery';
 
-const toast: ReturnType<typeof vi.fn> = vi.fn();
+const toast: Mock = vi.fn();
 let discovered: Peer[] = [];
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: (): { toast: typeof toast } => ({ toast }) }));

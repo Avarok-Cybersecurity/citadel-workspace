@@ -15,9 +15,9 @@
  * The badge is how a person learns a request exists. Persistence is for
  * surviving a reload; failing at that must not also mean failing to mention it.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 
-const persist: ReturnType<typeof vi.fn> = vi.fn();
+const persist: Mock = vi.fn();
 
 vi.mock('../persistence', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../persistence')>()),

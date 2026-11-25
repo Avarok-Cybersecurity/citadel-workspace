@@ -9,7 +9,7 @@
  * control-plane fetch for discovery, and Turnstile itself (fake-turnstile.ts,
  * on Cloudflare's TEST site keys -- no real challenge is fetched or solved).
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -28,7 +28,7 @@ import { ADMISSION_COPY } from '@/lib/admission/copy';
 import { ALWAYS_FAIL, ALWAYS_PASS, installFakeTurnstile, turnstileScriptLoaded, type FakeTurnstile } from '../admission/__tests__/fake-turnstile';
 import { loginWorld as h } from './login-world';
 
-let onNext: ReturnType<typeof vi.fn>;
+let onNext: Mock;
 let turnstile: FakeTurnstile;
 function renderLogin(initialUsername: string | undefined = undefined): void {
   onNext = vi.fn();

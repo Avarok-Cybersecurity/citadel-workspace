@@ -13,18 +13,18 @@
  * the app never learns it is connected — and the user's retry meets "username
  * already taken".
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { handleAuthSuccess, storeSession } from '../session-management';
 import type { StoredSession } from '@/types/session-types';
 
-function harness(storeFails: boolean): { state: { storedSessions: { sessions: StoredSession[]; }; addOrUpdateSession: ReturnType<typeof vi.fn>; setCurrentConnectionInfo: ReturnType<typeof vi.fn>; updateCurrentConnectionInfo: ReturnType<typeof vi.fn>; setStoredSessions: ReturnType<typeof vi.fn>; removeSession: ReturnType<typeof vi.fn>; }; io: { storeSessionsToLocalDB: ReturnType<typeof vi.fn>; loadSessionsFromLocalDB: ReturnType<typeof vi.fn>; setSelectedUser: ReturnType<typeof vi.fn>; setWorkspaceConnectionId: ReturnType<typeof vi.fn>; updateConnectionService: ReturnType<typeof vi.fn>; emitEvent: ReturnType<typeof vi.fn>; }; } {
+function harness(storeFails: boolean): { state: { storedSessions: { sessions: StoredSession[]; }; addOrUpdateSession: Mock; setCurrentConnectionInfo: Mock; updateCurrentConnectionInfo: Mock; setStoredSessions: Mock; removeSession: Mock; }; io: { storeSessionsToLocalDB: Mock; loadSessionsFromLocalDB: Mock; setSelectedUser: Mock; setWorkspaceConnectionId: Mock; updateConnectionService: Mock; emitEvent: Mock; }; } {
   const state: {
     storedSessions: { sessions: StoredSession[] };
-    addOrUpdateSession: ReturnType<typeof vi.fn>;
-    setCurrentConnectionInfo: ReturnType<typeof vi.fn>;
-    updateCurrentConnectionInfo: ReturnType<typeof vi.fn>;
-    setStoredSessions: ReturnType<typeof vi.fn>;
-    removeSession: ReturnType<typeof vi.fn>;
+    addOrUpdateSession: Mock;
+    setCurrentConnectionInfo: Mock;
+    updateCurrentConnectionInfo: Mock;
+    setStoredSessions: Mock;
+    removeSession: Mock;
   } = {
     storedSessions: { sessions: [] as StoredSession[] },
     addOrUpdateSession: vi.fn(),
@@ -33,7 +33,7 @@ function harness(storeFails: boolean): { state: { storedSessions: { sessions: St
     setStoredSessions: vi.fn(),
     removeSession: vi.fn(),
   };
-  const io: { storeSessionsToLocalDB: ReturnType<typeof vi.fn>; loadSessionsFromLocalDB: ReturnType<typeof vi.fn>; setSelectedUser: ReturnType<typeof vi.fn>; setWorkspaceConnectionId: ReturnType<typeof vi.fn>; updateConnectionService: ReturnType<typeof vi.fn>; emitEvent: ReturnType<typeof vi.fn> } = {
+  const io: { storeSessionsToLocalDB: Mock; loadSessionsFromLocalDB: Mock; setSelectedUser: Mock; setWorkspaceConnectionId: Mock; updateConnectionService: Mock; emitEvent: Mock } = {
     storeSessionsToLocalDB: vi.fn(async () => {
       if (storeFails) throw new Error('LocalDBSetKV request timed out');
     }),

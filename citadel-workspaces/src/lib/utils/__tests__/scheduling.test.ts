@@ -1,4 +1,4 @@
-import { describe, it, expect, vi    } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { yieldToEventLoop, waitFor, waitForEvent } from '../scheduling';
 
 describe('yieldToEventLoop', () => {
@@ -93,7 +93,7 @@ describe('waitFor', () => {
 
 describe('waitForEvent', () => {
   it('resolves with the emitted value and unsubscribes', async () => {
-    const unsubscribe: ReturnType<typeof vi.fn> = vi.fn();
+    const unsubscribe: Mock = vi.fn();
     const promise: Promise<string> = waitForEvent<string>(resolve => {
       setTimeout(() => resolve('connected'), 10);
       return unsubscribe;
@@ -104,7 +104,7 @@ describe('waitForEvent', () => {
   });
 
   it('unsubscribes on timeout too, so a listener cannot leak', async () => {
-    const unsubscribe: ReturnType<typeof vi.fn> = vi.fn();
+    const unsubscribe: Mock = vi.fn();
     const promise: Promise<void> = waitForEvent(() => unsubscribe, { timeoutMs: 20, description: 'never fires' });
 
     await expect(promise).rejects.toThrow(/waiting for: never fires/);
@@ -112,7 +112,7 @@ describe('waitForEvent', () => {
   });
 
   it('ignores a second emission rather than settling twice', async () => {
-    const unsubscribe: ReturnType<typeof vi.fn> = vi.fn();
+    const unsubscribe: Mock = vi.fn();
     let emit!: (v: string) => void;
     const promise: Promise<string> = waitForEvent<string>(resolve => { emit = resolve; return unsubscribe; },
       { timeoutMs: 1000, description: 'double emit' });

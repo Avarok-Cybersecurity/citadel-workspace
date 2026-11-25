@@ -5,14 +5,14 @@
  * is under test is the grid deciding which action a click, key or menu means.
  * `openersOf` is the product's lookup over the product's apps, spied, not stood in for.
  */
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
 import type { RevfsNode } from '@/types/revfs-types';
 import type { VFSItemActions } from '../vfs-item-actions';
 import type { VFSContentGridProps } from '../VFSContentGrid';
 import { openersOfNode } from '../file-openers';
 import { BUILT_IN_OPENERS } from '@/lib/citadel-apps/openers/built-in-openers';
 
-export type SpiedActions = { [K in keyof VFSItemActions]: VFSItemActions[K] & ReturnType<typeof vi.fn> };
+export type SpiedActions = { [K in keyof VFSItemActions]: VFSItemActions[K] & Mock };
 
 export function spyActions(): SpiedActions {
   return {

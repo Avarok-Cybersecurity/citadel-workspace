@@ -13,9 +13,9 @@
  * requests the old leader might still be executing.
  */
 
-import { describe, it, expect, vi, beforeEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
-const sendAck: ReturnType<typeof vi.fn> = vi.fn();
+const sendAck: Mock = vi.fn();
 
 vi.mock('../instance-channel', () => ({
   instanceChannel: {

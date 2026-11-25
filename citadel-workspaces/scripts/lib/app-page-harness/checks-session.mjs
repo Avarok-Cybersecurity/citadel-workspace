@@ -44,7 +44,10 @@ export async function theJoinIsOneNotification(page, label, check, t) {
     `${label}: 6. it is from ${t.context.server}, with the recorded title and body (${JSON.stringify(e)})`);
   if (e.length > 0) {
     await page.getByTestId('harness-notices').getByText(want.title, { exact: true }).first().click();
-    const opened = await until(page, (node) => window.__page.openNode.includes(node), t.context.node_id, 5_000);
+    // The opener navigates in a transition (react-router 7 makes every navigation one), so the
+    // location is read once it has moved, not in the same tick as the event.
+    const opened = await until(page, (node) => window.__page.openNode.includes(node)
+      && window.__page.notices.location.includes(`nodeId=${node}`), t.context.node_id, 5_000);
     const now = await record(page);
     check(opened && now.openNode.length === 1 && now.notices.location.includes(`nodeId=${t.context.node_id}`),
       `${label}: 6. activating its card opens the app's node (apps:open-node ${JSON.stringify(now.openNode)}; location ${now.notices.location})`);

@@ -11,7 +11,7 @@
  * Real: the CallManager, reducer, retry policy and session lifecycle. Mocked:
  * the transport (the socket) and the clock's timers.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { CallManager } from '../call-manager';
 import { DIRECT_CALL, type CallState } from '../call-state';
 import { LOST_ON_TAKEOVER } from '../lost-on-takeover';
@@ -23,15 +23,15 @@ const CAPS: CallCodecCapabilities = { audio: ['opus'], video: [] };
 
 interface Harness {
   manager: CallManager;
-  openSession: ReturnType<typeof vi.fn>;
-  sendSignal: ReturnType<typeof vi.fn>;
+  openSession: Mock;
+  sendSignal: Mock;
   ends: () => Array<[bigint, CallSignalPayload]>;
   settle: (work: Promise<void>) => Promise<void>;
 }
 
 function harness(): Harness {
-  const openSession: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
-  const sendSignal: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+  const openSession: Mock = vi.fn().mockResolvedValue(undefined);
+  const sendSignal: Mock = vi.fn().mockResolvedValue(undefined);
   const timers: Array<() => void> = [];
   const transport: CallTransport = { openSession, closeSession: vi.fn().mockResolvedValue(undefined), sendFrame: vi.fn(), sendSignal };
   const manager: CallManager = new CallManager({

@@ -18,10 +18,10 @@
  * Losing the record costs the automatic resend for that request. Not sending it
  * costs the request.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 
 const sent: Record<string, unknown>[] = [];
-const addOutgoing: ReturnType<typeof vi.fn> = vi.fn();
+const addOutgoing: Mock = vi.fn();
 
 vi.mock('@/lib/peer-registration-store', (): Record<string, unknown> => ({
   peerRegistrationStore: { addOutgoingRequest: (r: unknown): Promise<void> => addOutgoing(r) },

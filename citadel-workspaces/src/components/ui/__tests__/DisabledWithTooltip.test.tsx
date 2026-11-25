@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach  } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { DisabledWithTooltip } from '../DisabledWithTooltip';
 
@@ -44,7 +44,7 @@ describe('DisabledWithTooltip', () => {
   });
 
   it('does not fire onClick while disabled', () => {
-    const onClick: ReturnType<typeof vi.fn> = vi.fn();
+    const onClick: Mock = vi.fn();
     render(
       <Wrapper disabled tooltip="blocked">
         <button type="button" onClick={onClick}>Delete office</button>

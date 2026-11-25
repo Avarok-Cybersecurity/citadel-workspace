@@ -56,7 +56,7 @@ vi.mock('@/components/terms/TermsGate', () => ({ TermsGate: (): null => null }))
 vi.mock('@/components/calendar/background/CalendarInBackground', () => ({ CalendarInBackground: (): null => null }));
 vi.mock('@/components/layout/use-remember-location', () => ({ useRememberLocation: (): void => {} }));
 
-import { AppRoutes, ROUTER_FUTURE } from '@/app-routes';
+import { AppRoutes } from '@/app-routes';
 
 const navigateRef: { current: NavigateFunction | null } = { current: null };
 function CaptureNavigate(): null {
@@ -66,7 +66,7 @@ function CaptureNavigate(): null {
 
 async function renderAtDirectory(): Promise<void> {
   render(
-    <MemoryRouter initialEntries={['/directory']} future={ROUTER_FUTURE}>
+    <MemoryRouter initialEntries={['/directory']}>
       <CaptureNavigate />
       <AppRoutes />
     </MemoryRouter>,
@@ -75,7 +75,7 @@ async function renderAtDirectory(): Promise<void> {
 }
 
 async function goToWorkspace(): Promise<void> {
-  await act(async (): Promise<void> => { navigateRef.current?.('/workspace'); });
+  await act(async (): Promise<void> => { void navigateRef.current?.('/workspace'); });
   await screen.findByRole('heading', { name: 'Office page' });
 }
 

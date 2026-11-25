@@ -17,7 +17,7 @@
  * The operation IS queued for retry on this path, so "not delivered" would
  * overstate it -- these assert the flag, and the caller says "not yet".
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { peerMkdir, peerRmdir, peerRename, peerMove, peerCopy, type DirOpsContext } from '../revfs-dir-ops';
 import { createDefaultTree, mkdir } from '../tree-operations';
 import type { RevfsNode } from '@/types/revfs-types';
@@ -34,7 +34,7 @@ function tree(): RevfsNode {
 }
 
 function ctxWithAck(acked: boolean): DirOpsContext {
-  const io: { execute: ReturnType<typeof vi.fn> } = {
+  const io: { execute: Mock } = {
     execute: vi.fn((intent: Record<string, unknown>) => Promise.resolve({ type: intent.type, success: true })),
   };
   return {

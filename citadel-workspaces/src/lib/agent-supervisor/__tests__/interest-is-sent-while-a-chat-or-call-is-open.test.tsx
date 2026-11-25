@@ -82,8 +82,9 @@ describe('a call', () => {
     const { rerender } = renderHook(({ call }: { call: CallState }) => useCallInterest(OURS, call), {
       initialProps: { call: callWith('active', [OURS, PEER, 300n]) },
     });
-    await flush();
-    expect(agent.interests().map((i) => i.peerCid).sort()).toEqual([PEER, 300n]);
+    // The hook loads the interest module with a dynamic import, which is not a fixed number of
+    // microtasks under vitest 4's module runner: wait for the sends, not for ten ticks.
+    await vi.waitFor((): void => { expect(agent.interests().map((i) => i.peerCid).sort()).toEqual([PEER, 300n]); });
 
     rerender({ call: callWith('ended', [OURS, PEER, 300n]) });
     const seen: number = agent.interests().length;

@@ -11,7 +11,7 @@
  * getUserMedia is stubbed to resolve on our signal, which is the only way to
  * have two starts genuinely in flight at once.
  */
-import { describe, it, expect, vi, beforeEach, afterEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { CallSession } from '../call-session';
 import type { CallMediaKinds } from '@/types/call-signals';
 
@@ -24,8 +24,8 @@ const KEYS: string[] = ['AudioEncoder', 'AudioDecoder', 'VideoEncoder', 'VideoDe
 interface FakeTrack {
   kind: string;
   enabled: boolean;
-  stop: ReturnType<typeof vi.fn>;
-  addEventListener: ReturnType<typeof vi.fn>;
+  stop: Mock;
+  addEventListener: Mock;
 }
 
 function makeTrack(): FakeTrack {
@@ -52,7 +52,7 @@ function makeStream(): FakeStream {
 
 let release: (() => void) | null = null;
 let streams: FakeStream[] = [];
-let getUserMedia: ReturnType<typeof vi.fn>;
+let getUserMedia: Mock;
 
 beforeEach((): void => {
   for (const k of KEYS) savedKeys[k] = g[k];
@@ -70,7 +70,7 @@ beforeEach((): void => {
     this.readable = { getReader: (): { read: () => Promise<unknown>; cancel: () => Promise<void>; } => ({ read: (): Promise<unknown> => new Promise((): void => {}), cancel: (): Promise<void> => Promise.resolve() }) };
   };
   g.MediaStreamTrackGenerator = function (this: Record<string, unknown>): void {
-    this.writable = { getWriter: (): { write: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> } => ({ write: vi.fn(), close: vi.fn() }) };
+    this.writable = { getWriter: (): { write: Mock; close: Mock } => ({ write: vi.fn(), close: vi.fn() }) };
   };
 
   streams = [];

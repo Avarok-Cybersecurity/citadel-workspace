@@ -21,7 +21,7 @@
  * the house's most productive defect class -- a correct fix applied in one
  * place. Every sibling is listed here so the next one added has to join it.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { eventEmitter } from '@/lib/event-emitter';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
@@ -40,7 +40,7 @@ vi.mock('@/lib/workspace-service', () => ({
  * of this counted its own probe's invocations, so it returned 1 whatever the
  * hook had done and both tests were measuring nothing.
  */
-function liveHandlers(setState: ReturnType<typeof vi.fn>, event: string, payload: unknown): number {
+function liveHandlers(setState: Mock, event: string, payload: unknown): number {
   setState.mockClear();
   eventEmitter.emit(event, payload);
   return setState.mock.calls.length;
@@ -48,7 +48,7 @@ function liveHandlers(setState: ReturnType<typeof vi.fn>, event: string, payload
 
 interface EventSetup {
   readonly name: string;
-  readonly use: (props: { setState: ReturnType<typeof vi.fn> }) => void;
+  readonly use: (props: { setState: Mock }) => void;
   readonly event: string;
   readonly payload: unknown;
 }
@@ -85,7 +85,7 @@ const SETUPS: readonly EventSetup[] = [
 
 describe.each(SETUPS)('$name', ({ use, event, payload }: EventSetup) => {
   it('leaves no listener behind when it unmounts', async () => {
-    const setState: ReturnType<typeof vi.fn> = vi.fn();
+    const setState: Mock = vi.fn();
     const { unmount } = renderHook(() => use({ setState }));
     await new Promise((resolve): void => { setTimeout(resolve, 20); });
     const mounted: number = liveHandlers(setState, event, payload);
@@ -103,7 +103,7 @@ describe.each(SETUPS)('$name', ({ use, event, payload }: EventSetup) => {
   it('does not accumulate across remounts', async () => {
     // The shape of the leak: these hooks live in AppLayout, which remounts on
     // every route change.
-    const setState: ReturnType<typeof vi.fn> = vi.fn();
+    const setState: Mock = vi.fn();
 
     const first: ReturnType<typeof renderHook> = renderHook(() => use({ setState }));
     await new Promise((resolve): void => { setTimeout(resolve, 20); });

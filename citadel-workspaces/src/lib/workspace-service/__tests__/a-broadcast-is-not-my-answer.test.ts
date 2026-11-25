@@ -15,7 +15,7 @@
  * group messages.
  */
 
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { awaitWriteResponse } from '../await-write-response';
 import { eventEmitter } from '@/lib/event-emitter';
 import {
@@ -35,7 +35,7 @@ function emitLater(response: unknown): void {
 
 describe('a write waiting for its answer', () => {
   it('is not resolved by another member\'s broadcast of the same variant', async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+    const send: Mock = vi.fn().mockResolvedValue(undefined);
     let settled: boolean = false;
 
     const pending: Promise<void> = awaitWriteResponse('UpdateNode', send, nodeWithId(MINE))
@@ -53,7 +53,7 @@ describe('a write waiting for its answer', () => {
   });
 
   it('is resolved by its own answer', async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+    const send: Mock = vi.fn().mockResolvedValue(undefined);
     const pending: Promise<void> = awaitWriteResponse('UpdateNode', send, nodeWithId(MINE));
 
     emitLater({ Node: { id: MINE, name: 'saved' } });
@@ -62,7 +62,7 @@ describe('a write waiting for its answer', () => {
   });
 
   it('still rejects on a refusal, which carries no node id at all', async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+    const send: Mock = vi.fn().mockResolvedValue(undefined);
     const pending: Promise<void> = awaitWriteResponse('UpdateNode', send, nodeWithId(MINE));
 
     // An Error has to settle the write whatever the matcher says, or a refusal
@@ -73,7 +73,7 @@ describe('a write waiting for its answer', () => {
   });
 
   it('tells a delete of one node from a delete of another', async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+    const send: Mock = vi.fn().mockResolvedValue(undefined);
     let settled: boolean = false;
 
     const pending: Promise<void> = awaitWriteResponse('DeleteNode', send, aboutNode(MINE))
@@ -118,7 +118,7 @@ describe('a write waiting for its answer', () => {
  */
 describe('a workspace write waiting for its answer', () => {
   it('is not resolved by a concurrent read of the workspace as it is now', async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+    const send: Mock = vi.fn().mockResolvedValue(undefined);
     let settled: boolean = false;
 
     // The rename in flight: "Acme" -> "Acme Corp".
@@ -141,7 +141,7 @@ describe('a workspace write waiting for its answer', () => {
   });
 
   it('is resolved by the answer carrying the new name', async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+    const send: Mock = vi.fn().mockResolvedValue(undefined);
     const pending: Promise<void> = awaitWriteResponse(
       'UpdateWorkspace',
       send,
@@ -154,7 +154,7 @@ describe('a workspace write waiting for its answer', () => {
   });
 
   it('is not resolved by another workspace answering a theme write', async () => {
-    const send: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+    const send: Mock = vi.fn().mockResolvedValue(undefined);
     let settled: boolean = false;
 
     const pending: Promise<void> = awaitWriteResponse(

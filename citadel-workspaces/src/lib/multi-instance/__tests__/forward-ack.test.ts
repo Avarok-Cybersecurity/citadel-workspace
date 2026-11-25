@@ -12,7 +12,7 @@
  * fallback, because either one alone is a bug: a leaked entry leaks a timer,
  * and an uncancelled timer delivers the message twice.
  */
-import { describe, it, expect, vi, beforeEach, afterEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { OrphanBuffer } from '../orphan-buffer';
 
 const MSG: Record<string, unknown> = { MessageNotification: { cid: 1, peer_cid: 2 } } as Record<string, unknown>;
@@ -22,7 +22,7 @@ afterEach(() => vi.useRealTimers());
 
 describe('forward retention and ack', () => {
   it('an ack cancels the fallback, so the message is not also processed locally', () => {
-    const fallback: ReturnType<typeof vi.fn> = vi.fn();
+    const fallback: Mock = vi.fn();
     const buffer: OrphanBuffer = new OrphanBuffer(fallback, 2000);
 
     buffer.push('cid-1', MSG, 'MessageNotification', {
@@ -39,7 +39,7 @@ describe('forward retention and ack', () => {
   });
 
   it('no ack means the leader falls back and names the unresponsive tab', () => {
-    const fallback: ReturnType<typeof vi.fn> = vi.fn();
+    const fallback: Mock = vi.fn();
     const buffer: OrphanBuffer = new OrphanBuffer(fallback, 2000);
 
     buffer.push('cid-1', MSG, 'MessageNotification', {
@@ -55,7 +55,7 @@ describe('forward retention and ack', () => {
   });
 
   it('an unknown or repeated ack is a harmless no-op', () => {
-    const fallback: ReturnType<typeof vi.fn> = vi.fn();
+    const fallback: Mock = vi.fn();
     const buffer: OrphanBuffer = new OrphanBuffer(fallback, 2000);
 
     buffer.push('cid-1', MSG, 'MessageNotification', {
@@ -72,7 +72,7 @@ describe('forward retention and ack', () => {
   });
 
   it('acking one forward leaves another for the same CID pending', () => {
-    const fallback: ReturnType<typeof vi.fn> = vi.fn();
+    const fallback: Mock = vi.fn();
     const buffer: OrphanBuffer = new OrphanBuffer(fallback, 2000);
 
     buffer.push('cid-1', MSG, 'A', { requestId: 'req-1', targetInstanceId: 'tab-b', fanOut: ['tab-b'] });
@@ -88,7 +88,7 @@ describe('forward retention and ack', () => {
   });
 
   it('orphan pushes with no forward context still work unchanged', () => {
-    const fallback: ReturnType<typeof vi.fn> = vi.fn();
+    const fallback: Mock = vi.fn();
     const buffer: OrphanBuffer = new OrphanBuffer(fallback, 2000);
 
     buffer.push('cid-1', MSG, 'MessageNotification');
