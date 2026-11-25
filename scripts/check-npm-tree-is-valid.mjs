@@ -4,9 +4,9 @@
  *
  * Judges package-lock.json and the package.json files of the root, citadel-workspaces, its
  * integration-tests, citadel-workspace-client-ts and the agent's typescript-client. A problem npm
- * reports today is recorded in scripts/npm-tree.baseline.json (one: integration-tests asks for
- * @types/node ^20 and the lockfile serves it 22); a new one fails, and a fixed one fails until it is
- * removed from the baseline, so the baseline only shrinks.
+ * reports is recorded in scripts/npm-tree.baseline.json, empty since integration-tests' @types/node
+ * range was aligned with the UI's (npm never placed its nested ^20 copy, so it got the root's 22);
+ * a new problem fails, and a fixed one fails until it is removed, so the baseline only shrinks.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';

@@ -1263,7 +1263,7 @@ jobs:
         run: node scripts/check-workflows-parse.mjs
       - name: The installed npm tree satisfies every workspace's package.json
         # npm ci installs what package-lock.json lists without checking it against the manifests'
-        # ranges; npm ls does. Ratcheted (scripts/npm-tree.baseline.json): one known problem today.
+        # ranges; npm ls does. Ratcheted against scripts/npm-tree.baseline.json (empty).
         run: node --test scripts/lib/npm-tree.test.mjs && node scripts/check-npm-tree-is-valid.mjs
       - name: The site's deploy is refused before the agent is released, never after
         # js-yaml, like the step above: this job has run `npm ci`.
