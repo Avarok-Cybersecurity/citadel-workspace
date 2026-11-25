@@ -35,7 +35,8 @@ Every check passed is stamped over its exact inputs (every file, the installs, t
 environment; `scripts/lib/preflight-stamp.mjs`), so a retried push or a second tier run over the
 same tree is instant, and any changed input runs that check again. Variables are inputs: run the
 tier and the push with the same `CARGO_*`, `RUSTFLAGS`, `NODE_OPTIONS`. Heavy runs on one machine
-queue on one lock (`~/.cache/citadel-preflight/hook.lock`, times in `hook-times.tsv` beside it).
+queue on one lock (`~/.cache/citadel-preflight/hook.lock`, times in `hook-times.tsv` beside it),
+first come first served: a later arrival never takes it ahead of a waiter.
 
 The only bypass is git's own, `--no-verify`, for one commit or push.
 
