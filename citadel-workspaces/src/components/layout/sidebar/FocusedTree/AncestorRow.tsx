@@ -46,8 +46,8 @@ export const AncestorRow: ForwardRefExoticComponent<AncestorRowProps & RefAttrib
         className={cn(
           'rounded transition-colors hover:bg-primary-accent/15 hover:text-foreground',
           isRoot
-            ? cn(isMobile ? 'h-[34px]' : 'h-[30px]', 'px-1 gap-2 rounded-[5px] font-semibold text-foreground')
-            : cn(isMobile ? 'h-[34px]' : 'h-[24px]', 'gap-1.5 text-xs pr-1 [&>svg]:size-3', childCountLabel !== null ? 'text-foreground' : 'text-muted-foreground'),
+            ? cn(isMobile ? 'min-h-[34px]' : 'min-h-[30px]', 'py-0 px-1 gap-2 rounded-[5px] font-semibold text-foreground')
+            : cn(isMobile ? 'min-h-[34px]' : 'min-h-[24px]', 'py-0 gap-1.5 text-xs pr-1 [&>svg]:size-3', childCountLabel !== null ? 'text-foreground' : 'text-muted-foreground'),
         )}
         style={isRoot ? undefined : { paddingLeft: 4 + 6 * (level - 1) }}
       >
@@ -92,7 +92,7 @@ export const MoreAncestorsRow: ForwardRefExoticComponent<MoreAncestorsRowProps &
         testId="tree-more-ancestors"
         title={`Show ${hidden.length} more levels: ${hidden.map((n: DomainNode): string => n.name).join(', ')}`}
         onActivate={onExpand}
-        className={cn('gap-1.5 rounded text-xs text-muted-foreground hover:bg-primary-accent/15 hover:text-foreground [&>svg]:size-3', isMobile ? 'h-[34px]' : 'h-[24px]')}
+        className={cn('gap-1.5 rounded text-xs text-muted-foreground hover:bg-primary-accent/15 hover:text-foreground [&>svg]:size-3', 'py-0', isMobile ? 'min-h-[34px]' : 'min-h-[24px]')}
         style={{ paddingLeft: 4 + 6 * (level - 1) }}
       >
         <MoreHorizontal className="h-3 w-3 shrink-0" aria-hidden="true" />

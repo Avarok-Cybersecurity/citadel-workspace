@@ -49,7 +49,8 @@ export const SiblingRow: ForwardRefExoticComponent<SiblingRowProps & RefAttribut
   const unfolded: boolean = isSelected || isPeek;
   const canPeek: boolean = hasChildren && !isSelected;
   const Icon: ReturnType<typeof nodeIcon> = nodeIcon(node);
-  const height: string = isMobile ? 'h-[44px]' : isRoot ? 'h-[36px]' : 'h-[30px]';
+  // A floor, padded only sideways: the root's name over its kind and count is taller than 36px with p-2's 14px on top.
+  const height: string = cn('py-0', isMobile ? 'min-h-[44px]' : isRoot ? 'min-h-[36px]' : 'min-h-[30px]');
   const leaving: boolean = useLeaving();
   const fade: MotionValue<number> = useFadeOut();
 
