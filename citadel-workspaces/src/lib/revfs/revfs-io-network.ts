@@ -10,9 +10,19 @@ import type { RevfsIntentResult } from '@/types/revfs-intents';
 import { eventEmitter } from '../event-emitter';
 import { debugLog } from '@/lib/debug-config';
 import { TIMEOUT } from '../timeout-constants';
+import { readPushTick, SessionPushes, type PushTickReading } from './push-watch';
+import { emitPushPhase } from './push-phase-events';
 
 /** Timeout for backend file operations (30 seconds) */
 export const BACKEND_TIMEOUT_MS: number = TIMEOUT.FILE_SEND_MS;
+
+/** Why a push failed when the agent sent it but the receiver never accepted the file. */
+export function notAcceptedReason(seconds: number): string {
+  return `The other side did not accept the file within ${seconds} s.`;
+}
+
+/** This page's pushes in flight, per session: a push begun behind another is queued (push-watch.ts). */
+const sessionPushes: SessionPushes = new SessionPushes();
 
 export interface NetworkIODeps {
   sendInternalServiceRequest: (request: unknown) => Promise<void>;
@@ -30,6 +40,7 @@ export async function backendSendFile(
   fileName: string,
   content: Uint8Array,
   virtualDir: string,
+  pushId: string,
 ): Promise<RevfsIntentResult> {
   const requestId: string = crypto.randomUUID();
   const isServerStorage: boolean = peerCid === null;
@@ -78,22 +89,31 @@ export async function backendSendFile(
   };
 
   return new Promise((resolve) => {
-    // Idle timeout, re-armed on every event for THIS request: a large
-    // transfer that is still ticking must not be declared dead at a fixed
-    // 30s, while a transfer nobody is answering still fails honestly.
-    let timeout: ReturnType<typeof setTimeout>;
+    // Two clocks, never both running. From the request until the receiver accepts the file
+    // (TransferBeginning) the page bounds the wait itself: the SDK puts no deadline on accepting
+    // a file header. From then on the SDK bounds every wait up to the first group's answer and
+    // ends a stalled transfer with `Failed` (FILE_GROUP_HEADER_UNANSWERED_FAILS_WITHIN, under
+    // FILE_SEND_MS), and a push queued behind an earlier one may rightly wait far longer than
+    // FILE_SEND_MS; so the idle timeout starts again only at the first TransferTick, and each
+    // tick re-arms it, as the last resort for a stream that stops between groups.
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let dispatched: boolean = false;
+    let accepted: boolean = false;
     const armTimeout = (): void => {
       clearTimeout(timeout);
       timeout = setTimeout(() => {
         eventEmitter.off('websocket-message', handleMessage);
+        sessionPushes.end(cid, requestId);
         debugLog('RevfsIO', 'backendSendFile timed out');
-        resolve({ type: 'backend-send-file', success: false, reason: `Nothing answered for ${BACKEND_TIMEOUT_MS / 1000} s.` });
+        const seconds: number = BACKEND_TIMEOUT_MS / 1000;
+        resolve({ type: 'backend-send-file', success: false, reason: dispatched && !accepted ? notAcceptedReason(seconds) : `Nothing answered for ${seconds} s.` });
       }, BACKEND_TIMEOUT_MS);
     };
 
     const settle = (result: RevfsIntentResult): void => {
       clearTimeout(timeout);
       eventEmitter.off('websocket-message', handleMessage);
+      sessionPushes.end(cid, requestId);
       resolve(result);
     };
 
@@ -108,37 +128,38 @@ export async function backendSendFile(
       // existed nowhere. It is only a dispatch ack; keep waiting for the
       // Sender-side tick stream, which the internal service now stamps with
       // this request_id (kernel/revfs_correlation.rs).
-      const dispatched: { request_id?: string; } | undefined = msg.SendFileRequestSuccess as { request_id?: string } | undefined;
-      if (dispatched?.request_id === requestId) {
+      const ack: { request_id?: string; } | undefined = msg.SendFileRequestSuccess as { request_id?: string } | undefined;
+      if (ack?.request_id === requestId) {
         debugLog('RevfsIO', 'backendSendFile dispatched, awaiting transfer completion');
-        armTimeout();
+        dispatched = true;
         return;
       }
 
       // TransferComplete is the Sender-side terminal tick: every chunk was
       // streamed and acknowledged by the node that now stores the bytes. The
       // receiver only acks the file header after ACCEPTING the transfer, so
-      // this cannot fire for a push nobody accepted. Unit variants serialise
-      // as the bare string; Fail is a newtype carrying the message.
-      const tick: { request_id?: string; status?: Record<string, unknown> | string; } | undefined = msg.FileTransferTickNotification as {
+      // this cannot fire for a push nobody accepted.
+      const tick: { request_id?: string; status?: unknown; } | undefined = msg.FileTransferTickNotification as {
         request_id?: string;
-        status?: Record<string, unknown> | string;
+        status?: unknown;
       } | undefined;
       if (tick && tick.request_id === requestId) {
-        const status: string | Record<string, unknown> | undefined = tick.status;
-        if (status === 'TransferComplete') {
+        const reading: PushTickReading = readPushTick(tick.status);
+        if (reading.kind === 'complete') {
           debugLog('RevfsIO', 'backendSendFile transfer complete');
           settle({ type: 'backend-send-file', success: true, virtualDir });
-          return;
-        }
-        if (status === 'Fail' || (status !== null && typeof status === 'object' && 'Fail' in status)) {
+        } else if (reading.kind === 'failed') {
           debugLog('RevfsIO', 'backendSendFile transfer failed');
-          const said: unknown = typeof status === 'object' ? status.Fail : undefined;
-          settle({ type: 'backend-send-file', success: false, reason: typeof said === 'string' && said !== '' ? said : 'The transfer failed.' });
-          return;
+          settle({ type: 'backend-send-file', success: false, reason: reading.reason });
+        } else if (reading.kind === 'begun') {
+          clearTimeout(timeout);
+          const queued: boolean = sessionPushes.begin(cid, requestId);
+          emitPushPhase(pushId, queued ? { kind: 'waiting-for-earlier' } : { kind: 'progress', percentage: 0 });
+        } else if (reading.kind === 'tick') {
+          accepted = true;
+          armTimeout();
+          emitPushPhase(pushId, { kind: 'progress', percentage: reading.percentage });
         }
-        // Progress (TransferBeginning / TransferTick): still alive.
-        armTimeout();
         return;
       }
 
@@ -153,10 +174,8 @@ export async function backendSendFile(
     eventEmitter.on('websocket-message', handleMessage);
 
     deps.sendInternalServiceRequest(request).catch(error => {
-      clearTimeout(timeout);
-      eventEmitter.off('websocket-message', handleMessage);
       debugLog('RevfsIO', 'backendSendFile request error:', error);
-      resolve({ type: 'backend-send-file', success: false, reason: error instanceof Error ? error.message : String(error) });
+      settle({ type: 'backend-send-file', success: false, reason: error instanceof Error ? error.message : String(error) });
     });
   });
 }

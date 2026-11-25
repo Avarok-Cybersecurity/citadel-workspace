@@ -17,6 +17,7 @@
  * A document's encryption lock says what the device stores, takes focus with its tooltip, and opens Settings at Security.
  * A file's open entries (file manager menu and inspector, a chat file's keyboard-reached menu) name the app with its icon, 44px.
  * The outage notice is the whole page, opaque, its icon, sentence, code and Retry centred, at desktop and 390px.
+ * The upload toast that says a push waits for the earlier transfer fits the screen and wraps a long file name.
  * Serves the real components (see lib/polish-harness) and asserts bounding boxes, in Chromium and WebKit,
  * light and dark, at desktop and phone widths.
  */
@@ -44,5 +45,6 @@ import { DEV_MODE_CHECKS } from './lib/polish-harness/checks-dev-mode.mjs';
 import { AT_REST_CHECKS } from './lib/polish-harness/checks-at-rest.mjs';
 import { FILE_OPENER_CHECKS } from './lib/polish-harness/checks-file-openers.mjs';
 import { OUTAGE_CHECKS } from './lib/polish-harness/checks-outage.mjs';
+import { UPLOAD_TOAST_CHECKS } from './lib/polish-harness/checks-upload-toast.mjs';
 
-process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS, ...OUTAGE_CHECKS, ...APP_SETTINGS_CHECKS, ...BILLING_CHECKS, ...FILE_OPENER_CHECKS, ...DEV_MODE_CHECKS, ...AT_REST_CHECKS }));
+process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS, ...OUTAGE_CHECKS, ...UPLOAD_TOAST_CHECKS, ...APP_SETTINGS_CHECKS, ...BILLING_CHECKS, ...FILE_OPENER_CHECKS, ...DEV_MODE_CHECKS, ...AT_REST_CHECKS }));

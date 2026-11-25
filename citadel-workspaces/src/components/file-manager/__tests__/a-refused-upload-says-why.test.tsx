@@ -42,7 +42,7 @@ function serverOps(): FileOpsContext {
   const io: Pick<RevfsIO, 'execute'> = {
     execute: (intent: RevfsIntent): Promise<RevfsIntentResult> => {
       if (intent.type !== 'backend-send-file') throw new Error(`the server upload asked for ${intent.type} before its bytes were accepted`);
-      return backendSendFile({ sendInternalServiceRequest: refusingAgent }, intent.cid, intent.peerCid, intent.fileName, intent.content, intent.virtualDir);
+      return backendSendFile({ sendInternalServiceRequest: refusingAgent }, intent.cid, intent.peerCid, intent.fileName, intent.content, intent.virtualDir, intent.pushId);
     },
   };
   return {
