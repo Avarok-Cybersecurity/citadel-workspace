@@ -11,10 +11,10 @@ import { heldForTheOs } from '@/lib/notification-service/os-permission';
 import { installFakeNotificationApi, type FakeNotificationApi } from '@/lib/notification-service/__tests__/fake-notification-api';
 import { BellOsPrompt } from '../BellOsPrompt';
 import { OsNotificationsControl } from '../OsNotificationsControl';
-import { useOsPermission } from '../use-os-permission';
+import { useOsPermission, type OsPermissionState } from '../use-os-permission';
 
 function Settings(): JSX.Element {
-  const os = useOsPermission();
+  const os: OsPermissionState = useOsPermission();
   return <OsNotificationsControl permission={os.permission} ask={os.ask} />;
 }
 

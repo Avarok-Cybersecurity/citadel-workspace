@@ -16,7 +16,7 @@ export interface OsPermissionState {
 export function useOsPermission(): OsPermissionState {
   const [permission, setPermission] = useState<OsPermission>(readOsPermission);
   useEffect(() => {
-    const reread = (): void => setPermission(readOsPermission());
+    const reread: () => void = (): void => setPermission(readOsPermission());
     window.addEventListener('focus', reread);
     document.addEventListener('visibilitychange', reread);
     return (): void => {
@@ -24,7 +24,7 @@ export function useOsPermission(): OsPermissionState {
       document.removeEventListener('visibilitychange', reread);
     };
   }, []);
-  const ask = useCallback(async (): Promise<OsPermission> => {
+  const ask: () => Promise<OsPermission> = useCallback(async (): Promise<OsPermission> => {
     const answer: OsPermission = await askOsPermission();
     setPermission(answer);
     return answer;
