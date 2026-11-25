@@ -3,11 +3,13 @@
  * belongs to and what decides its relevance to a change (lib/change-tiers.mjs). One place, so the
  * hooks and the test that proves pre-push covers everything pre-commit leaves out read one list.
  */
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readsWholeRepo } from './change-tiers.mjs';
+import { UI, readsWholeRepo } from './change-tiers.mjs';
 import { NOT_ON_PRE_COMMIT, derivedChecks, gateKey } from './preflight-plan.mjs';
 import { scriptDrivesABrowser } from './preflight-stamp-io.mjs';
+import { uiTestReads } from './ui-test-reads.mjs';
 
 /** @param {string} root @returns {{ checks: object[], skipped: [string, string][] }} throws when the workflow cannot be read */
 export function derivedHookChecks(root) {
@@ -27,4 +29,12 @@ export function derivedHookChecks(root) {
     };
   });
   return { checks, skipped: plan.skipped };
+}
+
+/** The parent paths the UI's unit tests read (lib/ui-test-reads.mjs), from the tracked test files. */
+export function uiTestReadsIn(root) {
+  const files = execFileSync('git', ['ls-files', '-z', `${UI}/src`], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    .split('\0').filter((p) => /\.test\.tsx?$/.test(p))
+    .map((path) => ({ path, source: readFileSync(join(root, path), 'utf8') }));
+  return uiTestReads({ files, ui: UI, exists: (path) => existsSync(join(root, path)) });
 }

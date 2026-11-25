@@ -40,7 +40,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { derivedHookChecks } from './lib/preflight-derived.mjs';
+import { derivedHookChecks, uiTestReadsIn } from './lib/preflight-derived.mjs';
 import { crateOf, selectChecks } from './lib/change-tiers.mjs';
 import { pushedPaths, stagedPaths } from './lib/changed-paths.mjs';
 import { printFailures, runChecks, runFatal } from './lib/preflight-run.mjs';
@@ -164,7 +164,7 @@ const CHECKS = [
   check('generated bindings typecheck', 'npx', ['tsc', '--noEmit', '-p', 'tsconfig.json'], join(IS, 'typescript-client'), tag('ui', 'rust:agent')),
   check('typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI, tag('ui')),
   check('eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI, tag('ui')),
-  check('unit tests', 'npx', ['vitest', 'run'], UI, tag('ui')),
+  { ...check('unit tests', 'npx', ['vitest', 'run'], UI, tag('ui')), reads: uiTestReadsIn(ROOT) },
   ...preCommitOnly(),
   ...cargo,
 ];

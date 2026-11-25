@@ -12,6 +12,7 @@
  * A path that matches nothing is not dropped: it lands in `parent`, whose gates are the ones
  * that read the repository at large. Unknown means "check more", never "check nothing".
  */
+import { readsPath } from './ui-test-reads.mjs';
 
 export const UI = 'citadel-workspaces';
 export const AGENT = 'citadel-internal-service';
@@ -99,6 +100,7 @@ export function selectChecks(checks, hook, paths, rootCrateDirs) {
       if (gateIsRelevant(c.relevance, paths)) return true;
       return hook === 'pre-push' && [...c.tiers].some((t) => touched.has(t));
     }
-    return hook === 'pre-push' && [...c.tiers].some((t) => touched.has(t));
+    // `reads`: paths outside its tier that a check also reads (the UI's unit tests read the contracts beside it).
+    return hook === 'pre-push' && ([...c.tiers].some((t) => touched.has(t)) || (c.reads !== undefined && paths.some((p) => readsPath(c.reads, p))));
   });
 }
