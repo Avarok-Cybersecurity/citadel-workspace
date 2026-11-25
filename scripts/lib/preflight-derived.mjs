@@ -7,7 +7,8 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { UI, readsWholeRepo } from './change-tiers.mjs';
-import { NOT_ON_PRE_COMMIT, derivedChecks, gateKey } from './preflight-plan.mjs';
+import { NOT_ON_PRE_COMMIT, PARENT_WORKFLOW, derivedChecks, gateKey } from './preflight-plan.mjs';
+import { cargoGates } from './cargo-gates.mjs';
 import { scriptDrivesABrowser } from './preflight-stamp-io.mjs';
 import { uiTestReads } from './ui-test-reads.mjs';
 
@@ -37,4 +38,21 @@ export function uiTestReadsIn(root) {
     .split('\0').filter((p) => /\.test\.tsx?$/.test(p))
     .map((path) => ({ path, source: readFileSync(join(root, path), 'utf8') }));
   return uiTestReads({ files, ui: UI, exists: (path) => existsSync(join(root, path)) });
+}
+
+/**
+ * CI's cargo checks for every cargo workspace preflight does not name itself (lib/cargo-gates.mjs):
+ * pre-push only (a wasm clippy takes minutes), and only when a path inside that workspace changed.
+ * @param {string} root @param {string[]} covered repo-relative workspaces with hand-written checks
+ */
+export function cargoWorkspaceChecks(root, covered) {
+  return cargoGates({ text: readFileSync(join(root, PARENT_WORKFLOW), 'utf8'), covered }).map((g) => ({
+    name: `${g.wd}: ${g.argv.join(' ')}`,
+    cmd: g.argv[0],
+    args: g.argv.slice(1),
+    cwd: join(root, g.wd),
+    env: {},
+    tiers: new Set(['rust:workspace', 'not-pre-commit']),
+    reads: [g.wd],
+  }));
 }

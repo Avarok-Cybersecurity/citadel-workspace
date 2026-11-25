@@ -38,9 +38,9 @@
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { derivedHookChecks, uiTestReadsIn } from './lib/preflight-derived.mjs';
+import { cargoWorkspaceChecks, derivedHookChecks, uiTestReadsIn } from './lib/preflight-derived.mjs';
 import { prerequisiteProblem } from './lib/prerequisites.mjs';
 import { crateOf, selectChecks } from './lib/change-tiers.mjs';
 import { pushedPaths, stagedPaths } from './lib/changed-paths.mjs';
@@ -115,6 +115,7 @@ if (haveCargo) {
       check(`${label} tests`, 'cargo', ['test', '--workspace'], cwd, tag(tierName)),
     );
   }
+  cargo.push(...cargoWorkspaceChecks(ROOT, [ROOT, IS].map((d) => relative(ROOT, d) || '.')));
 } else {
   skipped.push(['rust wasm target compiles, fmt, clippy, tests', 'cargo is not on PATH']);
 }
