@@ -2,7 +2,9 @@
  * The member's Calendar notification settings, from the Calendar's own "Notifications" panel,
  * over the real core, ports, gate and store: each change is saved to the member's own storage as
  * it is made and read back as chosen; the preview follows the choices; turning the Calendar off
- * stills every option; and a new event starts with the reminders the member chose.
+ * stills every option; a new event starts with the reminders the member chose; and choosing this
+ * device asks the browser right there, on that click (over a fake Notification API: CI cannot
+ * drive a real prompt).
  */
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +15,7 @@ import { realEngine } from '@/lib/calendar/__tests__/engine-rig';
 import { member, TopicGroup, treeOf, type Member } from '@/lib/calendar/__tests__/tree-rig';
 import { CalendarPane } from '../CalendarPane';
 import type { PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
+import { installFakeNotificationApi, type FakeNotificationApi } from '@/lib/notification-service/__tests__/fake-notification-api';
 
 const engine: CalendarEngine = realEngine();
 const TREE: Record<string, PageNode> = treeOf({ a: null });
@@ -21,7 +24,7 @@ beforeEach((): void => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2024-07-16T15:00:00Z'));
 });
-afterEach((): void => { vi.useRealTimers(); });
+afterEach((): void => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 function opened(): Map<string, Uint8Array> {
   const values: Map<string, Uint8Array> = new Map();
@@ -77,5 +80,17 @@ describe("the Calendar's notification settings", () => {
     const editor: HTMLElement = await screen.findByTestId('calendar-event-editor');
     expect((within(editor).getByLabelText('1 hour before') as HTMLInputElement).checked).toBe(true);
     expect((within(editor).getByLabelText('10 minutes before') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('ask the browser on the click that sends notices to this device, and say what it answered', async () => {
+    const api: FakeNotificationApi = installFakeNotificationApi('default');
+    opened();
+    const form: HTMLElement = await panel();
+    expect(within(form).getByRole('button', { name: 'Allow notifications' })).toBeTruthy();
+    await act(async () => { fireEvent.click(within(form).getByLabelText(/^In Citadel only/)); });
+    expect(api.asked()).toBe(0);
+    await act(async () => { fireEvent.click(within(form).getByLabelText(/^In Citadel and on this device/)); });
+    expect(api.asked()).toBe(1);
+    expect(within(form).getByRole('button', { name: 'Send a test notification' })).toBeTruthy();
   });
 });
