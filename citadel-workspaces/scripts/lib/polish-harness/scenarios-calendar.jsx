@@ -34,11 +34,8 @@ function seeded(view) {
 }
 
 function Calendar({ view, zone }) {
-  const [engine, setEngine] = useState(null);
+  const engine = useCalendarEngine();
   const [state, dispatch] = useReducer(calendarReducer, view, seeded);
-  useEffect(() => {
-    glue.default({ module_or_path: wasmUrl }).then(() => setEngine(new CalendarEngine(glue, intlOffsetAt())));
-  }, []);
   if (engine === null) return <p>Loading the calendar</p>;
   return (
     <main className="mx-auto max-w-6xl p-4">
@@ -53,34 +50,36 @@ function Calendar({ view, zone }) {
 const PAGE_CLOCK = pinnedClock();
 const NODE = { id: 'n1', name: 'Platform', parent_id: 'company', children: [], metadata: [...new TextEncoder().encode(JSON.stringify({ time_zone: 'America/New_York' }))] };
 const COMPANY = { id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: [] };
-const TREE = { company: COMPANY, n1: NODE };
+export const TREE = { company: COMPANY, n1: NODE };
 
 /**
- * The whole tab as the registry mounts it, over the real ports and gate and an in-memory store
- * seeded through the shipped core: the member's settings, the node's events, and another member
- * (ana) who offers a type here.
+ * The tab's glue instance over the real ports and gate and an in-memory store seeded through the
+ * shipped core: the member's settings, the node's events, and another member (ana) who offers a
+ * type here. The whole tab as the registry mounts it is MountedCalendar below.
  */
-function MountedCalendar({ engine }) {
-  const [glue] = useState(() => {
-    const store = new MemoryStore(VIEWER);
-    store.put('user', SETTINGS_KEY, encodeSettings({ displayZone: { kind: 'fixed', zone: 'America/Chicago' } }));
-    for (const e of JULY_WEEK) if (e.source === 'node') store.put({ node: { node_id: 'n1' } }, `cal/event/${e.event.id}`, engine.encodeEvent(e.event));
-    const ana = { node_authored: { node_id: 'n1', author: 'ana' } };
-    store.values.set(store.where(ana, 'cal/type/t1', false), engine.encodeEventType(INTRO));
-    store.values.set(store.where(ana, 'cal/availability', false), engine.encodeAvailability(WORKING_HOURS));
-    // Company's all-hands in the coming hour, which goes down: its origin, and the projection its publisher wrote here.
-    const p = inherited.projection;
-    const hour = nextHour(PAGE_CLOCK);
-    const when = { once: { start_ms: hour + 3_600_000n, end_ms: hour + 7_200_000n } };
-    const allHands = event({ id: 'allhands', origin_node: 'company', rev: p.origin_rev, title: p.title, when, zone: p.zone, propagate: { down: true, up_to: null } });
-    store.put({ node: { node_id: 'company' } }, 'cal/event/allhands', engine.encodeEvent(allHands));
-    store.put({ node: { node_id: 'n1' } }, 'cal/inherit/company/allhands', engine.encodeProjection(engine.project(allHands)));
-    return glueInstance({
-      appId: 'net.avarok.calendar', ports: { storage: store.port(), nodes: treeNodesPort('Workspace', () => TREE) },
-      held: new Set(['storage.user', 'storage.node', 'storage.node.authored', 'nodes.read']),
-      policy: STANDARD_HOST_POLICY, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, wallNow: PAGE_CLOCK.now, pageUrl: window.location.href, storageChanges: () => () => {},
-    });
+export function seededGlue(engine) {
+  const store = new MemoryStore(VIEWER);
+  store.put('user', SETTINGS_KEY, encodeSettings({ displayZone: { kind: 'fixed', zone: 'America/Chicago' } }));
+  for (const e of JULY_WEEK) if (e.source === 'node') store.put({ node: { node_id: 'n1' } }, `cal/event/${e.event.id}`, engine.encodeEvent(e.event));
+  const ana = { node_authored: { node_id: 'n1', author: 'ana' } };
+  store.values.set(store.where(ana, 'cal/type/t1', false), engine.encodeEventType(INTRO));
+  store.values.set(store.where(ana, 'cal/availability', false), engine.encodeAvailability(WORKING_HOURS));
+  // Company's all-hands in the coming hour, which goes down: its origin, and the projection its publisher wrote here.
+  const p = inherited.projection;
+  const hour = nextHour(PAGE_CLOCK);
+  const when = { once: { start_ms: hour + 3_600_000n, end_ms: hour + 7_200_000n } };
+  const allHands = event({ id: 'allhands', origin_node: 'company', rev: p.origin_rev, title: p.title, when, zone: p.zone, propagate: { down: true, up_to: null } });
+  store.put({ node: { node_id: 'company' } }, 'cal/event/allhands', engine.encodeEvent(allHands));
+  store.put({ node: { node_id: 'n1' } }, 'cal/inherit/company/allhands', engine.encodeProjection(engine.project(allHands)));
+  return glueInstance({
+    appId: 'net.avarok.calendar', ports: { storage: store.port(), nodes: treeNodesPort('Workspace', () => TREE) },
+    held: new Set(['storage.user', 'storage.node', 'storage.node.authored', 'nodes.read']),
+    policy: STANDARD_HOST_POLICY, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, wallNow: PAGE_CLOCK.now, pageUrl: window.location.href, storageChanges: () => () => {},
   });
+}
+
+function MountedCalendar({ engine }) {
+  const [glue] = useState(() => seededGlue(engine));
   const state = { nodes: TREE, members: {}, workspace: { metadata: [] } };
   return (
     <WorkspaceContext.Provider value={{ state }}>
@@ -91,11 +90,17 @@ function MountedCalendar({ engine }) {
   );
 }
 
-function Mounted() {
+/** The shipped engine, once the glue's binary is loaded; null until then. */
+export function useCalendarEngine() {
   const [engine, setEngine] = useState(null);
   useEffect(() => {
     glue.default({ module_or_path: wasmUrl }).then(() => setEngine(new CalendarEngine(glue, intlOffsetAt())));
   }, []);
+  return engine;
+}
+
+function Mounted() {
+  const engine = useCalendarEngine();
   return engine === null ? <p>Loading the calendar</p> : <MountedCalendar engine={engine} />;
 }
 
