@@ -95,9 +95,10 @@ describe('DocumentPictures', () => {
   it('answers a store that throws as unavailable rather than failing the paint', async () => {
     const id: string = await sha256ContentId(PNG_4X3);
     const throwing: DocumentPictures = new DocumentPictures({
-      port: { put: () => Promise.reject(new Error('x')), get: () => Promise.reject(new Error('socket closed')) },
+      port: { put: () => Promise.reject(new Error('x')), get: () => Promise.reject(new Error('socket closed')), maxBytes: () => Promise.reject(new Error('socket closed')) },
       doc: DOC, contentIdOf: sha256ContentId, now: (): number => 0, limits: { fetchConcurrency: 1, retryAfterMs: 1 },
     });
     expect(await throwing.fetch(id)).toEqual({ ok: false, failure: { kind: 'unavailable', detail: 'The picture store could not be read.' } });
+    expect(await throwing.maxBytes()).toEqual({ ok: false, failure: { kind: 'unavailable', detail: 'The picture store could not be reached.' } });
   });
 });

@@ -49,6 +49,8 @@ export interface PicturePort {
   put(doc: PictureDocument, contentId: string, bytes: Uint8Array): Promise<PictureResult<void>>;
   /** The bytes kept under `contentId` for `doc`, unverified: the caller checks them against the id. */
   get(doc: PictureDocument, contentId: string): Promise<PictureResult<Uint8Array>>;
+  /** The largest picture this store keeps for `doc`: the one limit a picture is held to, told before any of it is sent. */
+  maxBytes(doc: PictureDocument): Promise<PictureResult<number>>;
 }
 
 const CONTENT_ID: RegExp = /^sha256-[0-9a-f]{64}$/;
@@ -68,6 +70,9 @@ export const ok = <T>(value: T): PictureResult<T> => ({ ok: true, value });
 export const failed = <T>(failure: PictureFailure): PictureResult<T> => ({ ok: false, failure });
 
 const MIB: number = 1024 * 1024;
+
+/** How a refusal to add a picture begins, so the ribbon passes it on as it is. */
+export const PICTURE_NOT_ADDED: string = 'The picture was not added.';
 
 /** What a member is told about `failure`. */
 export function describePictureFailure(failure: PictureFailure): string {

@@ -69,21 +69,31 @@ function sameDocument(a: WireDocument, b: WireDocument): boolean {
   return a.node_id === b.node_id && a.chat_doc === b.chat_doc;
 }
 
-/** Whether `answer` is about `doc`'s `contentId`, at `index` unless it is a refusal (which has none). */
-function answers(answer: Answer, doc: WireDocument, contentId: string, index: number): boolean {
-  if ('Refused' in answer) return sameDocument(answer.Refused.doc, doc) && answer.Refused.content_id === contentId;
+type ChunkAsked = Pick<Extract<DocumentPicturesRequest, { ReadChunk: unknown }>['ReadChunk'], 'doc' | 'content_id' | 'index'>;
+/** What a request asks about: a document's picture chunk, or (no content id) the document's limits. */
+type Asked = ChunkAsked | (Pick<ChunkAsked, 'doc'> & { readonly content_id: null; readonly index: null });
+
+function askedBy(request: DocumentPicturesRequest): Asked {
+  if ('Limits' in request) return { doc: request.Limits.doc, content_id: null, index: null };
+  return 'UploadChunk' in request ? request.UploadChunk : request.ReadChunk;
+}
+
+/** Whether `answer` answers `asked`; a refusal names no chunk, so it is matched by document and picture. */
+function answers(answer: Answer, asked: Asked): boolean {
+  if ('Refused' in answer) return sameDocument(answer.Refused.doc, asked.doc) && answer.Refused.content_id === asked.content_id;
+  if ('Limits' in answer) return asked.content_id === null && sameDocument(answer.Limits.doc, asked.doc);
   const body: { doc: WireDocument; content_id: string; index: number } = 'ChunkStored' in answer ? answer.ChunkStored : answer.Chunk;
-  return sameDocument(body.doc, doc) && body.content_id === contentId && body.index === index;
+  return sameDocument(body.doc, asked.doc) && body.content_id === asked.content_id && body.index === asked.index;
 }
 
 /** Sends `request` and settles with its answer, its refusal, or offline. */
 function exchange(wire: PictureWire, deadlineMs: number, request: DocumentPicturesRequest): Promise<Exchanged> {
-  const body: { doc: WireDocument; content_id: string; index: number } = 'UploadChunk' in request ? request.UploadChunk : request.ReadChunk;
+  const asked: Asked = askedBy(request);
   if (wire.link() === 'down') return Promise.resolve(OFFLINE);
   return new Promise<Exchanged>((settle: (result: Exchanged) => void): void => {
     const finish = (result: Exchanged): void => { stopAnswers(); stopLink(); clearTimeout(timer); settle(result); };
     const stopAnswers: () => void = wire.onAnswer((answer: Answer): void => {
-      if (!answers(answer, body.doc, body.content_id, body.index)) return;
+      if (!answers(answer, asked)) return;
       finish('Refused' in answer ? { ok: false, failure: failureOf(answer.Refused.refusal) } : { ok: true, answer });
     });
     const stopLink: () => void = wire.onLink((state: LinkState): void => { if (state === 'down') finish(OFFLINE); });
@@ -136,6 +146,11 @@ export function serverPictures(wire: PictureWire, deadlineMs: number): PicturePo
       put(wire, deadlineMs, wireDocument(doc), contentId, bytes),
     get: async (doc: PictureDocument, contentId: string): Promise<PictureResult<Uint8Array>> =>
       get(wire, deadlineMs, wireDocument(doc), contentId),
+    maxBytes: async (doc: PictureDocument): Promise<PictureResult<number>> => {
+      const result: Exchanged = await exchange(wire, deadlineMs, { Limits: { doc: wireDocument(doc) } });
+      if (!result.ok) return failed(result.failure);
+      return 'Limits' in result.answer ? ok(Number(result.answer.Limits.max_bytes)) : failed(UNEXPECTED);
+    },
   };
 }
 

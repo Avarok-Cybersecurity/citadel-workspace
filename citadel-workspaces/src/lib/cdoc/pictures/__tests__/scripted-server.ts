@@ -25,7 +25,14 @@ export interface Script {
   readonly silent?: boolean;
   /** Flip every byte read back. */
   readonly tamper?: boolean;
+  /** The largest picture the server keeps; SHIPPED_MAX_BYTES unless a test is about the limit. */
+  readonly maxBytes?: number;
 }
+
+/** What the shipped servers keep (`chat_attachment_max_bytes` in docker/workspace-server/kernel.toml and the tenant provisioning). */
+export const SHIPPED_MAX_BYTES: number = 25 * 1024 * 1024;
+/** The client reads no picture count from Limits (the server refuses past it); any value serves. */
+const SCRIPTED_MAX_PICTURES: number = 100;
 
 const keyOf = (doc: PictureDocument, id: string): string => `${doc.node_id}\n${doc.chat_doc ?? ''}\n${id}`;
 
@@ -59,11 +66,18 @@ export function scriptedServer(script: Script = {}): ScriptedServer {
     },
   };
   function answerTo(request: DocumentPicturesRequest): Answer {
+    const maxBytes: number = script.maxBytes ?? SHIPPED_MAX_BYTES;
+    if ('Limits' in request) {
+      const { doc } = request.Limits;
+      if (script.refuse !== undefined) return { Refused: { doc, content_id: null, refusal: script.refuse } };
+      return { Limits: { doc, max_bytes: BigInt(maxBytes), max_pictures: SCRIPTED_MAX_PICTURES } };
+    }
     const body: { doc: PictureDocument; content_id: string } = 'UploadChunk' in request ? request.UploadChunk : request.ReadChunk;
     if (script.refuse !== undefined) return { Refused: { doc: body.doc, content_id: body.content_id, refusal: script.refuse } };
     const key: string = keyOf(body.doc, body.content_id);
     if ('UploadChunk' in request) {
-      const { doc, content_id, index, total_chunks, bytes } = request.UploadChunk;
+      const { doc, content_id, index, total_chunks, bytes, size_bytes } = request.UploadChunk;
+      if (size_bytes > BigInt(maxBytes)) return { Refused: { doc, content_id, refusal: { TooLarge: { max_bytes: BigInt(maxBytes) } } } };
       const parts: number[][] = kept.get(key) ?? [];
       parts[index] = bytes;
       kept.set(key, parts);

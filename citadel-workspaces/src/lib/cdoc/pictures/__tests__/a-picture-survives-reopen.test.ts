@@ -6,7 +6,6 @@
  * the document's store, for another member's replica too, and inside an exported file.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { MAX_IMAGE_BYTES } from '../../engine/engine-limits';
 import type { AddedImage, EditorEvents } from '../../editor/controller';
 import type { PictureDocument } from '../picture-port';
 import { memoryPictures, PNG_4X3, type MemoryPictures } from './doubles/memory-pictures';
@@ -25,7 +24,7 @@ afterEach((): void => {
 
 async function insertPicture(store: MemoryPictures): Promise<{ readonly snapshot: Uint8Array; readonly added: AddedImage }> {
   const a: Opened = track(await openWith(storedAccess(store, PAGE), { kind: 'blank' }));
-  const added: AddedImage = await a.editor.addImage(PNG_4X3, MAX_IMAGE_BYTES);
+  const added: AddedImage = await a.editor.addImage(PNG_4X3);
   await a.editor.execute({ name: 'insertImageFitted', contentId: added.contentId });
   expect(drawnImages(await paintSettled(a))).toBe(1);
   return { snapshot: await a.editor.snapshot(), added };
@@ -47,7 +46,7 @@ describe('a picture inserted into a document', () => {
     const a: Opened = track(await openWith(storedAccess(store, PAGE), { kind: 'blank' }));
     const changes: Array<EditorEvents['change']> = [];
     a.editor.on('change', (c: EditorEvents['change']): void => { changes.push(c); });
-    const added: AddedImage = await a.editor.addImage(PNG_4X3, MAX_IMAGE_BYTES);
+    const added: AddedImage = await a.editor.addImage(PNG_4X3);
     expect(store.puts).toEqual([{ doc: PAGE, contentId: added.contentId }]);
     expect(changes).toEqual([]);
   });
@@ -56,7 +55,7 @@ describe('a picture inserted into a document', () => {
     const store: MemoryPictures = memoryPictures();
     store.fail({ kind: 'notPermitted' });
     const a: Opened = track(await openWith(storedAccess(store, PAGE), { kind: 'blank' }));
-    await expect(a.editor.addImage(PNG_4X3, MAX_IMAGE_BYTES)).rejects.toThrow(/do not have access/);
+    await expect(a.editor.addImage(PNG_4X3)).rejects.toThrow(/do not have access/);
   });
 
   it("is drawn in another member's replica that receives the update", async () => {
@@ -67,7 +66,7 @@ describe('a picture inserted into a document', () => {
     const c: Opened = track(await openWith(storedAccess(store, PAGE), { kind: 'snapshot', snapshot }, 'main-thread'));
     const updates: Uint8Array[] = [];
     a.editor.on('change', ({ update }: EditorEvents['change']): void => { updates.push(update); });
-    const added: AddedImage = await a.editor.addImage(PNG_4X3, MAX_IMAGE_BYTES);
+    const added: AddedImage = await a.editor.addImage(PNG_4X3);
     await a.editor.execute({ name: 'insertImageFitted', contentId: added.contentId });
     for (const update of updates) await c.editor.applyRemote(update);
     expect(drawnImages(await paintSettled(c))).toBe(1);

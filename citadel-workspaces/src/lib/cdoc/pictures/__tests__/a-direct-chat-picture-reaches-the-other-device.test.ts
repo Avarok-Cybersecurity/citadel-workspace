@@ -10,7 +10,6 @@
  * editor. Stood in: the channel, each agent's LocalDB, time (doubles/pair-world.ts).
  */
 import { describe, expect, it } from 'vitest';
-import { MAX_IMAGE_BYTES } from '../../engine/engine-limits';
 import { pictureMissingLabel } from '../picture-port';
 import { sha256ContentId } from '../content-id';
 import { close, drawnImages, heldBytes, insertCloseReopen, labels, openWith, paintSettled, type Opened, type OwnerScenario } from './picture-rig';
@@ -47,7 +46,7 @@ describe('a picture in a direct chat\'s document', () => {
     const a: Opened = await openWith(alice.access(), { kind: 'blank' });
     let snapshot: Uint8Array;
     try {
-      const { contentId } = await a.editor.addImage(PNG_4X3, MAX_IMAGE_BYTES);
+      const { contentId } = await a.editor.addImage(PNG_4X3);
       await a.editor.execute({ name: 'insertImageFitted', contentId });
       snapshot = await a.editor.snapshot();
     } finally {

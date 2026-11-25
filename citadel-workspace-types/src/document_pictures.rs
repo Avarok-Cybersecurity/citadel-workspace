@@ -55,6 +55,9 @@ pub enum DocumentPicturesRequest {
         content_id: String,
         index: u32,
     },
+    /// What this server keeps of `doc`'s pictures, so the client refuses a picture it would not
+    /// keep, with the reason, before sending any of it. Asked of a member who may add pictures.
+    Limits { doc: PictureDocument },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -77,9 +80,17 @@ pub enum DocumentPicturesResponse {
         #[debug(with = plaintext_debug_fmt)]
         bytes: Vec<u8>,
     },
+    /// The largest picture, and the most pictures, this server keeps for `doc`.
+    Limits {
+        doc: PictureDocument,
+        #[ts(type = "bigint")]
+        max_bytes: u64,
+        max_pictures: u32,
+    },
+    /// `content_id` is the picture's; `None` answers `Limits`, which names none.
     Refused {
         doc: PictureDocument,
-        content_id: String,
+        content_id: Option<String>,
         refusal: DocumentPictureRefusal,
     },
 }
@@ -135,21 +146,30 @@ pub fn check_picture_chunk(
 impl DocumentPicturesRequest {
     pub fn doc(&self) -> &PictureDocument {
         match self {
-            Self::UploadChunk { doc, .. } | Self::ReadChunk { doc, .. } => doc,
+            Self::UploadChunk { doc, .. } | Self::ReadChunk { doc, .. } | Self::Limits { doc } => {
+                doc
+            }
         }
     }
 
-    pub fn content_id(&self) -> &str {
+    /// The picture the request is about; `None` for `Limits`.
+    pub fn content_id(&self) -> Option<&str> {
         match self {
-            Self::UploadChunk { content_id, .. } | Self::ReadChunk { content_id, .. } => content_id,
+            Self::UploadChunk { content_id, .. } | Self::ReadChunk { content_id, .. } => {
+                Some(content_id)
+            }
+            Self::Limits { .. } => None,
         }
     }
 }
 
-/// What each request needs on the document's node: storing a picture is writing the document,
-/// reading one is reading it, by the page's gates or the channel's.
+/// What each request needs on the document's node: storing a picture, and asking how large one
+/// may be, is writing the document; reading one is reading it, by the page's gates or the channel's.
 pub fn required_permission(request: &DocumentPicturesRequest) -> Permission {
-    let writes = matches!(request, DocumentPicturesRequest::UploadChunk { .. });
+    let writes = matches!(
+        request,
+        DocumentPicturesRequest::UploadChunk { .. } | DocumentPicturesRequest::Limits { .. }
+    );
     match (request.doc().chat_doc.is_some(), writes) {
         (false, true) => Permission::EditMdx,
         (false, false) => Permission::ViewContent,

@@ -12,7 +12,7 @@ import type { AddedImage, EditorOrigin } from '../controller';
 import { createHash } from 'node:crypto';
 import { decodeAwareness, type Collected } from '../wire/decode-records';
 import { storedAccess } from '../../pictures/__tests__/picture-rig';
-import { memoryPictures } from '../../pictures/__tests__/doubles/memory-pictures';
+import { memoryPictures, type MemoryPictures } from '../../pictures/__tests__/doubles/memory-pictures';
 import type { PictureAccess } from '../../pictures/document-pictures';
 
 /** addImage stores what it holds: this document's pictures are kept in memory. */
@@ -68,11 +68,16 @@ describe('the editor opener', () => {
     expect(collected.units).toBeGreaterThan(0);
   });
 
-  it('holds a PNG, naming it by its sha256, and refuses a file over the limit', async () => {
+  it('holds a PNG, naming it by its sha256, and refuses a file over its store\'s limit', async () => {
     const editor: EditorSession = await opened(counting(), { kind: 'blank' });
-    const image: AddedImage = await editor.addImage(PNG_1X1, 1024);
+    const image: AddedImage = await editor.addImage(PNG_1X1);
     expect(image).toEqual({ contentId: `sha256-${createHash('sha256').update(PNG_1X1).digest('hex')}`, kind: 'png', width: 1, height: 1 });
-    await expect(editor.addImage(PNG_1X1, PNG_1X1.length - 1)).rejects.toThrow();
-    await expect(editor.addImage(Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]), 1024)).rejects.toThrow(/unsupported image type: GIF/);
+    await expect(editor.addImage(Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]))).rejects.toThrow(/unsupported image type: GIF/);
+    const small: MemoryPictures = memoryPictures();
+    small.limit(PNG_1X1.length - 1);
+    const runtime: TestRuntime = inProcessRuntime('worker');
+    const limited: EditorSession = await createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: storedAccess(small, { kind: 'page', nodeId: 'opener-test' }) }, counting())({ kind: 'blank' });
+    await expect(limited.addImage(PNG_1X1)).rejects.toThrow(/^The picture was not added\. Pictures in this document can be at most/);
+    expect(small.puts).toEqual([]);
   });
 });

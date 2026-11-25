@@ -10,6 +10,7 @@ import { DocumentPictures, type PictureAccess } from '../../document-pictures';
 import type { PicturePlan } from '../../picture-plan';
 import { sha256ContentId } from '../../content-id';
 import { PICTURE_LIMITS } from '../../picture-config';
+import { MAX_IMAGE_BYTES } from '../../../engine/engine-limits';
 
 export interface MemoryPictures extends PicturePort {
   /** Every put, in order. */
@@ -22,7 +23,15 @@ export interface MemoryPictures extends PicturePort {
   fail(failure: PictureFailure | null): void;
   /** Holds every get until the returned release is called. */
   hold(): () => void;
+  /** What `maxBytes` answers from now on. */
+  limit(maxBytes: number): void;
 }
+
+/**
+ * What the store keeps until a test says otherwise (`limit`): the editor's own ceiling for an
+ * embedded image (engine-limits.ts), so a test that is not about the limit is never refused by it.
+ */
+const UNTIL_A_TEST_LIMITS_IT: number = MAX_IMAGE_BYTES;
 
 const keyOf = (doc: PictureDocument, contentId: string): string => {
   switch (doc.kind) {
@@ -39,6 +48,7 @@ export function memoryPictures(): MemoryPictures {
   const puts: Array<{ readonly doc: PictureDocument; readonly contentId: string }> = [];
   const gets: Array<{ readonly doc: PictureDocument; readonly contentId: string }> = [];
   let failing: PictureFailure | null = null;
+  let maxBytes: number = UNTIL_A_TEST_LIMITS_IT;
   let gate: Promise<void> = Promise.resolve();
   return {
     puts,
@@ -46,6 +56,7 @@ export function memoryPictures(): MemoryPictures {
     put: async (doc: PictureDocument, contentId: string, bytes: Uint8Array): Promise<PictureResult<void>> => {
       puts.push({ doc, contentId });
       if (failing !== null) return failed(failing);
+      if (bytes.length > maxBytes) return failed({ kind: 'tooLarge', maxBytes });
       kept.set(keyOf(doc, contentId), bytes.slice());
       return ok(undefined);
     },
@@ -56,6 +67,8 @@ export function memoryPictures(): MemoryPictures {
       const bytes: Uint8Array | undefined = tampered.get(contentId) ?? kept.get(keyOf(doc, contentId));
       return bytes === undefined ? failed({ kind: 'notFound' }) : ok(bytes.slice());
     },
+    maxBytes: async (): Promise<PictureResult<number>> => (failing !== null ? failed(failing) : ok(maxBytes)),
+    limit: (next: number): void => { maxBytes = next; },
     tamper: (contentId: string, bytes: Uint8Array): void => { tampered.set(contentId, bytes); },
     fail: (failure: PictureFailure | null): void => { failing = failure; },
     hold: (): (() => void) => {

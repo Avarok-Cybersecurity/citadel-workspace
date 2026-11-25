@@ -14,7 +14,6 @@ import { PICTURE_LIMITS } from '../picture-config';
 import type { PictureDocument, PicturePort } from '../picture-port';
 import { sha256ContentId } from '../content-id';
 import { decodeImage } from '../../editor/wire/decode-v4-records';
-import { MAX_IMAGE_BYTES } from '../../engine/engine-limits';
 
 export interface Opened {
   readonly runtime: TestRuntime;
@@ -97,7 +96,7 @@ export async function insertCloseReopen(writer: () => PictureAccess, reader: () 
   let snapshot: Uint8Array;
   let contentId: string;
   try {
-    contentId = (await a.editor.addImage(picture, MAX_IMAGE_BYTES)).contentId;
+    contentId = (await a.editor.addImage(picture)).contentId;
     await a.editor.execute({ name: 'insertImageFitted', contentId });
     snapshot = await a.editor.snapshot();
   } finally {

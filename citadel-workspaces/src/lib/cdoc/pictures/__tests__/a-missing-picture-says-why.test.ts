@@ -7,7 +7,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { MAX_IMAGE_BYTES } from '../../engine/engine-limits';
 import type { AddedImage } from '../../editor/controller';
 import type { PaintOutcome } from '../../paint/page-rasterizer';
 import { LOADING_IMAGE_LABEL } from '../../paint/image-resolve';
@@ -23,7 +22,7 @@ afterEach((): void => { for (const o of opened.splice(0)) close(o); });
 
 async function withPicture(store: MemoryPictures): Promise<Uint8Array> {
   const a: Opened = track(await openWith(storedAccess(store, PAGE), { kind: 'blank' }));
-  const added: AddedImage = await a.editor.addImage(PNG_4X3, MAX_IMAGE_BYTES);
+  const added: AddedImage = await a.editor.addImage(PNG_4X3);
   await a.editor.execute({ name: 'insertImageFitted', contentId: added.contentId });
   return a.editor.snapshot();
 }

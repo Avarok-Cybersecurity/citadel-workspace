@@ -74,6 +74,18 @@ fn a_chat_documents_pictures_take_the_channels_gates() {
 }
 
 #[test]
+fn asking_a_documents_picture_limits_takes_its_write_gate() {
+    for chat_doc in [None, Some(CHAT_DOC)] {
+        let limits = DocumentPicturesRequest::Limits { doc: doc(chat_doc) };
+        assert_eq!(
+            required_permission(&limits),
+            required_permission(&upload(doc(chat_doc)))
+        );
+        assert_eq!(limits.content_id(), None);
+    }
+}
+
+#[test]
 fn a_content_id_is_the_prefix_and_a_lowercase_sha256() {
     assert_eq!(picture_digest(&format!("sha256-{DIGEST}")), Some(DIGEST));
     for id in [

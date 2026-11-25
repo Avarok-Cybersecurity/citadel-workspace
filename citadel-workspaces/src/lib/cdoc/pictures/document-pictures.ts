@@ -44,6 +44,7 @@ export class DocumentPictures {
   private readonly failures: Map<string, Failed> = new Map<string, Failed>();
   private readonly waiting: Array<() => void> = [];
   private running: number = 0;
+  private limit: Promise<PictureResult<number>> | null = null;
 
   constructor(private readonly deps: DocumentPicturesDeps) {
     if (!Number.isInteger(deps.limits.fetchConcurrency) || deps.limits.fetchConcurrency < 1) throw new Error('fetchConcurrency must be a positive integer');
@@ -59,6 +60,17 @@ export class DocumentPictures {
     const kept: PictureResult<void> = await this.deps.port.put(this.deps.doc, contentId, bytes);
     if (kept.ok) this.failures.delete(contentId);
     return kept;
+  }
+
+  /** The largest picture the store keeps for this document, asked once while it is open (a failure is asked again). */
+  maxBytes(): Promise<PictureResult<number>> {
+    const asked: Promise<PictureResult<number>> = this.limit ?? this.deps.port.maxBytes(this.deps.doc).catch((error: unknown): PictureResult<number> => {
+      console.warn('[DocumentPictures] the picture store did not say its limit', error);
+      return failed({ kind: 'unavailable', detail: 'The picture store could not be reached.' });
+    });
+    this.limit = asked;
+    void asked.then((result: PictureResult<number>): void => { if (!result.ok && this.limit === asked) this.limit = null; });
+    return asked;
   }
 
   /**

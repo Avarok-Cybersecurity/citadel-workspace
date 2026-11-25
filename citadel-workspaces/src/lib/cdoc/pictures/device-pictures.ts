@@ -21,6 +21,10 @@ export function devicePictures(db: LocalDbPort, hash: Hash): PicturePort {
       if (kept !== digestOf(contentId)) throw new Error(`the picture kept as ${contentId} was stored as ${kept}`);
       return ok(undefined);
     },
+    maxBytes: async (doc: PictureDocument): Promise<PictureResult<number>> => {
+      blobsOf(doc, db, hash);
+      return ok(SCRATCHPAD_FILE_LIMIT);
+    },
     get: async (doc: PictureDocument, contentId: string): Promise<PictureResult<Uint8Array>> => {
       try {
         return ok(await blobsOf(doc, db, hash).read(digestOf(contentId)));

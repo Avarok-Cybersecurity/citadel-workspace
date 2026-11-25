@@ -15,15 +15,16 @@ import type { PageRenderer, PendingPictures } from '../paint/page-renderer';
 import type { AddedImage, EditorOrigin } from '../editor/controller';
 import type { ImageLookup } from '../paint/image-resolve';
 import { decodeImage } from '../editor/wire/decode-v4-records';
+import { MAX_IMAGE_BYTES } from '../engine/engine-limits';
 import { isLasting, type PictureAccess } from './document-pictures';
-import { describePictureFailure, pictureMissingLabel, type PictureFailure, type PictureResult } from './picture-port';
+import { describePictureFailure, PICTURE_NOT_ADDED, pictureMissingLabel, type PictureFailure, type PictureResult } from './picture-port';
 
 export interface SessionPicturesDeps {
   readonly access: PictureAccess;
   readonly client: CdocClient;
   readonly renderer: PageRenderer;
-  /** Has the editor hold `bytes` (its addImage, in the session's command order); never stores. */
-  readonly hold: (bytes: Uint8Array) => Promise<AddedImage>;
+  /** Has the editor hold `bytes`, of at most `maxBytes` (its addImage, in the session's command order); never stores. */
+  readonly hold: (bytes: Uint8Array, maxBytes: number) => Promise<AddedImage>;
   /** Repaints `pages`: a picture they drew as a box has arrived, or failed. */
   readonly repaint: (pages: readonly number[]) => void;
 }
@@ -44,12 +45,40 @@ export class SessionPictures {
     this.stopListening = deps.renderer.onPendingPictures((pending: PendingPictures): void => this.wanted(pending));
   }
 
+  /**
+   * The largest picture this document takes: its store's limit, the only one (the server's, or
+   * the device's). Rejects with what the member is told when there is no store, when the store
+   * cannot say, or when `size` is over it, so a picture too large is refused before any of it is
+   * held or sent.
+   */
+  private async limitFor(size: number): Promise<number> {
+    const max: number = await this.limit();
+    if (size > max) throw new Error(`${PICTURE_NOT_ADDED} ${describePictureFailure({ kind: 'tooLarge', maxBytes: max })}`);
+    return max;
+  }
+
+  /** The store's limit; rejects with what the member is told when there is no store or it cannot say. */
+  async limit(): Promise<number> {
+    const access: PictureAccess = this.deps.access;
+    if (access.kind === 'none') throw new Error(access.reason);
+    const limit: PictureResult<number> = await access.pictures.maxBytes();
+    if (!limit.ok) throw new Error(`${PICTURE_NOT_ADDED} ${describePictureFailure(limit.failure)}`);
+    return limit.value;
+  }
+
+  /** A picture added by the member: held within the store's limit, then stored; rejects with what the member is told. */
+  async add(bytes: Uint8Array): Promise<AddedImage> {
+    const added: AddedImage = await this.deps.hold(bytes, await this.limitFor(bytes.length));
+    await this.keep(added.contentId, bytes);
+    return added;
+  }
+
   /** Stores `bytes`, which the editor holds as `contentId`; rejects with what the member is told. */
   async keep(contentId: string, bytes: Uint8Array): Promise<void> {
     const access: PictureAccess = this.deps.access;
     if (access.kind === 'none') throw new Error(access.reason);
     const kept: PictureResult<void> = await access.pictures.keep(contentId, bytes);
-    if (!kept.ok) throw new Error(`The picture was not added. ${describePictureFailure(kept.failure)}`);
+    if (!kept.ok) throw new Error(`${PICTURE_NOT_ADDED} ${describePictureFailure(kept.failure)}`);
   }
 
   /** For a replica opened on a file: stores every picture the file brought, before it is used. */
@@ -117,7 +146,8 @@ export class SessionPictures {
     if (!fetched.ok) return this.failed(contentId, fetched.failure);
     let held: AddedImage;
     try {
-      held = await this.deps.hold(fetched.value);
+      // Fetched from the store, so within its limit when kept; the editor's own ceiling is the bound here.
+      held = await this.deps.hold(fetched.value, MAX_IMAGE_BYTES);
     } catch (error: unknown) {
       // The bytes match the id but the editor does not take them (a type it does not draw).
       console.warn('[SessionPictures] the editor did not take a stored picture', contentId, error);

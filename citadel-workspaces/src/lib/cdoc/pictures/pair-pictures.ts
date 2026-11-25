@@ -45,6 +45,10 @@ export function pairPicturePort(ports: PairPicturePorts): PicturePort {
       const here: Uint8Array | null = await readHere(ports, docId, contentId);
       return here !== null ? ok(here) : wantFromPeer(ports, docId, contentId);
     },
+    maxBytes: async (doc: PictureDocument): Promise<PictureResult<number>> => {
+      docIdOf(ports, doc);
+      return ok(ports.config.maxBytes);
+    },
   };
 }
 

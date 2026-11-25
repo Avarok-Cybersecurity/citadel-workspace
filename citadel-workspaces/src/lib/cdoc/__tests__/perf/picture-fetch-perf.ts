@@ -9,7 +9,6 @@ import { performance } from 'node:perf_hooks';
 import { InProcessCdocClient } from '../../worker/clients';
 import { WorkerPageRenderer } from '../../paint/page-renderer';
 import { EditorSession } from '../../editor/editor-session';
-import { MAX_IMAGE_BYTES } from '../../engine/engine-limits';
 import type { EditorState } from '../../editor/controller';
 import { DocumentPictures, type PictureAccess } from '../../pictures/document-pictures';
 import { sha256ContentId } from '../../pictures/content-id';
@@ -57,7 +56,7 @@ export async function measurePictureFetch(pictures: number, keystrokes: number, 
   const store: MemoryPictures = memoryPictures();
   const writer: Opened = await open(store, limits, { kind: 'blank' });
   for (let n: number = 0; n < pictures; n++) {
-    const { contentId } = await writer.editor.addImage(nth(n), MAX_IMAGE_BYTES);
+    const { contentId } = await writer.editor.addImage(nth(n));
     await writer.editor.execute({ name: 'insertImageFitted', contentId });
     await writer.editor.execute({ name: 'insertText', text: `\nPicture ${n} and a line about it.\n` });
   }

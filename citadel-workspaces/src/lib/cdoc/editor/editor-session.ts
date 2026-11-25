@@ -31,7 +31,6 @@ import type { ExportedFile, ExportTarget, ImportReport } from './file-formats';
 import type { EditorResults } from '../worker/editor-protocol';
 import { PeerSet } from './peer-set';
 import { sameValue } from './same-value';
-import { MAX_IMAGE_BYTES } from '../engine/engine-limits';
 import { SessionPictures } from '../pictures/session-pictures';
 import { embedsPictures, picturesAbsent } from '../pictures/picture-export';
 
@@ -54,7 +53,7 @@ export class EditorSession implements EditorController, EditorView {
     this.current = initial;
     this.sizes = sizes;
     this.pictures = new SessionPictures({
-      access: deps.pictures, client: deps.client, renderer: deps.renderer, hold: (bytes: Uint8Array): Promise<AddedImage> => this.hold(bytes, MAX_IMAGE_BYTES),
+      access: deps.pictures, client: deps.client, renderer: deps.renderer, hold: (bytes: Uint8Array, maxBytes: number): Promise<AddedImage> => this.hold(bytes, maxBytes),
       repaint: (dirtyPages: readonly number[]): void => this.events.emit('pages', { pageCount: this.current.pageCount, dirtyPages }),
     });
     // One method per command name, each building that command; the type is EditorCommands by
@@ -216,11 +215,13 @@ export class EditorSession implements EditorController, EditorView {
     return this.serial(async (): Promise<DocumentStyle[]> => decodeStyles((await this.deps.client.request({ kind: 'styles' })).record));
   }
 
-  /** Holds the picture, then stores it (outside the command queue: typing goes on meanwhile). */
-  async addImage(bytes: Uint8Array, maxBytes: number): Promise<AddedImage> {
-    const added: AddedImage = await this.hold(bytes, maxBytes);
-    await this.pictures.keep(added.contentId, bytes);
-    return added;
+  /** Holds the picture, within its store's limit, then stores it (outside the command queue: typing goes on meanwhile). */
+  addImage(bytes: Uint8Array): Promise<AddedImage> {
+    return this.pictures.add(bytes);
+  }
+
+  pictureLimit(): Promise<number> {
+    return this.pictures.limit();
   }
 
   private hold(bytes: Uint8Array, maxBytes: number): Promise<AddedImage> {

@@ -39,11 +39,14 @@ pub(super) async fn process<R: Ratchet + Send + Sync + 'static>(
 ) -> Result<WorkspaceProtocolResponse, NetworkError> {
     let outcome = match request {
         Request::UploadChunk { .. } => upload(kernel, actor, request).await?,
-        Request::ReadChunk { index, .. } => read(kernel, actor, request, *index).await?,
+        Request::ReadChunk {
+            content_id, index, ..
+        } => read(kernel, actor, request, content_id, *index).await?,
+        Request::Limits { .. } => limits(kernel, actor, request).await?,
     };
     let response = outcome.unwrap_or_else(|refusal| Response::Refused {
         doc: request.doc().clone(),
-        content_id: request.content_id().to_string(),
+        content_id: request.content_id().map(str::to_string),
         refusal,
     });
     Ok(WorkspaceProtocolResponse::DocumentPictures(response))
@@ -143,7 +146,7 @@ async fn upload<R: Ratchet + Send + Sync + 'static>(
         .stage_upload_chunk(slot, digest, index, total_chunks, bytes)
         .await?
     {
-        Staged::Partial => return Ok(Ok(stored(request, false))),
+        Staged::Partial => return Ok(Ok(stored(request, content_id, index, false))),
         Staged::Mismatch => {
             backend.reserve_staging(&staging, actor, None).await?;
             return Ok(Err(Refusal::Mismatch));
@@ -156,7 +159,7 @@ async fn upload<R: Ratchet + Send + Sync + 'static>(
     backend.reserve_staging(&staging, actor, None).await?;
     let kept = keep(kernel, &doc, digest, &whole, limits).await;
     backend.drop_app_upload(slot).await?;
-    Ok(kept?.map(|()| stored(request, true)))
+    Ok(kept?.map(|()| stored(request, content_id, index, true)))
 }
 
 /// Keeps `whole` as `digest` among `doc`'s pictures, within the document's cap and the
@@ -187,13 +190,34 @@ async fn keep<R: Ratchet + Send + Sync + 'static>(
     Ok(Ok(()))
 }
 
-fn stored(request: &Request, stored: bool) -> Response {
-    let index = match request {
-        Request::UploadChunk { index, .. } | Request::ReadChunk { index, .. } => *index,
-    };
+/// What a member who may add pictures to the document may add: the limits `upload` enforces.
+async fn limits<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    actor: &str,
+    request: &Request,
+) -> Result<Outcome, NetworkError> {
+    if admit(kernel, actor, request).await?.is_none() {
+        return Ok(Err(Refusal::Denied));
+    }
+    Ok(
+        match kernel
+            .chat_attachment_limits()
+            .map(DocumentPictureLimits::of_chat_attachments)
+        {
+            Some(limits) => Ok(Response::Limits {
+                doc: request.doc().clone(),
+                max_bytes: limits.max_bytes,
+                max_pictures: limits.max_pictures_per_document,
+            }),
+            None => Err(Refusal::Unavailable),
+        },
+    )
+}
+
+fn stored(request: &Request, content_id: &str, index: u32, stored: bool) -> Response {
     Response::ChunkStored {
         doc: request.doc().clone(),
-        content_id: request.content_id().to_string(),
+        content_id: content_id.to_string(),
         index,
         stored,
     }
@@ -203,12 +227,13 @@ async fn read<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     actor: &str,
     request: &Request,
+    content_id: &str,
     index: u32,
 ) -> Result<Outcome, NetworkError> {
     let Some(doc) = admit(kernel, actor, request).await? else {
         return Ok(Err(Refusal::Denied));
     };
-    let Some(digest) = picture_digest(request.content_id()) else {
+    let Some(digest) = picture_digest(content_id) else {
         return Ok(Err(Refusal::BadChunk));
     };
     let backend = &kernel.domain_operations.backend_tx_manager;
@@ -216,7 +241,7 @@ async fn read<R: Ratchet + Send + Sync + 'static>(
         match backend.blob_chunk(&root_of(&doc), digest, index).await? {
             Some((meta, bytes)) => Ok(Response::Chunk {
                 doc: request.doc().clone(),
-                content_id: request.content_id().to_string(),
+                content_id: content_id.to_string(),
                 index,
                 total_chunks: meta.total_chunks,
                 size_bytes: u64::from(meta.bytes),

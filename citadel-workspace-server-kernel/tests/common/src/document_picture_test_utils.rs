@@ -54,7 +54,7 @@ pub async fn grant(kernel: &GateKernel, who: &str, node: &str, permission: Permi
         .expect("save user");
 }
 
-async fn send(
+pub async fn send(
     kernel: &GateKernel,
     who: (&str, u64),
     request: DocumentPicturesRequest,
