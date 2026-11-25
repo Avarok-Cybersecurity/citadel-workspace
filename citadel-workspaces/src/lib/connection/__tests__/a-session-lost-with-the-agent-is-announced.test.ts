@@ -7,7 +7,7 @@
  * follower, which is usually the tab on screen -- the tab now asks the agent for
  * its sessions and, if its own is not among them, says so.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { watchForSessionLostWithAgent, type SessionLostDeps } from '../sessions-lost-with-agent';
 import type { ActiveSessionsResult } from '../queries';
 import type { SessionInformation } from 'citadel-workspace-client-ts';
@@ -15,11 +15,11 @@ import type { AgentSocketState } from '@/lib/multi-instance/agent-socket-state';
 
 type Handler = (state: AgentSocketState) => void;
 
-interface Harness { deps: SessionLostDeps; fire: (event: 'down' | 'up') => Promise<void>; notify: ReturnType<typeof vi.fn> }
+interface Harness { deps: SessionLostDeps; fire: (event: 'down' | 'up') => Promise<void>; notify: Mock }
 
 function harness(opts: { currentCid: bigint | null; sessions: ActiveSessionsResult }): Harness {
   const handlers: Handler[] = [];
-  const notify: ReturnType<typeof vi.fn> = vi.fn();
+  const notify: Mock = vi.fn();
   const deps: SessionLostDeps = {
     onAgentSocket: (handler: Handler) => {
       handlers.push(handler);

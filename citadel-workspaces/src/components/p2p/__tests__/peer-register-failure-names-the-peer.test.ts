@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import {
   classifyPeerRegisterFailure,
   applyPeerRegisterFailure,
@@ -36,8 +36,8 @@ describe('a PeerRegisterFailure that means "already registered"', () => {
   });
 
   it('marks the peer without being told which, so the caller decides', () => {
-    const markRegistered: ReturnType<typeof vi.fn> = vi.fn();
-    const reportRefusal: ReturnType<typeof vi.fn> = vi.fn();
+    const markRegistered: Mock = vi.fn();
+    const reportRefusal: Mock = vi.fn();
     applyPeerRegisterFailure(alreadyRegistered, { markRegistered, reportRefusal });
     expect(markRegistered).toHaveBeenCalledTimes(1);
     // No argument: passing one would let the wrong id back in.
@@ -48,8 +48,8 @@ describe('a PeerRegisterFailure that means "already registered"', () => {
   it('still reports a genuine refusal by reason', () => {
     // The control: the other branch must be unaffected, or "nothing is said"
     // would swallow real refusals too.
-    const markRegistered: ReturnType<typeof vi.fn> = vi.fn();
-    const reportRefusal: ReturnType<typeof vi.fn> = vi.fn();
+    const markRegistered: Mock = vi.fn();
+    const reportRefusal: Mock = vi.fn();
     applyPeerRegisterFailure(
       { cid: 42n, message: 'no such peer', request_id: 'req-2' },
       { markRegistered, reportRefusal },

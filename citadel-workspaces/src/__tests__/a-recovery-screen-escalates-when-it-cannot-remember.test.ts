@@ -5,7 +5,7 @@
  * the reload landed on the same screen and offered "Get the current version"
  * for ever, with the way out never shown.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { showStorageVersionRecovery } from '../storage-version-recovery';
 
 const buttonLabels = (): string[] =>
@@ -17,7 +17,7 @@ afterEach(() => { vi.restoreAllMocks(); });
 describe('the recovery screen where sessionStorage refuses writes', () => {
   it('offers the reset at once instead of a reload that cannot be remembered', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation((): void => { throw new DOMException('denied', 'SecurityError'); });
-    const reload: ReturnType<typeof vi.fn> = vi.fn();
+    const reload: Mock = vi.fn();
     vi.stubGlobal('location', { ...window.location, reload });
     showStorageVersionRecovery();
 

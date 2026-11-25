@@ -6,16 +6,16 @@
  * published on the refusing member's record (`accepts_requests_from_strangers`)
  * for exactly this message.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { render, act, cleanup } from '@testing-library/react';
 import { PeerRefusalNotice } from '../PeerRefusalNotice';
 import { eventEmitter } from '@/lib/event-emitter';
 import { WorkspaceContext, useWorkspace } from '@/contexts/WorkspaceContext';
 import type { WorkspaceMember } from '@/types/workspace-entities';
 
-const toast: ReturnType<typeof vi.fn> = vi.fn();
+const toast: Mock = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({
-  useToast: (): { toast: ReturnType<typeof vi.fn> } => ({ toast }),
+  useToast: (): { toast: Mock } => ({ toast }),
 }));
 
 afterEach((): void => { cleanup(); toast.mockClear(); });

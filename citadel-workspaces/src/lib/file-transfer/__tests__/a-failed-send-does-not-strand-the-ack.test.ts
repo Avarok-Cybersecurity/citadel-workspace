@@ -17,13 +17,13 @@
  * The observables here are the leak itself: the emitter's listener counts and
  * the armed-timer count must return to baseline the moment the send fails.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 
 vi.mock('../../tab-context', () => ({
   getSelectedUser: async (): Promise<{ selectedCid: bigint }> => ({ selectedCid: 7n }),
 }));
 
-const sendMessage: ReturnType<typeof vi.fn> = vi.fn();
+const sendMessage: Mock = vi.fn();
 vi.mock('../../websocket-service', () => ({
   websocketService: {
     sendMessage: (request: Record<string, unknown>): Promise<void> => sendMessage(request) as Promise<void>,

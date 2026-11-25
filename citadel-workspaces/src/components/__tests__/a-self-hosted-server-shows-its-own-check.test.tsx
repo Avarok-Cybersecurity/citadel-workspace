@@ -7,7 +7,7 @@
  *
  * Doubled at the I/O seams (login-world.ts), as a-workspace-can-ask-for-a-human-check.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -29,7 +29,7 @@ import { loginWorld as h } from './login-world';
 /** The identity a native server's kernel.toml names (`turnstile_cdata`). */
 const IDENTITY: 'citadel-example' = 'citadel-example';
 
-let onNext: ReturnType<typeof vi.fn>;
+let onNext: Mock;
 let turnstile: FakeTurnstile;
 const type = (id: string, value: string): void => { fireEvent.change(document.getElementById(id) as HTMLElement, { target: { value } }); };
 function signIn(): void {

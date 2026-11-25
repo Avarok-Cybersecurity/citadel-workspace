@@ -18,7 +18,7 @@
  * otherwise: restoring the type gate changed no behaviour and failed no test.
  * The affordance is asserted below on its own terms.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { eventEmitter } from '@/lib/event-emitter';
@@ -42,7 +42,7 @@ function messageNotification(data: Record<string, unknown>): Notification {
 
 describe('a message notification card', () => {
   it('runs its callback when clicked', async () => {
-    const onCardClick: ReturnType<typeof vi.fn> = vi.fn();
+    const onCardClick: Mock = vi.fn();
     render(
       <NotificationItem
         notification={messageNotification({ peerCid: '42', onCardClick })}

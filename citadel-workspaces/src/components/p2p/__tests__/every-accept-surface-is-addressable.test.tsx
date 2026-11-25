@@ -16,11 +16,11 @@
  * markup would not do: the point is that the button EXISTS and is reachable by
  * the handle the shared helper uses.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { PendingRequestsModal } from '../PendingRequestsModal';
 
-const getPendingRequests: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
+const getPendingRequests: Mock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/peer-registration-store', () => ({
   peerRegistrationStore: {
     getPendingRequests,

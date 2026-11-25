@@ -7,7 +7,7 @@
  * authenticator (passkey fakes), through the sign-in composition root; the
  * clipboard and object URLs, which jsdom does not implement.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { World } from '@/lib/sign-in/__tests__/helpers';
 import type { FakeAccount } from '@/lib/sign-in/__tests__/fake-agent';
@@ -27,8 +27,8 @@ import type { RecoveryPhrase } from '@/lib/recovery/secret';
 const WORDS: string[] = fakePhrase(3);
 const PHRASE: RecoveryPhrase = WORDS;
 let alice: FakeAccount;
-let onDone: ReturnType<typeof vi.fn>;
-let clipboard: ReturnType<typeof vi.fn>;
+let onDone: Mock;
+let clipboard: Mock;
 const downloads: string[] = [];
 
 function renderSteps(secret: RecoveryPhrase): void {

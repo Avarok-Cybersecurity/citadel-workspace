@@ -7,7 +7,7 @@
  * the REAL AuthOperations and the message bus, the authenticator, and the IndexedDB / workspace /
  * ILM work a signed-in session starts (spies, to prove the console starts none of it).
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { FakeAccount } from '@/lib/sign-in/__tests__/fake-agent';
@@ -27,7 +27,7 @@ import { world } from '@/lib/sign-in/__tests__/helpers';
 import { loginWorld as h } from './login-world';
 import { CONSOLE_COPY } from '@/lib/recovery/copy';
 
-let onNext: ReturnType<typeof vi.fn>;
+let onNext: Mock;
 let alice: FakeAccount;
 const SERVER: string = 'bench.work.avarok.net';
 

@@ -8,14 +8,14 @@
  * sends workspace-protocol requests over that same agent socket). The banner,
  * the stores, the reader and the handler are the real ones.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
-const resetConnectionState: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
-const connectToAllRegisteredPeers: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
-const postAuthSetup: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
+const resetConnectionState: Mock = vi.fn(async () => undefined);
+const connectToAllRegisteredPeers: Mock = vi.fn(async () => undefined);
+const postAuthSetup: Mock = vi.fn(async () => undefined);
 vi.mock('@/lib/post-auth-setup', () => ({ postAuthSetup: (cid: bigint): Promise<void> => postAuthSetup(cid) }));
 vi.mock('@/lib/p2p-auto-connect-service', () => ({
   p2pAutoConnectService: {
@@ -75,7 +75,7 @@ beforeEach(() => {
 
 describe('a new deploy', () => {
   it('is a banner with a Reload button, not something that fades', async () => {
-    const accept: ReturnType<typeof vi.fn> = vi.fn();
+    const accept: Mock = vi.fn();
     renderApp();
     act(() => offerDeployNotice({ reason: 'deployed', accept }));
     expect(screen.getByTestId('deploy-banner').textContent).toContain('Update available');

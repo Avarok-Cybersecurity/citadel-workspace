@@ -19,7 +19,7 @@ export const WorkspaceNotInitializedModal: React.FC<WorkspaceNotInitializedModal
 
     const handleReturnToLogin = (): void => {
         onReturnToLogin();
-        navigate('/');
+        void navigate('/');
     };
 
     // Above the early return: hooks must run in the same order every render.

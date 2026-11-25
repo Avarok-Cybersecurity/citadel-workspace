@@ -8,7 +8,7 @@
  * connection is not needed — and the second is a green success toast, which on
  * a failed action reads as though something worked.
  */
-import { describe, it, expect, vi, beforeEach, afterEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { announceWhenQuiet, QUIET_WAIT_MS } from '../announce-when-quiet';
 
 describe('an ambient announcement', () => {
@@ -16,13 +16,13 @@ describe('an ambient announcement', () => {
   afterEach(() => vi.useRealTimers());
 
   it('goes out immediately when nothing is wrong', () => {
-    const announce: ReturnType<typeof vi.fn> = vi.fn();
+    const announce: Mock = vi.fn();
     announceWhenQuiet(announce, { isBusy: () => false });
     expect(announce).toHaveBeenCalledTimes(1);
   });
 
   it('waits while an error is on screen', () => {
-    const announce: ReturnType<typeof vi.fn> = vi.fn();
+    const announce: Mock = vi.fn();
     announceWhenQuiet(announce, { isBusy: () => true });
     vi.advanceTimersByTime(3_000);
     expect(announce).not.toHaveBeenCalled();
@@ -30,7 +30,7 @@ describe('an ambient announcement', () => {
 
   it('goes out as soon as the error clears', () => {
     let busy: boolean = true;
-    const announce: ReturnType<typeof vi.fn> = vi.fn();
+    const announce: Mock = vi.fn();
     announceWhenQuiet(announce, { isBusy: () => busy });
     vi.advanceTimersByTime(2_000);
     expect(announce).not.toHaveBeenCalled();
@@ -43,7 +43,7 @@ describe('an ambient announcement', () => {
     // The notice is true; it was only badly timed. Dropping it would trade a
     // confusing message for a missing one, and an error that never clears
     // would silence the feature for the rest of the session.
-    const announce: ReturnType<typeof vi.fn> = vi.fn();
+    const announce: Mock = vi.fn();
     announceWhenQuiet(announce, { isBusy: () => true });
     vi.advanceTimersByTime(QUIET_WAIT_MS + 100);
     expect(announce).toHaveBeenCalledTimes(1);
@@ -51,7 +51,7 @@ describe('an ambient announcement', () => {
 
   it('says it once, not once per poll', () => {
     let busy: boolean = true;
-    const announce: ReturnType<typeof vi.fn> = vi.fn();
+    const announce: Mock = vi.fn();
     announceWhenQuiet(announce, { isBusy: () => busy });
     busy = false;
     vi.advanceTimersByTime(QUIET_WAIT_MS * 2);
@@ -59,7 +59,7 @@ describe('an ambient announcement', () => {
   });
 
   it('can be cancelled, so an unmount does not fire into a dead component', () => {
-    const announce: ReturnType<typeof vi.fn> = vi.fn();
+    const announce: Mock = vi.fn();
     const cancel: () => void = announceWhenQuiet(announce, { isBusy: () => true });
     cancel();
     vi.advanceTimersByTime(QUIET_WAIT_MS * 2);

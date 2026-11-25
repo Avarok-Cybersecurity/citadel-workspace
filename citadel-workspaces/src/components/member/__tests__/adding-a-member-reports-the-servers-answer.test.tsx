@@ -13,7 +13,7 @@
  * and the role table's one I/O call (`rolesApi.list`), which answers with the
  * seed table -- the ladder that decides what is offered runs for real.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import type { WorkspaceRoles } from 'citadel-workspace-client-ts';
@@ -127,7 +127,7 @@ describe('adding a member', () => {
 
   it('closes, says so and refreshes the roster only once the server accepts', async () => {
     answer.current = { Success: 'Member added successfully' };
-    const onClose: ReturnType<typeof vi.fn> = vi.fn();
+    const onClose: Mock = vi.fn();
     await submitAdd('bob', onClose);
 
     await waitFor((): void => { expect(onClose).toHaveBeenCalled(); });
@@ -137,7 +137,7 @@ describe('adding a member', () => {
 
   it("shows the server's refusal in the dialog and keeps it open", async () => {
     answer.current = { Error: "Failed to add member: No account named 'bobb' exists on this workspace" };
-    const onClose: ReturnType<typeof vi.fn> = vi.fn();
+    const onClose: Mock = vi.fn();
     await submitAdd('bobb', onClose);
 
     const shown: HTMLElement = await screen.findByTestId('entity-modal-error');
@@ -153,7 +153,7 @@ describe('adding a member', () => {
     const asked: string[] = [];
     const close: () => void = registerDocumentSync({ nodeId: 'doc-7', chatDoc: null }, (): Promise<void> => { asked.push('doc-7'); return Promise.resolve(); });
     answer.current = { Success: 'Member added successfully' };
-    const onClose: ReturnType<typeof vi.fn> = vi.fn();
+    const onClose: Mock = vi.fn();
     await submitAdd('bob', onClose, 'doc-7');
     await waitFor((): void => { expect(onClose).toHaveBeenCalled(); });
     expect(asked).toEqual(['doc-7']);

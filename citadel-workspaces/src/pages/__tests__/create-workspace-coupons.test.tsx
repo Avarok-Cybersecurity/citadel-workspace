@@ -4,7 +4,7 @@
  * on the plan step, shown on review, sent at creation, kept across a cancelled
  * Checkout, and re-asked about when creation refuses it.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { loadDraft, saveDraft } from '@/lib/onboarding/create-flow';
 import { CODE_REMOVED, TERMS_CHANGED } from '@/lib/onboarding/coupon-recheck';
@@ -44,7 +44,7 @@ describe('a discount code', () => {
     const fake: ContractFake = contractFake();
     fake.couponReplies.push(TEN_OFF);
     fake.createReplies.push(CHECKOUT);
-    const redirect: ReturnType<typeof vi.fn> = vi.fn();
+    const redirect: Mock = vi.fn();
     renderFlow(fake, '/create', redirect);
     await teamWithCode('launch10');
     expect(couponRequests(fake)).toEqual([{ code: 'LAUNCH10', tier: 'team', interval: 'month', seats: 3, storage_blocks: 0, link_packs: 0, chat_document_packs: 0 }]);

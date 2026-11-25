@@ -9,15 +9,15 @@
  */
 import { UNKNOWN_REASON_COPY } from '@/lib/connection/connect-refusal';
 import { UsernameHeldElsewhere } from '@/lib/sessions/known-accounts';
-import { describe, it, expect, vi   } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { createRegistrationResponseHandler } from '../registration-response-handler';
 
 const REQ: "req-1" = 'req-1';
 
-function harness(): { handler: (raw: unknown) => void; resolve: ReturnType<typeof vi.fn>; reject: ReturnType<typeof vi.fn>; cleanup: ReturnType<typeof vi.fn>; } {
-  const resolve: ReturnType<typeof vi.fn> = vi.fn();
-  const reject: ReturnType<typeof vi.fn> = vi.fn();
-  const cleanup: ReturnType<typeof vi.fn> = vi.fn();
+function harness(): { handler: (raw: unknown) => void; resolve: Mock; reject: Mock; cleanup: Mock; } {
+  const resolve: Mock = vi.fn();
+  const reject: Mock = vi.fn();
+  const cleanup: Mock = vi.fn();
   const handler: (raw: unknown) => void = createRegistrationResponseHandler(REQ, resolve, reject, cleanup, {
     handleConnectSuccess: async (_p, res) => res({ cid: '42' }),
     setShowNotInitializedModal: vi.fn(),

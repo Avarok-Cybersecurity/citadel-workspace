@@ -58,7 +58,7 @@ export function useFileManagerPlace(myCid: bigint | null): FileManagerPlace {
   }, [key]);
 
   const go: (target: FileManagerTarget) => void = useCallback((target: FileManagerTarget): void => {
-    navigate(fileManagerHref(routerLocation.search, target));
+    void navigate(fileManagerHref(routerLocation.search, target));
   }, [navigate, routerLocation.search]);
 
   const openable: OpenableStorage | null = storage.kind === 'invalid' ? null : storage;

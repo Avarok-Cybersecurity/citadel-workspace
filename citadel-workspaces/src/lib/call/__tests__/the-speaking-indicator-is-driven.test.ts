@@ -12,7 +12,7 @@
  * detector nothing calls is exactly the defect being fixed, so the second half
  * drives a real CallSession and asserts the callback fires.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import {
   createSpeakingDetector,
   rmsOf,
@@ -107,7 +107,7 @@ describe('driving it from real audio', () => {
 
   it('reports speaking from audio handed to the session', async (): Promise<void> => {
     const { CallSession }: typeof import('../call-session') = await import('../call-session');
-    const onSpeakingChanged: ReturnType<typeof vi.fn> = vi.fn();
+    const onSpeakingChanged: Mock = vi.fn();
     const session: InstanceType<typeof CallSession> = new CallSession({
       onFrame: vi.fn(),
       onStreamsChanged: vi.fn(),
@@ -127,7 +127,7 @@ describe('driving it from real audio', () => {
 
   it('says nothing for silence', async (): Promise<void> => {
     const { CallSession }: typeof import('../call-session') = await import('../call-session');
-    const onSpeakingChanged: ReturnType<typeof vi.fn> = vi.fn();
+    const onSpeakingChanged: Mock = vi.fn();
     const session: InstanceType<typeof CallSession> = new CallSession({
       onFrame: vi.fn(),
       onStreamsChanged: vi.fn(),

@@ -55,7 +55,7 @@ const Messages: () => JSX.Element = (): JSX.Element => {
 
   const handleSelectPeer = (peerCid: string): void => {
     setSelectedPeerCid(peerCid);
-    navigate(`/messages?channel=${peerCid}`, { replace: true });
+    void navigate(`/messages?channel=${peerCid}`, { replace: true });
   };
 
   return (
@@ -105,7 +105,7 @@ const Messages: () => JSX.Element = (): JSX.Element => {
               type="button"
               onClick={() => {
                 setSelectedPeerCid(null);
-                navigate('/messages', { replace: true });
+                void navigate('/messages', { replace: true });
               }}
               className="md:hidden flex items-center gap-2 px-4 py-3 border-b border-border text-sm text-muted-foreground hover:text-foreground"
             >

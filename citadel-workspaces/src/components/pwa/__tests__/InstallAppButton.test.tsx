@@ -7,7 +7,7 @@
  * The `beforeinstallprompt` event is single-use and Chromium decides when to
  * fire it, so this drives it directly rather than waiting for a real browser.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import { InstallAppButton } from '../InstallAppButton';
 import {
@@ -15,9 +15,9 @@ import {
   resetInstallPromptCaptureForTests,
 } from '../install-prompt-store';
 
-const toast: ReturnType<typeof vi.fn> = vi.fn();
+const toast: Mock = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({
-  useToast: (): { toast: ReturnType<typeof vi.fn> } => ({ toast }),
+  useToast: (): { toast: Mock } => ({ toast }),
 }));
 
 /** A stand-in for the event Chromium fires; the DOM lib does not declare it. */

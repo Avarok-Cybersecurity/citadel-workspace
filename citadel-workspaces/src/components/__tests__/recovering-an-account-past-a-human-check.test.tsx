@@ -11,7 +11,7 @@
  * Doubled at the I/O seams (login-world.ts): the agent, IndexedDB, the control-plane fetch for
  * discovery and Turnstile itself (fake-turnstile.ts, on Cloudflare's TEST site keys).
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { FakeAccount } from '@/lib/sign-in/__tests__/fake-agent';
@@ -33,7 +33,7 @@ import { loginWorld as h } from './login-world';
 
 const SERVER: 'bench.work.avarok.net' = 'bench.work.avarok.net';
 const NEW_PASSWORD: string = 'meadowlantern';
-let onNext: ReturnType<typeof vi.fn>;
+let onNext: Mock;
 let alice: FakeAccount;
 let turnstile: FakeTurnstile;
 

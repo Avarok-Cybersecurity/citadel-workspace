@@ -12,7 +12,7 @@
  * ratchet, and failed. The peer also appeared among the user's connections
  * before they had agreed to anything.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { handleWebSocketMessage } from '../registration';
 import type { Peer } from '../types';
 
@@ -35,7 +35,7 @@ function context(): {
   registeredPeers: Map<bigint, Peer>;
   outgoingRegistrations: Set<bigint>;
   incomingRegistrations: Set<bigint>;
-  handleIncomingRegistration: ReturnType<typeof vi.fn>;
+  handleIncomingRegistration: Mock;
 } {
   return {
     pendingRequests: new Map(),

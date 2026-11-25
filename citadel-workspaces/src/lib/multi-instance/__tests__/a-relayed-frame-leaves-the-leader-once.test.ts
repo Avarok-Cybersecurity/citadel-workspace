@@ -5,7 +5,7 @@
  * The other half (a follower hands each frame over) is pinned in
  * call/__tests__/a-follower-tab-carries-a-call.test.ts.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import {
   deliverRelayedFrame,
   installMediaFrameRelay,
@@ -21,7 +21,7 @@ const payload: RelayedFrame = {
   cid: 11n, peerCid: 22n, track: 1, kind: 2, timestamp: 33, flags: 1, payload: new Uint8Array([9, 8, 7]),
 };
 
-function sink(): MediaFrameSink & { sendMediaFrame: ReturnType<typeof vi.fn> } {
+function sink(): MediaFrameSink & { sendMediaFrame: Mock } {
   return { sendMediaFrame: vi.fn() };
 }
 

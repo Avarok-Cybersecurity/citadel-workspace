@@ -23,12 +23,12 @@
  * verdict in turn, so they fail if the gate is inverted, removed, or put back
  * on a list of type names.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 const routeMessage: ReturnType<typeof vi.fn<(m: unknown) => boolean>> = vi.hoisted(() =>
   vi.fn<(m: unknown) => boolean>(),
 );
-const broadcastWorkspaceResponse: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
+const broadcastWorkspaceResponse: Mock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../multi-instance', () => ({
   instanceManager: { isLeader: true, leaderId: 'leader', instanceId: 'leader' },

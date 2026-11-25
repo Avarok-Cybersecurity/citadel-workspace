@@ -8,12 +8,12 @@
  * was going to obtain: about ten seconds of a spinner over a decision already
  * taken, and then a timeout that reports the wrong reason.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { sendToLeader } from '../send-to-leader';
 import { eventEmitter } from '@/lib/event-emitter';
 import type { AckResult } from '../outbound-queue';
 
-const channel: { send: ReturnType<typeof vi.fn> } = { send: vi.fn() };
+const channel: { send: Mock } = { send: vi.fn() };
 
 afterEach((): void => { channel.send.mockClear(); });
 

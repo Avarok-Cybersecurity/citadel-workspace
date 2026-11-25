@@ -10,10 +10,10 @@
  * event bus and the hook. Mocked: the call transport (the socket) and the
  * instance channel (a BroadcastChannel), the two I/O boundaries.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
-const channelSend: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
+const channelSend: Mock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/multi-instance', () => ({ instanceChannel: { send: channelSend } }));
 
 import { eventEmitter } from '@/lib/event-emitter';
@@ -26,8 +26,8 @@ import type { CallState } from '@/lib/call/call-state';
 const SELF: bigint = 1n;
 const CALLER: bigint = 7n;
 
-function ringingTab(): { manager: CallManager; sendSignal: ReturnType<typeof vi.fn>; fireTimers: () => void } {
-  const sendSignal: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+function ringingTab(): { manager: CallManager; sendSignal: Mock; fireTimers: () => void } {
+  const sendSignal: Mock = vi.fn().mockResolvedValue(undefined);
   const timers: Array<() => void> = [];
   const transport: CallTransport = {
     openSession: vi.fn().mockResolvedValue(undefined),

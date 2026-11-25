@@ -12,12 +12,12 @@
  * the assertion reads), and the stored-session reads the switcher's menu makes
  * on mount. Everything between the security form and the request is real.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { waitFor } from '@testing-library/react';
 import type { SessionSecuritySettings } from '@/lib/security-utils';
 import { renderSwitcher, joinFromTheSwitcher, JOIN_ADDRESS, JOIN_USERNAME } from './switcher-join-flow';
 
-const { register } = vi.hoisted((): { register: ReturnType<typeof vi.fn> } => ({
+const { register } = vi.hoisted((): { register: Mock } => ({
   register: vi.fn(async (): Promise<void> => {}),
 }));
 

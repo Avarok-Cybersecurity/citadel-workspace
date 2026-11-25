@@ -11,14 +11,14 @@
  * is what this asserts — with the button coming back as the visible proof that
  * the pending flag cleared on the failing path too.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConfirmDeleteDialog } from '../ConfirmDeleteDialog';
 
 describe('a confirm action that rejects', () => {
   it('clears pending and does not escape as an unhandled rejection', async (): Promise<void> => {
-    const onConfirm: ReturnType<typeof vi.fn> = vi.fn(
+    const onConfirm: Mock = vi.fn(
       async (): Promise<void> => { throw new Error('the caller reports this'); },
     );
 
@@ -44,7 +44,7 @@ describe('a confirm action that rejects', () => {
   it('still clears pending when the action succeeds', async (): Promise<void> => {
     // Positive control: a handler that only ever cleared on failure would pass
     // the test above.
-    const onConfirm: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<void> => {});
+    const onConfirm: Mock = vi.fn(async (): Promise<void> => {});
 
     render(
       <ConfirmDeleteDialog

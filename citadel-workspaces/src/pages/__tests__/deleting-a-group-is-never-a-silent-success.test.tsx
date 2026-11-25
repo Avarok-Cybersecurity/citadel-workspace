@@ -11,7 +11,7 @@
  * has a CID is the whole subject) and the WebSocket send. `sendGroupEnd`, its
  * CID resolution and the hook's error handling all run for real.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useGroupSettingsActions, type GroupSettingsActions } from '../use-group-settings-actions';
 import { connectionManager } from '@/lib/connection';
@@ -23,7 +23,7 @@ interface Toast { title: string; description?: string; variant?: 'destructive' }
 const GROUP: string = '5:9';
 
 let toasts: Toast[];
-let navigate: ReturnType<typeof vi.fn>;
+let navigate: Mock;
 let sent: Array<Record<string, unknown>>;
 
 function actions(): GroupSettingsActions {

@@ -15,7 +15,7 @@
  * fires for everybody is the same defect wearing the opposite sign, and it would
  * hide the prompt from the one person who is supposed to see it.
  */
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useOnboardingIntent } from '../useOnboardingIntent';
 import { initPromptSuppressed, INIT_PROMPT_SUPPRESSED_KEY } from '@/lib/workspace-init-prompt';
@@ -43,7 +43,7 @@ describe('the onboarding answer', () => {
   });
 
   it('stops the master-password prompt when the user says they are joining', () => {
-    const begin: ReturnType<typeof vi.fn> = vi.fn();
+    const begin: Mock = vi.fn();
     const { result } = renderHook(() => useOnboardingIntent(begin, vi.fn()));
 
     act(() => { result.current.request(); });
@@ -59,7 +59,7 @@ describe('the onboarding answer', () => {
   });
 
   it('leaves the prompt in place for someone setting a workspace up', () => {
-    const begin: ReturnType<typeof vi.fn> = vi.fn();
+    const begin: Mock = vi.fn();
     const { result } = renderHook(() => useOnboardingIntent(begin, vi.fn()));
 
     act(() => { result.current.request(); });
@@ -70,7 +70,7 @@ describe('the onboarding answer', () => {
   });
 
   it('leaves the prompt in place when the user closes the dialog without answering', () => {
-    const begin: ReturnType<typeof vi.fn> = vi.fn();
+    const begin: Mock = vi.fn();
     const { result } = renderHook(() => useOnboardingIntent(begin, vi.fn()));
 
     act(() => { result.current.request(); });
@@ -100,8 +100,8 @@ describe('setting up, where this deployment creates workspaces', () => {
   it('goes to /create instead of the wizard', () => {
     const unpublish: () => void = publishControlPlane('/api');
     try {
-      const begin: ReturnType<typeof vi.fn> = vi.fn();
-      const create: ReturnType<typeof vi.fn> = vi.fn();
+      const begin: Mock = vi.fn();
+      const create: Mock = vi.fn();
       const { result } = renderHook(() => useOnboardingIntent(begin, create));
       act(() => { result.current.request(); });
       act(() => { result.current.resolve('admin'); });
@@ -116,8 +116,8 @@ describe('setting up, where this deployment creates workspaces', () => {
   it('still runs the wizard for someone joining', () => {
     const unpublish: () => void = publishControlPlane('/api');
     try {
-      const begin: ReturnType<typeof vi.fn> = vi.fn();
-      const create: ReturnType<typeof vi.fn> = vi.fn();
+      const begin: Mock = vi.fn();
+      const create: Mock = vi.fn();
       const { result } = renderHook(() => useOnboardingIntent(begin, create));
       act(() => { result.current.request(); });
       act(() => { result.current.resolve('member'); });

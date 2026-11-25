@@ -75,7 +75,7 @@ export function GroupChatPage(): JSX.Element {
   // Load group on mount
   useEffect(() => {
     if (!groupId) {
-      navigate('/workspace');
+      void navigate('/workspace');
       return;
     }
 
@@ -88,7 +88,7 @@ export function GroupChatPage(): JSX.Element {
     if (!loadedGroup) {
       const gone: GoneMessage | null = groupGoneMessage(groupId);
       if (gone) toast({ ...gone, variant: 'destructive' });
-      navigate('/workspace');
+      void navigate('/workspace');
       return;
     }
 
@@ -100,7 +100,7 @@ export function GroupChatPage(): JSX.Element {
   const handleLeaveGroup: () => Promise<void> = useCallback(async (): Promise<void> => {
     if (!groupId) return;
     await leaveGroup(groupId);
-    navigate('/workspace');
+    void navigate('/workspace');
   }, [groupId, leaveGroup, navigate]);
 
   const handleKickMember: (memberCid: string) => Promise<void> = useCallback(

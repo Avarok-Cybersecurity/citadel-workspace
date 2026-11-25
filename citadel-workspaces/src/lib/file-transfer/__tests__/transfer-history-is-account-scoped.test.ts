@@ -11,7 +11,7 @@
  * The same guarded/unguarded twin that produced most of this codebase's
  * defects, one file apart from the guard that names the hazard.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 
 const currentCid: { value: bigint | null } = { value: 1n };
 vi.mock('@/lib/multi-instance', () => ({
@@ -62,7 +62,7 @@ describe('the transfer history', () => {
     persistTransfer(transfer('a1', 'alice.pdf'));
 
     currentCid.value = 2n;
-    const store: { setTransfer: ReturnType<typeof vi.fn>; setSettings: ReturnType<typeof vi.fn>; } = { setTransfer: vi.fn(), setSettings: vi.fn() };
+    const store: { setTransfer: Mock; setSettings: Mock; } = { setTransfer: vi.fn(), setSettings: vi.fn() };
     await loadPersistedTransfers(store);
 
     expect(store.setTransfer).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe('the transfer history', () => {
   it('is still visible to the account that created it', async () => {
     persistTransfer(transfer('a1', 'alice.pdf'));
 
-    const store: { setTransfer: ReturnType<typeof vi.fn>; setSettings: ReturnType<typeof vi.fn>; } = { setTransfer: vi.fn(), setSettings: vi.fn() };
+    const store: { setTransfer: Mock; setSettings: Mock; } = { setTransfer: vi.fn(), setSettings: vi.fn() };
     await loadPersistedTransfers(store);
 
     expect(store.setTransfer).toHaveBeenCalledTimes(1);
@@ -104,7 +104,7 @@ describe('the transfer history', () => {
     currentCid.value = null;
     persistTransfer(transfer('a1', 'alice.pdf'));
 
-    const store: { setTransfer: ReturnType<typeof vi.fn>; setSettings: ReturnType<typeof vi.fn>; } = { setTransfer: vi.fn(), setSettings: vi.fn() };
+    const store: { setTransfer: Mock; setSettings: Mock; } = { setTransfer: vi.fn(), setSettings: vi.fn() };
     await loadPersistedTransfers(store);
 
     expect(store.setTransfer).toHaveBeenCalledTimes(1);

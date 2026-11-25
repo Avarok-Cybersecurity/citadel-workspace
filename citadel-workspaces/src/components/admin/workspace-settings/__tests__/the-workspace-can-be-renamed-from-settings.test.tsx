@@ -6,7 +6,7 @@
  * covered by an_owner_edits_the_workspace_profile.rs). The dialog, its form rules and the
  * workspace context are production code.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { WorkspaceContext } from '@/contexts/WorkspaceContext';
 import WorkspaceService from '@/lib/workspace-service';
@@ -48,7 +48,7 @@ describe('workspace settings', () => {
 
   it('sends only the new name, and closes once the server accepts it', async () => {
     const save = vi.spyOn(WorkspaceService, 'updateWorkspaceProfile').mockResolvedValue(undefined);
-    const onOpenChange: ReturnType<typeof vi.fn> = vi.fn();
+    const onOpenChange: Mock = vi.fn();
     renderDialog(onOpenChange);
     fireEvent.change(screen.getByTestId('workspace-settings-name'), { target: { value: 'Avarok Labs' } });
     fireEvent.click(screen.getByTestId('workspace-settings-save'));
@@ -58,7 +58,7 @@ describe('workspace settings', () => {
 
   it("stays open and shows the server's reason when the save is refused", async () => {
     vi.spyOn(WorkspaceService, 'updateWorkspaceProfile').mockRejectedValue(new Error('Permission denied: UpdateWorkspace required'));
-    const onOpenChange: ReturnType<typeof vi.fn> = vi.fn();
+    const onOpenChange: Mock = vi.fn();
     renderDialog(onOpenChange);
     fireEvent.change(screen.getByTestId('workspace-settings-name'), { target: { value: 'Avarok Labs' } });
     fireEvent.click(screen.getByTestId('workspace-settings-save'));

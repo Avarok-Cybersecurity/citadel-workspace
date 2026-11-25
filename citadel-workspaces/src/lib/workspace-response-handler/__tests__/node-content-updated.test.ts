@@ -38,7 +38,7 @@ describe('NodeContentUpdated', () => {
 
   it('announces the new content, not merely that something changed', () => {
     handleNodeVariants(contentUpdated(), connection);
-    const call: unknown[] | undefined = emit.mock.calls.find((c) => c[0] === 'node:content-updated');
+    const call: unknown[] | undefined = emit.mock.calls.find((c: unknown[]) => c[0] === 'node:content-updated');
     expect(call, 'no node:content-updated was emitted').toBeTruthy();
     // The payload has to carry the content itself: a bare "something changed"
     // would force a refetch, which is the behaviour this replaces.
@@ -51,7 +51,7 @@ describe('NodeContentUpdated', () => {
 
   it('passes the request id through, so state can track what it applied', () => {
     handleNodeVariants(contentUpdated(), connection);
-    const call: unknown[] | undefined = emit.mock.calls.find((c) => c[0] === 'node:content-updated');
+    const call: unknown[] | undefined = emit.mock.calls.find((c: unknown[]) => c[0] === 'node:content-updated');
     expect((call?.[1] as { connection: ConnectionInfo }).connection).toBe(connection);
   });
 

@@ -6,7 +6,7 @@
  * is checked, that picking one reports it, and that the cost of each is on
  * screen rather than in a tooltip.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach } from 'vitest';
@@ -45,7 +45,7 @@ describe('the video settings modal', () => {
     // No Save button, deliberately: the effect is visible in the call within a
     // second, and a modal that makes somebody commit before they can see what
     // they chose is a modal that gets cancelled.
-    const onQualityChange: ReturnType<typeof vi.fn> = vi.fn();
+    const onQualityChange: Mock = vi.fn();
     render(
       <VideoSettingsModal open onOpenChange={() => {}} quality="auto" onQualityChange={onQualityChange} />,
     );

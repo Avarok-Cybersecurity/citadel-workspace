@@ -14,7 +14,7 @@
  * hangup would tell the user their microphone had been disconnected.
  */
 
-import { describe, it, expect, vi, beforeEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { CallSession } from '../call-session';
 
 interface FakeTrack {
@@ -42,7 +42,7 @@ function makeTrack(kind: 'audio' | 'video'): FakeTrack {
 
 let tracks: FakeTrack[] = [];
 
-function callbacks(): { onFrame: ReturnType<typeof vi.fn>; onStreamsChanged: ReturnType<typeof vi.fn>; onSpeakingChanged: ReturnType<typeof vi.fn>; onCaptureFailed: ReturnType<typeof vi.fn>; onNeedKeyframe: ReturnType<typeof vi.fn>; onTrackEnded: ReturnType<typeof vi.fn>; } {
+function callbacks(): { onFrame: Mock; onStreamsChanged: Mock; onSpeakingChanged: Mock; onCaptureFailed: Mock; onNeedKeyframe: Mock; onTrackEnded: Mock; } {
   return {
     onFrame: vi.fn(),
     onStreamsChanged: vi.fn(),

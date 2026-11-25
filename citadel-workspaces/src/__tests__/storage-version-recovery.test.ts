@@ -13,7 +13,7 @@
  * back here — which is exactly the signal that separates the two causes.
  */
 
-import { describe, it, expect, beforeEach, vi   } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { showStorageVersionRecovery } from '../storage-version-recovery';
 
 const RELOAD_ATTEMPTED_KEY: "citadel-storage-version-reload-attempted" = 'citadel-storage-version-reload-attempted';
@@ -72,7 +72,7 @@ describe('the storage-version recovery screen', () => {
 
   it('records the attempt before reloading, or the escalation never appears', () => {
     showStorageVersionRecovery();
-    const reload: ReturnType<typeof vi.fn> = vi.fn();
+    const reload: Mock = vi.fn();
     Object.defineProperty(window, 'location', {
       value: { reload },
       writable: true,

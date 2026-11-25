@@ -15,7 +15,7 @@
  * existing accept test mocks `io` wholesale, which is exactly why this survived
  * — the mock stood precisely where the defect was.
  */
-import { describe, it, expect, vi, beforeEach   } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 type SentRequest = {
   RespondFileTransfer: { object_id: bigint; accept: boolean; cid: bigint };
@@ -27,12 +27,12 @@ type SentRequest = {
 vi.mock('../../tab-context', () => ({
   getSelectedUser: async (): Promise<{ selectedCid: bigint; }> => ({ selectedCid: 7n }),
 }));
-const sendRequest: ReturnType<typeof vi.fn> = vi.fn(async (_request: unknown): Promise<void> => undefined);
+const sendRequest: Mock = vi.fn(async (_request: unknown): Promise<void> => undefined);
 // Accepting also sends an in-band response signal to the SENDER, whose UI
 // otherwise learns of a decline not at all — the SDK gives a declined sender no
 // notification whatsoever. Mocked so this file keeps testing the protocol half
 // it is about; `in-band-signals` has its own tests.
-const sendP2PMessageReliable: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<void> => undefined);
+const sendP2PMessageReliable: Mock = vi.fn(async (): Promise<void> => undefined);
 vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
     sendRequest: (r: unknown): Promise<void> => sendRequest(r),

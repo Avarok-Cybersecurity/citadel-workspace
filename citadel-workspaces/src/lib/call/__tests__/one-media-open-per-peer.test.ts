@@ -16,14 +16,14 @@
  * and CI reported it as the call failing — `call-group.spec.ts`, all three
  * "decodes frames from TWO distinct peers" cases.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { openSessionFor } from '../media-session-lifecycle';
 import type { CallManagerInternals } from '../call-manager-internals';
 import type { CallState } from '../call-state';
 
 const PEER: bigint = 5n;
 
-function internals(openSession: ReturnType<typeof vi.fn>): CallManagerInternals {
+function internals(openSession: Mock): CallManagerInternals {
   return {
     transport: { openSession, closeSession: vi.fn().mockResolvedValue(undefined) },
     openSessions: new Set<bigint>(),
@@ -41,7 +41,7 @@ describe('opening a media session for a peer', () => {
     // Deliberately slow, so the second call lands inside the first's window --
     // which is the whole window the completion-based guard cannot see.
     let release: () => void = () => {};
-    const openSession: ReturnType<typeof vi.fn> = vi.fn(
+    const openSession: Mock = vi.fn(
       () => new Promise<void>((resolve) => { release = resolve; }),
     );
     const m: CallManagerInternals = internals(openSession);
@@ -58,7 +58,7 @@ describe('opening a media session for a peer', () => {
     // The positive control. A lock that serialised every peer would make a
     // group call open its sessions one after another, which is the opposite of
     // what accept() does on purpose.
-    const openSession: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+    const openSession: Mock = vi.fn().mockResolvedValue(undefined);
     const m: CallManagerInternals = internals(openSession);
 
     await Promise.all([openSessionFor(m, 5n, null), openSessionFor(m, 6n, null)]);
@@ -69,7 +69,7 @@ describe('opening a media session for a peer', () => {
   it('opens again later, once the first has finished', async () => {
     // The other positive control: the in-flight entry must be cleared, or a
     // peer whose session closes could never be reopened.
-    const openSession: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+    const openSession: Mock = vi.fn().mockResolvedValue(undefined);
     const m: CallManagerInternals = internals(openSession);
 
     await openSessionFor(m, PEER, null);

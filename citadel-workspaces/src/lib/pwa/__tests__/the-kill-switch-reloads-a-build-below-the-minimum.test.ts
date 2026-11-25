@@ -7,7 +7,7 @@
  * Nothing is mocked: the watch and the kill switch take their I/O as arguments, the drafts
  * are the real draft store, and the storage is jsdom's sessionStorage.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { startVersionWatch, type VersionWatchIO } from '../version-watch';
 import { KILL_SWITCH_KEY, runKillSwitch, type KillSwitchIO } from '../kill-switch';
 import { checkedMinSeq, manifestForBuild } from '../version-manifest';
@@ -112,7 +112,7 @@ describe('the kill switch', () => {
   it('still reloads when the worker cannot be updated first', async () => {
     const k: Recorded = killSwitch(window.sessionStorage);
     k.io.checkWorker = async (): Promise<void> => { throw new Error('no registration'); };
-    const reload: ReturnType<typeof vi.fn> = vi.fn();
+    const reload: Mock = vi.fn();
     k.io.reload = reload;
 
     await runKillSwitch(k.io);

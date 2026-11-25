@@ -98,12 +98,12 @@ export const UserDirectory: () => JSX.Element = (): JSX.Element => {
   const handleSendMessage = (userId: string): void => {
     const contact: RegisteredPeer | undefined = registeredPeers.find((p) => p.username === userId);
     if (contact) {
-      navigate(`/messages?channel=${contact.cid}`);
+      void navigate(`/messages?channel=${contact.cid}`);
       return;
     }
     try {
       const member: { id: string; displayName: string } = allMembers.find((m) => m.id === userId) ?? { id: userId, displayName: userId };
-      navigate(`/messages?channel=${reachablePeer(discoveredPeers, member).cid}`);
+      void navigate(`/messages?channel=${reachablePeer(discoveredPeers, member).cid}`);
     } catch (error) {
       toast({
         title: 'Cannot open that conversation',

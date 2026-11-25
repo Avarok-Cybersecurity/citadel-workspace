@@ -7,7 +7,7 @@
  * to sit in one right-hand group with settings so the row has exactly two
  * children to separate.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import type { ComponentProps } from 'react';
 import { render, screen , type RenderResult } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -72,7 +72,7 @@ describe('P2PChatHeader layout', () => {
 
 describe('the files button', () => {
   it('opens the storage you share once you are registered peers', async () => {
-    const onOpenFiles: ReturnType<typeof vi.fn> = vi.fn();
+    const onOpenFiles: Mock = vi.fn();
     render(
       <P2PChatHeader peerName="Bob" peerUsername="bob" peerPresence={null} peerTyping={false} paused={false}
         isConnected isRegistered connectionRoute={null} supervisor={null} onSettingsClick={vi.fn()} onOpenFiles={onOpenFiles} />,

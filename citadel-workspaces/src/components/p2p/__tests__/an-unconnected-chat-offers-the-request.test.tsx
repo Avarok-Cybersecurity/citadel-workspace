@@ -7,7 +7,7 @@
  * The hook runs with its three effects injected (the trust check, the send, the outgoing record);
  * the composer and the bubble footer are the production components.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { useConnectRequest, type ConnectRequest, type ConnectRequestDeps } from '../hooks/use-connect-request';
 import { MessageInput } from '@/components/chat/pane/MessageInput';
@@ -19,7 +19,7 @@ import type { PeerTrust } from '@/lib/workspace-service/messaging-trust-operatio
 
 afterEach(cleanup);
 
-function deps(trust: PeerTrust | Error, alreadyAsked: boolean = false): ConnectRequestDeps & { send: ReturnType<typeof vi.fn> } {
+function deps(trust: PeerTrust | Error, alreadyAsked: boolean = false): ConnectRequestDeps & { send: Mock } {
   return {
     askTrust: (): Promise<PeerTrust> => (trust instanceof Error ? Promise.reject(trust) : Promise.resolve(trust)),
     send: vi.fn(async (): Promise<boolean> => true),

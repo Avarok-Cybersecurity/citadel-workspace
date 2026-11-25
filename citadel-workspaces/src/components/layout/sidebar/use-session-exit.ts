@@ -38,7 +38,7 @@ export function useSessionExit(): { showDisconnectModal: boolean; disconnectStat
 
     // Just navigate to landing page, keep session active
     runAsyncSetup(clearSelectedUser);
-    navigate('/');
+    void navigate('/');
 
     toastSuccess(toast, "Returned to landing page", "Your session is still active. Click your workspace icon to return instantly.");
   };
@@ -127,7 +127,7 @@ export function useSessionExit(): { showDisconnectModal: boolean; disconnectStat
   const handleDisconnectComplete = (): void => {
     setShowDisconnectModal(false);
     if (disconnectStatus === "ready") {
-      navigate('/');
+      void navigate('/');
       toastSuccess(toast, "Signed out", "You have been fully logged out. You'll need to login again to access this workspace.");
     }
   };

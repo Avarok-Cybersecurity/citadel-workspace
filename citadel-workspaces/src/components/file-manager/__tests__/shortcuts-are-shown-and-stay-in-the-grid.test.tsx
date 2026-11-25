@@ -8,7 +8,7 @@
  * - A single click on a file both selected it and started a download, so
  *   selecting a file to cut or inspect pulled it from the peer.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { RevfsFileState, type RevfsNode } from '@/types/revfs-types';
 import { VFSContentGrid, type ContentView } from '../VFSContentGrid';
@@ -23,7 +23,7 @@ function file(name: string): RevfsNode {
 }
 const tree: RevfsNode = { name: '', path: '/', type: 'directory', children: [file('a.txt')], createdAt: 0, updatedAt: 0 };
 
-function grid(actions: SpiedActions, selected: Set<string>, onSelect: ReturnType<typeof vi.fn> = vi.fn(), view: ContentView = 'list'): void {
+function grid(actions: SpiedActions, selected: Set<string>, onSelect: Mock = vi.fn(), view: ContentView = 'list'): void {
   render(
     <>
       <VFSContentGrid {...gridProps(tree, { actions, selectedPaths: selected, onSelect, view })} />
@@ -74,8 +74,8 @@ describe('the shortcuts', () => {
 describe('every shortcut a menu names', () => {
   it('reaches its action', () => {
     const actions: SpiedActions = spyActions();
-    const onSelectAll: ReturnType<typeof vi.fn> = vi.fn();
-    const onClearSelection: ReturnType<typeof vi.fn> = vi.fn();
+    const onSelectAll: Mock = vi.fn();
+    const onClearSelection: Mock = vi.fn();
     render(<VFSContentGrid {...gridProps(tree, { actions, selectedPaths: new Set(['/a.txt']), hasPasteItems: true, onSelectAll, onClearSelection })} />);
     fireEvent.keyDown(document.body, { key: 'c', ctrlKey: true });
     fireEvent.keyDown(document.body, { key: 'x', metaKey: true });
@@ -97,7 +97,7 @@ describe('every shortcut a menu names', () => {
 describe('opening a file', () => {
   it.each<ContentView>(['list', 'grid'])('is not what a click does in the %s: a click selects', (view: ContentView) => {
     const actions: SpiedActions = spyActions();
-    const onSelect: ReturnType<typeof vi.fn> = vi.fn();
+    const onSelect: Mock = vi.fn();
     grid(actions, new Set(), onSelect, view);
     fireEvent.click(screen.getByText('a.txt'));
     expect(onSelect).toHaveBeenCalledWith('/a.txt', 'replace', ['/a.txt']);
@@ -105,7 +105,7 @@ describe('opening a file', () => {
   });
 
   it('extends or toggles the selection with a modifier', () => {
-    const onSelect: ReturnType<typeof vi.fn> = vi.fn();
+    const onSelect: Mock = vi.fn();
     grid(spyActions(), new Set(), onSelect);
     fireEvent.click(screen.getByText('a.txt'), { metaKey: true });
     fireEvent.click(screen.getByText('a.txt'), { shiftKey: true });
