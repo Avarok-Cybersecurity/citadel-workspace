@@ -11,7 +11,7 @@ import type { Notification as AppNotification } from './types';
  */
 export const SERVICE_WORKER_READY_TIMEOUT_MS: number = 1500;
 
-function serviceWorkerRegistration(): Promise<ServiceWorkerRegistration | undefined> {
+export function serviceWorkerRegistration(): Promise<ServiceWorkerRegistration | undefined> {
   return Promise.race([
     navigator.serviceWorker?.ready,
     new Promise<undefined>((resolve) => {
@@ -21,19 +21,13 @@ function serviceWorkerRegistration(): Promise<ServiceWorkerRegistration | undefi
 }
 
 /**
- * The one delivery path, shared by BOTH permission branches of
- * `showBrowserNotification`.
+ * The one delivery path.
  *
  * On Chromium for Android the `Notification` constructor THROWS ("Illegal
  * constructor. Use ServiceWorkerRegistration.showNotification() instead")
  * rather than no-opping, so the service-worker surface is tried first and the
- * constructor is the guarded fallback. This used to exist only in the
- * permission-already-granted branch; the branch taken right after
- * `requestPermission()` resolved granted kept its own bare `new Notification`
- * inside a voided promise — so on exactly the platform the guard was written
- * for, the FIRST backgrounded message after the user granted permission threw
- * into the void and showed nothing. One function, so the branches cannot
- * differ again.
+ * constructor is the guarded fallback. One function, so no branch can keep a
+ * bare `new Notification` of its own again.
  */
 async function deliver(notification: AppNotification): Promise<void> {
   const options: NotificationOptions = {
@@ -62,18 +56,12 @@ async function deliver(notification: AppNotification): Promise<void> {
 /**
  * Shows an OS-level notification, on whichever surface this platform provides.
  * Fire-and-forget by design: the rest of the notification pipeline is never
- * gated on OS delivery or on the user's permission decision.
+ * gated on OS delivery. It never asks for permission: a request made outside a
+ * click is ignored by Safari and Firefox, so asking happens only from the
+ * page's controls (os-permission.ts), and the service holds a notice that needs
+ * it (os-decision.ts) rather than reaching here.
  */
 export function showBrowserNotification(notification: AppNotification): void {
   if (typeof window === 'undefined' || !('Notification' in window)) return;
-
-  if (Notification.permission === 'granted') {
-    void deliver(notification);
-  } else if (Notification.permission !== 'denied') {
-    void Notification.requestPermission().then((permission) => {
-      if (permission === 'granted') {
-        return deliver(notification);
-      }
-    });
-  }
+  if (Notification.permission === 'granted') void deliver(notification);
 }
