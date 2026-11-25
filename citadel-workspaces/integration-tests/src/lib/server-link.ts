@@ -11,7 +11,7 @@
  */
 import { execSync } from 'child_process';
 import { expect, type Locator, type Page } from '@playwright/test';
-import { getWorkspaceRoot } from './service-helpers.js';
+import { composeDir, getWorkspaceRoot } from './service-helpers.js';
 import { composeCommand, composeTarget } from './compose-guard.js';
 
 /** How long the agent may take to give up on a silent server, and then to bring it back. */
@@ -19,7 +19,7 @@ const LOSS_REPORTED_WITHIN_MS: number = 180_000;
 const RECONNECTED_WITHIN_MS: number = 180_000;
 
 const compose = (verb: 'pause' | 'unpause'): void => {
-  execSync(composeCommand(composeTarget(process.env), `${verb} server`), { stdio: 'inherit', timeout: 60_000, cwd: getWorkspaceRoot() });
+  execSync(composeCommand(composeTarget(process.env, composeDir()), `${verb} server`), { stdio: 'inherit', timeout: 60_000, cwd: getWorkspaceRoot() });
 };
 
 export async function withServerUnreachable<T>(page: Page, step: () => Promise<T>): Promise<T> {

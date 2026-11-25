@@ -6,6 +6,7 @@
  */
 
 import { execSync } from 'child_process';
+import { existsSync } from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { sleep, waitForServicesAlive } from './utils.js';
@@ -51,6 +52,14 @@ export function getWorkspaceRoot(): string {
   return path.resolve(__dirname, '..', '..', '..');
 }
 
+/** The directory compose finds docker-compose.yml in from the workspace root: it searches upward, as this does. */
+export function composeDir(): string {
+  for (let dir = getWorkspaceRoot(); ; dir = path.dirname(dir)) {
+    if (existsSync(path.join(dir, 'docker-compose.yml'))) return dir;
+    if (path.dirname(dir) === dir) throw new Error(`no docker-compose.yml at or above ${getWorkspaceRoot()}`);
+  }
+}
+
 /**
  * Restart backend services (server and internal-service) to ensure clean state.
  *
@@ -66,7 +75,7 @@ export function getWorkspaceRoot(): string {
  */
 export async function restartBackendServices(): Promise<void> {
   const cwd = getWorkspaceRoot();
-  const target = composeTarget(process.env);
+  const target = composeTarget(process.env, composeDir());
 
   console.log('\n' + '='.repeat(60));
   console.log('RESTARTING BACKEND SERVICES FOR CLEAN STATE');
