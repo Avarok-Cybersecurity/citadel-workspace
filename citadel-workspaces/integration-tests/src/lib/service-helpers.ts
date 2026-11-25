@@ -9,6 +9,7 @@ import { execSync } from 'child_process';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { sleep, waitForServicesAlive } from './utils.js';
+import { composeCommand, composeTarget, containerName } from './compose-guard.js';
 
 /**
  * How long to let the stack come back before calling it broken.
@@ -65,6 +66,7 @@ export function getWorkspaceRoot(): string {
  */
 export async function restartBackendServices(): Promise<void> {
   const cwd = getWorkspaceRoot();
+  const target = composeTarget(process.env);
 
   console.log('\n' + '='.repeat(60));
   console.log('RESTARTING BACKEND SERVICES FOR CLEAN STATE');
@@ -89,14 +91,14 @@ export async function restartBackendServices(): Promise<void> {
     // dependency chain `docker compose restart` was originally avoided for.
     // --force-recreate discards the writable layer, which is the point.
     console.log('\n  Recreating server container...');
-    execSync('docker compose up -d --force-recreate --no-deps server', {
+    execSync(composeCommand(target, 'up -d --force-recreate --no-deps server'), {
       stdio: 'inherit',
       timeout: 120000,
       cwd,
     });
 
     console.log('  Recreating internal-service container...');
-    execSync('docker compose up -d --force-recreate --no-deps internal-service', {
+    execSync(composeCommand(target, 'up -d --force-recreate --no-deps internal-service'), {
       stdio: 'inherit',
       timeout: 120000,
       cwd,
@@ -122,7 +124,7 @@ export async function restartBackendServices(): Promise<void> {
 
     for (;;) {
       const psOutput = execSync(
-        'docker compose ps -a --format json server internal-service',
+        composeCommand(target, 'ps -a --format json server internal-service'),
         { cwd, timeout: 10000 }
       ).toString();
 
@@ -158,15 +160,15 @@ export async function restartBackendServices(): Promise<void> {
         // otherwise and sends people looking at the wrong thing.
         let why = '';
         try {
-          const recent = execSync('docker compose logs --tail=20 server', { cwd, timeout: 15000 }).toString();
+          const recent = execSync(composeCommand(target, 'logs --tail=20 server'), { cwd, timeout: 15000 }).toString();
           if (/Address already in use/.test(recent)) why = ' (port not released yet)';
         } catch { /* the log is a nicety here, not worth failing over */ }
         console.log(`  A container exited${why}; restart attempt ${restarts}/${MAX_CONTAINER_RESTARTS}...`);
         if (server?.State === 'exited') {
-          execSync('docker restart --timeout 15 citadel-workspace-server-1', { stdio: 'inherit', timeout: 60000 });
+          execSync(`docker restart --timeout 15 ${containerName(target, 'server')}`, { stdio: 'inherit', timeout: 60000 });
         }
         if (internal?.State === 'exited') {
-          execSync('docker restart --timeout 15 citadel-workspace-internal-service-1', { stdio: 'inherit', timeout: 60000 });
+          execSync(`docker restart --timeout 15 ${containerName(target, 'internal-service')}`, { stdio: 'inherit', timeout: 60000 });
         }
       }
 
@@ -176,7 +178,7 @@ export async function restartBackendServices(): Promise<void> {
         // left re-running the suite to find out.
         let tail = '';
         try {
-          tail = execSync('docker compose logs --tail=40 server internal-service', {
+          tail = execSync(composeCommand(target, 'logs --tail=40 server internal-service'), {
             cwd, timeout: 20000,
           }).toString();
         } catch {
