@@ -14,7 +14,7 @@ export const NativeSelect: ForwardRefExoticComponent<SelectHTMLAttributes<HTMLSe
       <select
         ref={ref}
         {...rest}
-        className="h-[44px] w-full min-w-0 appearance-none rounded-md border border-input bg-background pl-3 pr-9 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="h-[44px] w-full min-w-0 appearance-none rounded-md border border-control-border bg-background pl-3 pr-9 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {children}
       </select>

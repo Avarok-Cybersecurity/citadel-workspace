@@ -10,6 +10,7 @@
  * refuse `unavailable`.
  */
 import type { InstallScope } from 'citadel-workspace-client-ts';
+import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import type { NodeInfo } from '../sdk/generated/NodeInfo';
 import type { NodesPort, PortAnswer } from '../host/ports';
 
@@ -23,6 +24,18 @@ export interface PageNode {
 
 /** The page's tree as it stands now (read per call, so a rename is seen at once). */
 export type TreeRead = () => Readonly<Record<string, PageNode>>;
+
+/**
+ * The page's tree with the workspace in it. `WORKSPACE_ROOT_ID` is a sentinel on the server, never a
+ * stored node, so the tree the page holds never contains it, and a Calendar on the workspace's own
+ * page was refused `not_found` for the node it runs on. The kernel answers the sentinel (get_node,
+ * list_nodes) with the spaces whose parent is none or the sentinel as its children; so does this.
+ */
+export function withWorkspaceRoot(nodes: Readonly<Record<string, PageNode>>, name: string): Readonly<Record<string, PageNode>> {
+  if (nodes[WORKSPACE_ROOT_ID] !== undefined) return nodes;
+  const children: string[] = Object.values(nodes).filter((n: PageNode) => n.parent_id === null || n.parent_id === WORKSPACE_ROOT_ID).map((n: PageNode) => n.id);
+  return { ...nodes, [WORKSPACE_ROOT_ID]: { id: WORKSPACE_ROOT_ID, name, parent_id: null, children } };
+}
 
 const NOT_FOUND: PortAnswer<never> = { refused: { unavailable: 'not_found' } };
 const READ_ONLY: PortAnswer<never> = { refused: { unavailable: 'nodes' } };

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { RibbonTip } from './RibbonButton';
 import { useRibbon } from './ribbon-context';
 
-const FIELD: string = 'h-[44px] shrink-0 rounded-md border border-input bg-background px-2 text-[14px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
+const FIELD: string = 'h-[44px] shrink-0 rounded-md border border-control-border bg-background px-2 text-[14px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
 
 export interface PickerOption {
   readonly value: string;

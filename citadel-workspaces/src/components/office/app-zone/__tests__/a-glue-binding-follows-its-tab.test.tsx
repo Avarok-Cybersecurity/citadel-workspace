@@ -15,6 +15,7 @@ import { WorkspaceProvider, type WorkspaceState } from '@/contexts/WorkspaceCont
 import type { GlueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import type { AppTabMount, AppZoneRuntime, GlueBound, GlueTabMount } from '../app-zone-environment';
 import { useGlueBinding } from '../use-glue-binding';
+import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
 interface Bind { tab: GlueTabMount; bound: (b: GlueBound) => void; closed: boolean }
 
@@ -55,6 +56,14 @@ describe("a glue tab's binding", () => {
     rerender();
     expect(binds).toHaveLength(1);
     expect(binds[0]?.tab.firstParty.tree().n1?.name).toBe('Platform team');
+  });
+
+  it("gives its tree port the workspace, which the page's tree never holds, named and over its spaces", () => {
+    const { runtime, binds } = recordingRuntime();
+    const state: WorkspaceState = { ...stateWith('Platform'), workspace: { name: 'Stealth Inference OS' } } as unknown as WorkspaceState;
+    const wrapper = ({ children }: { children: ReactNode }): JSX.Element => <WorkspaceProvider state={state}>{children}</WorkspaceProvider>;
+    renderHook(() => useGlueBinding(runtime, tabOn(WORKSPACE_ROOT_ID)), { wrapper });
+    expect(binds[0]?.tab.firstParty.tree()[WORKSPACE_ROOT_ID]).toEqual({ id: WORKSPACE_ROOT_ID, name: 'Stealth Inference OS', parent_id: null, children: ['n1'] });
   });
 
   it('lets the binding go on unmount, and on a move to another node binds afresh', () => {

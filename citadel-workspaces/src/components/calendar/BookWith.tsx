@@ -50,7 +50,7 @@ type Page = { kind: 'none' } | { kind: 'loading'; host: string } | { kind: 'fail
 const reasonOf = (e: unknown): string => (e instanceof PortRefused ? refusalCopy(e.refused) : 'something went wrong');
 /** A poll is voted on, not booked as a slot. */
 const bookable = (types: EventType[]): EventType[] => types.filter((t: EventType) => t.kind !== 'poll');
-const CHOICE_LINK: string = 'flex min-h-[44px] items-center self-start rounded-md border border-border px-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+const CHOICE_LINK: string = 'flex min-h-[44px] items-center self-start rounded-md border border-control-border px-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 export function BookWith(p: BookWithProps): JSX.Element {
   const { ports, engine, node, me, entries } = p;

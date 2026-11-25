@@ -119,7 +119,7 @@ export function BookingPage(p: BookingPageProps): JSX.Element {
       <h2 className="text-base font-semibold text-foreground">Book with {p.hostName}</h2>
       <div role="group" aria-label="What to book" className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
         {types.map((t: EventType) => (
-          <button key={t.id} type="button" aria-pressed={type?.id === t.id} onClick={(): void => pickType(t)} className={cn(CARD, type?.id === t.id ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted')}>
+          <button key={t.id} type="button" aria-pressed={type?.id === t.id} onClick={(): void => pickType(t)} className={cn(CARD, type?.id === t.id ? 'border-primary bg-primary/10' : 'border-control-border hover:bg-muted')}>
             <span className="font-medium text-foreground">{t.name}</span>
             <span className="text-muted-foreground">{t.durations_min.map((d: number) => `${d} min`).join(' or ')}</span>
           </button>
