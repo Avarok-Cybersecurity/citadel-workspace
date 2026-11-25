@@ -16,18 +16,52 @@
 import { createHash } from 'node:crypto';
 
 /** Bumped whenever what goes into a key changes, so an older stamp can never match. */
-export const STAMP_FORMAT = 1;
+export const STAMP_FORMAT = 2;
 
 /** A stamp older than this is ignored: date-dependent tests, browser caches, a day's drift. */
 export const STAMP_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 /**
- * Environment the key leaves out, with why. Git sets GIT_* for each hook differently (index
- * file, exec path, push options) and preflight strips the repo locators before a gate starts;
- * PWD, OLDPWD, SHLVL and _ are shell bookkeeping, and every gate is spawned with an explicit cwd.
- * Everything else is in the key: an unknown variable re-runs the gate rather than being trusted.
+ * Environment the key leaves out, BY NAME, each with where it comes from. Everything else is in
+ * the key -- CARGO_*, RUSTFLAGS, NODE_OPTIONS, CI, CITADEL_*, SDKROOT, CPATH -- so an unknown or
+ * changed variable re-runs the gate rather than being trusted.
+ *
+ * Measured on Apple git 2.54 (scratch hooks, REL-1124): `git push` and `git hook run` hand a hook
+ * the same environment; a shell differs from both by GIT_EXEC_PATH (and its PATH prefix, see
+ * pathWithoutGitExecPath), GIT_PREFIX, and the xcrun shim's SDKROOT, CPATH, MANPATH and an extra
+ * LIBRARY_PATH entry. The shim's variables stay IN the key (SDKROOT picks the C SDK a build script
+ * compiles against): a tier is run through `git hook run` (lib/preflight-push.mjs) precisely so
+ * that they match the push.
  */
-export const ENV_NOT_IN_KEY = /^(GIT_[A-Z0-9_]+|PWD|OLDPWD|SHLVL|_)$/;
+/**
+ * Git hands a hook the variables that locate ITS repository. Inherited by a gate that runs git
+ * in another repo, they silently point that gate at the wrong index and object store, so
+ * lib/preflight-run.mjs strips them from every gate; for the same reason they are not inputs.
+ */
+export const REPO_LOCATORS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES'];
+const GIT_HOOK_VARIABLES = [
+  'GIT_EXEC_PATH', 'GIT_PREFIX', // every hook: git's own exec dir, and the subdirectory git was started in
+  ...REPO_LOCATORS.filter((name) => name !== 'GIT_PREFIX'),
+  'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_DATE', 'GIT_EDITOR', 'GIT_REFLOG_ACTION', // pre-commit / pre-merge-commit: the commit being made
+  'GIT_PUSH_OPTION_COUNT', // pre-push with `-o`; the options themselves match GIT_PUSH_OPTION_<n> below
+  'GIT_SSH_COMMAND', 'GIT_SSH', 'GIT_SSH_VARIANT', // transport only: lanes set a keep-alive for the push alone
+];
+const SHELL_BOOKKEEPING = ['PWD', 'OLDPWD', 'SHLVL', '_']; // every gate is spawned with an explicit cwd
+export const ENV_NOT_IN_KEY = new RegExp(`^(${[...GIT_HOOK_VARIABLES, ...SHELL_BOOKKEEPING, 'PREFLIGHT_PRE_PUSH'].join('|')}|GIT_PUSH_OPTION_[0-9]+)$`);
+// PREFLIGHT_PRE_PUSH says whether the pre-push hook runs the tier or only verifies its stamps
+// (lib/preflight-push.mjs); both modes judge the same inputs, so it cannot be part of the key.
+
+/**
+ * PATH as the gates see it, without the directory git prepends for its own children.
+ * Git puts GIT_EXEC_PATH at the front of PATH for every hook, so a key that kept it could never
+ * match between a hook and anything else (the 1 272 s push of REL-1124 re-ran every stamped gate
+ * for this). Only an entry equal to GIT_EXEC_PATH is dropped; every other entry stays, in order.
+ * @param {string} path @param {string|undefined} execPath @returns {string}
+ */
+export function pathWithoutGitExecPath(path, execPath) {
+  if (!execPath) return path;
+  return path.split(':').filter((entry) => entry !== execPath).join(':');
+}
 
 /** A gate drives a browser or a built bundle when its import closure says so. */
 const BROWSER_MARKER = /from\s+['"](playwright(-core)?|@playwright\/test|@axe-core\/playwright|vite)['"]|import\(\s*['"]playwright|['"]vite['"]\s*,\s*['"]preview['"]/;
@@ -54,7 +88,7 @@ export function blobId(content) {
 export function envInKey(env) {
   return Object.entries(env)
     .filter(([name, value]) => value !== undefined && !ENV_NOT_IN_KEY.test(name))
-    .map(([name, value]) => [name, String(value)])
+    .map(([name, value]) => [name, name === 'PATH' ? pathWithoutGitExecPath(String(value), env.GIT_EXEC_PATH) : String(value)])
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
@@ -96,6 +130,36 @@ export function stampsOff(tier, env) {
   if (flag === '1') return 'PREFLIGHT_NO_STAMP=1';
   if (tier === 'full') return '--tier full runs every gate';
   return null;
+}
+
+/**
+ * Which world a check's key is computed over, or null when it is never stamped. Every check is
+ * stampable except the checkout checks (`env`: they decide whether anything else means anything)
+ * and the `push` checks (they read the REMOTE, which no local key describes). A check run in the
+ * agent workspace is keyed over the agent's inputs alone (preflight-world-io.mjs, isAgentInput).
+ * @param {{ tiers: Set<string> }} check @param {string} cwd relative to the parent  @returns {'world'|'agent'|null}
+ */
+export function stampScope(check, cwd) {
+  if (check.tiers.has('env') || check.tiers.has('push')) return null;
+  return cwd === 'citadel-internal-service' || cwd.startsWith('citadel-internal-service/') ? 'agent' : 'world';
+}
+
+/**
+ * The first entries two worlds disagree on, for a hook that found no stamp: it names what changed
+ * (`env:CARGO_PROFILE_TEST_OPT_LEVEL`, `file:docs/x.md`) instead of only saying "re-run".
+ * @param {[string, string][]} before @param {[string, string][]} after @param {number} limit
+ * @returns {string[]}
+ */
+export function worldDifferences(before, after, limit) {
+  const was = new Map(before);
+  const now = new Map(after);
+  const out = [];
+  for (const label of [...new Set([...was.keys(), ...now.keys()])].sort()) {
+    if (was.get(label) === now.get(label)) continue;
+    out.push(`${label}${!was.has(label) ? ' (new)' : !now.has(label) ? ' (gone)' : ''}`);
+    if (out.length === limit) break;
+  }
+  return out;
 }
 
 /**

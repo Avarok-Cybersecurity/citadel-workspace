@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { crateOf, gateIsRelevant, readsWholeRepo, selectChecks, tiersFor } from './change-tiers.mjs';
+import { crateOf, gateIsRelevant, namesTopLevel, readsWholeRepo, selectChecks, tiersFor } from './change-tiers.mjs';
 
 const CRATES = ['citadel-workspace-server-kernel', 'citadel-workspace-types', 'citadel-workspace-server-kernel/tests/common'];
 
@@ -32,7 +32,7 @@ test('a path belongs to the deepest crate containing it', () => {
 });
 
 test('a gate is relevant when its source names the top-level directory, or it is the changed file', () => {
-  const gate = { script: 'scripts/check-x.mjs', source: "join(ROOT, 'citadel-workspaces', 'src')", cwdArea: null, wholeRepo: false };
+  const gate = { script: 'scripts/check-x.mjs', source: "join(ROOT, 'citadel-workspaces', 'src')", cwdArea: null, wholeRepo: false, browser: false };
   assert.equal(gateIsRelevant(gate, ['citadel-workspaces/src/a.ts']), true);
   assert.equal(gateIsRelevant(gate, ['citadel-workspace-types/src/lib.rs']), false);
   assert.equal(gateIsRelevant(gate, ['scripts/check-x.mjs']), true);
@@ -45,15 +45,37 @@ test('a gate that lists every tracked file reads the whole repo', () => {
   assert.equal(readsWholeRepo("readdirSync(join(ROOT, 'docs'))"), false);
 });
 
+test("a gate that walks the tree from '.' reads the whole repo (doc file refs did, and lost apps/ to a narrower match)", () => {
+  assert.equal(readsWholeRepo("(function walk(dir) { readdirSync(join(ROOT, dir)) })('.');"), true);
+  assert.equal(readsWholeRepo("readdirSync('.').filter((f) => /^docker-compose/.test(f))"), true);
+  assert.equal(readsWholeRepo("join(ROOT, './x')"), false);
+});
+
+test('a top-level name counts as a whole name only, never inside a longer one', () => {
+  for (const s of ["join(ROOT, 'docs')", '"docs/x.md"', '`${ROOT}/docs/x`', "'../docs/a'", 'the docs say']) assert.equal(namesTopLevel(s, 'docs'), true, s);
+  for (const s of ["'./lib/docs-harness/serve.mjs'", 'citadel-docs', 'cdocs', 'docs_x']) assert.equal(namesTopLevel(s, 'docs'), false, s);
+  assert.equal(namesTopLevel("'package.json'", 'package.json'), true);
+  assert.equal(namesTopLevel("'xpackage.json'", 'package.json'), false);
+  assert.equal(namesTopLevel("'a-b'", 'a.b'), false, 'a dot in the name is literal');
+});
+
+test('a browser gate is selected by the directories it names whole, a static gate by any mention', () => {
+  const docsHarness = { script: 'citadel-workspaces/scripts/check-docs-crispness.mjs', source: "from './lib/docs-harness/serve.mjs'", cwdArea: 'citadel-workspaces', wholeRepo: false };
+  assert.equal(gateIsRelevant({ ...docsHarness, browser: true }, ['docs/TESTING.md']), false, 'REL-1124: a docs-only commit ran four browser gates');
+  assert.equal(gateIsRelevant({ ...docsHarness, browser: true }, ['citadel-workspaces/src/a.tsx']), true, 'what it judges still selects it');
+  assert.equal(gateIsRelevant({ ...docsHarness, browser: false }, ['docs/TESTING.md']), true, 'a static gate keeps the wide match');
+  assert.throws(() => gateIsRelevant({ ...docsHarness }, ['docs/x']), /browser must be true or false/);
+});
+
 const c = (name, tiers, relevance) => ({ name, tiers: new Set(tiers), relevance });
 const CHECKS = [
   c('env', ['env']),
   c('pointers', ['push']),
   c('staged eslint', ['pre-commit-only']),
-  c('ui static', ['ui'], { script: 's', source: 'citadel-workspaces', cwdArea: 'citadel-workspaces', wholeRepo: false }),
-  c('parent static', ['parent'], { script: 'p', source: 'docs', cwdArea: null, wholeRepo: false }),
+  c('ui static', ['ui'], { script: 's', source: 'citadel-workspaces', cwdArea: 'citadel-workspaces', wholeRepo: false, browser: false }),
+  c('parent static', ['parent'], { script: 'p', source: 'docs', cwdArea: null, wholeRepo: false, browser: false }),
   c('vitest', ['ui']),
-  c('slow static', ['ui', 'not-pre-commit'], { script: 'x', source: '', cwdArea: 'citadel-workspaces', wholeRepo: false }),
+  c('slow static', ['ui', 'not-pre-commit'], { script: 'x', source: '', cwdArea: 'citadel-workspaces', wholeRepo: false, browser: true }),
   c('clippy root', ['rust:root']),
   c('heavy bundle', []),
 ];

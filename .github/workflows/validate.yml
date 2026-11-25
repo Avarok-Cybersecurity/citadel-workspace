@@ -488,7 +488,9 @@ jobs:
       - name: Preflight derives CI's gates, tiers a change, and plans merge previews correctly
         run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/changed-paths.test.mjs scripts/lib/merge-preview-planning.test.mjs
       - name: A hook skips a gate only on a pass stamped over identical inputs
-        run: node --test scripts/lib/preflight-stamp.test.mjs scripts/lib/preflight-stamp-io.test.mjs
+        run: node --test scripts/lib/preflight-stamp.test.mjs scripts/lib/preflight-stamp-io.test.mjs scripts/lib/preflight-stamp-keys.test.mjs
+      - name: The pre-push hook verifies the tier's stamps, pre-push covers what pre-commit leaves out, the hook lock is never broken while held, and node_modules is the one the lockfile describes
+        run: node --test scripts/lib/preflight-push.test.mjs scripts/lib/hook-lock.test.mjs scripts/lib/installed-modules.test.mjs
       - name: The flaky-spec report counts only attempts that failed
         run: node --test scripts/lib/retry-passes.test.mjs
       - name: Every required check is produced, every release step has a PR twin, no dispatch is blind
