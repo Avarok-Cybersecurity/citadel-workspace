@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { withWorkspaceRoot, type PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import type { CalendarEngine } from '../engine/calendar-engine';
+import type { Event } from '../generated/Event';
 import { calendarReducer, initialCalendar, type CalendarAction, type CalendarState, type EntrySource, type LoadState } from '../store';
 import { useCalendarSources } from '../use-calendar-sources';
 import { event, realEngine } from './engine-rig';
@@ -44,7 +45,7 @@ describe("the Calendar on the workspace's own page", () => {
   });
 
   it('shows an event a page below sends up to the workspace', async () => {
-    const offsite = event({ id: 'offsite', origin_node: 'team', title: 'Offsite', propagate: { down: false, up_to: WORKSPACE_ROOT_ID } });
+    const offsite: Event = event({ id: 'offsite', origin_node: 'team', title: 'Offsite', propagate: { down: false, up_to: WORKSPACE_ROOT_ID } });
     const state: CalendarState = await workspacePage({ ...withWorkspaceRoot(SENT, 'Stealth Inference OS') }, (amy: Member): void => {
       amy.store.put({ node: { node_id: 'team' } }, 'cal/event/offsite', engine.encodeEvent(offsite));
     });

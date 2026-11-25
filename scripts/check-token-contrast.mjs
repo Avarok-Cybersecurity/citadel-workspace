@@ -111,9 +111,9 @@ const NON_TEXT = [
   ['control-border', 'card'],
   ['control-border', 'surface'],
   // A selected chip, card or segment is filled with --primary: the fill is its edge (owner, 2026-11-25:
-  // the Calendar's chosen day was 2.94:1 on the dark page).
+  // the Calendar's chosen day was 2.94:1 on the dark page). Not on --card: lighter still would take the
+  // chat bubble's 90%-opacity meta text under 4.5:1.
   ['primary', 'background'],
-  ['primary', 'card'],
 ];
 
 const needed = [...new Set([...PAIRS.flat(), ...TINTED.flat(), ...NON_TEXT.flat(), 'card'])];

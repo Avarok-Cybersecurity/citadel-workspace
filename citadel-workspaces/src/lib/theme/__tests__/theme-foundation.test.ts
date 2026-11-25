@@ -39,7 +39,8 @@ describe('Avarok Purple, the default', () => {
     const vars: Record<string, string> = paletteToCssVars(defaultTheme().dark);
 
     expect(vars['--background']).toBe('235 18% 13%');
-    expect(vars['--primary']).toBe('257 30% 50%');
+    // 52%, not 50%: a selected fill clears 3:1 on the dark page (owner, 2026-11-25).
+    expect(vars['--primary']).toBe('257 30% 52%');
     expect(vars['--primary-accent']).toBe('251 85% 75%');
     // 72%, not 54% — the value Lighthouse forced.
     expect(vars['--muted-foreground']).toBe('265 25% 72%');
