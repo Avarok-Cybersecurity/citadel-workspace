@@ -72,6 +72,7 @@ export function peerPorts(install: AppInstall, scopeKey: string, limits: AppLimi
     cid: session.cid, seat, agent: w.agent, topics: install.details.topics, limits: limits.topics, authority, record: w.topicRecord,
     topicGroup: (name: string, claim: string | null) => topicGroup(w.transport, install.id, name, claim), timeoutMs: w.policy.portTimeoutMs,
     refused: (name: string, limit: string): void => w.report(`[apps] ${install.app_id} (install ${install.id}): the server refused a message to topic ${name}`, limit),
+    notAMember: (name: string): void => w.report(`[apps] ${install.app_id} (install ${install.id}): the server refused a message to topic ${name}: this session is not in its group`, 'NotAMember'),
   });
   return {
     held, ihttp: transportRouter({ relay, p2p, held, scopeKey }), topic,

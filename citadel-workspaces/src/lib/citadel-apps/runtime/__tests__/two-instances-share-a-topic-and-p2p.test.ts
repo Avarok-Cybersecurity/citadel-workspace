@@ -18,6 +18,7 @@ import { p2pIhttpPort } from '../ihttp-p2p-port';
 import { PeerAuthority } from '../peer-authority';
 import { encodeTopicMessage } from '../topic-model';
 import { topicPort, type OwnedTopicPort } from '../topic-port';
+import { admittedAfterJoin } from './agent-admits-a-joiner';
 import type { RequestType, ResponseType } from 'citadel-workspace-client-ts';
 
 const APP: string = 'net.avarok.compute-pool';
@@ -42,6 +43,7 @@ function agent(): TestAgent {
       const [variant, body] = Object.entries(request)[0] as [string, Record<string, unknown>];
       sent.push({ [variant]: body });
       queueMicrotask(() => handlers.forEach((h) => h({ [SUCCESS[variant as RequestType] as string]: { cid: ME, request_id: body.request_id, group_key: body.group_key, peer_cid: body.peer_cid } })));
+      for (const added of admittedAfterJoin(variant, body, ME)) queueMicrotask(() => handlers.forEach((h) => h(added)));
     },
   };
   return { link, sent, push: async (m: unknown): Promise<void> => { handlers.forEach((h) => h(m)); await new Promise<void>((r) => setTimeout(r, 0)); } };
@@ -54,7 +56,7 @@ function topics(seat: PlaneSeat, link: AgentLink, arrivals: TopicArrival[]): Own
   const port: OwnedTopicPort = topicPort({
     seat, cid: ME, agent: link, topics: ['pool'], limits: { max_msg_bytes: 64, max_msgs_per_s: 2 }, timeoutMs: 1000,
     authority: new PeerAuthority(admit, () => 0, 30), topicGroup: async () => '5:9',
-    record: { group: () => undefined, request: () => undefined }, refused: () => undefined,
+    record: { group: () => undefined, request: () => undefined }, refused: () => undefined, notAMember: () => undefined,
   });
   port.onEvent((a: TopicArrival) => arrivals.push(a));
   return port;
@@ -70,13 +72,13 @@ describe('a topic held by two instances of one install', () => {
     const ports: OwnedTopicPort[] = [0, 1].map((i: number) => topics(registry.attach('inst-1', APP), a.link, heard[i]));
     await ports[0].TopicOpen({ name: 'pool' });
     await ports[1].TopicOpen({ name: 'pool' });
-    expect(variants(a.sent)).toEqual(['GroupRequestJoin']);
+    expect(variants(a.sent)).toEqual(['GroupListJoined', 'GroupRequestJoin']);
     await ports[0].closeAll();
-    expect(variants(a.sent)).toEqual(['GroupRequestJoin']);
+    expect(variants(a.sent)).toEqual(['GroupListJoined', 'GroupRequestJoin']);
     await a.push(message);
     expect([heard[0].length, heard[1].length]).toEqual([0, 1]);
     await ports[1].closeAll();
-    expect(variants(a.sent)).toEqual(['GroupRequestJoin', 'GroupLeave']);
+    expect(variants(a.sent)).toEqual(['GroupListJoined', 'GroupRequestJoin', 'GroupLeave']);
   });
 
   it('one of them answers a join request', async () => {

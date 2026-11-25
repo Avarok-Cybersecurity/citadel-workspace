@@ -145,3 +145,54 @@ export async function watchDeliveredFrames(page: Page): Promise<void> {
 export async function deliveredFrames(page: Page): Promise<string[]> {
   return page.evaluate((): string[] => [...((window as unknown as { __appsSpecDelivered?: string[] }).__appsSpecDelivered ?? [])]);
 }
+
+/** A topic group frame on a page's agent socket: the session's channel opened, a group message heard, or one this page sent. */
+export interface GroupFrame { readonly kind: 'channel' | 'heard' | 'sent'; readonly cid: string; readonly at: number }
+
+export interface GroupWire {
+  /** Where the record is now: a later `channelFor` or `describe` reads from here. */
+  readonly mark: () => number;
+  /** Whether the agent said `cid` holds a new group channel (`GroupChannelCreateSuccess`) after `from`, within `timeoutMs`. */
+  readonly channelFor: (cid: string, from: number, timeoutMs: number) => Promise<boolean>;
+  /** The frames after `from`, each with its offset from the first, for a log line. */
+  readonly describe: (from: number) => string;
+}
+
+/**
+ * Record, from now on, the topic-group frames on every socket `pages` open (tabs of one browser
+ * share the leader's socket, so a session's frames are on whichever tab leads): what separates "B was
+ * not in the group yet" from "B heard the job and did not claim" from "B claimed late". Regexes
+ * read `cid`, each struct's first field, before any nested key; a message's bytes are a number list.
+ */
+export function watchGroupWire(...pages: Page[]): GroupWire {
+  const frames: GroupFrame[] = [];
+  const waiters: Set<() => void> = new Set<() => void>();
+  const text = (payload: string | Buffer): string => (typeof payload === 'string' ? payload : payload.toString('utf8'));
+  const note = (kind: GroupFrame['kind'], payload: string, pattern: RegExp): void => {
+    for (const m of payload.matchAll(pattern)) frames.push({ kind, cid: m[1], at: Date.now() });
+    for (const wake of [...waiters]) wake();
+  };
+  for (const page of pages) page.on('websocket', (ws: WebSocket) => {
+    ws.on('framereceived', ({ payload }: { payload: string | Buffer }) => {
+      note('channel', text(payload), /"GroupChannelCreateSuccess":\{[^{}]*?"cid":(\d+)/g);
+      note('heard', text(payload), /"GroupMessageNotification":\{[^{}]*?"cid":(\d+)/g);
+    });
+    ws.on('framesent', ({ payload }: { payload: string | Buffer }) => note('sent', text(payload), /"GroupMessage":\{[^{}]*?"cid":(\d+)/g));
+  });
+  const opened = (cid: string, from: number): boolean => frames.slice(from).some((f: GroupFrame) => f.kind === 'channel' && f.cid === cid);
+  return {
+    mark: (): number => frames.length,
+    channelFor: (cid: string, from: number, timeoutMs: number): Promise<boolean> => new Promise<boolean>((resolve: (seen: boolean) => void): void => {
+      const done = (seen: boolean): void => { waiters.delete(check); clearTimeout(timer); resolve(seen); };
+      const check = (): void => { if (opened(cid, from)) done(true); };
+      const timer: ReturnType<typeof setTimeout> = setTimeout((): void => done(false), timeoutMs);
+      waiters.add(check);
+      check();
+    }),
+    describe: (from: number): string => {
+      const seen: GroupFrame[] = frames.slice(from);
+      const t0: number = seen[0]?.at ?? 0;
+      return seen.length === 0 ? 'no group frames' : seen.map((f: GroupFrame) => `${f.kind}(${f.cid}) +${f.at - t0} ms`).join(', ');
+    },
+  };
+}

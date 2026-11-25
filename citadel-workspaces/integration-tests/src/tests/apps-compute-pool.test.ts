@@ -6,7 +6,10 @@
  * installed for the whole workspace through the page's apps transport (apps.ts says why).
  *
  *   1. A installs it; A and B each allow serve, call and topics in Apps -> Installed (each plane's
- *      data-allowed turns "true"), and both open the office whose page holds its zone.
+ *      data-allowed turns "true"), and both open the office whose page holds its zone. B is in the
+ *      pool's topic only once B's agent opens the group's channel (`GroupChannelCreateSuccess`): a
+ *      running zone means the app's init returned, not that its topic is open, and a job announced
+ *      before B is in is one B never hears (the run computes it alone, so step 2 waits for it).
  *   2. P2P: A's job gets B's answer via p2p, verified; A's socket sent an agent IhttpSend to B and
  *      B's socket received IhttpFrameNotifications for B: the frames took the direct path.
  *   3. Relay forced: B's answer via relay, verified, and A sent no agent IhttpSend for it (step 2
@@ -31,7 +34,7 @@ import { TestHarness, runTestMain, sleep, waitForP2PChannelReady } from '../lib/
 import { openMultiWindowWorld, makePeers, type MultiWindowWorld, type PeersReady } from '../lib/multi-window-setup.js';
 import { signComputePool, COMPUTE_POOL_ID, type SignedApp } from '../lib/apps-signing.js';
 import { blockPeer, consentPeer, installSignedApp, readZoneLog, revokePeer, uninstallApp, type Plane, type ZoneLog } from '../lib/apps.js';
-import { answered, openPoolZone, placePoolZone, pressAppAction, runJob, runJobWithout, sessionCid, watchIhttpWire, type JobRun, type WireCount } from '../lib/apps-zone.js';
+import { answered, openPoolZone, placePoolZone, pressAppAction, runJob, runJobWithout, sessionCid, watchGroupWire, watchIhttpWire, type GroupWire, type JobRun, type WireCount } from '../lib/apps-zone.js';
 import { runTwoTabVariant, type TwoTabResults } from '../lib/apps-two-tabs.js';
 
 const stamp: number = Date.now();
@@ -49,13 +52,13 @@ const REFUSED: string = 'Unavailable("refused")';
 const say = (step: string): void => console.log(`\n${'─'.repeat(50)}\n${step}\n${'─'.repeat(50)}`);
 
 interface Results {
-  peers: PeersReady; channelReady: boolean; installed: boolean; consented: boolean; mounted: boolean;
+  peers: PeersReady; channelReady: boolean; installed: boolean; consented: boolean; mounted: boolean; inThePool: boolean;
   p2pJob: boolean; p2pOnTheWire: boolean;
   relayJob: boolean; relayOffTheP2pWire: boolean;
   revokedServeRefused: boolean; fallsBackToRelay: boolean; blockedOutOfReach: boolean; unblockedReaches: boolean;
   revokeEndsWithin60s: boolean; nextCallRefused: boolean;
   uninstallClosesBothZones: boolean;
-  noRelayNoFallback: boolean;
+  inThePoolAgain: boolean; noRelayNoFallback: boolean;
   twoTabs: TwoTabResults | null;
 }
 
@@ -82,11 +85,13 @@ async function runTest(): Promise<boolean> {
   const bLog: ZoneLog = readZoneLog(b, 'B');
   const aWire: WireCount = watchIhttpWire(a);
   const bWire: WireCount = watchIhttpWire(b);
+  const aGroups: GroupWire = watchGroupWire(a);
+  const bGroups: GroupWire = watchGroupWire(b);
   const r: Results = {
-    peers: { accounts: false, registered: false, conversations: false, talking: false }, channelReady: false, installed: false, consented: false, mounted: false,
+    peers: { accounts: false, registered: false, conversations: false, talking: false }, channelReady: false, installed: false, consented: false, mounted: false, inThePool: false,
     p2pJob: false, p2pOnTheWire: false, relayJob: false, relayOffTheP2pWire: false,
     revokedServeRefused: false, fallsBackToRelay: false, blockedOutOfReach: false, unblockedReaches: false,
-    revokeEndsWithin60s: false, nextCallRefused: false, uninstallClosesBothZones: false, noRelayNoFallback: false, twoTabs: null,
+    revokeEndsWithin60s: false, nextCallRefused: false, uninstallClosesBothZones: false, inThePoolAgain: false, noRelayNoFallback: false, twoTabs: null,
   };
   try {
     say('STEP 1: A installs the Compute Pool; A and B allow it and open its zone');
@@ -100,15 +105,20 @@ async function runTest(): Promise<boolean> {
     await consentPeer(a, installId, ALL);
     await consentPeer(b, installId, ALL);
     r.consented = true;
+    const bJoins: number = bGroups.mark();
     await openPoolZone(a, OFFICE);
     await openPoolZone(b, OFFICE);
     r.mounted = true;
     const bCid: string = await sessionCid(b);
+    r.inThePool = await bGroups.channelFor(bCid, bJoins, JOB_MS);
 
     say('STEP 2: a job over P2P');
     const [sent2, recv2] = [aWire.sentTo(bCid), bWire.receivedFor(bCid)];
+    const marks2: [number, number] = [aGroups.mark(), bGroups.mark()];
     r.p2pJob = p2pOk(await runJob(a, aLog, 'run-primes', B, JOB_MS));
     r.p2pOnTheWire = aWire.sentTo(bCid) > sent2 && bWire.receivedFor(bCid) > recv2;
+    // A's announce and B's claim, as the sockets carried them: a red step 2 names its own cause.
+    console.log(`  group frames: A ${aGroups.describe(marks2[0])}; B ${bGroups.describe(marks2[1])}`);
 
     say('STEP 3: the relay, forced');
     await pressAppAction(a, 'mode-relay');
@@ -152,8 +162,11 @@ async function runTest(): Promise<boolean> {
     const noRelay: string = await installSignedApp(a, app, RELAY_PAIR);
     await consentPeer(a, noRelay, ALL);
     await consentPeer(b, noRelay, ALL);
+    const bRejoins: number = bGroups.mark();
     await openPoolZone(a, OFFICE);
     await openPoolZone(b, OFFICE);
+    // A new install is a new topic group: B must be in it before A's job, as in step 1.
+    r.inThePoolAgain = await bGroups.channelFor(bCid, bRejoins, JOB_MS);
     await revokePeer(b, noRelay, 'serve');
     await pressAppAction(a, 'mode-prefer');
     r.noRelayNoFallback = refusedOverP2p(await runJob(a, aLog, 'run-primes', B, JOB_MS), 'Unavailable("p2p")');
