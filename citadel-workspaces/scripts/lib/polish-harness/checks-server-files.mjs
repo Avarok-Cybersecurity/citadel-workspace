@@ -80,6 +80,9 @@ const cardBoxes = (file) => file.evaluate((el) => {
 
 async function cardFits(page, width, file, label) {
   await file.waitFor({ state: 'visible' });
+  // At rest: a just-clicked Download is still easing back from its press feedback (scale 0.98, a
+  // 43.12px box). The 44px target is the button's box at rest; shrinking while pressed is intended.
+  await settled(page);
   const boxes = await cardBoxes(file);
   const { box, name, button } = boxes;
   await inTheViewport(page, box, width, label);
