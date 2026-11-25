@@ -37,10 +37,11 @@
  *    (uuid's randomness feature comes from the client), and a check, not a wasm-pack build.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { derivedHookChecks, uiTestReadsIn } from './lib/preflight-derived.mjs';
+import { prerequisiteProblem } from './lib/prerequisites.mjs';
 import { crateOf, selectChecks } from './lib/change-tiers.mjs';
 import { pushedPaths, stagedPaths } from './lib/changed-paths.mjs';
 import { printFailures, runChecks, runFatal } from './lib/preflight-run.mjs';
@@ -206,6 +207,8 @@ for (const { check: c, decision } of stamps.plan) {
   if (decision.run && decision.warn) console.log(`  ${c.name}: re-running, ${decision.why}`);
   if (!decision.run) console.log(`  ${c.name} … ${stampedLine(decision.record, started)}`);
 }
+const prerequisite = prerequisiteProblem({ checks: toRun.map((c) => ({ ...c, cwd: resolve(ROOT, c.cwd) })), uiDirs: [UI, join(ROOT, 'citadel-workspace-client-ts')], exists: (p) => existsSync(join(ROOT, p)) });
+if (prerequisite !== null) { console.error(`preflight: ${prerequisite}`); process.exit(1); }
 const keyOf = new Map(stamps.plan.filter((p) => p.key).map((p) => [p.check, p.key]));
 const passes = [];
 // Anything beyond the node gates (cargo, tsc, vitest, a browser) waits for the machine-wide lock, and
