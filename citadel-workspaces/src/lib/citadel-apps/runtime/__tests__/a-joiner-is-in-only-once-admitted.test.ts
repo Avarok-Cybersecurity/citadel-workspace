@@ -66,7 +66,9 @@ function rig(claimed: string | null, holdClaim: boolean = false, joined: readonl
 }
 
 /** The open's answer if it has one yet. */
-function watch(answer: PortReply<TopicOpened>): { readonly now: () => PortAnswer<TopicOpened> | 'pending' } {
+interface Watched { readonly now: () => PortAnswer<TopicOpened> | 'pending' }
+
+function watch(answer: PortReply<TopicOpened>): Watched {
   let got: PortAnswer<TopicOpened> | 'pending' = 'pending';
   void Promise.resolve(answer).then((a: PortAnswer<TopicOpened>) => { got = a; });
   return { now: () => got };
@@ -82,7 +84,7 @@ describe('a joiner is in the topic only once admitted', () => {
   it('stays pending after "the owner was asked"; another session’s or group’s channel does not open it; its own does', async () => {
     vi.useFakeTimers();
     const r: Rig = rig('5:9');
-    const open = watch(r.port.TopicOpen({ name: 'pool' }));
+    const open: Watched = watch(r.port.TopicOpen({ name: 'pool' }));
     await vi.advanceTimersByTimeAsync(0);
     expect([r.sent, open.now()]).toEqual([['GroupListJoined', 'GroupRequestJoin'], 'pending']);
     await r.push(channel(999n, THEIRS));
@@ -95,7 +97,7 @@ describe('a joiner is in the topic only once admitted', () => {
   it('a session already in the group (another tab joined it) is in without asking again', async () => {
     vi.useFakeTimers();
     const r: Rig = rig('5:9', false, [THEIRS]);
-    const open = watch(r.port.TopicOpen({ name: 'pool' }));
+    const open: Watched = watch(r.port.TopicOpen({ name: 'pool' }));
     await vi.advanceTimersByTimeAsync(0);
     expect([r.sent, open.now()]).toEqual([['GroupListJoined'], OPENED]);
   });
@@ -103,7 +105,7 @@ describe('a joiner is in the topic only once admitted', () => {
   it('a decline is Unavailable', async () => {
     vi.useFakeTimers();
     const r: Rig = rig('5:9');
-    const open = watch(r.port.TopicOpen({ name: 'pool' }));
+    const open: Watched = watch(r.port.TopicOpen({ name: 'pool' }));
     await vi.advanceTimersByTimeAsync(0);
     await r.push({ GroupRequestJoinDeclineResponse: { cid: ME, group_key: THEIRS, request_id: null } });
     expect(open.now()).toEqual(UNAVAILABLE);
@@ -112,7 +114,7 @@ describe('a joiner is in the topic only once admitted', () => {
   it('an admission that never comes is Unavailable once the bound passes (paused clock)', async () => {
     vi.useFakeTimers();
     const r: Rig = rig('5:9');
-    const open = watch(r.port.TopicOpen({ name: 'pool' }));
+    const open: Watched = watch(r.port.TopicOpen({ name: 'pool' }));
     await vi.advanceTimersByTimeAsync(TIMEOUT_MS - 1);
     expect(open.now()).toBe('pending');
     await vi.advanceTimersByTimeAsync(1);
@@ -122,7 +124,7 @@ describe('a joiner is in the topic only once admitted', () => {
   it('an owner whose open is in flight answers a join request for its group instead of dropping it', async () => {
     vi.useFakeTimers();
     const r: Rig = rig(null, true);
-    const open = watch(r.port.TopicOpen({ name: 'pool' }));
+    const open: Watched = watch(r.port.TopicOpen({ name: 'pool' }));
     await vi.advanceTimersByTimeAsync(0);
     expect([r.sent, open.now()]).toEqual([['GroupCreateAppTopic'], 'pending']);
     await r.push({ GroupJoinRequestNotification: { cid: ME, peer_cid: 8n, group_key: MINE, request_id: null } });

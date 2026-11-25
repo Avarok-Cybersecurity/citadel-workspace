@@ -5,12 +5,14 @@
  * TEST FAKE: the Calendar's topic port is an in-memory CalendarTopics, the boundary cal-topic.ts
  * is given; it refuses the first `refusals` opens as the host does. listenCal is production.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { CAL_JOIN_RETRY_MS, CAL_TOPIC, listenCal } from '../cal-topic';
 import { PortRefused, type CalendarPorts } from '../ports';
 import { realEngine } from './engine-rig';
 
-function topics(refusals: number): { readonly ports: Pick<CalendarPorts, 'topics'>; readonly opens: () => number } {
+interface Topics { readonly ports: Pick<CalendarPorts, 'topics'>; readonly opens: () => number }
+
+function topics(refusals: number): Topics {
   let opens: number = 0;
   const ports: Pick<CalendarPorts, 'topics'> = {
     topics: {
@@ -33,8 +35,8 @@ describe('a refused cal join', () => {
 
   it('is said and tried again after the retry interval, until it is in', async () => {
     vi.useFakeTimers();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const t = topics(2);
+    const warn: MockInstance<typeof console.warn> = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const t: Topics = topics(2);
     listenCal(t.ports, realEngine(), () => undefined);
     await vi.advanceTimersByTimeAsync(0);
     expect([t.opens(), warn.mock.calls[0]?.[0]]).toEqual([1, '[calendar] the cal topic could not be joined; changes arrive by storage only; trying again in 10 s']);
@@ -51,7 +53,7 @@ describe('a refused cal join', () => {
   it('stops trying once the window leaves', async () => {
     vi.useFakeTimers();
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const t = topics(Infinity);
+    const t: Topics = topics(Infinity);
     const leave: () => void = listenCal(t.ports, realEngine(), () => undefined);
     await vi.advanceTimersByTimeAsync(0);
     leave();
