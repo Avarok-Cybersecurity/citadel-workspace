@@ -16,6 +16,7 @@ import type { AgentLink } from '../agent-link';
 import { peerPorts, type PeerPorts, type PeerWorld } from '../peer-ports';
 import type { IhttpFrame } from '../../sdk/generated/IhttpFrame';
 import { InstallPlaneRegistry } from '../install-plane-registry';
+import { admittedAfterJoin } from './agent-admits-a-joiner';
 
 const GRANTED: Capability[] = ['ihttp.p2p.serve', 'ihttp.p2p.call', 'group.topic.publish', 'storage.user'];
 const INSTALL: AppInstall = installOf('com.acme.kanban', 'Workspace', {
@@ -56,6 +57,7 @@ function world(session: boolean, mine: PeerForMe | null): World {
         ? { IhttpSendAccepted: { cid: 100n, peer_cid: body.peer_cid, request_id: body.request_id } }
         : { GroupRequestJoinSuccess: { cid: 100n, group_key: body.group_key, request_id: body.request_id } };
       queueMicrotask(() => handlers.forEach((h) => h(reply)));
+      for (const added of admittedAfterJoin(variant, body, 100n)) queueMicrotask(() => handlers.forEach((h) => h(added)));
     },
   };
   const w: PeerWorld = {

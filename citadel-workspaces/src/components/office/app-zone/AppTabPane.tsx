@@ -17,6 +17,7 @@ import { useGlueBinding, type GlueBinding } from './use-glue-binding';
 import { AppZoneRequired, placeholderFor, type PlaceholderView } from './AppZoneRequired';
 import type { ZoneProps, ZoneView } from './zone-state';
 import { usePlacedApp, useRuntimeMount, type PlacedApp } from './use-placed-app';
+import { TopicJoinNotice } from './TopicJoinNotice';
 
 /** The placeholder's height in a tab: the panel fills the pane, the placeholder sits at its top. */
 const PLACEHOLDER_HEIGHT: number = 240;
@@ -47,6 +48,7 @@ function TabRuntimeHost({ runtime, view, reasonFor, tabId, nodeId, me }: TabRunt
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col" data-testid="app-tab-pane" data-app-id={app.manifest.id}>
       <div ref={toolbar} data-testid="app-tab-toolbar-slot" className="flex-shrink-0 px-[8px]" />
+      <div className="flex-shrink-0 px-[8px]"><TopicJoinNotice installId={install.id} appName={app.manifest.name} /></div>
       <div ref={host} data-testid="app-tab-host" className="relative min-h-[320px] w-full flex-1" />
     </div>
   );
@@ -70,6 +72,7 @@ function GlueTabHost({ runtime, load, tab }: { runtime: AppZoneRuntime; load: Gl
   if (loaded === 'failed') return <p role="alert" className="m-[16px] text-sm text-destructive-emphasis">{props.manifest.name} could not be loaded. Reload the page to try again.</p>;
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col" data-testid="app-tab-pane" data-app-id={props.manifest.id}>
+      <div className="flex-shrink-0 px-[8px]"><TopicJoinNotice installId={tab.install.id} appName={props.manifest.name} /></div>
       <loaded.Tab {...props} glue={binding.instance} mayEditNode={permits(edit)} />
     </div>
   );

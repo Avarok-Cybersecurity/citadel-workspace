@@ -10,6 +10,7 @@ import type { PeerAuthorization } from '@/lib/citadel-apps/member-consent-types'
 import type { AgentLink } from '@/lib/citadel-apps/runtime/agent-link';
 import { PeerAuthority } from '@/lib/citadel-apps/runtime/peer-authority';
 import { topicPort, type OwnedTopicPort } from '@/lib/citadel-apps/runtime/topic-port';
+import { admittedAfterJoin } from '@/lib/citadel-apps/runtime/__tests__/agent-admits-a-joiner';
 import { encodeGroupMessage } from '../group-message-codec';
 import { toGroupEvents, type GroupEvent } from '../group-events';
 import { withoutAppTopics } from '../app-topic-filter';
@@ -28,6 +29,7 @@ function joinedTopic(groupId: string): OwnedTopicPort {
     send: async (request: Record<string, unknown>): Promise<void> => {
       const [variant, body] = Object.entries(request)[0] as [string, Record<string, unknown>];
       queueMicrotask(() => handlers.forEach((h) => h({ [SUCCESS[variant]]: { cid: ME, group_key: body.group_key, request_id: body.request_id } })));
+      for (const added of admittedAfterJoin(variant, body, ME)) queueMicrotask(() => handlers.forEach((h) => h(added)));
     },
   };
   const never = async (): Promise<PeerAuthorization> => ({ ok: false, why: 'NoHost' });
@@ -35,7 +37,7 @@ function joinedTopic(groupId: string): OwnedTopicPort {
     seat: new InstallPlaneRegistry().attach('inst-1', 'net.avarok.compute-pool'),
     cid: ME, agent, topics: ['pool'], limits: { max_msg_bytes: 64, max_msgs_per_s: 2 }, timeoutMs: 1000,
     authority: new PeerAuthority(never, (): number => 0, 30), topicGroup: async (): Promise<string> => groupId,
-    record: { group: markTopicGroup, request: markTopicRequest }, refused: (): void => undefined,
+    record: { group: markTopicGroup, request: markTopicRequest }, refused: (): void => undefined, notAMember: (): void => undefined,
   });
 }
 

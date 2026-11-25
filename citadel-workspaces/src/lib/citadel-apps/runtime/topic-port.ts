@@ -10,6 +10,12 @@
  * what the body says. Two instances of the install on this page hold one membership: the group is
  * joined by the first and left by the last, and one of them answers join requests
  * (install-plane-registry.ts). Pure over the injected agent and kernel.
+ *
+ * `TopicOpen` answers ok only once this member hears the group: a joiner waits for the agent to
+ * say it was admitted (topic-admission.ts), never for the agent's "the owner was asked". Every
+ * open ends, in the group or in `Unavailable("topic")`, within `timeoutMs` of each agent or kernel
+ * step (the host's `portTimeoutMs`, 10 s in STANDARD_HOST_POLICY), and the dispatcher bounds the
+ * whole call by the same `portTimeoutMs` (host/dispatch.ts `bounded`, `Refused { limit: "timeout" }`).
  */
 import type { PortAnswer, TopicArrival, TopicPort } from '../host/ports';
 import type { PeerAuthorization } from '../member-consent-types';
@@ -18,6 +24,7 @@ import { groupIdToKey, groupKeyToId, parseGroupKey } from '@/lib/group-conversat
 import { agentAsk, bytesOf, variantOf, type AgentLink, type AgentOutcome, type Json } from './agent-link';
 import type { PlaneSeat } from './install-plane-registry';
 import type { PeerAuthority } from './peer-authority';
+import { joinAdmitted } from './topic-admission';
 import { LIMIT_TOPIC_BYTES, LIMIT_TOPIC_RATE } from '../sdk/generated/AbiConstants';
 import { mayOpen, readTopicMessage, topicEnvelope, type TopicLimits } from './topic-model';
 
@@ -41,6 +48,12 @@ export interface TopicDeps {
    * agent names no request (request_id is always null), so it answers no publish: it is reported.
    */
   readonly refused: (topic: string, limit: typeof LIMIT_TOPIC_BYTES | typeof LIMIT_TOPIC_RATE) => void;
+  /**
+   * The server refused one of this session's messages to an open topic because the session is not
+   * in its group (it was removed, or the group passed on). The refusal answers no publish and the
+   * topic ABI has no event for it, so it is reported here rather than dropped.
+   */
+  readonly notAMember: (topic: string) => void;
 }
 
 interface Open {
@@ -59,9 +72,11 @@ export type OwnedTopicPort = TopicPort & { readonly closeAll: () => Promise<void
 
 export function topicPort(d: TopicDeps): OwnedTopicPort {
   const open: Map<string, Open> = new Map<string, Open>();
+  /** Groups an open in flight has learnt (the topic's name by group id): a join request or a message for one is not dropped. */
+  const opening: Map<string, string> = new Map<string, string>();
   const listeners: Set<(a: TopicArrival) => void> = new Set<(a: TopicArrival) => void>();
   const emit = (a: TopicArrival): void => { for (const l of [...listeners]) l(a); };
-  const topicOf = (groupId: string): string | undefined => [...open.entries()].find(([, o]: [string, Open]) => o.groupId === groupId)?.[0];
+  const topicOf = (groupId: string): string | undefined => [...open.entries()].find(([, o]: [string, Open]) => o.groupId === groupId)?.[0] ?? opening.get(groupId);
 
   const ask = (build: (id: string) => Json, ok: string, failed: string): Promise<AgentOutcome<Json | null>> =>
     agentAsk<Json | null>(d.agent, build, (m: unknown, id: string): Json | null | undefined => {
@@ -78,11 +93,17 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
     }, 'GroupCreateSuccess', 'GroupCreateFailure');
     return r.ok && r.value !== null ? groupKeyToId(parseGroupKey(r.value.group_key)) : null;
   };
-  const join = async (groupId: string): Promise<boolean> => {
+  /** In the group: the owner admitted this session (topic-admission.ts), not merely was asked. */
+  const joined = async (): Promise<readonly string[] | null> => {
+    const r: AgentOutcome<Json | null> = await ask((request_id: string): Json => ({ GroupListJoined: { cid: d.cid, request_id } }), 'GroupListJoinedSuccess', 'GroupListJoinedFailure');
+    const groups: unknown = r.ok ? r.value?.groups : undefined;
+    return Array.isArray(groups) ? groups.map((k: unknown): string => groupKeyToId(parseGroupKey(k))) : null;
+  };
+  const join = (groupId: string): Promise<boolean> => joinAdmitted({ agent: d.agent, cid: d.cid, groupId, timeoutMs: d.timeoutMs }, joined, async (): Promise<boolean> => {
     const r: AgentOutcome<Json | null> = await ask((request_id: string): Json =>
       ({ GroupRequestJoin: { cid: d.cid, group_key: groupIdToKey(groupId), request_id } }), 'GroupRequestJoinSuccess', 'GroupRequestJoinFailure');
     return r.ok && r.value !== null;
-  };
+  });
   /** Leaves still unanswered: a join or create waits for them (see OwnedTopicPort). */
   const leaving: Set<Promise<unknown>> = new Set<Promise<unknown>>();
   const leave = (groupId: string, topic: string | null): Promise<unknown> => {
@@ -107,17 +128,22 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
     if (held === 'refused') return null;
     if (held !== null) {
       d.record.group(held);
+      opening.set(held, name);
       return (await join(held)) ? held : null;
     }
     const mine: string | null = await create();
     if (mine === null) return null;
     d.record.group(mine);
+    // Joiners can find the group as soon as the kernel holds the claim, before this open is done.
+    opening.set(mine, name);
     const kept: string | null | 'refused' = await d.topicGroup(name, mine);
     if (kept === mine) return mine;
     // Another member claimed first (or the claim was refused): theirs is the topic's, ours goes.
+    opening.delete(mine);
     void leave(mine, null);
     if (kept === null || kept === 'refused') return null;
     d.record.group(kept);
+    opening.set(kept, name);
     return (await join(kept)) ? kept : null;
   };
 
@@ -129,7 +155,8 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
     if (refusal === undefined || refusal.cid !== d.cid) return;
     const topic: string | undefined = topicOf(groupKeyToId(parseGroupKey(refusal.group_key)));
     // A send from a session no longer in the topic's group broke no cap: it is not a limit event.
-    if (topic === undefined || refusal.refusal === 'NotAMember') return;
+    if (topic === undefined) return;
+    if (refusal.refusal === 'NotAMember') { d.notAMember(topic); return; }
     d.refused(topic, variantOf(refusal.refusal, 'RateLimited') === undefined ? LIMIT_TOPIC_BYTES : LIMIT_TOPIC_RATE);
   }));
 
@@ -163,6 +190,7 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
       if (!mayOpen(name, d.topics)) return { refused: { policy: 'unknown_topic' } };
       if (!open.has(name)) {
         const groupId: string | null = await d.seat.holdTopic(name, () => groupFor(name));
+        for (const [id, topic] of [...opening]) if (topic === name) opening.delete(id);
         if (groupId === null) return UNAVAILABLE;
         open.set(name, { groupId });
       }
