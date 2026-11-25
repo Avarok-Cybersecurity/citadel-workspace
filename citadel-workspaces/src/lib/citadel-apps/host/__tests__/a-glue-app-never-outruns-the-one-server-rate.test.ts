@@ -9,7 +9,7 @@ import type { Capability } from '../capabilities';
 import { glueInstance, type GlueInstance } from '../glue-instance';
 import { STANDARD_HOST_POLICY } from '../limits';
 import type { HostReply } from '../ports';
-import { fakeStorage, ManualClock, type Recorder } from './fakes';
+import { fakeStorage, ManualClock, oneClock, type Recorder } from './fakes';
 
 const flush = (): Promise<void> => new Promise<void>((done: () => void): void => { setTimeout(done, 0); });
 const RATE: number = STANDARD_HOST_POLICY.serverCallsPerSecond;
@@ -21,7 +21,7 @@ async function arrivals(burst: number): Promise<{ readonly counts: number[]; rea
   const clock: ManualClock = new ManualClock();
   const g: GlueInstance = glueInstance({
     appId: 'net.avarok.calendar', ports: { storage: fakeStorage(rec) }, held: new Set<Capability>(['storage.user']),
-    policy: STANDARD_HOST_POLICY, limits: { topics: null, p2p: null }, clock, pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
+    policy: STANDARD_HOST_POLICY, limits: { topics: null, p2p: null }, ...oneClock(clock), pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
   });
   const pending: Promise<HostReply<unknown>>[] = Array.from({ length: burst }, () => g.op('KvGet', { backend: 'user', key: 'k' }));
   const counts: number[] = [];

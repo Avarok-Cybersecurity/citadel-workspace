@@ -52,7 +52,10 @@ export interface GlueOptions {
   readonly held: ReadonlySet<Capability>;
   readonly policy: HostPolicy;
   readonly limits: InstanceLimits;
+  /** Monotonic (a page's performance.now()): what calls are paced by and waits are timed on. Never a date. */
   readonly clock: DispatchClock;
+  /** The date, as epoch ms: what an app reads "now" from. */
+  readonly wallNow: () => number;
   /** The page the app is mounted in: what an internal link is relative to. */
   readonly pageUrl: string;
   readonly storageChanges: StorageChanges;
@@ -60,8 +63,10 @@ export interface GlueOptions {
 
 export interface GlueInstance {
   readonly held: ReadonlySet<Capability>;
-  /** The clock the instance was given: what the app reads "now" from, and waits on. */
+  /** The monotonic clock the instance was given: what the app waits on. Never a date. */
   readonly clock: DispatchClock;
+  /** The date, as epoch ms: what the app reads "now" from. */
+  readonly wallNow: () => number;
   /** One call by (group, op), as a worker would make it. */
   readonly call: (group: AbiGroup, op: number, args: CborMap) => Promise<HostReply<unknown>>;
   /** The same call by the op's generated name, typed by its arguments and reply. */
@@ -145,6 +150,7 @@ export function glueInstance(o: GlueOptions): GlueInstance {
   return {
     held: o.held,
     clock,
+    wallNow: o.wallNow,
     call,
     op: async <N extends OpName>(name: N, args: OpArgs[N]): Promise<HostReply<OpReplies[N]>> => {
       const at: { readonly group: AbiGroup; readonly op: number } = findOpByName(name);

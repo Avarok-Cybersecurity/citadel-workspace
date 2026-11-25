@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import type { Capability } from '../../host/capabilities';
 import { glueInstance, type GlueInstance } from '../../host/glue-instance';
 import { STANDARD_HOST_POLICY } from '../../host/limits';
-import { ManualClock } from '../../host/__tests__/fakes';
+import { ManualClock, oneClock } from '../../host/__tests__/fakes';
 import { IHTTP_INITIAL_CREDIT, IHTTP_MAX_CHUNK_BYTES } from '../../sdk/generated/AbiConstants';
 import { calendarPorts, type CalendarPorts } from '@/lib/calendar/ports';
 import { IhttpRelay } from '@/lib/calendar/__tests__/ihttp-relay';
@@ -21,7 +21,7 @@ const HELD: Capability[] = ['ihttp.serve', 'ihttp.call'];
 function instance(name: string, relay: IhttpRelay, heard: IhttpRequest[]): IhttpEndpoint {
   const glue: GlueInstance = glueInstance({
     appId: 'net.avarok.calendar', ports: { ihttp: relay.port(name) }, held: new Set<Capability>(HELD), policy: STANDARD_HOST_POLICY,
-    limits: { topics: null, p2p: null }, clock: new ManualClock(), pageUrl: 'https://w.example/n1', storageChanges: () => (): void => {},
+    limits: { topics: null, p2p: null }, ...oneClock(new ManualClock()), pageUrl: 'https://w.example/n1', storageChanges: () => (): void => {},
   });
   const ports: CalendarPorts = calendarPorts(glue);
   void ports.ihttp.serve([{ method: 'POST', path: '/echo' }], { relay: true, p2p: false });
