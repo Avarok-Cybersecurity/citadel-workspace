@@ -11,7 +11,7 @@ import { FakeAgentLocalDb } from '../../chat/__tests__/doubles/fake-agent-local-
 import { sha256Hex } from '@/lib/chat/attachments/attachment-wire';
 import { devicePictures } from '../device-pictures';
 import { SCRATCHPAD_FILE_LIMIT } from '@/lib/scratchpad/scratchpad-blobs';
-import type { PictureDocument } from '../picture-port';
+import type { PictureDocument, PicturePort } from '../picture-port';
 import { drawnImages, insertCloseReopen, labels, storedAccess, type OwnerScenario } from './picture-rig';
 import { PNG_4X3 } from './doubles/memory-pictures';
 import { sha256ContentId } from '../content-id';
@@ -32,7 +32,7 @@ describe('a picture in a scratchpad document', () => {
 
   it('is kept apart per document: another document of the account does not find it', async () => {
     const agent: FakeAgentLocalDb = new FakeAgentLocalDb();
-    const port = devicePictures(agent.connection([ME]), sha256Hex);
+    const port: PicturePort = devicePictures(agent.connection([ME]), sha256Hex);
     const id: string = await sha256ContentId(PNG_4X3);
     expect((await port.put(DOC, id, PNG_4X3)).ok).toBe(true);
     expect(await port.get({ ...DOC, docId: 'cdoc-scratch-2' }, id)).toEqual({ ok: false, failure: { kind: 'notFound' } });

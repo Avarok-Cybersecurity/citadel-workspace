@@ -13,6 +13,7 @@ import type { PaintOutcome } from '../../paint/page-rasterizer';
 import { LOADING_IMAGE_LABEL } from '../../paint/image-resolve';
 import { pictureMissingLabel, type PictureDocument } from '../picture-port';
 import { memoryPictures, PNG_4X3, type MemoryPictures } from './doubles/memory-pictures';
+import type { Call } from '../../paint/__tests__/recording-canvas';
 import { close, drawnImages, labels, openWith, paintSettled, repainted, storedAccess, type Opened } from './picture-rig';
 
 const PAGE: PictureDocument = { kind: 'page', nodeId: 'node-2' };
@@ -53,7 +54,7 @@ describe('a picture the editor does not hold yet', () => {
     const snapshot: Uint8Array = await withPicture(store);
     store.fail(failure);
     const b: Opened = track(await openWith(storedAccess(store, PAGE), { kind: 'snapshot', snapshot }));
-    const calls = await paintSettled(b);
+    const calls: Call[] = await paintSettled(b);
     expect(drawnImages(calls)).toBe(0);
     expect(labels(calls)).toContain(pictureMissingLabel(failure));
   });
@@ -63,7 +64,7 @@ describe('a picture the editor does not hold yet', () => {
     const snapshot: Uint8Array = await withPicture(store);
     const b: Opened = track(await openWith(storedAccess(store, PAGE), { kind: 'snapshot', snapshot }));
     store.tamper(store.puts[0].contentId, Uint8Array.from([...PNG_4X3, 0]));
-    const calls = await paintSettled(b);
+    const calls: Call[] = await paintSettled(b);
     expect(drawnImages(calls)).toBe(0);
     expect(labels(calls)).toContain(pictureMissingLabel({ kind: 'damaged' }));
   });

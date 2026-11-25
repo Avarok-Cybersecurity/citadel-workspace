@@ -48,7 +48,7 @@ describe('a picture from the peer', () => {
     await new Promise<void>((resolve: () => void): void => { setTimeout(resolve, 0); });
     channel.deliverFirst(channel.inFlightCount);
     expect(await settled(alice)).toEqual(['sent']);
-    const chunks = channel.sent.filter((s) => s.from === ALICE && s.kind === 'picture_chunk');
+    const chunks: typeof channel.sent = channel.sent.filter((s) => s.from === ALICE && s.kind === 'picture_chunk');
     expect(chunks.length).toBe(4);
     expect(chunks.every((s) => s.bytes <= PAIR_PICTURES.chunkBytes + 1024)).toBe(true);
     channel.deliver(new Rng(7), { drop: 0, duplicate: 1, reorder: true });

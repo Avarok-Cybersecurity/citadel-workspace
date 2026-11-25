@@ -12,6 +12,8 @@ import type { PictureDocument } from '../picture-port';
 import { memoryPictures, PNG_4X3, type MemoryPictures } from './doubles/memory-pictures';
 import { close, drawnImages, heldBytes, labels, openWith, paintSettled, storedAccess, type Opened } from './picture-rig';
 import { UNAVAILABLE_IMAGE_LABEL } from '../../paint/image-resolve';
+import type { Call } from '../../paint/__tests__/recording-canvas';
+import type { ExportedFile } from '../../editor/file-formats';
 
 const PAGE: PictureDocument = { kind: 'page', nodeId: 'node-1' };
 const opened: Opened[] = [];
@@ -34,7 +36,7 @@ describe('a picture inserted into a document', () => {
     const store: MemoryPictures = memoryPictures();
     const { snapshot, added } = await insertPicture(store);
     const b: Opened = track(await openWith(storedAccess(store, PAGE), { kind: 'snapshot', snapshot }));
-    const calls = await paintSettled(b);
+    const calls: Call[] = await paintSettled(b);
     expect(labels(calls)).not.toContain(UNAVAILABLE_IMAGE_LABEL);
     expect(drawnImages(calls)).toBe(1);
     expect(await heldBytes(b, added.contentId)).toEqual(PNG_4X3);
@@ -76,7 +78,7 @@ describe('a picture inserted into a document', () => {
     const store: MemoryPictures = memoryPictures();
     const { snapshot, added } = await insertPicture(store);
     const b: Opened = track(await openWith(storedAccess(store, PAGE), { kind: 'snapshot', snapshot }));
-    const docx = await b.editor.exportAs({ format: 'docx' });
+    const docx: ExportedFile = await b.editor.exportAs({ format: 'docx' });
     const imported: Opened = track(await openWith({ kind: 'none', reason: 'a test reads the file' }, { kind: 'bytes', bytes: docx.bytes, format: 'docx' }));
     expect(await heldBytes(imported, added.contentId)).toEqual(PNG_4X3);
   });

@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import type { DocumentPictureRefusal } from 'citadel-workspace-client-ts';
 import { serverPictures } from '../server-pictures';
-import type { PictureDocument, PictureFailure, PictureResult } from '../picture-port';
+import type { PicturePort, PictureDocument, PictureFailure, PictureResult } from '../picture-port';
 import { scriptedServer, type ScriptedServer } from './scripted-server';
 
 const NO_DEADLINE_HERE: number = 5_000;
@@ -40,13 +40,13 @@ describe('a refused or unanswered picture', () => {
       [typeof refusal === 'string' ? refusal : Object.keys(refusal)[0], refusal, expected],
   );
   it.each(named)('is refused %s as the member is told it', async (_: string, refusal: DocumentPictureRefusal, expected: PictureFailure) => {
-    const port = serverPictures(scriptedServer({ refuse: refusal }), NO_DEADLINE_HERE);
+    const port: PicturePort = serverPictures(scriptedServer({ refuse: refusal }), NO_DEADLINE_HERE);
     expect(failure(await port.put(PAGE, ID, picture))).toEqual(expected);
     expect(failure(await port.get(PAGE, ID))).toEqual(expected);
   });
 
   it('is offline when the server does not answer in time', async () => {
-    const port = serverPictures(scriptedServer({ silent: true }), SHORT_DEADLINE);
+    const port: PicturePort = serverPictures(scriptedServer({ silent: true }), SHORT_DEADLINE);
     expect(failure(await port.put(PAGE, ID, picture))).toEqual({ kind: 'offline' });
     expect(failure(await port.get(PAGE, ID))).toEqual({ kind: 'offline' });
   });
@@ -54,7 +54,7 @@ describe('a refused or unanswered picture', () => {
   it('is offline, and not sent, while the link is down', async () => {
     const server: ScriptedServer = scriptedServer();
     server.setLink('down');
-    const port = serverPictures(server, NO_DEADLINE_HERE);
+    const port: PicturePort = serverPictures(server, NO_DEADLINE_HERE);
     expect(failure(await port.put(PAGE, ID, picture))).toEqual({ kind: 'offline' });
     expect(failure(await port.get(PAGE, ID))).toEqual({ kind: 'offline' });
     expect(server.sent).toEqual([]);
@@ -62,7 +62,7 @@ describe('a refused or unanswered picture', () => {
 
   it('is offline as soon as the link drops while it waits', async () => {
     const server: ScriptedServer = scriptedServer({ silent: true });
-    const port = serverPictures(server, BEYOND_THE_TEST);
+    const port: PicturePort = serverPictures(server, BEYOND_THE_TEST);
     const pending: Promise<PictureResult<Uint8Array>> = port.get(PAGE, ID);
     await Promise.resolve();
     server.setLink('down');

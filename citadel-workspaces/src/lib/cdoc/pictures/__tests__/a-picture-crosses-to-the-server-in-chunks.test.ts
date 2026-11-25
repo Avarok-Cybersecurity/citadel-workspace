@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import type { DocumentPicturesRequest } from 'citadel-workspace-client-ts';
 import { CHAT_ATTACHMENT_CHUNK_BYTES } from '@/lib/chat/attachments/attachment-wire';
 import { serverPictures } from '../server-pictures';
-import type { PictureDocument, PictureResult } from '../picture-port';
+import type { PicturePort, PictureDocument, PictureResult } from '../picture-port';
 import { scriptedServer, type ScriptedServer } from './scripted-server';
 
 /** Long enough never to fire in a test that is not about the deadline. */
@@ -25,7 +25,7 @@ function value<T>(result: PictureResult<T>): T {
 describe('a picture on the workspace server', () => {
   it('goes up in the server\'s chunks, one answered at a time, and comes back whole', async () => {
     const server: ScriptedServer = scriptedServer();
-    const port = serverPictures(server, NO_DEADLINE_HERE);
+    const port: PicturePort = serverPictures(server, NO_DEADLINE_HERE);
     value(await port.put(PAGE, ID, picture));
     expect(server.maxInFlight()).toBe(1);
     const sizes: number[] = server.sent.map((r: DocumentPicturesRequest): number => ('UploadChunk' in r ? r.UploadChunk.bytes.length : -1));
@@ -35,7 +35,7 @@ describe('a picture on the workspace server', () => {
 
   it('addresses a node chat document as itself, and takes no answer about another document', async () => {
     const server: ScriptedServer = scriptedServer();
-    const port = serverPictures(server, NO_DEADLINE_HERE);
+    const port: PicturePort = serverPictures(server, NO_DEADLINE_HERE);
     value(await port.put(CHAT, ID, picture));
     const first: DocumentPicturesRequest | undefined = server.sent[0];
     expect(first !== undefined && 'UploadChunk' in first ? first.UploadChunk.doc : null).toEqual({ node_id: 'room-1', chat_doc: CHAT.kind === 'nodeChat' ? CHAT.chatDoc : '' });
@@ -46,7 +46,7 @@ describe('a picture on the workspace server', () => {
 
   it('hands on what it read unchecked, and asks the server every time', async () => {
     const server: ScriptedServer = scriptedServer({ tamper: true });
-    const port = serverPictures(server, NO_DEADLINE_HERE);
+    const port: PicturePort = serverPictures(server, NO_DEADLINE_HERE);
     value(await port.put(PAGE, ID, picture));
     const flipped: Uint8Array = picture.map((b: number): number => b ^ 0xff);
     expect(value(await port.get(PAGE, ID))).toEqual(flipped);
@@ -57,7 +57,7 @@ describe('a picture on the workspace server', () => {
   });
 
   it('keeps no picture of a direct chat\'s or a scratchpad\'s document', async () => {
-    const port = serverPictures(scriptedServer(), NO_DEADLINE_HERE);
+    const port: PicturePort = serverPictures(scriptedServer(), NO_DEADLINE_HERE);
     await expect(port.put({ kind: 'pair', selfCid: 1n, peerCid: 2n, docId: 'd' }, ID, picture)).rejects.toThrow(/no pictures of a pair/);
     await expect(port.get({ kind: 'scratchpad', account: 1n, docId: 'd' }, ID)).rejects.toThrow(/no pictures of a scratchpad/);
   });

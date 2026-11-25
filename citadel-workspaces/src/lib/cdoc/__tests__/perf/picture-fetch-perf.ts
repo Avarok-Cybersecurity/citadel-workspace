@@ -13,6 +13,7 @@ import { MAX_IMAGE_BYTES } from '../../engine/engine-limits';
 import type { EditorState } from '../../editor/controller';
 import { DocumentPictures, type PictureAccess } from '../../pictures/document-pictures';
 import { sha256ContentId } from '../../pictures/content-id';
+import type { PictureDocument } from '../../pictures/picture-port';
 import { PICTURE_LIMITS, type PictureLimits } from '../../pictures/picture-config';
 import { memoryPictures, PNG_4X3, type MemoryPictures } from '../../pictures/__tests__/doubles/memory-pictures';
 import { realHost } from '../wasm-rig';
@@ -34,7 +35,7 @@ export interface PictureFetchPerf {
 }
 
 const percentile = (xs: number[], p: number): number => [...xs].sort((a: number, b: number) => a - b)[Math.min(xs.length - 1, Math.floor(p * xs.length))];
-const DOC = { kind: 'page', nodeId: 'perf' } as const;
+const DOC: PictureDocument = { kind: 'page', nodeId: 'perf' };
 
 /** A distinct PNG per index: bytes after IEND change the content id, not the picture. */
 const nth = (n: number): Uint8Array => Uint8Array.from([...PNG_4X3, n & 0xff, n >> 8]);
@@ -43,7 +44,9 @@ function access(store: MemoryPictures, limits: PictureLimits): PictureAccess {
   return { kind: 'stored', pictures: new DocumentPictures({ port: store, doc: DOC, contentIdOf: sha256ContentId, now: (): number => performance.now(), limits }) };
 }
 
-function open(store: MemoryPictures, limits: PictureLimits, from: Parameters<typeof EditorSession.open>[2]): Promise<{ editor: EditorSession; renderer: WorkerPageRenderer }> {
+interface Opened { readonly editor: EditorSession; readonly renderer: WorkerPageRenderer }
+
+function open(store: MemoryPictures, limits: PictureLimits, from: Parameters<typeof EditorSession.open>[2]): Promise<Opened> {
   const client: InProcessCdocClient = new InProcessCdocClient(realHost(nullPort, (): typeof nullTarget => nullTarget));
   const renderer: WorkerPageRenderer = new WorkerPageRenderer(client, (): OffscreenCanvas => ({}) as OffscreenCanvas);
   return EditorSession.open({ client, renderer, pictures: access(store, limits) }, 1n, from).then((editor: EditorSession) => ({ editor, renderer }));
@@ -52,7 +55,7 @@ function open(store: MemoryPictures, limits: PictureLimits, from: Parameters<typ
 /** `limits`: the production limits; a control passes others. */
 export async function measurePictureFetch(pictures: number, keystrokes: number, limits: PictureLimits = PICTURE_LIMITS): Promise<PictureFetchPerf> {
   const store: MemoryPictures = memoryPictures();
-  const writer = await open(store, limits, { kind: 'blank' });
+  const writer: Opened = await open(store, limits, { kind: 'blank' });
   for (let n: number = 0; n < pictures; n++) {
     const { contentId } = await writer.editor.addImage(nth(n), MAX_IMAGE_BYTES);
     await writer.editor.execute({ name: 'insertImageFitted', contentId });
@@ -87,7 +90,7 @@ export async function measurePictureFetch(pictures: number, keystrokes: number, 
     if (waiting === 0) break;
     await new Promise<void>((resolve: () => void): void => { setTimeout(resolve, 0); });
   }
-  const gets = store.gets.slice(putGets);
+  const gets: MemoryPictures['gets'] = store.gets.slice(putGets);
   editor.dispose();
   return {
     pictures, pages: editor.state.pageCount, keyP50Ms: percentile(keyTimes, 0.5), keyP95Ms: percentile(keyTimes, 0.95), pageP50Ms: percentile(pageTimes, 0.5),
