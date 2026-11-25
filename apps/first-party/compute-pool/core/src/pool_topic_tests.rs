@@ -1,7 +1,7 @@
 use super::*;
 use crate::dashboard;
 use crate::jobs::Job;
-use crate::limits::{CLAIM_WINDOW_MS, JOIN_RETRY_MS};
+use crate::limits::CLAIM_WINDOW_MS;
 use crate::pool::{Action, Outcome};
 use crate::wire::{work, PoolMsg};
 use citadel_app_sdk_types::calls::{DrawCommand, Via};
@@ -37,25 +37,29 @@ fn a_member_is_logged_the_first_time_it_is_heard_and_not_again() {
     assert!(logged(&alice.on_msg("bob", beat)).is_empty());
 }
 
+/// A failed open is said and shown, and never retried on a timer: the pool opens the topic again
+/// only when the host says who is on it (it admitted this member), and only once per such word.
 #[test]
-fn a_failed_open_is_said_shown_and_tried_again_after_the_retry_interval() {
+fn a_failed_open_is_said_and_shown_and_reopened_only_when_the_host_says_who_is_on_the_topic() {
     let mut pool = Pool::new("alice", 4);
     assert!(shown(&pool).iter().any(|t| t == "joining the pool…"));
     let said = pool.join_failed("Refused(Unavailable(\"topic\"))");
     assert_eq!(
         logged(&said),
-        ["not in the pool: Refused(Unavailable(\"topic\")); trying again in 10 s"]
+        ["not in the pool: Refused(Unavailable(\"topic\")); joining when the host admits this member"]
     );
     assert!(shown(&pool)
         .iter()
-        .any(|t| t.starts_with("not in the pool (")));
-    assert!(!pool.tick(JOIN_RETRY_MS - 1).contains(&Action::JoinTopic));
-    assert!(pool.tick(1).contains(&Action::JoinTopic));
-    assert_eq!(pool.membership, Membership::Joining);
+        .any(|t| t == "not in the pool (Refused(Unavailable(\"topic\")))"));
     assert!(
-        !pool.tick(JOIN_RETRY_MS).contains(&Action::JoinTopic),
-        "one try per failure"
+        !pool.tick(60 * 60 * 1000).contains(&Action::JoinTopic),
+        "no timer"
     );
+    assert_eq!(pool.heard_members(), [Action::JoinTopic]);
+    assert_eq!(pool.membership, Membership::Joining);
+    assert!(pool.heard_members().is_empty(), "once per word");
+    pool.joined();
+    assert!(pool.heard_members().is_empty(), "already in");
 }
 
 /// A job a member answered and checked, and one this device did alone, read differently in the

@@ -63,7 +63,7 @@ pub fn draw(pool: &Pool, width: f32, height: f32) -> Vec<DrawCommand> {
     let status = match (pool.progress(), &pool.membership) {
         (Some((done, all)), _) => format!("job: {done}/{all} chunks"),
         (None, Membership::Joining) => String::from("joining the pool…"),
-        (None, Membership::Out { why, .. }) => format!("not in the pool ({why}): trying again"),
+        (None, Membership::Out { why }) => format!("not in the pool ({why})"),
         (None, Membership::In) => match pool.history.back() {
             Some(r) => format!("last job: {} ms, {}", r.ms, r.outcome().wording()),
             None => String::from("no job yet: press Run"),

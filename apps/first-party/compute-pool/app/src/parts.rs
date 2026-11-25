@@ -20,8 +20,6 @@ pub(crate) fn toolbar() -> Vec<ToolbarItem> {
     ]
 }
 
-/// Opens the pool's topic; the pool hears whether it is in (`joined`) or why not (and retries).
-
 /// What one worker's outcome tells the pool.
 pub(crate) fn answer_of(outcome: &Outcome, planned: Via) -> (Result<ChunkResults, String>, Via) {
     match outcome {

@@ -55,7 +55,7 @@ pub enum Action {
     Save(Record),
     /// A line for the app's log (`log.write`, info).
     Log(String),
-    /// Open the pool's topic again (pool_topic.rs: a failed open is retried).
+    /// Open the pool's topic again: the host said this member is in now (pool_topic.rs).
     JoinTopic,
 }
 
@@ -128,7 +128,6 @@ impl Pool {
             .retain(|_, p| now.saturating_sub(p.last_seen_ms) <= PEER_STALE_MS);
         let mut out = Vec::new();
         self.since_heartbeat = self.since_heartbeat.saturating_add(dt_ms);
-        out.extend(self.retry_join(dt_ms));
         if self.since_heartbeat >= HEARTBEAT_MS && self.membership == Membership::In {
             let load = u32::from(self.running.is_some());
             out.push(self.publish(PoolMsg::Heartbeat {

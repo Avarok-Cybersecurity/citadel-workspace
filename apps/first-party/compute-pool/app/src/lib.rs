@@ -29,6 +29,7 @@ struct ComputePool {
     size: (f32, f32),
 }
 
+/// Opens the pool's topic; the pool hears whether it is in (`joined`) or why not.
 fn open_topic() {
     topic::open(TOPIC, on_topic).then(|app: &mut ComputePool, r| {
         let actions = match r {
@@ -44,8 +45,13 @@ fn open_topic() {
 }
 
 fn on_topic(app: &mut ComputePool, event: TopicEvent) {
-    let TopicEvent::Message { from, body } = event else {
-        return;
+    let (from, body) = match event {
+        TopicEvent::Message { from, body } => (from, body),
+        TopicEvent::Members(_) if app.topic.is_none() => {
+            let actions = app.pool.heard_members();
+            return app.perform(actions);
+        }
+        _ => return,
     };
     if body.0.len() > TOPIC_MAX_MSG_BYTES as usize {
         return;
