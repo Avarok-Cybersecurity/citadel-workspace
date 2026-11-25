@@ -41,7 +41,7 @@ pub(super) fn made_by_provisioning(install: &AppInstall) -> bool {
 
 impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Installs each of `bundles` the workspace does not have yet, `trusted` being the first-party
-    /// keys (`FIRST_PARTY_PUBLISHER_KEYS` in production).
+    /// keys (`install::trusted_first_party_keys()` at boot).
     pub async fn provision_first_party_apps(
         &self,
         bundles: &[(&str, SignedBundle<'_>)],
@@ -50,6 +50,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         if bundles.is_empty() {
             return Ok(());
         }
+        #[cfg(feature = "ci-first-party-root")]
+        citadel_logging::warn!(target: "citadel", "This server trusts the CI first-party root: a test build, never a release");
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| NetworkError::msg(format!("The server clock is before the epoch: {e}")))?

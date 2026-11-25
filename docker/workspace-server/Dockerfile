@@ -23,8 +23,14 @@
 # pull it -- is untenable; the slim stage lands at roughly 150 MB instead.
 # =============================================================================
 
+# The stage the `dev` image is built on: `builder`, or the integration image's
+# `builder-ci-first-party`, which only docker/ci/compose.ci-first-party.yml names
+# (scripts/check-ci-first-party-root-stays-in-ci.mjs holds that). `production`
+# always copies from `builder`.
+ARG KERNEL_BUILDER=builder
+
 # 1.99: the kernel links cdoc-crdt (the Documents relay's CRDT), whose rust-version is 1.99.
-FROM rust:1.99.0 AS builder
+FROM rust:1.99.0 AS builder-base
 
 WORKDIR /usr/src/app
 
@@ -72,6 +78,8 @@ COPY ./citadel-support-signature /usr/src/app/citadel-support-signature
 # with "failed to load manifest for workspace member".
 COPY ./citadel-workspace-executor /usr/src/app/citadel-workspace-executor
 COPY ./citadel-internal-service /usr/src/app/citadel-internal-service
+# Reads a built kernel for the CI first-party root's key (both builder stages below).
+COPY ./scripts/ci-first-party-key.sh /usr/src/app/scripts/ci-first-party-key.sh
 
 # Set environment variables for build - skips WASM build in Docker
 ENV SKIP_WASM_BUILD=1
@@ -84,14 +92,41 @@ ENV DOCKER_CONTAINER=1
 # in validate.yml, which lints the same crate with `-D warnings`. This copy ran WITHOUT
 # `-D warnings`, so it could not fail the build: pure cost, no signal.
 
+# =============================================================================
+# The kernel every shipped and dev image runs. `CITADEL_DEPLOY` is set by the
+# builds that publish (publish-images.yml, docker-compose.production.yml): the
+# kernel's build.rs then refuses the CI first-party root outright, and the
+# binary is checked not to carry its key either way.
+# =============================================================================
+FROM builder-base AS builder
+ARG CITADEL_DEPLOY
+
 # Build release binary to avoid dev-dependency features leaking through
 RUN cargo build --release --bin citadel-workspace-server-kernel
+RUN ./scripts/ci-first-party-key.sh absent ./target/release/citadel-workspace-server-kernel
 
 # Copy binary to /usr/local/bin so it is not shadowed by the target_cache volume
 # mount the dev compose file attaches at /usr/src/app/target.
 RUN cp ./target/release/citadel-workspace-server-kernel /usr/local/bin/
 # Makes the sign-in seed on a data volume's first start, then runs the server (the dev stage's
 # CMD). After the build, so editing it does not recompile the server.
+COPY --chmod=0755 ./docker/workspace-server/start.sh /usr/local/bin/start-workspace-server
+
+# =============================================================================
+# The pull-request integration image's kernel: the first-party apps signed by
+# the CI job with the published CI seed (`--ci-key`), embedded, and trusted
+# through the `ci-first-party-root` feature. `first-party-signed` is a named
+# build context only the CI override supplies; no other build reaches this
+# stage, so nothing else resolves it.
+# =============================================================================
+FROM builder-base AS builder-ci-first-party
+COPY --from=first-party-signed . /usr/src/app/first-party-signed
+ENV CITADEL_FIRST_PARTY_SIGNED_DIR=/usr/src/app/first-party-signed
+
+RUN cargo build --release --bin citadel-workspace-server-kernel --features citadel-workspace-server-kernel/ci-first-party-root
+RUN ./scripts/ci-first-party-key.sh present ./target/release/citadel-workspace-server-kernel
+
+RUN cp ./target/release/citadel-workspace-server-kernel /usr/local/bin/
 COPY --chmod=0755 ./docker/workspace-server/start.sh /usr/local/bin/start-workspace-server
 
 # =============================================================================
@@ -161,7 +196,7 @@ CMD ["/usr/local/bin/start-workspace-server"]
 # MUST REMAIN THE LAST STAGE -- it is the default target for docker-compose.yml,
 # which pins no target for this service.
 # =============================================================================
-FROM builder AS dev
+FROM ${KERNEL_BUILDER} AS dev
 
 EXPOSE 12349
 
