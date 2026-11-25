@@ -5,7 +5,7 @@
 import type { Capability } from '@/lib/citadel-apps/host/capabilities';
 import { glueInstance, type GlueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY, type IhttpLimits } from '@/lib/citadel-apps/host/limits';
-import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
+import { ManualClock, oneClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import type { IhttpEndpoint } from '@/lib/citadel-apps/glue-sdk/ihttp-endpoint';
 import { BookingHost } from '../booking-host';
 import { BOOKING_ROUTES } from '../booking-wire';
@@ -44,7 +44,7 @@ export async function member(name: string, relay: IhttpRelay, shared: Map<string
   const glue: GlueInstance = glueInstance({
     appId: 'net.avarok.calendar', held: new Set<Capability>(HELD), policy: POLICY, limits: { topics: null, p2p: null },
     ports: { storage: store.slowPort(), ihttp: relay.port(name), notify: { Notify: ({ title, body }) => { notes.push(`${title}: ${body}`); return { ok: null }; } } },
-    clock: new ManualClock(), pageUrl: 'https://w.example/n1', storageChanges: () => (): void => {},
+    ...oneClock(new ManualClock()), pageUrl: 'https://w.example/n1', storageChanges: () => (): void => {},
   });
   const ports: CalendarPorts = calendarPorts(glue);
   const host: BookingHost = new BookingHost({ ports, engine, node: 'n1', me: name, nowMs: () => NOW });

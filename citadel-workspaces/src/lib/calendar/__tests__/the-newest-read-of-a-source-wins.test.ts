@@ -10,7 +10,7 @@ import { glueInstance, type StorageChange } from '@/lib/citadel-apps/host/glue-i
 import { STANDARD_HOST_POLICY } from '@/lib/citadel-apps/host/limits';
 import type { PortAnswer, StoragePort } from '@/lib/citadel-apps/host/ports';
 import type { KvPage } from '@/lib/citadel-apps/sdk/generated/KvPage';
-import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
+import { ManualClock, oneClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { calendarPorts } from '../ports';
 import { calendarReducer, initialCalendar, type CalendarAction, type CalendarState } from '../store';
 import { useCalendarSources } from '../use-calendar-sources';
@@ -42,7 +42,7 @@ describe('reading a source twice at once', () => {
     const listeners: Set<(c: StorageChange) => void> = new Set();
     const ports: CalendarPorts = calendarPorts(glueInstance({
       appId: 'net.avarok.calendar', ports: { storage }, held: new Set<Capability>(['storage.user', 'storage.node', 'storage.node.authored']),
-      policy: STANDARD_HOST_POLICY, limits: { topics: null, p2p: null }, clock: new ManualClock(), pageUrl: 'https://w.example/n1',
+      policy: STANDARD_HOST_POLICY, limits: { topics: null, p2p: null }, ...oneClock(new ManualClock()), pageUrl: 'https://w.example/n1',
       storageChanges: (l) => { listeners.add(l); return (): boolean => listeners.delete(l); },
     }));
     let state: CalendarState = initialCalendar('month', { y: 2024, m: 7, d: 16 });
