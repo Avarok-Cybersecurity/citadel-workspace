@@ -6,5 +6,5 @@
     "noEmit": true,
     "noImplicitAny": false
   },
-  "include": ["src", "scripts/lib/polish-harness/**/*.jsx"]
+  "include": ["src", "scripts/lib/polish-harness/**/*.jsx", "scripts/lib/polish-harness/**/*.d.ts"]
 }

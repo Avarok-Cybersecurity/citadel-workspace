@@ -18,22 +18,6 @@
   "scripts/lib/polish-harness/scenarios-at-rest.jsx": {
     "TS2345": 1
   },
-  "scripts/lib/polish-harness/scenarios-calendar-changes.jsx": {
-    "TS2339": 4,
-    "TS2353": 1,
-    "TS2740": 1
-  },
-  "scripts/lib/polish-harness/scenarios-calendar-teams.jsx": {
-    "TS2339": 5,
-    "TS2353": 1,
-    "TS2740": 1
-  },
-  "scripts/lib/polish-harness/scenarios-calendar.jsx": {
-    "TS2322": 1,
-    "TS2345": 2,
-    "TS2339": 1,
-    "TS2740": 3
-  },
   "scripts/lib/polish-harness/scenarios-chat-files.jsx": {
     "TS2345": 1,
     "TS2322": 1
