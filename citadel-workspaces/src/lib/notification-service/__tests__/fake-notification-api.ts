@@ -13,13 +13,15 @@ export interface FakeNotificationApi {
   outcome: 'show' | 'error' | 'throw';
   readonly asked: () => number;
   readonly shown: string[];
+  /** The body of each shown notification, in order. */
+  readonly bodies: string[];
   readonly setPermission: (p: NotificationPermission) => void;
 }
 
 export function installFakeNotificationApi(permission: NotificationPermission): FakeNotificationApi {
   let asks: number = 0;
   const api: FakeNotificationApi = {
-    answer: 'granted', outcome: 'show', shown: [],
+    answer: 'granted', outcome: 'show', shown: [], bodies: [],
     asked: (): number => asks,
     setPermission: (p: NotificationPermission): void => { Fake.permission = p; },
   };
@@ -32,9 +34,10 @@ export function installFakeNotificationApi(permission: NotificationPermission): 
     };
     onshow: (() => void) | null = null;
     onerror: (() => void) | null = null;
-    constructor(title: string) {
+    constructor(title: string, options?: NotificationOptions) {
       if (api.outcome === 'throw') throw new TypeError('Illegal constructor');
       api.shown.push(title);
+      api.bodies.push(options?.body ?? '');
       setTimeout((): void => { (api.outcome === 'show' ? this.onshow : this.onerror)?.(); }, 0);
     }
   }
