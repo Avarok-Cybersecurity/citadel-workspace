@@ -1261,6 +1261,10 @@ jobs:
         # workflow. It refuses to skip in that case -- deliberately -- so the
         # only correct home is a job that has run `npm ci`.
         run: node scripts/check-workflows-parse.mjs
+      - name: The installed npm tree satisfies every workspace's package.json
+        # npm ci installs what package-lock.json lists without checking it against the manifests'
+        # ranges; npm ls does. Ratcheted (scripts/npm-tree.baseline.json): one known problem today.
+        run: node --test scripts/lib/npm-tree.test.mjs && node scripts/check-npm-tree-is-valid.mjs
       - name: The site's deploy is refused before the agent is released, never after
         # js-yaml, like the step above: this job has run `npm ci`.
         run: node --test scripts/lib/deploy-order.test.mjs && node scripts/check-deploy-order.mjs
