@@ -631,6 +631,10 @@ jobs:
         # Fixed ports with --strictPort made concurrent runs collide (4198, 4203 were seen).
         run: node --test scripts/lib/fixed-ports.test.mjs && node scripts/check-preview-ports-are-chosen-per-run.mjs
         working-directory: citadel-workspaces
+      - name: A motion sample is judged only when the page painted
+        # stall-attribution.mjs decides which stalled samples the sidebar sweep may discard (docs/GATES.md).
+        run: node --test scripts/lib/polish-harness/stall-attribution.test.mjs
+        working-directory: citadel-workspaces
       - name: Service logs survive a failing test
         # `if: failure()` on a step reads as "run if anything failed" and is not:
         # steps run in order, so a dump placed before the test has already been
