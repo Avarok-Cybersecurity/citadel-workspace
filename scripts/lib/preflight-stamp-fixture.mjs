@@ -4,20 +4,22 @@
  * agent workspace directory (keyed on its own: preflight-world-io.mjs, isAgentInput).
  */
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readWorld } from './preflight-world-io.mjs';
+import { scratchGit } from './scratch-git.mjs';
 
 export const ENV = { PATH: '/usr/bin:/bin', SWEEP_PORT: '4199' };
-export const sh = (cwd, ...args) => execFileSync('git', ['-c', 'protocol.file.allow=always', '-c', 'commit.gpgsign=false',
-  '-c', 'user.name=t', '-c', 'user.email=t@localhost', ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+// Scratch repositories only: no outer -c, global config or credential helper reaches them (lib/scratch-git.mjs).
+const SCRATCH = realpathSync(mkdtempSync(join(tmpdir(), 'stamp-fixtures-')));
+process.on('exit', () => rmSync(SCRATCH, { recursive: true, force: true }));
+export const { git: sh } = scratchGit(SCRATCH);
 export const put = (path, text) => { mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, text); };
 
 /** A parent with the UI as a real submodule, a built dist/, a harness and an installed playwright. */
 export function fixture() {
-  const base = mkdtempSync(join(tmpdir(), 'stamp-'));
+  const base = mkdtempSync(join(SCRATCH, 'stamp-'));
   const ui = join(base, 'ui-origin');
   put(join(ui, 'package.json'), '{"name":"ui","devDependencies":{"playwright":"*"}}');
   put(join(ui, 'scripts', 'check-a11y.mjs'), "import { go } from './lib/harness.mjs';\ngo();\n");
