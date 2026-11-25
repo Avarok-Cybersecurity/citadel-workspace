@@ -11,5 +11,6 @@ pub mod dashboard;
 pub mod jobs;
 pub mod limits;
 pub mod pool;
+pub mod record;
 pub mod sha256;
 pub mod wire;

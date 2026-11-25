@@ -52,7 +52,7 @@ const REFUSED: string = 'Unavailable("refused")';
 const say = (step: string): void => console.log(`\n${'─'.repeat(50)}\n${step}\n${'─'.repeat(50)}`);
 
 interface Results {
-  peers: PeersReady; channelReady: boolean; installed: boolean; consented: boolean; mounted: boolean; inThePool: boolean;
+  peers: PeersReady; channelReady: boolean; installed: boolean; consented: boolean; mounted: boolean; inThePool: boolean; aHearsB: boolean;
   p2pJob: boolean; p2pOnTheWire: boolean;
   relayJob: boolean; relayOffTheP2pWire: boolean;
   revokedServeRefused: boolean; fallsBackToRelay: boolean; blockedOutOfReach: boolean; unblockedReaches: boolean;
@@ -62,6 +62,7 @@ interface Results {
   twoTabs: TwoTabResults | null;
 }
 
+const heard = (who: string): RegExp => new RegExp(`^\\[app info\\] member ${who} is here$`);
 const p2pOk = (run: JobRun): boolean => answered(run.answer) && run.answer?.via === 'p2p' && run.verified === true;
 const relayOk = (run: JobRun): boolean => answered(run.answer) && run.answer?.via === 'relay' && run.verified === true;
 const refusedOverP2p = (run: JobRun, note: string): boolean => run.answer?.via === 'p2p' && run.answer.note === note;
@@ -88,7 +89,7 @@ async function runTest(): Promise<boolean> {
   const aGroups: GroupWire = watchGroupWire(a);
   const bGroups: GroupWire = watchGroupWire(b);
   const r: Results = {
-    peers: { accounts: false, registered: false, conversations: false, talking: false }, channelReady: false, installed: false, consented: false, mounted: false, inThePool: false,
+    peers: { accounts: false, registered: false, conversations: false, talking: false }, channelReady: false, installed: false, consented: false, mounted: false, inThePool: false, aHearsB: false,
     p2pJob: false, p2pOnTheWire: false, relayJob: false, relayOffTheP2pWire: false,
     revokedServeRefused: false, fallsBackToRelay: false, blockedOutOfReach: false, unblockedReaches: false,
     revokeEndsWithin60s: false, nextCallRefused: false, uninstallClosesBothZones: false, inThePoolAgain: false, noRelayNoFallback: false, twoTabs: null,
@@ -105,12 +106,14 @@ async function runTest(): Promise<boolean> {
     await consentPeer(a, installId, ALL);
     await consentPeer(b, installId, ALL);
     r.consented = true;
-    const bJoins: number = bGroups.mark();
+    const [bJoins, aHeard]: [number, number] = [bGroups.mark(), aLog.lines.length];
     await openPoolZone(a, OFFICE);
     await openPoolZone(b, OFFICE);
     r.mounted = true;
     const bCid: string = await sessionCid(b);
     r.inThePool = await bGroups.channelFor(bCid, bJoins, JOB_MS);
+    // The app's own word: B announces itself on its first tick in the topic, and A logs hearing it.
+    r.aHearsB = (await aLog.find(heard(B), aHeard, JOB_MS)) !== null;
 
     say('STEP 2: a job over P2P');
     const [sent2, recv2] = [aWire.sentTo(bCid), bWire.receivedFor(bCid)];

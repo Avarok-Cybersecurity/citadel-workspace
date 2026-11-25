@@ -5,7 +5,9 @@
  * and nothing else (the core refuses any other shape), so a topic never carries event content.
  *
  * The topic is a hint beside the kernel's `StorageChanged`, never the record: a message that
- * cannot be sent or read is reported on the console and the stored value stays the truth.
+ * cannot be sent or read is reported on the console and the stored value stays the truth. A join
+ * the host refuses (nobody admitted this member within the host's port bound) is said and tried
+ * again every `CAL_JOIN_RETRY_MS` while the window listens, so live changes do not stay off quietly.
  */
 import type { TopicArrival } from '@/lib/citadel-apps/host/ports';
 import type { CalendarEngine } from './engine/calendar-engine';
@@ -14,6 +16,8 @@ import { PortRefused, type CalendarPorts } from './ports';
 import type { Unsubscribe } from '@/lib/citadel-apps/host/glue-instance';
 
 export const CAL_TOPIC: string = 'cal';
+/** How long after a refused join the window tries again (the Compute Pool's JOIN_RETRY_MS too). */
+export const CAL_JOIN_RETRY_MS: number = 10_000;
 
 type TopicPorts = Pick<CalendarPorts, 'topics'>;
 
@@ -42,9 +46,17 @@ export function listenCal(ports: TopicPorts, engine: CalendarEngine, onChange: (
     }
     onChange(change);
   });
-  void ports.topics.open(CAL_TOPIC).catch(reportRefusal('the cal topic could not be joined; changes arrive by storage only'));
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  const join = (): void => {
+    void ports.topics.open(CAL_TOPIC).catch((error: unknown): void => {
+      reportRefusal(`the cal topic could not be joined; changes arrive by storage only; trying again in ${CAL_JOIN_RETRY_MS / 1000} s`)(error);
+      if (live) retry = setTimeout(join, CAL_JOIN_RETRY_MS);
+    });
+  };
+  join();
   return (): void => {
     live = false;
+    clearTimeout(retry);
     off();
     void ports.topics.close(CAL_TOPIC).catch(reportRefusal('the cal topic could not be left'));
   };

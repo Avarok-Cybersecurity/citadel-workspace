@@ -35,7 +35,7 @@ fn dispatched(alice: &mut Pool) -> Assignment {
         panic!("{announced:?}")
     };
     for who in ["bob", "carol"] {
-        assert!(alice.on_msg(who, PoolMsg::Claim { job_id }).is_empty());
+        assert!(published(&alice.on_msg(who, PoolMsg::Claim { job_id })).is_empty());
     }
     let out = alice.tick(CLAIM_WINDOW_MS);
     let fanout = out.iter().find_map(|a| match a {
@@ -51,9 +51,12 @@ fn dispatched(alice: &mut Pool) -> Assignment {
 }
 
 #[test]
-fn a_member_heartbeats_on_its_first_tick_and_then_every_interval() {
+fn a_member_heartbeats_on_its_first_tick_in_the_topic_and_then_every_interval() {
     let mut pool = Pool::new("alice", 4);
     let beat = PoolMsg::Heartbeat { cores: 4, load: 0 };
+    // Not in the topic yet: a heartbeat now would go nowhere and push the next one 10 s away.
+    assert!(published(&pool.tick(HEARTBEAT_MS)).is_empty());
+    pool.joined();
     assert_eq!(published(&pool.tick(16)), std::slice::from_ref(&beat));
     assert!(published(&pool.tick(HEARTBEAT_MS - 1)).is_empty());
     assert_eq!(published(&pool.tick(1)), [beat]);
@@ -64,6 +67,7 @@ fn a_member_heartbeats_on_its_first_tick_and_then_every_interval() {
 #[test]
 fn back_to_back_jobs_never_publish_over_the_topic_rate() {
     let mut pool = Pool::new("alice", 4);
+    pool.joined();
     let mut sent: Vec<u64> = Vec::new();
     let mut now: u64 = 0;
     while now < 60_000 {
@@ -127,7 +131,10 @@ fn honest_workers_give_the_whole_answer_verified_and_it_is_saved_and_gossiped() 
         panic!("{out:?}")
     };
     assert_eq!(record.result, jobs::run(&job()).unwrap());
-    assert!(record.verified);
+    assert_eq!(
+        (record.outcome(), &record.helpers[..]),
+        (Outcome::Verified, &["bob".into(), "carol".into()][..])
+    );
     assert!(matches!(published(&out)[..], [PoolMsg::Done { .. }]));
     let line = alloc::format!(
         "job {:x} done in {} ms: verified",
@@ -160,7 +167,7 @@ fn a_wrong_answer_on_the_checked_chunk_is_caught_and_replaced() {
     let Some(Action::Save(record)) = out.last() else {
         panic!("{out:?}")
     };
-    assert!(!record.verified);
+    assert_eq!(record.outcome(), Outcome::WrongAnswer);
     let line = alloc::format!(
         "job {:x} done in {CLAIM_WINDOW_MS} ms: wrong answer",
         a.job_id
@@ -187,6 +194,11 @@ fn chunks_nobody_answered_are_computed_here_and_with_no_claimants_all_of_them() 
     };
     assert_eq!(record.result, jobs::run(&job()).unwrap());
     assert_eq!(alice.peers["carol"].last.as_deref(), Some("NoHost"));
+    // The check falls on one of bob's chunks: the only member's chunks in the result.
+    assert_eq!(
+        (record.outcome(), &record.helpers[..]),
+        (Outcome::Verified, &["bob".into()][..])
+    );
 }
 
 #[test]
@@ -221,6 +233,15 @@ fn with_no_claimants_the_job_finishes_when_the_window_closes() {
         panic!("{out:?}")
     };
     assert_eq!(record.result, jobs::run(&job()).unwrap());
+    assert_eq!(
+        (record.outcome(), record.check, record.helpers.len()),
+        (Outcome::Local, Some(Check::NothingTheirs), 0)
+    );
+    let line = alloc::format!(
+        "job {:x} done in {CLAIM_WINDOW_MS} ms: computed on this device",
+        record.job_id
+    );
+    assert_eq!(logged(&out), [line]);
     assert!(solo.progress().is_none());
     assert!(solo.run(job()).is_some(), "a new Run is accepted");
 }

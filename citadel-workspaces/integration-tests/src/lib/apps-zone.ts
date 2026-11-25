@@ -19,7 +19,8 @@ import { COMPUTE_POOL_ID } from './apps-signing.js';
 import type { ZoneLog } from './apps.js';
 
 export const ANSWER: RegExp = /^\[app info\] answer from (\S+) via (p2p|relay): (.+)$/;
-export const JOB: RegExp = /^\[app info\] job ([0-9a-f]+) done in (\d+) ms: (verified|wrong answer)$/;
+/** "verified" only when a member's chunk was checked; a job nobody else answered is "computed on this device" (core record.rs). */
+export const JOB: RegExp = /^\[app info\] job ([0-9a-f]+) done in (\d+) ms: (verified|wrong answer|computed on this device)$/;
 export type Via = 'p2p' | 'relay';
 export type AppAction = 'run-primes' | 'run-sha' | 'mode-prefer' | 'mode-p2p' | 'mode-relay';
 
@@ -75,14 +76,15 @@ export async function runJob(page: Page, log: ZoneLog, action: 'run-primes' | 'r
 /**
  * Press `action` and wait for the job's end; whether `peer` answered any part of it. A member who
  * blocked this one hears none of its topic messages (kernel peer_rules.rs: a block refuses every
- * direction, topics too), so they never claim and are never called: the job is done without them.
+ * direction, topics too), so they never claim and are never called: the job is done without them,
+ * and with no other member here, it is done on this device alone (the outcome the log says).
  */
 export async function runJobWithout(page: Page, log: ZoneLog, action: 'run-primes' | 'run-sha', peer: string, timeoutMs: number): Promise<{ readonly done: boolean; readonly peerAnswered: boolean }> {
   const from: number = log.lines.length;
   await pressAppAction(page, action);
   const j: RegExpExecArray | null = await log.find(JOB, from, timeoutMs);
   const prefix: string = `[app info] answer from ${peer} via `;
-  return { done: j !== null && j[3] === 'verified', peerAnswered: log.lines.slice(from).some((l: string) => l.startsWith(prefix)) };
+  return { done: j !== null && j[3] === 'computed on this device', peerAnswered: log.lines.slice(from).some((l: string) => l.startsWith(prefix)) };
 }
 
 export interface WireCount {

@@ -6,7 +6,7 @@
 
 use citadel_app_sdk::ihttp::{self, Address, FanoutLimits, Outbound, Outcome, ServeOn, Via};
 use citadel_app_sdk::topic::{self, Topic, TopicEvent};
-use citadel_app_sdk::types::calls::{EventKind, HttpMethod, Route, ToolbarItem};
+use citadel_app_sdk::types::calls::{EventKind, HttpMethod, Route};
 use citadel_app_sdk::types::{decode, encode};
 use citadel_app_sdk::SuspendReason;
 use citadel_app_sdk::{canvas, events, export_app, log, storage, ui};
@@ -15,7 +15,10 @@ use compute_pool_core::dashboard;
 use compute_pool_core::jobs::Job;
 use compute_pool_core::limits::*;
 use compute_pool_core::pool::{Action, Mode, Pool, Record};
-use compute_pool_core::wire::{self, ChunkResults, PoolMsg, ROUTES, TOPIC};
+use compute_pool_core::wire::{self, PoolMsg, ROUTES, TOPIC};
+
+mod parts;
+use parts::{answer_of, toolbar};
 
 const HISTORY_KEY: &str = "history";
 
@@ -26,19 +29,18 @@ struct ComputePool {
     size: (f32, f32),
 }
 
-fn toolbar() -> Vec<ToolbarItem> {
-    let item = |id: &str, label: &str| ToolbarItem {
-        id: id.into(),
-        label: label.into(),
-        icon_name: None,
-    };
-    vec![
-        item("run-primes", "Run: count primes"),
-        item("run-sha", "Run: SHA-256 chains"),
-        item("mode-prefer", "P2P, then relay"),
-        item("mode-p2p", "P2P only"),
-        item("mode-relay", "Relay only"),
-    ]
+fn open_topic() {
+    topic::open(TOPIC, on_topic).then(|app: &mut ComputePool, r| {
+        let actions = match r {
+            Ok(t) => {
+                app.topic = Some(t);
+                app.pool.joined();
+                Vec::new()
+            }
+            Err(e) => app.pool.join_failed(&format!("{e:?}")),
+        };
+        app.perform(actions);
+    });
 }
 
 fn on_topic(app: &mut ComputePool, event: TopicEvent) {
@@ -67,19 +69,6 @@ fn serve_job(app: &mut ComputePool, request: ihttp::Request, writer: ihttp::Resp
     }
 }
 
-/// What one worker's outcome tells the pool.
-fn answer_of(outcome: &Outcome, planned: Via) -> (Result<ChunkResults, String>, Via) {
-    match outcome {
-        Outcome::Ok(r) if r.head.status == 200 => (
-            decode::<ChunkResults>(&r.body).map_err(|_| "unreadable answer".into()),
-            r.via,
-        ),
-        Outcome::Ok(r) => (Err(format!("status {}", r.head.status)), r.via),
-        Outcome::Failed(refused) => (Err(format!("{refused:?}")), planned),
-        Outcome::Skipped => (Err("skipped".into()), planned),
-    }
-}
-
 impl ComputePool {
     fn perform(&mut self, actions: Vec<Action>) {
         for action in actions {
@@ -91,6 +80,7 @@ impl ComputePool {
                 } => self.fan_out(targets, &assignment),
                 Action::Save(record) => self.save(&record),
                 Action::Log(line) => drop(log::info(&line)),
+                Action::JoinTopic => open_topic(),
             }
         }
     }
@@ -171,12 +161,7 @@ impl App for ComputePool {
                 let _ = log::warn(&format!("serve: {e:?}"));
             }
         });
-        topic::open(TOPIC, on_topic).then(|app: &mut ComputePool, r| match r {
-            Ok(t) => app.topic = Some(t),
-            Err(e) => {
-                let _ = log::warn(&format!("topic: {e:?}"));
-            }
-        });
+        open_topic();
         storage::user()
             .get(HISTORY_KEY)
             .then(|app: &mut ComputePool, r| {

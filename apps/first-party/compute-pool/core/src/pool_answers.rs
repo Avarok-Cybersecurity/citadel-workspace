@@ -3,7 +3,9 @@
 use super::{Action, Pool, Record};
 use crate::jobs;
 use crate::limits::HISTORY_LEN;
+use crate::record::Check;
 use crate::wire::{ChunkResults, PoolMsg};
+use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
 use citadel_app_sdk_types::calls::Via;
@@ -53,7 +55,8 @@ impl Pool {
     }
 
     /// Every worker has answered (the fan-out's `done`): fill what is missing locally, check one
-    /// chunk, combine, record and report.
+    /// member's chunk, combine, record and report. With no member's chunk, the job was computed
+    /// here alone, and the record says so (record.rs).
     pub fn finish(&mut self) -> Vec<Action> {
         let Some(mut r) = self.running.take() else {
             return Vec::new();
@@ -61,8 +64,15 @@ impl Pool {
         let Ok(chunks) = jobs::split(&r.assignment.job, r.assignment.chunks) else {
             return Vec::new();
         };
-        let check = jobs::spot_check(r.assignment.job_id, chunks.len());
-        let mut verified = true;
+        // The checked chunk is one a member answered: one computed here would check nothing.
+        let theirs: Vec<(usize, &String)> = (r.answers.iter())
+            .filter(|(i, (who, _))| *who != self.me && (**i as usize) < chunks.len())
+            .map(|(i, (who, _))| (*i as usize, who))
+            .collect();
+        let check = jobs::spot_check(r.assignment.job_id, theirs.len()).map(|k| theirs[k].0);
+        let helpers: BTreeSet<String> = theirs.iter().map(|(_, who)| (*who).clone()).collect();
+        let helpers: Vec<String> = helpers.into_iter().collect();
+        let mut found = Check::NothingTheirs;
         let mut results = Vec::with_capacity(chunks.len());
         for (i, chunk) in chunks.iter().enumerate() {
             let own = || jobs::run(chunk).ok();
@@ -70,10 +80,15 @@ impl Pool {
             let result = match (theirs, check == Some(i)) {
                 (Some((who, got)), true) => {
                     let mine = own();
-                    if mine.as_ref() != Some(&got) {
-                        verified = false;
+                    let agreed = mine.as_ref() == Some(&got);
+                    if !agreed {
                         self.peer(&who).last = Some("wrong answer".into());
                     }
+                    found = if agreed {
+                        Check::Agreed
+                    } else {
+                        Check::Disagreed
+                    };
                     mine
                 }
                 (Some((_, got)), false) => Some(got),
@@ -95,7 +110,8 @@ impl Pool {
             job_id: r.assignment.job_id,
             job: r.assignment.job,
             result,
-            verified,
+            helpers,
+            check: Some(found),
             ms,
         };
         self.history.push_back(record.clone());
@@ -103,8 +119,11 @@ impl Pool {
             self.history.pop_front();
         }
         let digest = crate::sha256::sha256(&citadel_app_sdk_types::encode(&record.result));
-        let outcome = if verified { "verified" } else { "wrong answer" };
-        let line = alloc::format!("job {:x} done in {ms} ms: {outcome}", record.job_id);
+        let line = alloc::format!(
+            "job {:x} done in {ms} ms: {}",
+            record.job_id,
+            record.outcome().wording()
+        );
         let done = self.publish(PoolMsg::Done {
             job_id: record.job_id,
             digest,

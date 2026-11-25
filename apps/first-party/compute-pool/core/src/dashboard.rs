@@ -2,7 +2,7 @@
 //! one card per peer (username, transport badge, round trip, last result) and a latency
 //! sparkline. Colours are `0xRRGGBBAA`.
 
-use crate::pool::{Mode, Pool};
+use crate::pool::{Membership, Mode, Pool};
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -60,11 +60,12 @@ pub fn draw(pool: &Pool, width: f32, height: f32) -> Vec<DrawCommand> {
         16.0,
         INK,
     ));
-    let status = match pool.progress() {
-        Some((done, all)) => format!("job: {done}/{all} chunks"),
-        None => match pool.history.back() {
-            Some(r) if r.verified => format!("last job: {} ms, verified", r.ms),
-            Some(r) => format!("last job: {} ms, a wrong answer was caught", r.ms),
+    let status = match (pool.progress(), &pool.membership) {
+        (Some((done, all)), _) => format!("job: {done}/{all} chunks"),
+        (None, Membership::Joining) => String::from("joining the pool…"),
+        (None, Membership::Out { why, .. }) => format!("not in the pool ({why}): trying again"),
+        (None, Membership::In) => match pool.history.back() {
+            Some(r) => format!("last job: {} ms, {}", r.ms, r.outcome().wording()),
             None => String::from("no job yet: press Run"),
         },
     };

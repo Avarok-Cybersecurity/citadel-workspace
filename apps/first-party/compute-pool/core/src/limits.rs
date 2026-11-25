@@ -16,6 +16,8 @@ pub const TOPIC_MAX_MSGS_PER_S: u32 = 2;
 /// How often a member says it is there, and how long a silent member stays on the dashboard.
 pub const HEARTBEAT_MS: u32 = 10_000;
 pub const PEER_STALE_MS: u64 = 35_000;
+/// How long after a failed topic open the pool tries again.
+pub const JOIN_RETRY_MS: u32 = 10_000;
 /// How long a job collects claims before it is handed out.
 pub const CLAIM_WINDOW_MS: u32 = 1_500;
 /// The job history kept in `storage.user`.
