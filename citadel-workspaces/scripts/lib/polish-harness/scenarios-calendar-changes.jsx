@@ -42,7 +42,7 @@ async function seeded(engine) {
   const ports = calendarPorts(glueInstance({
     appId: 'net.avarok.calendar', ports: { storage: store.port(), nodes: treeNodesPort('Workspace', () => TREE) },
     held: new Set(['storage.user', 'storage.node', 'storage.node.authored', 'nodes.read']),
-    policy: { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_000 }, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, pageUrl: window.location.href, storageChanges: () => () => {},
+    policy: { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_000 }, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, wallNow: PAGE_CLOCK.now, pageUrl: window.location.href, storageChanges: () => () => {},
   }));
   const [first, second] = hours();
   const review = event({ id: 'review', origin_node: 'n1', author: VIEWER, hosts: [VIEWER], title: 'Quarterly review', when: first, zone: ZONE, propagate: { down: true, up_to: null } });

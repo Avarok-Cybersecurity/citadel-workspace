@@ -3,9 +3,10 @@
  * given the tree and the roster as they are at each call, and its notifications are badged with
  * the app's name and the tab's node and handed to the page's sink; it takes one of the page's instance slots and
  * gives it back on close, so a second tab binds once the first is closed; and a page with no slot
- * left, or a manifest that does not run in a tab, binds nothing and says why.
+ * left, or a manifest that does not run in a tab, binds nothing and says why. Its date is the page's
+ * wall clock (the world's `nowMs`), never the monotonic dispatch clock it waits on.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GlueBound, GlueHandle, GlueTabMount } from '@/components/office/app-zone/app-zone-environment';
 import { calendarPorts, type CalendarPorts } from '@/lib/calendar/ports';
 import { InstanceSlots } from '../../host/instance-slots';
@@ -38,6 +39,22 @@ describe('a glue tab binding', () => {
     expect((await ports.node('n-1')).name).toBe('Platform team');
     await ports.notify('bookings', 'New booking', 'Intro with ana');
     expect(r.notices).toEqual([{ appId: kernel.rel.install.app_id, from: 'Kanban', nodeId: 'n-1', title: 'New booking', body: 'Intro with ana' }]);
+  });
+
+  it("dates by the page's wall clock, not the dispatch clock it waits on", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-25T15:00:00Z'));
+    try {
+      const kernel: FakeRuntimeKernel = new FakeRuntimeKernel(release(appModule(), [], TAB_APP));
+      const r: Rig = rig(kernel);
+      rigs.push(r);
+      const bound: GlueBound = await r.runtime.bindGlue(glueTab(kernel, () => ({}))).ready;
+      if (bound.kind !== 'bound') throw new Error(bound.why);
+      expect(bound.instance.wallNow()).toBe(Date.parse('2026-11-25T15:00:00Z'));
+      expect(calendarPorts(bound.instance).clock.now()).toBe(Date.parse('2026-11-25T15:00:00Z'));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("takes one of the page's slots and gives it back on close; with none left it binds nothing", async () => {

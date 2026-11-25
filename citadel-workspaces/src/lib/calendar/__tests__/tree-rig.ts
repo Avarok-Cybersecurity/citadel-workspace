@@ -9,7 +9,7 @@ import type { Capability } from '@/lib/citadel-apps/host/capabilities';
 import { glueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY, type HostPolicy } from '@/lib/citadel-apps/host/limits';
 import type { TopicArrival, TopicPort } from '@/lib/citadel-apps/host/ports';
-import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
+import { ManualClock, oneClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { treeNodesPort, type PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
 import { calendarPorts, type CalendarPorts } from '../ports';
 import { MemoryStore } from './memory-store';
@@ -78,7 +78,7 @@ export function member(me: string, values: Map<string, Uint8Array>, tree: Record
     ports: { storage: store.port(), nodes: treeNodesPort('Workspace', () => tree), topic: group.port(me) },
     held: new Set<Capability>(HELD), policy: POLICY,
     limits: { topics: { max_msg_bytes: 1024, max_msgs_per_s: 2 }, p2p: null },
-    clock: new ManualClock(Date.now()), pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
+    ...oneClock(new ManualClock(Date.now())), pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
   }));
   return { store, ports };
 }

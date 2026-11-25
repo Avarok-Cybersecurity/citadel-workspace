@@ -83,6 +83,15 @@ export function fakeIhttp(rec: Recorder, frames: Parameters<IhttpPort['respond']
   };
 }
 
+/**
+ * A glue instance's two clocks from one hand-moved clock: for a rig that never tells the monotonic
+ * dispatch clock from the wall clock apart (the-calendar-reads-the-wall-clock.test.ts does), so its
+ * pinned instant is the date the app reads as well as the time it waits on.
+ */
+export function oneClock(clock: ManualClock): { clock: ManualClock; wallNow: () => number } {
+  return { clock, wallNow: clock.now };
+}
+
 /** A clock the test advances by hand; timers fire in `advance`. */
 export class ManualClock implements DispatchClock {
   private timers: { at: number; fire: () => void; live: boolean }[] = [];

@@ -62,7 +62,7 @@ export function bindGlue(tab: GlueTabMount, deps: GlueDeps, planes: InstallPlane
       });
     instance = glueInstance({
       appId: install.app_id, ports, held: bound.held, policy: deps.policy, limits: instanceLimits(manifest.limits),
-      clock: deps.clock, pageUrl: deps.pageUrl(), storageChanges: changes,
+      clock: deps.clock, wallNow: world.nowMs, pageUrl: deps.pageUrl(), storageChanges: changes,
     });
     return { kind: 'bound', instance };
   };

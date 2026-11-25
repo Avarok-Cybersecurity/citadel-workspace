@@ -9,7 +9,7 @@ import type { Capability } from '@/lib/citadel-apps/host/capabilities';
 import { glueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY } from '@/lib/citadel-apps/host/limits';
 import type { HostPorts, NotifyPort, PortAnswer, StoragePort, TopicPort } from '@/lib/citadel-apps/host/ports';
-import { fakeStorage, ManualClock, recordingCall, type Recorder } from '@/lib/citadel-apps/host/__tests__/fakes';
+import { fakeStorage, ManualClock, oneClock, recordingCall, type Recorder } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { rosterMembersPort } from '@/lib/citadel-apps/runtime/first-party-ports';
 import { treeNodesPort } from '@/lib/citadel-apps/runtime/nodes-port';
 import { backendOf, calendarPorts, PortRefused, type CalendarPorts } from '../ports';
@@ -19,7 +19,7 @@ const ALL: Capability[] = ['storage.user', 'storage.node', 'storage.node.authore
 function rig(ports: HostPorts, held: Capability[] = ALL): CalendarPorts {
   return calendarPorts(glueInstance({
     appId: 'net.avarok.calendar', ports, held: new Set<Capability>(held), policy: STANDARD_HOST_POLICY,
-    limits: { topics: { max_msg_bytes: 1024, max_msgs_per_s: 2 }, p2p: null }, clock: new ManualClock(), pageUrl: 'https://w.example/n1',
+    limits: { topics: { max_msg_bytes: 1024, max_msgs_per_s: 2 }, p2p: null }, ...oneClock(new ManualClock()), pageUrl: 'https://w.example/n1',
     storageChanges: () => () => {},
   }));
 }

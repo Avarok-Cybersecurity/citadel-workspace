@@ -9,7 +9,7 @@ import type { Capability } from '../capabilities';
 import { glueInstance, type GlueInstance } from '../glue-instance';
 import { STANDARD_HOST_POLICY } from '../limits';
 import type { HostPorts, HostReply } from '../ports';
-import { fakeLog, fakeNodes, fakeStorage, ManualClock, type Recorder } from './fakes';
+import { fakeLog, fakeNodes, fakeStorage, ManualClock, oneClock, type Recorder } from './fakes';
 import type { KvValue } from '@/lib/citadel-apps/sdk/generated/KvValue';
 
 /** Every microtask the calls queued, run: a real macrotask turn (the test's clock is the manual one). */
@@ -18,7 +18,7 @@ const flush = (): Promise<void> => new Promise<void>((done: () => void): void =>
 function glue(ports: HostPorts, held: Capability[], clock: ManualClock = new ManualClock()): GlueInstance {
   return glueInstance({
     appId: 'net.avarok.calendar', ports, held: new Set<Capability>(held), policy: STANDARD_HOST_POLICY,
-    limits: { topics: null, p2p: null }, clock, pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
+    limits: { topics: null, p2p: null }, ...oneClock(clock), pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
   });
 }
 

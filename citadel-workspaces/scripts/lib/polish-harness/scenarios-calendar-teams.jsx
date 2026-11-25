@@ -67,7 +67,7 @@ function build(engine) {
   const ports = calendarPorts(glueInstance({
     appId: 'net.avarok.calendar', ports: { storage: store.port(), nodes: treeNodesPort('Workspace', () => TREE), members: rosterMembersPort(() => ROSTER) },
     held: new Set(['storage.user', 'storage.node', 'storage.node.authored', 'nodes.read', 'members.list']),
-    policy: { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_000 }, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, pageUrl: window.location.href, storageChanges: () => () => {},
+    policy: { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_000 }, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, wallNow: PAGE_CLOCK.now, pageUrl: window.location.href, storageChanges: () => () => {},
   }));
   // An app the viewer allowed and one they refused, for the Apps panel (design §3.8).
   void saveConsent(ports, engine, 'com.acme.kanban', 'allow').then(() => saveConsent(ports, engine, 'com.acme.spam', 'refuse'));
