@@ -34,7 +34,7 @@ describe('a person is drawn with their picture wherever they are named', () => {
     ['the account list', <AccountRow key="a" username="ada" host="h" current={false} live lastConnected={null} signedOut={null} onSwitch={NOTHING} onDelete={null} />],
     ['the directory row', <MemberListItem key="m" member={{ ...ADA, isSelf: false, isContact: false } as never} variant="all" onSendMessage={NOTHING} onInvite={NOTHING} onSelect={NOTHING} />],
     ['the profile card', <UserProfileCard key="p" selectedUser={ADA as never} isSelf={false} isConnected={false} onClose={NOTHING} onSendMessage={NOTHING} onInvite={NOTHING} />],
-    ['the notification', <NotificationItem key="n" notification={{ id: 'n', type: NotificationType.MESSAGE, title: 't', content: 'c', senderName: 'ada', priority: NotificationPriority.NORMAL, read: true, timestamp: 1 }} />],
+    ['the notification', <NotificationItem key="n" notification={{ id: 'n', type: NotificationType.MESSAGE, title: 't', content: 'c', senderName: 'ada', priority: NotificationPriority.NORMAL, read: true, timestamp: 1, osReach: 'when-away' }} />],
   ])('%s', (_where, view) => {
     render(inWorkspace(view));
     expect(screen.getByTestId('member-avatar-ada').getAttribute('data-avatar-src')).toBe(PICTURE);

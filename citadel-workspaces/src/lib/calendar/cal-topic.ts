@@ -42,7 +42,7 @@ export function listenCal(ports: TopicPorts, engine: CalendarEngine, onChange: (
     }
     onChange(change);
   });
-  void ports.topics.open(CAL_TOPIC).catch(reportRefusal('the cal topic could not be joined; changes arrive by storage only'));
+  void ports.topics.open(CAL_TOPIC).catch(reportRefusal('the cal topic is not joined yet; changes arrive by storage until the host joins it (the page says why)'));
   return (): void => {
     live = false;
     off();

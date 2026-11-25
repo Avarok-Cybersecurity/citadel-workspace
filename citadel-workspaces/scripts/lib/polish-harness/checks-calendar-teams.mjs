@@ -138,13 +138,16 @@ async function aNewPollFits({ page, url, viewport }) {
 }
 
 /**
- * The member's notification settings fit with 44px targets, light and dark, and each change is
- * saved to their own storage as it is made; turned off, every option is stilled.
+ * The member's notification settings fit with 44px targets, light and dark, the system notification
+ * control (Allow, or how to unblock) among them, and each change is saved to their own storage as it
+ * is made; turned off, every option is stilled.
  */
 async function theNotificationSettingsFitAndSave({ page, url, viewport }) {
   const width = await opened(page, url, viewport, 'Notifications');
   const form = page.getByTestId('calendar-notify-settings');
   await form.waitFor({ state: 'visible', timeout: 5000 });
+  // What this browser allows, and its action (Allow, or a test), sits inside the form and is measured with it.
+  await form.getByTestId('os-notifications-control').waitFor({ state: 'visible', timeout: 5000 });
   await fitsAndReads(page, width, 'the notification settings');
   await form.getByLabel(/^Bookings/).uncheck();
   await form.getByLabel('30 minutes before').check();

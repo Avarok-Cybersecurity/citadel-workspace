@@ -71,5 +71,9 @@ export async function runMatrix(CHECKS, { viewports, motions }) {
   } finally {
     await harness.close();
   }
+  // A check may judge the whole run once it is over (a rate across every leg), as `afterAll` returning problems.
+  for (const [name, check] of Object.entries(CHECKS)) {
+    for (const problem of check.afterAll?.() ?? []) { failures += 1; console.error(`  FAIL  ${name} [whole run]\n        ${problem}`); }
+  }
   return failures === 0 ? 0 : 1;
 }

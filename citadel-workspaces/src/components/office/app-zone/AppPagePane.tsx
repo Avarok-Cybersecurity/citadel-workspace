@@ -18,6 +18,7 @@ import { AppZoneContext, type AppZoneEnvironment, type AppZoneHandle, type AppZo
 import { AppZoneRequired, placeholderFor, type PlaceholderView } from './AppZoneRequired';
 import type { ZoneProps, ZoneView } from './zone-state';
 import { usePlacedApp, useRuntimeMount, type PlacedApp } from './use-placed-app';
+import { TopicJoinNotice } from './TopicJoinNotice';
 
 /** The placeholder's height on a page: it sits at the top of the pane, as a tab's does. */
 const PLACEHOLDER_HEIGHT: number = 240;
@@ -72,6 +73,7 @@ function PageRuntimeHost({ runtime, view, reasonFor, nodeId, me, onRetry }: Page
   return (
     <div className="flex h-full min-h-0 w-full flex-col" data-testid="app-page-pane" data-app-id={app.manifest.id} data-page-state={state}>
       <div ref={toolbar} data-testid="app-page-toolbar-slot" className="flex-shrink-0 px-[8px]" />
+      <div className="flex-shrink-0 px-[8px]"><TopicJoinNotice installId={install.id} appName={app.manifest.name} /></div>
       <div className="relative min-h-0 w-full flex-1 overflow-hidden">
         {/* In flow, not absolute: the surface makes its host `position: relative` to place the status over the canvas. */}
         <div ref={host} data-testid="app-page-host" className="h-full w-full" />

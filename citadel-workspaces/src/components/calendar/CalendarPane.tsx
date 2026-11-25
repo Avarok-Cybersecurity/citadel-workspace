@@ -2,8 +2,10 @@
  * The Calendar pane once the core and the member's zone are known (design §3.9): the views over
  * the store kept read from storage, and in the page's flow the panels a member opens from them:
  * a new event, their booking page on this node, and booking someone else (which a member deep
- * link opens directly). Ids and the clock are read here, at the pane's edge; nothing below reads
- * a port, a clock or the address.
+ * link opens directly). Each panel, the event form among them, takes the calendar's place behind
+ * "Back to the calendar"; the form once sat above the calendar's own bar, which read as misplaced.
+ * Ids and the clock are read here, at the pane's edge; nothing below reads a port, a clock or the
+ * address.
  */
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
@@ -155,7 +157,7 @@ export function CalendarPane({ ports, engine, nodeId, me, displayZone, deviceZon
           <Button variant="outline" className="h-[44px]" onClick={(): void => setPanel({ kind: 'notifications' })}>Notifications</Button>
         </div>
       )}
-      {panel.kind !== 'none' && panel.kind !== 'new' && panel.kind !== 'edit' && (
+      {panel.kind !== 'none' && (
         <Button variant="ghost" className="h-[44px] self-start" onClick={close}>
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           <span>Back to the calendar</span>
@@ -182,9 +184,9 @@ export function CalendarPane({ ports, engine, nodeId, me, displayZone, deviceZon
         <BookWith ports={ports} engine={engine} node={node} me={me} entries={state.entries} displayZone={displayZone} deviceZone={deviceZone}
           today={now.date} nowMs={nowMs} origin={window.location.origin} nodeName={nodeName} initial={panel.moving !== null ? { host: panel.moving.host, typeId: panel.moving.typeId } : linked === null ? null : { host: linked.host, typeId: linked.typeId }} onBook={book} />
       )}
-      {(panel.kind === 'none' || panel.kind === 'new' || panel.kind === 'edit') && (
+      {panel.kind === 'none' && (
         <>
-          {open !== null && panel.kind !== 'edit' && <EventDetails chip={open} displayZone={displayZone} nodeName={nodeName} onClose={(): void => setOpen(null)} onCancelBooking={role === null ? null : cancelBooking}
+          {open !== null && <EventDetails chip={open} displayZone={displayZone} nodeName={nodeName} onClose={(): void => setOpen(null)} onCancelBooking={role === null ? null : cancelBooking}
             onReschedule={role?.kind === 'booker' && client !== null ? (): void => { const { id, host: bookedWith } = role; reschedule(id, bookedWith).catch((e: unknown): void => { console.error('[calendar] the booking to move could not be read', e); }); } : null}
             onEdit={changeable === null ? null : (): void => setPanel({ kind: 'edit', entry: changeable })}
             onCancelEvent={changeable === null ? null : (reason: string | null): Promise<string | null> => cancelEvent(ports, engine, changeable, me, reason, nowOf(ports), nodeName)} />}

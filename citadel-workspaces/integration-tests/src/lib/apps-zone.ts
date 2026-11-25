@@ -19,7 +19,8 @@ import { COMPUTE_POOL_ID } from './apps-signing.js';
 import type { ZoneLog } from './apps.js';
 
 export const ANSWER: RegExp = /^\[app info\] answer from (\S+) via (p2p|relay): (.+)$/;
-export const JOB: RegExp = /^\[app info\] job ([0-9a-f]+) done in (\d+) ms: (verified|wrong answer)$/;
+/** "verified" only when a member's chunk was checked; a job nobody else answered is "computed on this device" (core record.rs). */
+export const JOB: RegExp = /^\[app info\] job ([0-9a-f]+) done in (\d+) ms: (verified|wrong answer|computed on this device)$/;
 export type Via = 'p2p' | 'relay';
 export type AppAction = 'run-primes' | 'run-sha' | 'mode-prefer' | 'mode-p2p' | 'mode-relay';
 
@@ -75,14 +76,15 @@ export async function runJob(page: Page, log: ZoneLog, action: 'run-primes' | 'r
 /**
  * Press `action` and wait for the job's end; whether `peer` answered any part of it. A member who
  * blocked this one hears none of its topic messages (kernel peer_rules.rs: a block refuses every
- * direction, topics too), so they never claim and are never called: the job is done without them.
+ * direction, topics too), so they never claim and are never called: the job is done without them,
+ * and with no other member here, it is done on this device alone (the outcome the log says).
  */
 export async function runJobWithout(page: Page, log: ZoneLog, action: 'run-primes' | 'run-sha', peer: string, timeoutMs: number): Promise<{ readonly done: boolean; readonly peerAnswered: boolean }> {
   const from: number = log.lines.length;
   await pressAppAction(page, action);
   const j: RegExpExecArray | null = await log.find(JOB, from, timeoutMs);
   const prefix: string = `[app info] answer from ${peer} via `;
-  return { done: j !== null && j[3] === 'verified', peerAnswered: log.lines.slice(from).some((l: string) => l.startsWith(prefix)) };
+  return { done: j !== null && j[3] === 'computed on this device', peerAnswered: log.lines.slice(from).some((l: string) => l.startsWith(prefix)) };
 }
 
 export interface WireCount {
@@ -144,4 +146,55 @@ export async function watchDeliveredFrames(page: Page): Promise<void> {
 
 export async function deliveredFrames(page: Page): Promise<string[]> {
   return page.evaluate((): string[] => [...((window as unknown as { __appsSpecDelivered?: string[] }).__appsSpecDelivered ?? [])]);
+}
+
+/** A topic group frame on a page's agent socket: the session's channel opened, a group message heard, or one this page sent. */
+export interface GroupFrame { readonly kind: 'channel' | 'heard' | 'sent'; readonly cid: string; readonly at: number }
+
+export interface GroupWire {
+  /** Where the record is now: a later `channelFor` or `describe` reads from here. */
+  readonly mark: () => number;
+  /** Whether the agent said `cid` holds a new group channel (`GroupChannelCreateSuccess`) after `from`, within `timeoutMs`. */
+  readonly channelFor: (cid: string, from: number, timeoutMs: number) => Promise<boolean>;
+  /** The frames after `from`, each with its offset from the first, for a log line. */
+  readonly describe: (from: number) => string;
+}
+
+/**
+ * Record, from now on, the topic-group frames on every socket `pages` open (tabs of one browser
+ * share the leader's socket, so a session's frames are on whichever tab leads): what separates "B was
+ * not in the group yet" from "B heard the job and did not claim" from "B claimed late". Regexes
+ * read `cid`, each struct's first field, before any nested key; a message's bytes are a number list.
+ */
+export function watchGroupWire(...pages: Page[]): GroupWire {
+  const frames: GroupFrame[] = [];
+  const waiters: Set<() => void> = new Set<() => void>();
+  const text = (payload: string | Buffer): string => (typeof payload === 'string' ? payload : payload.toString('utf8'));
+  const note = (kind: GroupFrame['kind'], payload: string, pattern: RegExp): void => {
+    for (const m of payload.matchAll(pattern)) frames.push({ kind, cid: m[1], at: Date.now() });
+    for (const wake of [...waiters]) wake();
+  };
+  for (const page of pages) page.on('websocket', (ws: WebSocket) => {
+    ws.on('framereceived', ({ payload }: { payload: string | Buffer }) => {
+      note('channel', text(payload), /"GroupChannelCreateSuccess":\{[^{}]*?"cid":(\d+)/g);
+      note('heard', text(payload), /"GroupMessageNotification":\{[^{}]*?"cid":(\d+)/g);
+    });
+    ws.on('framesent', ({ payload }: { payload: string | Buffer }) => note('sent', text(payload), /"GroupMessage":\{[^{}]*?"cid":(\d+)/g));
+  });
+  const opened = (cid: string, from: number): boolean => frames.slice(from).some((f: GroupFrame) => f.kind === 'channel' && f.cid === cid);
+  return {
+    mark: (): number => frames.length,
+    channelFor: (cid: string, from: number, timeoutMs: number): Promise<boolean> => new Promise<boolean>((resolve: (seen: boolean) => void): void => {
+      const done = (seen: boolean): void => { waiters.delete(check); clearTimeout(timer); resolve(seen); };
+      const check = (): void => { if (opened(cid, from)) done(true); };
+      const timer: ReturnType<typeof setTimeout> = setTimeout((): void => done(false), timeoutMs);
+      waiters.add(check);
+      check();
+    }),
+    describe: (from: number): string => {
+      const seen: GroupFrame[] = frames.slice(from);
+      const t0: number = seen[0]?.at ?? 0;
+      return seen.length === 0 ? 'no group frames' : seen.map((f: GroupFrame) => `${f.kind}(${f.cid}) +${f.at - t0} ms`).join(', ');
+    },
+  };
 }

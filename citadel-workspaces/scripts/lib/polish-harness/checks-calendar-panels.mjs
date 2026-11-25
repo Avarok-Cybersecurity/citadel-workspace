@@ -1,12 +1,14 @@
 import { strict as assert } from 'node:assert';
 import { AxeBuilder } from '@axe-core/playwright';
+import { controlEdgesAreSeen } from './control-edges.mjs';
 
 /**
  * The Calendar tab mounted whole (scenario `calendar-mounted`: the registry's mount over real
  * ports and an in-memory store), and each panel a member opens from it: the event editor, their
  * booking page, and someone else's booking page with a day chosen. At 375px and on a desktop:
  * no sideways scroll, nothing past the pane, every control a finger reaches at least 44 by 44 px;
- * and axe finds nothing serious or critical, measured at rest.
+ * every drawn control edge seen at 3:1 (control-edges.mjs, which axe does not measure); and axe
+ * finds nothing serious or critical, measured at rest.
  */
 const settled = (page) => page.waitForFunction(() => document.getAnimations().every((a) => a.playState === 'finished' || a.playState === 'idle'), undefined, { timeout: 5000 });
 
@@ -40,6 +42,7 @@ export async function fitsAndReads(page, width, what) {
     const named = small.map((b) => `${b.id} ${Math.round(b.width)}x${Math.round(b.height)}`);
     assert.deepEqual(named, [], `${what}: targets under 44px at 375px: ${named.slice(0, 5).join('; ')}`);
   }
+  await controlEdgesAreSeen(page, '[data-testid="calendar-pane"]', what);
   const result = await new AxeBuilder({ page }).include('[data-testid="calendar-pane"]').analyze();
   const serious = result.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
   assert.deepEqual(serious.map((v) => `${v.id} at ${v.nodes[0]?.target}`), [], `${what}: axe`);
@@ -48,6 +51,8 @@ export async function fitsAndReads(page, width, what) {
 async function theMountedTabFits({ page, url, viewport }) {
   const width = await mounted(page, url, viewport);
   await fitsAndReads(page, width, 'the mounted tab');
+  // Today and the toolbar's outline buttons draw edges, so a measure of none means the probe missed them.
+  assert.ok(await controlEdgesAreSeen(page, '[data-testid="calendar-pane"]', 'the mounted tab') >= 6, 'the mounted tab: the outline buttons were not measured');
 }
 
 /** Company's all-hands, projected here by its publisher, read through the tab's own ports and shown as from Company. */

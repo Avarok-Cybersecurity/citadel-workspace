@@ -11,7 +11,7 @@ import { NotificationPriority, NotificationType, type Notification } from '@/lib
 import NotificationItem from '../NotificationItem';
 
 function card(priority: NotificationPriority): Notification {
-  return { id: 'n', type: NotificationType.MESSAGE, title: 'New message from Thomas Braun', content: "I'm good!", timestamp: 1, read: false, priority };
+  return { id: 'n', type: NotificationType.MESSAGE, title: 'New message from Thomas Braun', content: "I'm good!", timestamp: 1, read: false, priority, osReach: 'when-away' };
 }
 
 describe('a notification card', () => {

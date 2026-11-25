@@ -1,19 +1,21 @@
 /**
  * OS-level delivery for backgrounded tabs, both platform shapes.
  *
- * Two ways it silently showed nothing:
+ * Three ways it silently showed nothing:
  *
- * 1. The branch taken right after `requestPermission()` resolved granted kept
- *    its own bare `new Notification` — a second copy of delivery that missed
- *    the Chromium-for-Android fix (the constructor THROWS there), inside a
- *    voided promise that swallowed the throw. The first backgrounded message
- *    after granting permission showed nothing on exactly the platform the
- *    service-worker path exists for.
+ * 1. A branch kept its own bare `new Notification` — a second copy of
+ *    delivery that missed the Chromium-for-Android fix (the constructor THROWS
+ *    there), inside a voided promise that swallowed the throw.
  *
  * 2. `navigator.serviceWorker.ready` NEVER settles when no service worker
  *    registers (dev, private browsing, failed registration), so an unbounded
  *    await parked delivery forever and made the constructor fallback
  *    unreachable.
+ *
+ * 3. Delivery asked for permission itself, from a timer with no click behind
+ *    it, which Safari and Firefox ignore: permission stayed unasked and every
+ *    notification was dropped. Asking belongs to the page's controls
+ *    (os-permission.ts); delivery never asks.
  *
  * jsdom cannot prove the real Android constructor throws or that a real
  * `ready` hangs — these tests encode that documented platform behavior in
@@ -35,6 +37,7 @@ const sample: AppNotification = {
   priority: NotificationPriority.NORMAL,
   read: false,
   timestamp: 0,
+  osReach: 'when-away',
 };
 
 const constructed: Mock = vi.fn();
@@ -73,15 +76,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
   constructed.mockReset();
+  WorkingNotification.requestPermission.mockClear();
   WorkingNotification.permission = 'granted';
   AndroidNotification.permission = 'default';
   Reflect.deleteProperty(navigator, 'serviceWorker');
 });
 
-describe('the first notification after granting permission (defect A)', () => {
-  it('reaches the service worker on a platform whose constructor throws', async () => {
+describe('a platform whose constructor throws (defect A)', () => {
+  it('reaches the service worker', async () => {
     const showNotification: Mock = vi.fn(async () => undefined);
     stubServiceWorker(Promise.resolve({ showNotification }));
+    AndroidNotification.permission = 'granted';
     vi.stubGlobal('Notification', AndroidNotification);
 
     showBrowserNotification(sample);
@@ -93,12 +98,10 @@ describe('the first notification after granting permission (defect A)', () => {
         tag: 'n1',
       });
     });
-    expect(AndroidNotification.requestPermission).toHaveBeenCalled();
   });
 
   it('still shows via the constructor where that is the surface (opposite direction)', async () => {
     // Without this, "always show nothing" would pass the test above's twin.
-    WorkingNotification.permission = 'default';
     stubServiceWorker(undefined); // no service worker at all
     vi.stubGlobal('Notification', WorkingNotification);
 
@@ -112,6 +115,23 @@ describe('the first notification after granting permission (defect A)', () => {
         tag: 'n1',
       });
     });
+  });
+});
+
+describe('permission not yet given (defect C)', () => {
+  it('shows nothing and never asks: a prompt without a click is ignored by Safari and Firefox', async () => {
+    const showNotification: Mock = vi.fn(async () => undefined);
+    stubServiceWorker(Promise.resolve({ showNotification }));
+    WorkingNotification.permission = 'default';
+    vi.stubGlobal('Notification', WorkingNotification);
+
+    showBrowserNotification(sample);
+    // A task, not a microtask: long enough for a resolved worker to have been handed it.
+    await new Promise<void>((resolve) => { setTimeout(resolve, 0); });
+
+    expect(WorkingNotification.requestPermission).not.toHaveBeenCalled();
+    expect(showNotification).not.toHaveBeenCalled();
+    expect(constructed).not.toHaveBeenCalled();
   });
 });
 

@@ -71,7 +71,7 @@
        /20 tints, which is every surface they are read on. */
     --success-emphasis: 160 84% 23%;
     --warning-emphasis: 38 92% 27%;
-    /* "Seen" double tick. Sits on your own bubble (bg-primary) in both themes: 5.25:1 light, 3.91:1 dark, above the 3:1 a graphic needs. */
+    /* "Seen" double tick. Sits on your own bubble (bg-primary) in both themes: 5.25:1 light, 3.58:1 dark, above the 3:1 a graphic needs. */
     --read-receipt: 199 100% 80%;
 
     /* Lines and controls */
@@ -112,7 +112,9 @@
     --surface: 230 32% 22%;         /* was #262C4A */
     --surface-foreground: 0 0% 100%;
 
-    --primary: 257 30% 50%;         /* was #6E59A5 */
+    /* 52%, not 50%: a selected chip or card filled with it was 2.94:1 on the page, under the 3:1 a
+       control needs (WCAG 1.4.11); now 3.21. White text on it is 5.26:1, the bubble's 90% meta 4.61. */
+    --primary: 257 30% 52%;         /* was #6E59A5 */
     --primary-foreground: 0 0% 100%;
     --primary-accent: 251 85% 75%;  /* was #9B87F5 */
 
@@ -150,7 +152,7 @@
     --warning-foreground: 235 18% 13%;
     --success-emphasis: 160 84% 41%;
     --warning-emphasis: 38 92% 50%;
-    /* "Seen" double tick. Sits on your own bubble (bg-primary) in both themes: 5.25:1 light, 3.91:1 dark, above the 3:1 a graphic needs. */
+    /* "Seen" double tick. Sits on your own bubble (bg-primary) in both themes: 5.25:1 light, 3.58:1 dark, above the 3:1 a graphic needs. */
     --read-receipt: 199 100% 80%;
 
     --border: 222 23% 23%;          /* was #2D3548 */
