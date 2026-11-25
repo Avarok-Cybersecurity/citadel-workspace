@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Capability } from '@/lib/citadel-apps/host/capabilities';
-import { glueInstance, type StorageChange } from '@/lib/citadel-apps/host/glue-instance';
+import { glueInstance, type StorageChange, type Unsubscribe } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY } from '@/lib/citadel-apps/host/limits';
 import { ManualClock, oneClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { calendarPorts, type CalendarPorts } from '../ports';
@@ -28,7 +28,7 @@ describe("the Calendar's own writes to the member's store", () => {
   it('are heard by its listeners once written, each key, and not after they leave', async () => {
     const ports: CalendarPorts = rig(['storage.user', 'storage.node']);
     const heard: StorageChange[] = [];
-    const leave = ports.onStorageChanged((c: StorageChange): void => { heard.push(c); });
+    const leave: Unsubscribe = ports.onStorageChanged((c: StorageChange): void => { heard.push(c); });
     await ports.storage.set({ kind: 'user' }, 'cal/private/a', bytes);
     await ports.storage.setMany({ kind: 'user' }, [{ key: 'cal/private/b', value: bytes }, { key: 'cal/private/c', value: bytes }]);
     await ports.storage.remove({ kind: 'user' }, 'cal/private/a');
