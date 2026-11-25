@@ -6,9 +6,9 @@
  * that the chain holds, and that a failed send does not poison the sends
  * queued behind it.
  */
-import { describe, it, expect, vi, beforeEach, afterEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 
-const sendP2PCommand: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
+const sendP2PCommand: Mock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/p2p/message-send-operations', () => ({ sendP2PCommand }));
 
 import { WebSocketCallTransport } from '../websocket-call-transport';

@@ -21,21 +21,21 @@
  * level and some inside `Response`, and matching only one form is how the
  * ConnectFailure branch came to be half-written.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { createRegistrationResponseHandler } from '../registration-response-handler';
 
 const REQ: 'req-1' = 'req-1';
 
 function harness(): {
   handler: (raw: unknown) => void;
-  resolve: ReturnType<typeof vi.fn>;
-  reject: ReturnType<typeof vi.fn>;
-  cleanup: ReturnType<typeof vi.fn>;
+  resolve: Mock;
+  reject: Mock;
+  cleanup: Mock;
   seen: Record<string, unknown>[];
 } {
-  const resolve: ReturnType<typeof vi.fn> = vi.fn();
-  const reject: ReturnType<typeof vi.fn> = vi.fn();
-  const cleanup: ReturnType<typeof vi.fn> = vi.fn();
+  const resolve: Mock = vi.fn();
+  const reject: Mock = vi.fn();
+  const cleanup: Mock = vi.fn();
   const seen: Record<string, unknown>[] = [];
   const handler: (raw: unknown) => void = createRegistrationResponseHandler(REQ, resolve, reject, cleanup, {
     handleConnectSuccess: async (payload, res) => { seen.push(payload); res({ cid: String(payload.cid) }); },

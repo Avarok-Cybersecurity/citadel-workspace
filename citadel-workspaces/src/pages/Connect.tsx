@@ -101,7 +101,7 @@ export const Connect: () => JSX.Element = (): JSX.Element => {
           description: `${outcome.reason} Sign in to reconnect.`,
           variant: "destructive",
         });
-        navigate('/');
+        void navigate('/');
         return;
       }
 

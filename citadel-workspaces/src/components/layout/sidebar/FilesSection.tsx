@@ -129,7 +129,7 @@ export const FilesSection: () => JSX.Element = (): JSX.Element => {
 
     // The server, at the top level: the button names no member, so it opens
     // nobody's storage but your own. It used to open the first registered peer's.
-    navigate(fileManagerHref(location.search, { storage: { kind: 'server' }, path: '/', item: null, via: null }));
+    void navigate(fileManagerHref(location.search, { storage: { kind: 'server' }, path: '/', item: null, via: null }));
   };
 
   return (

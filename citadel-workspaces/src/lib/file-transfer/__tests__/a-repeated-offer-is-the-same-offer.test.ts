@@ -8,13 +8,13 @@
  * Driven through the real service, router and correlator. Mocked: the socket to
  * the agent and the tab's session lookup, as in a-fast-reception-stays-complete.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 vi.mock('@/lib/tab-context', () => ({
   getSelectedUser: async (): Promise<{ selectedCid: bigint }> => ({ selectedCid: 7n }),
 }));
 
-const sendRequest: ReturnType<typeof vi.fn> = vi.fn(async (_request: unknown): Promise<void> => undefined);
+const sendRequest: Mock = vi.fn(async (_request: unknown): Promise<void> => undefined);
 vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
     sendRequest: (r: unknown): Promise<void> => sendRequest(r),

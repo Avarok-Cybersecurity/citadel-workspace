@@ -10,13 +10,13 @@
  * The two cross-tab transports are doubles, as in a-path-change-reaches-the-session-it-names:
  * there is no second tab in jsdom, so the forward call is where the routing decision shows.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { eventEmitter } from '../../event-emitter';
 
 const instanceChannelMock: {
-  requestCidReport: ReturnType<typeof vi.fn>;
-  forwardToInstance: ReturnType<typeof vi.fn>;
-  broadcast: ReturnType<typeof vi.fn>;
+  requestCidReport: Mock;
+  forwardToInstance: Mock;
+  broadcast: Mock;
 } = vi.hoisted(() => ({
   requestCidReport: vi.fn(),
   forwardToInstance: vi.fn(),
@@ -30,8 +30,8 @@ const instanceManagerMock: {
   instanceId: string; isLeader: boolean;
   findInstanceByCid: ReturnType<typeof vi.fn<(cid: bigint) => string | null>>;
   findInstancesByCid(cid: bigint): string[];
-  getAllInstances: ReturnType<typeof vi.fn>;
-  registerInstance: ReturnType<typeof vi.fn>;
+  getAllInstances: Mock;
+  registerInstance: Mock;
 } = vi.hoisted(() => ({
   instanceId: 'leader-instance', isLeader: true, // the router reads leadership here, not from the event
   findInstanceByCid: vi.fn<(cid: bigint) => string | null>(),

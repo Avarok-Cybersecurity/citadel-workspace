@@ -12,7 +12,7 @@
  * base tree, so the last write resurrected everything the others removed.
  */
 
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { withSerialLock } from '../serial-queue';
 
 /** A store with the exact hazard: a gap between reading and writing. */
@@ -73,7 +73,7 @@ describe('withSerialLock', () => {
     // place for a different reason -- it stops a rejected promise sitting in
     // the map with nobody awaiting it, which is an unhandled rejection -- and
     // that is stated at the code rather than pretended to be tested here.
-    const after: ReturnType<typeof vi.fn> = vi.fn();
+    const after: Mock = vi.fn();
 
     const failed: Promise<never> = withSerialLock('tree', (): Promise<never> => Promise.reject(new Error('nope')));
     const queued: Promise<void> = withSerialLock('tree', async () => { after(); });

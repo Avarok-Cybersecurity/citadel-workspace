@@ -12,7 +12,7 @@
  * `rmdir`, `removeFile` and `confirm` are all injectable, so the real handler
  * runs and only the boundary is stubbed.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import type { RevfsNode } from '@/types/revfs-types';
 import { useFileManagerHandlers } from '../useFileManagerHandlers';
@@ -38,8 +38,8 @@ vi.mock('@/components/shared/prompt-dialog', () => ({
 // here resolves undefined, which reads as "the peer did not acknowledge" -- so
 // the stub has to state which peer it is modelling.
 let peerAcknowledges: boolean = true;
-const rmdir: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<boolean> => peerAcknowledges);
-const removeFile: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<boolean> => peerAcknowledges);
+const rmdir: Mock = vi.fn(async (): Promise<boolean> => peerAcknowledges);
+const removeFile: Mock = vi.fn(async (): Promise<boolean> => peerAcknowledges);
 
 function node(path: string, type: 'directory' | 'file'): RevfsNode {
   return { path, name: path.split('/').pop() ?? path, type, children: [] } as unknown as RevfsNode;

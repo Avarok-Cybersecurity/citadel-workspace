@@ -8,7 +8,7 @@
  * hand. The client's own parsing of real responses is covered through the
  * fetch boundary in coupon-preview-client.test.ts and the flow specs.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState, type JSX } from 'react';
 import { CouponField } from '../CouponField';
@@ -54,9 +54,9 @@ function Host({ port, initial, onApplied }: { port: CouponPort; initial: Applied
   );
 }
 
-function mount(initial?: AppliedCoupon): { asked: Asked[]; onApplied: ReturnType<typeof vi.fn> } {
+function mount(initial?: AppliedCoupon): { asked: Asked[]; onApplied: Mock } {
   const { port, asked } = fakePort();
-  const onApplied: ReturnType<typeof vi.fn> = vi.fn();
+  const onApplied: Mock = vi.fn();
   render(<Host port={port} initial={initial} onApplied={onApplied} />);
   return { asked, onApplied };
 }

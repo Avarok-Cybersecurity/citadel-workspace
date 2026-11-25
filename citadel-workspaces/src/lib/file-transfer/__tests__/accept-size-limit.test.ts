@@ -7,7 +7,7 @@
  * without being asked. A receiver had no way to limit what arrived, while the
  * control read as protective.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { acceptTransfer , type LifecycleDeps } from '../transfer-lifecycle';
 import type { FileTransfer } from '../types';
 
@@ -27,8 +27,8 @@ function offered(fileSize: number): FileTransfer {
   } as unknown as FileTransfer;
 }
 
-function deps(transfer: FileTransfer, maxFileSize: number): { d: LifecycleDeps; executeIntent: ReturnType<typeof vi.fn>; } {
-  const executeIntent: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+function deps(transfer: FileTransfer, maxFileSize: number): { d: LifecycleDeps; executeIntent: Mock; } {
+  const executeIntent: Mock = vi.fn().mockResolvedValue(undefined);
   return {
     d: {
       state: {

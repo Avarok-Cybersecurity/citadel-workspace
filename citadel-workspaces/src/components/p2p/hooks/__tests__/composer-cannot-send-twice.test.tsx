@@ -10,16 +10,16 @@
  * composer when the bubble appears rather than when the network resolves.
  */
 
-import { describe, it, expect, vi, beforeEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { clearAllDraftsForTests } from '@/lib/chat/draft-store';
 import { renderHook, act, waitFor  } from '@testing-library/react';
 import { useP2PCompose } from '../useP2PCompose';
 import { peerTransportFor } from '@/components/p2p/__tests__/doubles/peer-transport';
 import type { ChatTransport } from '@/lib/chat/transport/chat-transport';
 
-const sendMessage: ReturnType<typeof vi.fn> = vi.fn();
-const stopTypingPolling: ReturnType<typeof vi.fn> = vi.fn();
-const startTypingPolling: ReturnType<typeof vi.fn> = vi.fn();
+const sendMessage: Mock = vi.fn();
+const stopTypingPolling: Mock = vi.fn();
+const startTypingPolling: Mock = vi.fn();
 
 vi.mock('@/lib/p2p/p2p-messenger-manager', () => ({
   P2PMessengerManager: {
@@ -27,7 +27,7 @@ vi.mock('@/lib/p2p/p2p-messenger-manager', () => ({
   },
 }));
 
-vi.mock('@/hooks/use-toast', () => ({ useToast: (): { toast: ReturnType<typeof vi.fn> } => ({ toast: vi.fn() }) }));
+vi.mock('@/hooks/use-toast', () => ({ useToast: (): { toast: Mock } => ({ toast: vi.fn() }) }));
 
 // The real adapter over the mocked messenger above.
 const transport: ChatTransport = peerTransportFor({ cid: 42n, name: 'Bob' }, null);

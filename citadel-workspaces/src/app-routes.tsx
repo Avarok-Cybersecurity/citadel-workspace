@@ -1,20 +1,10 @@
 import { lazy, Suspense, type LazyExoticComponent } from "react";
-import { Routes, Route, type FutureConfig } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import { RouteFallback } from "./components/RouteFallback";
 
 // Landing is the route almost every session starts on, so it is imported eagerly:
 // code-splitting it would only add a network round trip before first paint.
 import Landing from "./pages/Landing";
-
-/**
- * The router's opt-ins, read by every router that renders `AppRoutes`.
- *
- * Both were logging deprecation warnings on every boot; adopting them means the
- * eventual react-router v7 upgrade is a version bump rather than a behaviour
- * change. `v7_startTransition` matters beyond that: navigation is a transition,
- * so the outgoing route stays on screen until the incoming one has rendered.
- */
-export const ROUTER_FUTURE: Partial<FutureConfig> = { v7_startTransition: true, v7_relativeSplatPath: true };
 
 /**
  * Every other route is split out. Nothing here was split before, so a visitor to
@@ -51,7 +41,8 @@ const Legal: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages
 // list load only for that link.
 const SignIn: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./pages/SignIn"));
 
-/** The route table. Rendered inside a router configured with `ROUTER_FUTURE`. */
+/** The route table. react-router 7 makes every navigation a transition, so the outgoing route stays
+ * on screen until the incoming one has rendered (what the v6 `v7_startTransition` opt-in did). */
 export function AppRoutes(): JSX.Element {
   return (
     <Suspense fallback={<RouteFallback />}>

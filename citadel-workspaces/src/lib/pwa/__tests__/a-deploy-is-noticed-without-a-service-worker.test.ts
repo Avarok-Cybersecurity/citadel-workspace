@@ -6,7 +6,7 @@
  * ran the superseded bundle until something else forced a reload. Nothing is
  * mocked: the watch takes its I/O as arguments, and these hand it a fake server.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import type { OutputAsset, OutputChunk } from 'rollup';
 import { isNewDeploy, readDeployedEntry, versionManifest } from '../deployed-version';
 import { respondToDeploy, startVersionWatch, type VersionWatchIO } from '../version-watch';
@@ -105,7 +105,7 @@ describe('watching for a deploy', () => {
   });
 
   it('does not ask while offline, and stops when told to', async () => {
-    const served: ReturnType<typeof vi.fn> = vi.fn(() => ({ entry: '/assets/index-bbbb2222.js' }));
+    const served: Mock = vi.fn(() => ({ entry: '/assets/index-bbbb2222.js' }));
     startVersionWatch(harness(served, false).io);
     await settle();
     expect(served).not.toHaveBeenCalled();
@@ -123,7 +123,7 @@ describe('what a detected deploy does', () => {
   beforeEach(() => clearDeployNoticeForTests());
 
   it('offers a plain reload when no worker controls the page', () => {
-    const reload: ReturnType<typeof vi.fn> = vi.fn();
+    const reload: Mock = vi.fn();
     respondToDeploy({ workerControlsPage: () => false, checkWorker: async () => undefined, reload });
     expect(getDeployNotice()?.reason).toBe('deployed');
     getDeployNotice()?.accept();
@@ -131,7 +131,7 @@ describe('what a detected deploy does', () => {
   });
 
   it('asks the worker instead when one does, since a reload would serve the old build', () => {
-    const checkWorker: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
+    const checkWorker: Mock = vi.fn(async () => undefined);
     respondToDeploy({ workerControlsPage: () => true, checkWorker, reload: vi.fn() });
     expect(checkWorker).toHaveBeenCalledOnce();
     expect(getDeployNotice()).toBeNull();

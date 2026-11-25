@@ -5,12 +5,12 @@
  *
  * Doubled: the bound workspace requests (`messagingTrustApi`), the workspace server's boundary.
  */
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { DomainNode, MessagingTrustPolicy, MessagingTrustSettings } from 'citadel-workspace-client-ts';
 import { WorkspaceContext, type WorkspaceState } from '@/contexts/WorkspaceContext';
 
-const h: { held: MessagingTrustSettings; setWorkspacePolicy: ReturnType<typeof vi.fn>; setMyPolicy: ReturnType<typeof vi.fn> } = vi.hoisted(() => ({
+const h: { held: MessagingTrustSettings; setWorkspacePolicy: Mock; setMyPolicy: Mock } = vi.hoisted(() => ({
   held: { workspace: 'AllTrusted', mine: null, effective_root: 'workspace-root' },
   setWorkspacePolicy: vi.fn(),
   setMyPolicy: vi.fn(),

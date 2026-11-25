@@ -4,13 +4,13 @@
  * the module boundary because it IS the injected audio layer — its own logic
  * is covered against fakes in call-sounds.test.ts.
  */
-import { describe, it, expect, vi, beforeEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, waitFor , type RenderResult } from '@testing-library/react';
 import { CallSoundEffects } from '../CallSoundEffects';
 import { CallContext, type CallContextValue } from '@/lib/call/call-context';
 import type { CallState } from '@/lib/call/call-state';
 
-const player: { startRing: ReturnType<typeof vi.fn>; stopRing: ReturnType<typeof vi.fn>; chime: ReturnType<typeof vi.fn>; isRinging: ReturnType<typeof vi.fn> } = {
+const player: { startRing: Mock; stopRing: Mock; chime: Mock; isRinging: Mock } = {
   startRing: vi.fn(() => Promise.resolve()),
   stopRing: vi.fn(),
   chime: vi.fn(),

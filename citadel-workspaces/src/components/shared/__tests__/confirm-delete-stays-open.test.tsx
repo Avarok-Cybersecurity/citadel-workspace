@@ -8,7 +8,7 @@
  * These drive the real component. Asserting the source contains preventDefault
  * would pass on any version that mentions it.
  */
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
@@ -64,7 +64,7 @@ describe('ConfirmDeleteDialog', () => {
   it('ignores a second click while the first delete is still in flight', async () => {
     const user: UserEvent = userEvent.setup();
     let release!: () => void;
-    const onConfirm: ReturnType<typeof vi.fn> = vi.fn((): Promise<void> => new Promise<void>((r): void => { release = (): void => r(); }));
+    const onConfirm: Mock = vi.fn((): Promise<void> => new Promise<void>((r): void => { release = (): void => r(); }));
     render(<Harness onConfirm={onConfirm} />);
 
     const button: HTMLElement = screen.getByRole('button', { name: 'Delete' });

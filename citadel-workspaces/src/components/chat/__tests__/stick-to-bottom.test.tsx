@@ -7,7 +7,7 @@
  * geometry, `scrollTo` and ResizeObserver are stubbed on the element: those are
  * the browser facts the hook reads, and the only stand-ins here.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { render, type RenderResult, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { useRef, type RefObject } from 'react';
 import { useStickToBottom, type StickToBottom } from '../use-stick-to-bottom';
@@ -16,7 +16,7 @@ import { NewMessagesPill } from '../NewMessagesPill';
 interface Item { id: string }
 
 let geometry: { scrollTop: number; scrollHeight: number; clientHeight: number };
-let scrollTo: ReturnType<typeof vi.fn>;
+let scrollTo: Mock;
 let resizeCallbacks: Array<() => void>;
 
 beforeEach(() => {

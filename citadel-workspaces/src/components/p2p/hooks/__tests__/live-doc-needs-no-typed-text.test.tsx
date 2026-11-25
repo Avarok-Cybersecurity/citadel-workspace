@@ -8,18 +8,18 @@
  *
  * Mocked: the P2P messenger (network I/O) and toasts; the composer hook is production code.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { clearAllDraftsForTests } from '@/lib/chat/draft-store';
 import { useP2PCompose } from '../useP2PCompose';
 import { peerTransportFor } from '@/components/p2p/__tests__/doubles/peer-transport';
 import type { ChatTransport } from '@/lib/chat/transport/chat-transport';
 
-const sendMessage: ReturnType<typeof vi.fn> = vi.fn();
+const sendMessage: Mock = vi.fn();
 vi.mock('@/lib/p2p/p2p-messenger-manager', () => ({
-  P2PMessengerManager: { getInstance: (): Record<string, ReturnType<typeof vi.fn>> => ({ sendMessage, stopTypingPolling: vi.fn(), startTypingPolling: vi.fn() }) },
+  P2PMessengerManager: { getInstance: (): Record<string, Mock> => ({ sendMessage, stopTypingPolling: vi.fn(), startTypingPolling: vi.fn() }) },
 }));
-vi.mock('@/hooks/use-toast', () => ({ useToast: (): { toast: ReturnType<typeof vi.fn> } => ({ toast: vi.fn() }) }));
+vi.mock('@/hooks/use-toast', () => ({ useToast: (): { toast: Mock } => ({ toast: vi.fn() }) }));
 
 // The real adapter over the mocked messenger above.
 const transport: ChatTransport = peerTransportFor({ cid: 42n, name: 'Bob' }, null);

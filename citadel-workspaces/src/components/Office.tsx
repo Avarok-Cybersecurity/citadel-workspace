@@ -31,7 +31,7 @@ export const Office: () => JSX.Element = (): JSX.Element => {
       debugLog('Office', `[Office] Navigating to default node: ${defaultNode.name} (${defaultNode.id})`);
       const newParams: URLSearchParams = new URLSearchParams(location.search);
       newParams.set("nodeId", defaultNode.id);
-      navigate(`/workspace?${newParams.toString()}`, { replace: true });
+      void navigate(`/workspace?${newParams.toString()}`, { replace: true });
     }
   }, [nodeId, section, state.nodes, location.search, navigate]);
 

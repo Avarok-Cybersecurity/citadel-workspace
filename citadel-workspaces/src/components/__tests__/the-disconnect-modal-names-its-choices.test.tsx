@@ -16,7 +16,7 @@
  * those strings exist — just not as the label of the thing being pressed.
  * Existing somewhere is not the same as being the name of the control.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DisconnectConfirmModal } from '../DisconnectConfirmModal';
@@ -56,7 +56,7 @@ function renderModal(onConfirm: (action: 'disconnect' | 'deregister') => void): 
 
 describe('the disconnect confirmation', () => {
   it('offers signing out under a stable handle', async (): Promise<void> => {
-    const onConfirm: ReturnType<typeof vi.fn> = vi.fn();
+    const onConfirm: Mock = vi.fn();
     renderModal(onConfirm);
 
     await userEvent.click(screen.getByTestId('confirm-sign-out'));
@@ -68,7 +68,7 @@ describe('the disconnect confirmation', () => {
     // Two destructive choices one beside the other: the control that signs you
     // out and the control that destroys the account must never be reachable by
     // the same locator.
-    const onConfirm: ReturnType<typeof vi.fn> = vi.fn();
+    const onConfirm: Mock = vi.fn();
     renderModal(onConfirm);
 
     await userEvent.click(screen.getByTestId('confirm-delete-account'));
@@ -79,7 +79,7 @@ describe('the disconnect confirmation', () => {
 describe('the second confirmation on deleting an account', () => {
   it('does not delete when it is refused', async () => {
     secondConfirmationAnswer = false;
-    const onConfirm: ReturnType<typeof vi.fn> = vi.fn();
+    const onConfirm: Mock = vi.fn();
     renderModal(onConfirm);
 
     await userEvent.click(screen.getByTestId('confirm-delete-account'));
@@ -93,7 +93,7 @@ describe('the second confirmation on deleting an account', () => {
     // action goes through on one click even when the second question would be
     // refused.
     secondConfirmationAnswer = false;
-    const onConfirm: ReturnType<typeof vi.fn> = vi.fn();
+    const onConfirm: Mock = vi.fn();
     renderModal(onConfirm);
 
     await userEvent.click(screen.getByTestId('confirm-sign-out'));
@@ -108,7 +108,7 @@ describe('signing out an account with edits held on this device', () => {
     const { documentEditsKey, localRecordPut } = await import('@/lib/document-replica-cache');
     await localRecordPut(documentEditsKey(42n, 'doc-1', 'tab-1'), [Uint8Array.from([1])]);
     secondConfirmationAnswer = false;
-    const onConfirm: ReturnType<typeof vi.fn> = vi.fn();
+    const onConfirm: Mock = vi.fn();
     renderModal(onConfirm);
 
     await userEvent.click(screen.getByTestId('confirm-sign-out'));

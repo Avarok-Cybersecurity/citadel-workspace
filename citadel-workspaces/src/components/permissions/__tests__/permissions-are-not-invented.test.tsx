@@ -13,10 +13,10 @@
  * one user being edited — so an admin who changed nothing still sent writes.
  */
 
-import { describe, it, expect, vi, beforeEach     } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
-const getUserPermissions: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+const getUserPermissions: Mock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/lib/workspace-service', () => ({
   default: { getUserPermissions: (...args: unknown[]): unknown => getUserPermissions(...args) },
 }));

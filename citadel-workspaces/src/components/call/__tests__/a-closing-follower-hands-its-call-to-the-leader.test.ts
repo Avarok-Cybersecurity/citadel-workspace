@@ -6,11 +6,11 @@
  * the way that handler does. Mocked: the instance channel and election (a
  * BroadcastChannel).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
 const tab: { isLeader: boolean } = vi.hoisted(() => ({ isLeader: false }));
-const channelSend: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
+const channelSend: Mock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/multi-instance', () => ({
   instanceChannel: { send: channelSend },
   instanceManager: { get isLeader(): boolean { return tab.isLeader; } },
@@ -26,8 +26,8 @@ import type { MessageSenderConfig } from '@/lib/p2p/message-sender-types';
 
 const active: CallState = { callId: 'c1', status: 'active', participants: new Map([[7n, {}]]) } as unknown as CallState;
 
-function manager(): CallManager & { end: ReturnType<typeof vi.fn> } {
-  return { getState: (): CallState => active, end: vi.fn().mockResolvedValue(undefined) } as unknown as CallManager & { end: ReturnType<typeof vi.fn> };
+function manager(): CallManager & { end: Mock } {
+  return { getState: (): CallState => active, end: vi.fn().mockResolvedValue(undefined) } as unknown as CallManager & { end: Mock };
 }
 
 beforeEach(() => channelSend.mockReset());

@@ -13,7 +13,7 @@
  *   and the workspace/ILM requests a signed-in session makes, which have no
  *   backend here.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { FakeAccount } from '@/lib/sign-in/__tests__/fake-agent';
@@ -34,7 +34,7 @@ import { enrolKey, world } from '@/lib/sign-in/__tests__/helpers';
 import { loginWorld as h } from './login-world';
 import { listHints } from '@/lib/sign-in/hints';
 
-let onNext: ReturnType<typeof vi.fn>;
+let onNext: Mock;
 function renderLogin(): void {
   onNext = vi.fn();
   render(<MemoryRouter><Login onNext={onNext} onCancel={() => {}} initialUsername={undefined} /><SecurityKeyPrompt /></MemoryRouter>);

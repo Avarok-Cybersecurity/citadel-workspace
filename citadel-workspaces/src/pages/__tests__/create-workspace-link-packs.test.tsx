@@ -1,5 +1,5 @@
 /** Buying secure-link packs through the real create flow (doubles as in create-workspace-flow.test.tsx). */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { loadDraft } from '@/lib/onboarding/create-flow';
 import { contractFake, type ContractFake } from '@/lib/onboarding/__tests__/contract-fake';
@@ -11,7 +11,7 @@ describe('secure-link packs', () => {
   it('are counted beside storage, priced in the total, reviewed and sent', async () => {
     const fake: ContractFake = contractFake();
     fake.createReplies.push({ status: 200, body: { checkout_url: 'https://checkout.stripe.com/c/pay/cs_test_lp', reservation_token: 'rt_lp' } });
-    const redirect: ReturnType<typeof vi.fn> = vi.fn();
+    const redirect: Mock = vi.fn();
     renderFlow(fake, '/create', redirect);
     await throughToReview(() => {
       fireEvent.click(screen.getByTestId('plan-team'));

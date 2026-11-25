@@ -19,7 +19,7 @@
  * than a call that fails: there is nothing to act on, and nothing that says
  * acting is needed.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { CallManager } from '../call-manager';
 import { CONNECT_TIMEOUT_MS } from '../call-constants';
 import type { CallTransport } from '../call-transport';
@@ -35,7 +35,7 @@ const flush: () => Promise<unknown> = (): Promise<unknown> =>
 
 interface Harness {
   manager: CallManager;
-  openSession: ReturnType<typeof vi.fn>;
+  openSession: Mock;
   setNow: (ms: number) => void;
   tick: () => number;
 }
@@ -45,7 +45,7 @@ function harness(): Harness {
   const timers: Array<{ fn: () => void; at: number; cancelled: boolean; fired: boolean }> = [];
   // Never settles. That is the case under test: not a rejection, which the
   // retry policy handles, but an open the service never answers.
-  const openSession: ReturnType<typeof vi.fn> = vi.fn(
+  const openSession: Mock = vi.fn(
     (): Promise<void> => new Promise<void>((): void => {}),
   );
   const manager: CallManager = new CallManager({

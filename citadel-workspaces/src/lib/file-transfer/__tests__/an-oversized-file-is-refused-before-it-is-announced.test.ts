@@ -15,7 +15,7 @@
  * authority at 16 MiB). So a 3 MiB file staged fine in async mode and died
  * post-announcement in p2p mode. One constant now; the guard here uses it.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 const announced: unknown[] = [];
 // The agent's greeting is the edge: this suite is about the inline route (an agent that
@@ -56,7 +56,7 @@ function intent(size: number): SendTransferRequestIntent {
 }
 
 describe('a p2p send above the inline cap', () => {
-  const sendFile: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<unknown> => ({}));
+  const sendFile: Mock = vi.fn(async (): Promise<unknown> => ({}));
   const router: RealProtocolIORouter = { sendFile } as unknown as RealProtocolIORouter;
 
   beforeEach((): void => {

@@ -4,23 +4,23 @@
  * light on after a call ends, which is the single most alarming bug a calling
  * feature can ship.
  */
-import { describe, it, expect, vi, beforeEach, afterEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { CallSession } from '../call-session';
 import type { CallMediaKinds } from '@/types/call-signals';
 import type { WireFrame } from '@/lib/call/frame-codec';
 
-const stopped: Array<{ stop: ReturnType<typeof vi.fn> }> = [];
-const codecInstances: Array<{ close: ReturnType<typeof vi.fn> }> = [];
+const stopped: Array<{ stop: Mock }> = [];
+const codecInstances: Array<{ close: Mock }> = [];
 
 function stubCodecClass(): new (...args: unknown[]) => unknown {
   return class {
     state: string = 'configured';
     encodeQueueSize: number = 0;
-    encode: ReturnType<typeof vi.fn> = vi.fn();
-    decode: ReturnType<typeof vi.fn> = vi.fn();
-    configure: ReturnType<typeof vi.fn> = vi.fn();
-    close: ReturnType<typeof vi.fn> = vi.fn((): void => { this.state = 'closed'; });
-    constructor() { codecInstances.push(this as unknown as { close: ReturnType<typeof vi.fn> }); }
+    encode: Mock = vi.fn();
+    decode: Mock = vi.fn();
+    configure: Mock = vi.fn();
+    close: Mock = vi.fn((): void => { this.state = 'closed'; });
+    constructor() { codecInstances.push(this as unknown as { close: Mock }); }
     static isConfigSupported: () => Promise<{ supported: boolean; }> = async (): Promise<{ supported: boolean; }> => ({ supported: true });
   };
 }
@@ -29,7 +29,7 @@ interface FakeTrack {
   kind: 'audio' | 'video';
   readyState: string;
   enabled: boolean;
-  stop: ReturnType<typeof vi.fn>;
+  stop: Mock;
   addEventListener: (event: string, fn: () => void) => void;
   /** Test-only: what the browser does when a device is unplugged. */
   fireEnded: () => void;
@@ -63,8 +63,6 @@ function fakeStream(withVideo: boolean): MediaStream {
   } as unknown as MediaStream;
 }
 
-type Mock = ReturnType<typeof vi.fn>;
-
 function callbacks(): {
   onFrame: Mock;
   onStreamsChanged: Mock;
@@ -89,8 +87,8 @@ beforeEach(() => {
   vi.stubGlobal(
     'MediaStreamTrackGenerator',
     class {
-      writable: { getWriter: () => { write: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> } } = { getWriter: () => ({ write: vi.fn().mockResolvedValue(undefined), close: vi.fn().mockResolvedValue(undefined) }) };
-      stop: ReturnType<typeof vi.fn> = vi.fn();
+      writable: { getWriter: () => { write: Mock; close: Mock } } = { getWriter: () => ({ write: vi.fn().mockResolvedValue(undefined), close: vi.fn().mockResolvedValue(undefined) }) };
+      stop: Mock = vi.fn();
       constructor(public init: { kind: string }) {}
     },
   );
@@ -100,7 +98,7 @@ beforeEach(() => {
   vi.stubGlobal(
     'MediaStreamTrackProcessor',
     class {
-      readable: { getReader: () => { read: () => Promise<unknown>; cancel: ReturnType<typeof vi.fn> } } = { getReader: () => ({ read: (): Promise<unknown> => new Promise((): void => {}), cancel: vi.fn().mockResolvedValue(undefined) }) };
+      readable: { getReader: () => { read: () => Promise<unknown>; cancel: Mock } } = { getReader: () => ({ read: (): Promise<unknown> => new Promise((): void => {}), cancel: vi.fn().mockResolvedValue(undefined) }) };
       constructor(public init: { track: unknown }) {}
     },
   );
@@ -294,7 +292,7 @@ describe('closing during capture', () => {
     release(lateStream);
 
     expect(await pending).toBeNull();
-    for (const track of lateStream.getTracks() as unknown as Array<{ stop: ReturnType<typeof vi.fn> }>) {
+    for (const track of lateStream.getTracks() as unknown as Array<{ stop: Mock }>) {
       expect(track.stop).toHaveBeenCalled();
     }
     expect(session.getLocalStream()).toBeNull();
@@ -321,7 +319,7 @@ describe('starting a second time on the same session', () => {
     const session: CallSession = new CallSession(callbacks());
 
     await session.start({ audio: true, video: true, screen: false });
-    const first: Array<{ stop: ReturnType<typeof vi.fn> }> = [...stopped];
+    const first: Array<{ stop: Mock }> = [...stopped];
     expect(first.length, 'the first capture produced no tracks to orphan').toBeGreaterThan(0);
     expect(first.every((t) => t.stop.mock.calls.length === 0)).toBe(true);
 

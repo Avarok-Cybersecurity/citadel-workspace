@@ -189,7 +189,7 @@ export function useWorkspaceSwitcher(workspaceName: string | undefined, signIn: 
         setServerAddress("");
         setServerPassword("");
         setTargetWorkspaceForNewAccount(null);
-        navigate(getWorkspacePath());
+        void navigate(getWorkspacePath());
         break;
     }
   };

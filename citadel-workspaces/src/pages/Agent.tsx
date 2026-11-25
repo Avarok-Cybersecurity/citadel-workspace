@@ -37,7 +37,7 @@ export default function Agent(): JSX.Element {
   const updater: Updater = useUpdater();
   const restart: RestartControl = useRestartToUpdate();
   const tab: AgentTab = tabFromHash(hash);
-  const open = (next: AgentTab): void => { navigate({ hash: `#${next}` }, { replace: true }); };
+  const open = (next: AgentTab): void => { void navigate({ hash: `#${next}` }, { replace: true }); };
   return (
     <main className="min-h-dvh bg-background text-foreground">
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">

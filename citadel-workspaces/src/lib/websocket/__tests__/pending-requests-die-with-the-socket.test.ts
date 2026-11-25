@@ -9,7 +9,7 @@
  * watches a spinner for a minute over a socket that is gone, and is then told
  * the request "timed out", which names the wrong cause.
  */
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { requestResponse, requestResponseSoft } from '../request-response';
 import { eventEmitter } from '../../event-emitter';
 
@@ -73,7 +73,7 @@ describe('a pending request', () => {
   });
 
   it('is not left waiting by the soft variant either', async () => {
-    const onFailure: ReturnType<typeof vi.fn> = vi.fn();
+    const onFailure: Mock = vi.fn();
     const promise: Promise<void> = requestResponseSoft({
       request: { Whatever: { request_id: 'r3' } },
       requestId: 'r3',

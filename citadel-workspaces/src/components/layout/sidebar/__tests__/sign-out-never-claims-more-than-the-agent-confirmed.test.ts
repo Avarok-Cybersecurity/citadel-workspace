@@ -8,12 +8,12 @@
  * Doubled: the agent connection (connectionManager), tab storage, the WASM
  * poller, router and toaster -- all I/O boundaries. The hook's own sequencing runs for real.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 const h: {
-  disconnect: ReturnType<typeof vi.fn>; removeSession: ReturnType<typeof vi.fn>; clearSelectedUser: ReturnType<typeof vi.fn>;
-  navigate: ReturnType<typeof vi.fn>; answer: boolean;
+  disconnect: Mock; removeSession: Mock; clearSelectedUser: Mock;
+  navigate: Mock; answer: boolean;
 } = vi.hoisted(() => ({ disconnect: vi.fn(), removeSession: vi.fn(), clearSelectedUser: vi.fn(), navigate: vi.fn(), answer: true }));
 
 vi.mock('@/lib/connection', () => ({

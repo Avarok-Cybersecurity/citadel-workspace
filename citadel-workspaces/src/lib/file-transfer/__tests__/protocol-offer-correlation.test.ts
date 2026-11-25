@@ -1,7 +1,7 @@
 /**
  * The two halves of a transfer race, so correlation must work in both orders.
  */
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { ProtocolOfferCorrelator } from '../protocol-offer-correlation';
 
 const SENDER: string = '42';
@@ -9,7 +9,7 @@ const FILE: { name: string; size: number; } = { name: 'report.pdf', size: 8192 }
 
 describe('ProtocolOfferCorrelator', () => {
   it('joins when the bytes are announced first', () => {
-    const register: ReturnType<typeof vi.fn> = vi.fn();
+    const register: Mock = vi.fn();
     const c: ProtocolOfferCorrelator = new ProtocolOfferCorrelator(register, (): boolean => true);
 
     c.noteProtocolOffer('90210', SENDER, FILE.name, FILE.size);
@@ -19,7 +19,7 @@ describe('ProtocolOfferCorrelator', () => {
   });
 
   it('joins when the bubble arrives first', () => {
-    const register: ReturnType<typeof vi.fn> = vi.fn();
+    const register: Mock = vi.fn();
     const c: ProtocolOfferCorrelator = new ProtocolOfferCorrelator(register, (): boolean => true);
 
     // On a slow link the protocol notification can trail the message. Dropping
@@ -33,7 +33,7 @@ describe('ProtocolOfferCorrelator', () => {
   });
 
   it('does not join across senders', () => {
-    const register: ReturnType<typeof vi.fn> = vi.fn();
+    const register: Mock = vi.fn();
     const c: ProtocolOfferCorrelator = new ProtocolOfferCorrelator(register, (): boolean => true);
 
     c.noteProtocolOffer('90212', SENDER, FILE.name, FILE.size);
@@ -45,7 +45,7 @@ describe('ProtocolOfferCorrelator', () => {
   });
 
   it('keeps concurrent transfers from the same sender distinct', () => {
-    const register: ReturnType<typeof vi.fn> = vi.fn();
+    const register: Mock = vi.fn();
     const c: ProtocolOfferCorrelator = new ProtocolOfferCorrelator(register, (): boolean => true);
 
     c.noteProtocolOffer('100', SENDER, 'a.bin', 10);
@@ -61,7 +61,7 @@ describe('ProtocolOfferCorrelator', () => {
     // Live: an offer of cancel-me.bin whose protocol half never came was
     // cancelled; the same file sent again got paired with it, and the new
     // bubble said "not announced over the protocol yet" on every Accept.
-    const register: ReturnType<typeof vi.fn> = vi.fn();
+    const register: Mock = vi.fn();
     const ended: Set<string> = new Set<string>();
     const c: ProtocolOfferCorrelator = new ProtocolOfferCorrelator(register, (id: string): boolean => !ended.has(id));
     c.noteMessageOffer('old', '7', 'cancel-me.bin', 200000);

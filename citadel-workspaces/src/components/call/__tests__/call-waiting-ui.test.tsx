@@ -4,7 +4,7 @@
  * user decides whether the feature works.
  */
 import type { ComponentProps } from 'react';
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CallStage } from '../CallStage';
@@ -58,7 +58,7 @@ describe('CallStage outgoing-call panel', () => {
   });
 
   it('offers a Cancel that hangs up', async () => {
-    const onLeave: ReturnType<typeof vi.fn> = vi.fn();
+    const onLeave: Mock = vi.fn();
     render(<CallStage call={callState()} {...stageProps} onLeave={onLeave} />);
 
     await userEvent.click(screen.getByTestId('call-cancel'));

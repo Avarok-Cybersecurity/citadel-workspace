@@ -8,7 +8,7 @@
  *
  * Mocked: the call transport, the I/O boundary the leader sends through.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { departureOf, endForDepartedTab, type DepartureDeps } from '../call-departure';
 import type { CallTransport } from '../call-transport';
 import type { CallState } from '../call-state';
@@ -18,8 +18,8 @@ const active: CallState = {
   participants: new Map([[7n, {}], [8n, {}]]),
 } as unknown as CallState;
 
-function leader(isLeader: boolean): { deps: DepartureDeps; transport: { sendSignal: ReturnType<typeof vi.fn>; closeSession: ReturnType<typeof vi.fn> }; as: bigint[] } {
-  const transport: { sendSignal: ReturnType<typeof vi.fn>; closeSession: ReturnType<typeof vi.fn> } = {
+function leader(isLeader: boolean): { deps: DepartureDeps; transport: { sendSignal: Mock; closeSession: Mock }; as: bigint[] } {
+  const transport: { sendSignal: Mock; closeSession: Mock } = {
     sendSignal: vi.fn().mockResolvedValue(undefined), closeSession: vi.fn().mockResolvedValue(undefined),
   };
   const as: bigint[] = [];

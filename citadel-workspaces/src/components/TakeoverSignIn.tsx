@@ -49,7 +49,7 @@ export function TakeoverSignIn({ request, onClose }: TakeoverSignInProps): JSX.E
     onClose();
     try {
       await postAuthSetup(BigInt(cid));
-      navigate(getWorkspacePath());
+      void navigate(getWorkspacePath());
     } catch (error) {
       toastError(toast, 'Could not open the workspace', describeFailure(error, 'Sign in again to continue.'));
     }

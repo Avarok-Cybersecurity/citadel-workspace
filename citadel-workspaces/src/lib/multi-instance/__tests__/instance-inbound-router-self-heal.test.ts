@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach     } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { eventEmitter } from '../../event-emitter';
 import { ORPHAN_BUFFER_TIMEOUT_MS } from '../orphan-buffer';
 
@@ -7,9 +7,9 @@ import { ORPHAN_BUFFER_TIMEOUT_MS } from '../orphan-buffer';
 // captures the singleton references, so any vi.mock factory has to be in place
 // before the first `import` of the SUT module.
 const instanceChannelMock: {
-  requestCidReport: ReturnType<typeof vi.fn>;
-  forwardToInstance: ReturnType<typeof vi.fn>;
-  broadcast: ReturnType<typeof vi.fn>;
+  requestCidReport: Mock;
+  forwardToInstance: Mock;
+  broadcast: Mock;
 } = vi.hoisted(() => ({
   requestCidReport: vi.fn(),
   forwardToInstance: vi.fn(),
@@ -19,8 +19,8 @@ const instanceChannelMock: {
 const instanceManagerMock: {
   instanceId: string; isLeader: boolean;
   findInstanceByCid: ReturnType<typeof vi.fn<(cid: bigint) => string | null>>; findInstancesByCid(cid: bigint): string[];
-  getAllInstances: ReturnType<typeof vi.fn>;
-  registerInstance: ReturnType<typeof vi.fn>;
+  getAllInstances: Mock;
+  registerInstance: Mock;
 } = vi.hoisted(() => ({
   instanceId: 'leader-instance', isLeader: true, // the router reads leadership here, not from the event
   findInstanceByCid: vi.fn<(cid: bigint) => string | null>(), findInstancesByCid(cid: bigint): string[] { const one: string | null = this.findInstanceByCid(cid); return one ? [one] : []; },
@@ -66,7 +66,7 @@ describe('InstanceInboundRouter self-heal (CID-routed message for unknown CID)',
   it('buffers the orphaned message instead of processing it locally up front', () => {
     instanceManagerMock.findInstanceByCid.mockReturnValue(null);
 
-    const local: ReturnType<typeof vi.fn> = vi.fn();
+    const local: Mock = vi.fn();
     eventEmitter.on('websocket-message', local);
 
     const cidRoutedMessage: { FileTransferRequestNotification: { cid: string; peer_cid: string; request_id: null; }; } = {
@@ -95,7 +95,7 @@ describe('InstanceInboundRouter self-heal (CID-routed message for unknown CID)',
       .mockReturnValueOnce('follower-x') // second lookup (replay): now owned by follower-x
       ;
 
-    const local: ReturnType<typeof vi.fn> = vi.fn();
+    const local: Mock = vi.fn();
     eventEmitter.on('websocket-message', local);
 
     const cidRoutedMessage: { MessageNotification: { cid: string; peer_cid: string; message: number[]; request_id: null; }; } = {
@@ -153,11 +153,11 @@ describe('InstanceInboundRouter self-heal (CID-routed message for unknown CID)',
     // here, nothing ever does.
     instanceManagerMock.findInstanceByCid.mockReturnValue(null);
 
-    const warn: ReturnType<typeof vi.fn> = vi.fn();
+    const warn: Mock = vi.fn();
     const originalWarn: typeof console.warn = console.warn;
     console.warn = warn;
 
-    const local: ReturnType<typeof vi.fn> = vi.fn();
+    const local: Mock = vi.fn();
     eventEmitter.on('websocket-message', local);
 
     const cidRoutedMessage: { MessageNotification: { cid: string; peer_cid: string; message: number[]; request_id: null; }; } = {
@@ -192,7 +192,7 @@ describe('InstanceInboundRouter self-heal (CID-routed message for unknown CID)',
   it('falls back to local processing when the fallback timer fires before any cid-report', async () => {
     instanceManagerMock.findInstanceByCid.mockReturnValue(null);
 
-    const local: ReturnType<typeof vi.fn> = vi.fn();
+    const local: Mock = vi.fn();
     eventEmitter.on('websocket-message', local);
 
     const cidRoutedMessage: { MessageNotification: { cid: string; peer_cid: string; message: number[]; request_id: null; }; } = {
@@ -256,7 +256,7 @@ describe('InstanceInboundRouter self-heal (CID-routed message for unknown CID)',
   it('does NOT request a CID report when the leader itself owns the target CID', () => {
     instanceManagerMock.findInstanceByCid.mockReturnValue('leader-instance');
 
-    const local: ReturnType<typeof vi.fn> = vi.fn();
+    const local: Mock = vi.fn();
     eventEmitter.on('websocket-message', local);
 
     const cidRoutedMessage: { PeerRegisterNotification: { cid: string; peer_cid: string; request_id: null; }; } = {
@@ -337,7 +337,7 @@ a missed ack decodes another tab’s video on this one',
     // What separates them is whether the frame reappears when the timer fires.
     instanceManagerMock.findInstanceByCid.mockReturnValue(null);
 
-    const local: ReturnType<typeof vi.fn> = vi.fn();
+    const local: Mock = vi.fn();
     eventEmitter.on('websocket-message', local);
     vi.useFakeTimers();
 
@@ -360,7 +360,7 @@ a missed ack decodes another tab’s video on this one',
     // above while losing the messages the buffer exists to save.
     instanceManagerMock.findInstanceByCid.mockReturnValue(null);
 
-    const local: ReturnType<typeof vi.fn> = vi.fn();
+    const local: Mock = vi.fn();
     eventEmitter.on('websocket-message', local);
     vi.useFakeTimers();
 

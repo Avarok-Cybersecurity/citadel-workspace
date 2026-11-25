@@ -20,14 +20,14 @@
  * half — that a true verdict suppresses the broadcast — is pinned in
  * websocket/__tests__/a-delivered-message-is-not-broadcast-again.test.ts.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { eventEmitter } from '../../event-emitter';
 import type { ResponseType } from 'citadel-workspace-client-ts';
 
 const instanceChannelMock: {
-  requestCidReport: ReturnType<typeof vi.fn>;
-  forwardToInstance: ReturnType<typeof vi.fn>;
-  broadcast: ReturnType<typeof vi.fn>;
+  requestCidReport: Mock;
+  forwardToInstance: Mock;
+  broadcast: Mock;
 } = vi.hoisted(() => ({
   requestCidReport: vi.fn(),
   forwardToInstance: vi.fn(),
@@ -37,8 +37,8 @@ const instanceChannelMock: {
 const instanceManagerMock: {
   instanceId: string; isLeader: boolean;
   findInstancesByCid: ReturnType<typeof vi.fn<(cid: bigint) => string[]>>;
-  getAllInstances: ReturnType<typeof vi.fn>;
-  registerInstance: ReturnType<typeof vi.fn>;
+  getAllInstances: Mock;
+  registerInstance: Mock;
 } = vi.hoisted(() => ({
   instanceId: 'leader-instance', isLeader: true, // the router reads leadership here, not from the event
   findInstancesByCid: vi.fn<(cid: bigint) => string[]>(),

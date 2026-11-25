@@ -5,13 +5,13 @@
  *
  * Mocked: the instance channel (a BroadcastChannel) and the roster lookup.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act, cleanup } from '@testing-library/react';
 
-const channelSend: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
+const channelSend: Mock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/multi-instance', () => ({ instanceChannel: { send: channelSend } }));
 vi.mock('@/lib/roster-peer-name', () => ({ rosterPeerName: (): string => 'Bob' }));
-const toastSpy: { show: ReturnType<typeof vi.fn>; dismiss: ReturnType<typeof vi.fn> } = vi.hoisted(() => ({ show: vi.fn(), dismiss: vi.fn() }));
+const toastSpy: { show: Mock; dismiss: Mock } = vi.hoisted(() => ({ show: vi.fn(), dismiss: vi.fn() }));
 vi.mock('sonner', () => ({ toast: Object.assign(toastSpy.show, { dismiss: toastSpy.dismiss }) }));
 
 import { eventEmitter } from '@/lib/event-emitter';

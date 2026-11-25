@@ -74,7 +74,7 @@ export function AppsModalHost(): JSX.Element | null {
     const link: AppLink | null = readAppLinkParams(params);
     for (const key of APP_LINK_KEYS) params.delete(key);
     const rest: string = params.toString();
-    navigate(`${location.pathname}${rest === '' ? '' : `?${rest}`}`, { replace: true });
+    void navigate(`${location.pathname}${rest === '' ? '' : `?${rest}`}`, { replace: true });
     if (link !== null) void openLinkHere(link, thisTabsServer, refuseOtherServer);
   }, [location.search, location.pathname, navigate]);
 

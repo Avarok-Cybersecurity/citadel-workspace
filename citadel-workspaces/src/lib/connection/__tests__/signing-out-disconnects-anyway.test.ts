@@ -11,15 +11,15 @@
  * an action the user asked for. Here the suppressed action is the one that ends
  * a session, which makes it the worse direction of the two.
  */
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { handleLogout } from '../session-management';
 import { removeAllSessions } from '../session-list';
 
-function harness(writeFails: boolean): { state: { storedSessions: { sessions: never[]; }; removeSession: ReturnType<typeof vi.fn>; clearSessions: ReturnType<typeof vi.fn>; currentConnectionInfo: { cid: bigint; }; }; io: { storeSessionsToLocalDB: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; forgetAccountDocuments: ReturnType<typeof vi.fn>; forgetAtRestRoot: ReturnType<typeof vi.fn>; }; } {
+function harness(writeFails: boolean): { state: { storedSessions: { sessions: never[]; }; removeSession: Mock; clearSessions: Mock; currentConnectionInfo: { cid: bigint; }; }; io: { storeSessionsToLocalDB: Mock; disconnect: Mock; forgetAccountDocuments: Mock; forgetAtRestRoot: Mock; }; } {
   const state: {
     storedSessions: { sessions: never[] };
-    removeSession: ReturnType<typeof vi.fn>;
-    clearSessions: ReturnType<typeof vi.fn>;
+    removeSession: Mock;
+    clearSessions: Mock;
     currentConnectionInfo: { cid: bigint };
   } = {
     storedSessions: { sessions: [] },
@@ -27,7 +27,7 @@ function harness(writeFails: boolean): { state: { storedSessions: { sessions: ne
     clearSessions: vi.fn(),
     currentConnectionInfo: { cid: 7n },
   };
-  const io: { storeSessionsToLocalDB: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; forgetAccountDocuments: ReturnType<typeof vi.fn>; forgetAtRestRoot: ReturnType<typeof vi.fn> } = {
+  const io: { storeSessionsToLocalDB: Mock; disconnect: Mock; forgetAccountDocuments: Mock; forgetAtRestRoot: Mock } = {
     storeSessionsToLocalDB: vi.fn(async () => {
       if (writeFails) throw new Error('LocalDBSetKV request timed out');
     }),
@@ -83,7 +83,7 @@ describe('signing out when the local write times out', () => {
 
   it('removing every session disconnects too', async () => {
     const { state, io } = harness(true);
-    const disconnectFn: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<void> => {});
+    const disconnectFn: Mock = vi.fn(async (): Promise<void> => {});
     await removeAllSessions(state as never, io as never, disconnectFn);
     expect(disconnectFn).toHaveBeenCalled();
   });

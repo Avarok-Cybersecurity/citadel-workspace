@@ -12,7 +12,7 @@
  * Cloudflare's TEST site keys). The fake admission refuses a token bound to no
  * workspace or another one, as the tenant worker's boundVerdict does.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { FakeAccount } from '@/lib/sign-in/__tests__/fake-agent';
@@ -35,7 +35,7 @@ import { ALWAYS_PASS, installFakeTurnstile, type FakeTurnstile } from '../admiss
 import { loginWorld as h } from './login-world';
 
 const SERVER: 'bench.work.avarok.net' = 'bench.work.avarok.net';
-let onNext: ReturnType<typeof vi.fn>;
+let onNext: Mock;
 function renderLogin(): void {
   onNext = vi.fn();
   render(<MemoryRouter><Login onNext={onNext} onCancel={() => {}} initialUsername={undefined} /></MemoryRouter>);

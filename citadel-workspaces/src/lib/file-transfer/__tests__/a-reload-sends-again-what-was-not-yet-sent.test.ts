@@ -13,7 +13,7 @@
  * the agent (executeIntent) and the File store (a Map, as send-queue-io's
  * in-memory half).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import type { FileTransfer } from '../types';
 import { sendFile, type LifecycleDeps } from '../transfer-lifecycle';
 import { releaseHeldSends, type SendQueuePort } from '../send-queue-hold';
@@ -119,7 +119,7 @@ describe('after a reload, a send with nothing kept', () => {
 
   it('sends the picked file to the same person once, then stops offering', async () => {
     const record: FileTransfer = { ...(lost as FileTransfer) };
-    const sendFileTo: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<string> => 'new-id');
+    const sendFileTo: Mock = vi.fn(async (): Promise<string> => 'new-id');
     const deps: Parameters<typeof resendLostTransfer>[0] = {
       getTransfer: (id: string): FileTransfer | undefined => (id === record.id ? record : undefined),
       sendFile: sendFileTo, saveTransfer: async (): Promise<void> => undefined, emitStateChange: (): void => undefined,
