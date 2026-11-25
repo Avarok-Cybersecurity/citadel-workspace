@@ -4,6 +4,7 @@ import type { BillingPortalAnswer } from "./BillingPortalAnswer";
 import type { ChatAttachmentsResponse } from "./ChatAttachmentsResponse";
 import type { ChatDocumentsResponse } from "./ChatDocumentsResponse";
 import type { CustomNodeType } from "./CustomNodeType";
+import type { DocumentPicturesResponse } from "./DocumentPicturesResponse";
 import type { DocumentsResponse } from "./DocumentsResponse";
 import type { DomainNode } from "./DomainNode";
 import type { GroupMessage } from "./GroupMessage";
@@ -92,4 +93,4 @@ revfs_storage_quota_mb: bigint, } } | { "IceServers": { ice_servers: Array<IceSe
 /**
  * IDs of child nodes that were also deleted (if cascade was true)
  */
-children_deleted: Array<string>, } } | { "NodeMoved": { node_id: string, old_parent_id: string | null, new_parent_id: string | null, } } | { "ServerShutdown": { message: string, drain_seconds: bigint, } } | { "Telemetry": TelemetryResponse } | { "MessagingTrust": MessagingTrustResponse } | { "Roles": RolesResponse } | { "Documents": DocumentsResponse } | { "ChatDocuments": ChatDocumentsResponse } | { "ChatAttachments": ChatAttachmentsResponse } | { "SecureLinks": SecureLinksResponse } | { "Apps": AppsResponse } | { "ServerIdentity": ServerIdentity };
+children_deleted: Array<string>, } } | { "NodeMoved": { node_id: string, old_parent_id: string | null, new_parent_id: string | null, } } | { "ServerShutdown": { message: string, drain_seconds: bigint, } } | { "Telemetry": TelemetryResponse } | { "MessagingTrust": MessagingTrustResponse } | { "Roles": RolesResponse } | { "Documents": DocumentsResponse } | { "ChatDocuments": ChatDocumentsResponse } | { "ChatAttachments": ChatAttachmentsResponse } | { "DocumentPictures": DocumentPicturesResponse } | { "SecureLinks": SecureLinksResponse } | { "Apps": AppsResponse } | { "ServerIdentity": ServerIdentity };
