@@ -9,6 +9,8 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { settled, targetsAreBigEnough } from './checks-controls.mjs';
 import { ROUGH, roughness } from './motion-probe.mjs';
 import { sampleTransition } from './motion-sampler.mjs';
+import { ceilingProblem, judgeTransition } from './stall-attribution.mjs';
+import { attributionFor, measuredSample } from './stall-counters.mjs';
 import { cpuThrottle, newParityContext } from '../ci-parity.mjs';
 
 const MOBILE_BELOW = 768;
@@ -130,24 +132,29 @@ const LEVEL_CHANGES = [
 /** POLISH_CPU_THROTTLE=4 (or CI_PARITY=1) slows Chromium's CPU the way a CI runner is slow, to reproduce what only CI sees. */
 const THROTTLE = cpuThrottle();
 
-/** Every level change, sampled; `judge` turns one transition's findings into problems. */
-async function eachLevelChange({ page, url, viewport }, { throttle, query: extra, judge }) {
+/**
+ * Every level change, sampled; `judge` turns one transition's findings into problems. A sample whose page did
+ * not paint for FLOOR_MS is attributed, not judged (stall-attribution.mjs); `tally` counts what was discarded.
+ */
+async function eachLevelChange({ page, url, viewport }, { throttle, query: extra, judge, tally }) {
   if (throttle > 1 && page.context().browser().browserType().name() !== 'chromium') throw new Error('CPU throttling needs Chromium (CDP)');
   const moving = await newParityContext(page.context().browser(), { viewport, reducedMotion: 'no-preference' });
+  const attribution = tally ? await attributionFor(moving.browser(), new URL(url('focused-sidebar')).origin, throttle) : null;
   const rough = [];
   try {
     for (const [name, query, clicked] of LEVEL_CHANGES) {
-      const tab = await moving.newPage();
-      try {
+      const open = async (tab) => {
         if (throttle > 1) await (await moving.newCDPSession(tab)).send('Emulation.setCPUThrottlingRate', { rate: throttle });
         await tab.goto(url('focused-sidebar') + query + extra);
         await tab.getByTestId(clicked).waitFor({ state: 'visible' });
         await settled(tab);
-        const problems = judge(await sampleTransition(tab, clicked, 800));
-        if (problems.length > 0) rough.push(`${name}: ${problems.length} -- ${problems.slice(0, 3).join(' | ')}`);
-      } finally {
-        await tab.close();
-      }
+      };
+      const counted = attribution !== null && attribution.counters !== null;
+      const measure = () => measuredSample(moving, { open, sample: (tab) => sampleTransition(tab, clicked, 800), counted });
+      const { problems, discarded, notes } = await judgeTransition(measure, judge, attribution);
+      for (const n of notes) console.log(`        ${name}: ${n}`);
+      if (counted) { tally.transitions += 1; tally.discarded += discarded; }
+      if (problems.length > 0) rough.push(`${name}: ${problems.length} -- ${problems.slice(0, 3).join(' | ')}`);
     }
   } finally {
     await moving.close();
@@ -155,13 +162,18 @@ async function eachLevelChange({ page, url, viewport }, { throttle, query: extra
   assert.equal(rough.length, 0, rough.join('\n        '));
 }
 
+/** Samples discarded as runner stalls, over the transitions where one could be: the sweep's ceiling. */
+const STALLS = { discarded: 0, transitions: 0 };
+
 async function aLevelChangeIsOneMotion(args) {
   await eachLevelChange(args, {
     throttle: THROTTLE,
     query: '',
     judge: (frames) => { const found = roughness(frames); return ROUGH.flatMap((k) => found[k].map((f) => `${k}: ${f.slice(0, 160)}`)); },
+    tally: STALLS,
   });
 }
+aLevelChangeIsOneMotion.afterAll = () => ceilingProblem(STALLS.discarded, STALLS.transitions);
 
 /** The CPU of a slow phone, which is what lite is for. CDP throttling is Chromium's; WebKit runs it unthrottled. */
 const LITE_THROTTLE = 6;
