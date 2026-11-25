@@ -7,7 +7,7 @@
 import type { Capability } from '@/lib/citadel-apps/host/capabilities';
 import { glueInstance, type StorageChange, type GlueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY, type IhttpLimits } from '@/lib/citadel-apps/host/limits';
-import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
+import { ManualClock, oneClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { withNoticePrefs } from '../notice-gate';
 import { calendarPorts, type CalendarPorts } from '../ports';
 import { MemoryStore } from './memory-store';
@@ -36,7 +36,7 @@ export function noticeMember(name: string, shared: Map<string, Uint8Array>, star
   const glue: GlueInstance = glueInstance({
     appId: 'net.avarok.calendar', held: new Set<Capability>(held), policy: POLICY, limits: { topics: null, p2p: null },
     ports: { storage: store.port(), notify: { Notify: ({ title, body }) => { notes.push(`${title}: ${body}`); return { ok: null }; } } },
-    clock, pageUrl: 'https://w.example/n1',
+    ...oneClock(clock), pageUrl: 'https://w.example/n1',
     storageChanges: (listener: (change: StorageChange) => void) => { listeners.add(listener); return (): void => { listeners.delete(listener); }; },
   });
   const ports: CalendarPorts = withNoticePrefs(calendarPorts(glue), (s: boolean): void => { system.push(s); });

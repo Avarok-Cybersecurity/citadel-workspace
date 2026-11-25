@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { Capability } from '@/lib/citadel-apps/host/capabilities';
 import { glueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY, type IhttpLimits } from '@/lib/citadel-apps/host/limits';
-import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
+import { ManualClock, oneClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { ihttpEndpoint } from '@/lib/citadel-apps/glue-sdk/ihttp-endpoint';
 import { BookingHost } from '../booking-host';
 import { calendarHandler, calendarRoutes, serveCalendar } from '../calendar-endpoint';
@@ -34,7 +34,7 @@ const STANDUP: NewEvent = {
 function instance(app: string, user: string, relay: IhttpRelay, store: MemoryStore, held: Capability[]): CalendarPorts {
   return calendarPorts(glueInstance({
     appId: app, held: new Set<Capability>(held), policy: POLICY, limits: { topics: null, p2p: null },
-    ports: { storage: store.port(), ihttp: relay.appPort(user, app) }, clock: new ManualClock(), pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
+    ports: { storage: store.port(), ihttp: relay.appPort(user, app) }, ...oneClock(new ManualClock()), pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
   }));
 }
 

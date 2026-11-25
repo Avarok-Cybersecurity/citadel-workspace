@@ -36,13 +36,28 @@ export interface RigExtra {
   readonly held: readonly Capability[];
 }
 
-export function mountRig(me: string, store: MemoryStore = new MemoryStore(me), extra: RigExtra | null = null): MountRig {
+/** The instance's two clocks: the dispatch clock it paces and waits on, and the wall clock it dates by. */
+export interface RigClocks {
+  readonly dispatch: ManualClock;
+  readonly wallNow: () => number;
+}
+
+/**
+ * Default: one clock pinned at the test's (faked) Date.now(), standing for both, which is all a
+ * test needs that does not tell them apart; the-calendar-opens-on-the-real-date.test.tsx does.
+ */
+function pinnedClocks(): RigClocks {
+  const dispatch: ManualClock = new ManualClock(Date.now());
+  return { dispatch, wallNow: dispatch.now };
+}
+
+export function mountRig(me: string, store: MemoryStore = new MemoryStore(me), extra: RigExtra | null = null, clocks: RigClocks = pinnedClocks()): MountRig {
   const listeners: Set<(c: StorageChange) => void> = new Set();
   const glue: GlueInstance = glueInstance({
     appId: 'net.avarok.calendar', policy: POLICY,
     ports: extra === null ? { storage: store.port() } : { storage: store.port(), ihttp: extra.ihttp },
     held: new Set<Capability>([...HELD, ...(extra?.held ?? [])]),
-    limits: { topics: null, p2p: null }, clock: new ManualClock(Date.now()), pageUrl: 'https://w.example/n1',
+    limits: { topics: null, p2p: null }, clock: clocks.dispatch, wallNow: clocks.wallNow, pageUrl: 'https://w.example/n1',
     storageChanges: (l) => { listeners.add(l); return () => listeners.delete(l); },
   });
   return { store, glue, change: (c: StorageChange): void => { for (const l of listeners) l(c); } };

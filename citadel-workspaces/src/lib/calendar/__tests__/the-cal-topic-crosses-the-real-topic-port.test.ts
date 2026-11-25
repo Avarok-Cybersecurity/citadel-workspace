@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 import type { Capability } from '@/lib/citadel-apps/host/capabilities';
 import { glueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY } from '@/lib/citadel-apps/host/limits';
-import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
+import { ManualClock, oneClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import type { AgentLink } from '@/lib/citadel-apps/runtime/agent-link';
 import { InstallPlaneRegistry } from '@/lib/citadel-apps/runtime/install-plane-registry';
 import { PeerAuthority } from '@/lib/citadel-apps/runtime/peer-authority';
@@ -57,7 +57,7 @@ function seat(cid: bigint, username: string): Seat {
   });
   const ports: CalendarPorts = calendarPorts(glueInstance({
     appId: 'net.avarok.calendar', ports: { topic: port }, held: new Set<Capability>(['group.topic.subscribe', 'group.topic.publish']),
-    policy: STANDARD_HOST_POLICY, limits: { topics: LIMITS, p2p: null }, clock: new ManualClock(), pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
+    policy: STANDARD_HOST_POLICY, limits: { topics: LIMITS, p2p: null }, ...oneClock(new ManualClock()), pageUrl: 'https://w.example/n1', storageChanges: () => () => {},
   }));
   const deliver = async (fromCid: bigint, message: number[]): Promise<void> => {
     handlers.forEach((h) => h({ GroupMessageNotification: { cid, peer_cid: fromCid, group_key: GROUP, message, request_id: null } }));
