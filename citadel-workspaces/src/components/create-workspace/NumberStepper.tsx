@@ -33,7 +33,7 @@ export function NumberStepper({ id, label, value, min, max, onChange, testId }: 
   };
 
   return (
-    <div className="inline-flex h-11 overflow-hidden rounded-md border border-input bg-background">
+    <div className="inline-flex h-11 overflow-hidden rounded-md border border-control-border bg-background">
       <button
         type="button"
         className={BUTTON}

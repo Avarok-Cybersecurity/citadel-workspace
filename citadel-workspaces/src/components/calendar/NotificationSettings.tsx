@@ -3,15 +3,15 @@
  * Calendar and under Apps in the workspace's Settings: whether the Calendar notifies at all, which
  * kinds, the reminders a new event starts with, and whether a notice may also reach this device's
  * notification centre, with a preview of a reminder as it would arrive. Each change is saved as it
- * is made (use-notify-prefs.ts); nothing here reads a store.
+ * is made (use-notify-prefs.ts); nothing here reads a store. Choosing this device is a click, so
+ * the browser's permission is asked for right there; the control below says what it answered.
  */
 import { useId } from 'react';
 import { MemberAvatar } from '@/components/shared/MemberAvatar';
 import { LEAD_CHOICES, leadLabel, NOTICE_KINDS, type NoticeDelivery, type NoticeKind, type NotifyPrefs } from '@/lib/calendar/notify-prefs';
 import type { PrefsState } from './use-notify-prefs';
-
-/** Whether this browser will show this site's system notifications: the browser's answer, or that it has none. */
-export type SystemPermission = NotificationPermission | 'unsupported';
+import { OsNotificationsControl } from '@/components/notification/OsNotificationsControl';
+import type { OsPermissionState } from '@/components/notification/use-os-permission';
 
 const KINDS: Readonly<Record<NoticeKind, { label: string; hint: string }>> = {
   reminders: { label: 'Reminders for my events', hint: 'Before an event you set a reminder on.' },
@@ -21,7 +21,7 @@ const KINDS: Readonly<Record<NoticeKind, { label: string; hint: string }>> = {
 };
 
 const DELIVERY: readonly { value: NoticeDelivery; label: string; hint: string }[] = [
-  { value: 'system', label: 'In Citadel and on this device', hint: 'In the bell, and in your system notifications when Citadel is not in front.' },
+  { value: 'system', label: 'In Citadel and on this device', hint: 'In the bell, and in your system notifications as they arrive, whether or not Citadel is in front.' },
   { value: 'in_app', label: 'In Citadel only', hint: 'In the bell, never in your system notifications.' },
 ];
 
@@ -33,13 +33,6 @@ const STACKED: string = `grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3
 const LEGEND: string = 'mb-2 text-sm font-semibold text-foreground';
 /** A native checkbox drawn as a switch, so the whole row is its 44px target (the Radix switch is a 24px button). */
 const SWITCH: string = "relative h-6 w-11 shrink-0 cursor-pointer appearance-none rounded-full border-2 border-muted-foreground bg-input transition-colors checked:border-transparent checked:bg-primary focus-visible:outline-none before:absolute before:left-0 before:top-0 before:h-5 before:w-5 before:rounded-full before:bg-background before:shadow before:transition-transform before:content-[''] checked:before:translate-x-5";
-
-function permissionNote(permission: SystemPermission): string | null {
-  if (permission === 'denied') return 'Your browser blocks notifications from this site, so only the bell will show them until you allow them in its site settings.';
-  if (permission === 'unsupported') return 'This browser shows no system notifications, so only the bell will show them.';
-  if (permission === 'default') return 'Your browser will ask once before the first one is shown.';
-  return null;
-}
 
 function Preview({ prefs }: { prefs: NotifyPrefs }): JSX.Element {
   const on: boolean = prefs.enabled && prefs.kinds.reminders;
@@ -59,7 +52,7 @@ function Preview({ prefs }: { prefs: NotifyPrefs }): JSX.Element {
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            {prefs.delivery === 'system' ? 'Shown in the bell, and on this device when Citadel is not in front.' : 'Shown in the bell only.'}
+            {prefs.delivery === 'system' ? 'Shown in the bell, and in your system notifications.' : 'Shown in the bell only.'}
           </p>
         </>
       ) : (
@@ -69,11 +62,10 @@ function Preview({ prefs }: { prefs: NotifyPrefs }): JSX.Element {
   );
 }
 
-export function NotificationSettings({ state, permission }: { state: Extract<PrefsState, { kind: 'ready' }>; permission: SystemPermission }): JSX.Element {
+export function NotificationSettings({ state, os }: { state: Extract<PrefsState, { kind: 'ready' }>; os: OsPermissionState }): JSX.Element {
   const base: string = useId();
   const { prefs, save } = state;
   const off: boolean = !prefs.enabled;
-  const note: string | null = prefs.delivery === 'system' ? permissionNote(permission) : null;
   const lead: number[] = [...new Set([...LEAD_CHOICES, ...prefs.leadMinutes])].sort((a: number, b: number) => a - b);
   return (
     <div className="flex min-w-0 flex-col gap-5" data-testid="calendar-notify-settings">
@@ -114,18 +106,21 @@ export function NotificationSettings({ state, permission }: { state: Extract<Pre
         {DELIVERY.map((d) => (
           <label key={d.value} className={STACKED}>
             <input type="radio" name={`${base}-delivery`} className="mt-0.5 h-4 w-4 shrink-0 accent-primary" checked={prefs.delivery === d.value}
-              onChange={(): void => save({ ...prefs, delivery: d.value })} />
+              onChange={(): void => {
+                save({ ...prefs, delivery: d.value });
+                if (d.value === 'system' && os.permission === 'default') void os.ask();
+              }} />
             <span className="min-w-0 font-medium">{d.label}</span>
             <span className="col-start-2 min-w-0 text-muted-foreground">{d.hint}</span>
           </label>
         ))}
-        {note !== null && <p className="text-sm text-muted-foreground" data-testid="calendar-notify-permission">{note}</p>}
+        {prefs.delivery === 'system' && <OsNotificationsControl permission={os.permission} ask={os.ask} />}
       </fieldset>
       <Preview prefs={prefs} />
       <div className="flex min-w-0 flex-col gap-1">
         <p role="status" className="text-sm text-muted-foreground">{state.saving ? 'Saving…' : ''}</p>
         {state.error !== null && <p role="alert" className="text-sm text-destructive-emphasis">{state.error}</p>}
-        <p className="text-sm text-muted-foreground">Notices arrive while one of your workspace windows is open. A reminder that falls due while none is open is listed once when you return; invitations and polls made meanwhile are in the Calendar, without a notice.</p>
+        <p className="text-sm text-muted-foreground">Notices, reminders included, need one of your Citadel windows open: nothing runs while none is. A reminder that falls due while none is open is listed once when you return; invitations and polls made meanwhile are in the Calendar, without a notice.</p>
       </div>
     </div>
   );

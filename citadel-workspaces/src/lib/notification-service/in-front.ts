@@ -11,7 +11,8 @@
  *
  * So: a conversation is in front when its chat is open AND the window is in
  * front (visible and focused). An OS-level interruption is for a window that is
- * not in front; an in-app one for anything not in front.
+ * not in front, unless its source says it is for the system whenever it arrives
+ * (a reminder; os-decision.ts); an in-app one for anything not in front.
  */
 import { windowInFront } from '@/lib/agent-conversations/report-focus';
 
@@ -20,7 +21,7 @@ export function conversationInFront(isOpen: boolean): boolean {
   return isOpen && windowInFront();
 }
 
-/** Whether an OS notification (and its chime) may interrupt: the window is not in front. */
-export function mayInterruptTheOs(): boolean {
-  return typeof document !== 'undefined' && !windowInFront();
+/** Whether this window is in front, for the system notification's rule (os-decision.ts). */
+export function thisWindowInFront(): boolean {
+  return typeof document !== 'undefined' && windowInFront();
 }

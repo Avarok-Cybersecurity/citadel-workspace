@@ -67,7 +67,9 @@ export const AVAROK_DARK: ThemePalette = {
   surface: { h: 230, s: 32, l: 22 },
   surfaceForeground: { h: 0, s: 0, l: 100 },
 
-  primary: { h: 257, s: 30, l: 50 },
+  // 52%: a selected chip or card filled with it clears 3:1 on the page (WCAG 1.4.11); the chat
+  // bubble's 90%-opacity white meta text on it stays above 4.5:1 (4.61).
+  primary: { h: 257, s: 30, l: 52 },
   primaryForeground: { h: 0, s: 0, l: 100 },
   primaryAccent: { h: 251, s: 85, l: 75 },
 

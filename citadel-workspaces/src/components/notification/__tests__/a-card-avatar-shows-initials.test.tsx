@@ -10,7 +10,7 @@ import { peerRegistrationNotification } from '@/lib/notification-service/peer-re
 import NotificationItem from '../NotificationItem';
 
 function card(overrides: Partial<Notification>): Notification {
-  return { id: 'n1', type: NotificationType.SYSTEM, title: 'T', content: 'c', timestamp: 1, read: false, priority: NotificationPriority.NORMAL, ...overrides };
+  return { id: 'n1', type: NotificationType.SYSTEM, title: 'T', content: 'c', timestamp: 1, read: false, priority: NotificationPriority.NORMAL, osReach: 'when-away', ...overrides };
 }
 
 describe('a notification card avatar', () => {

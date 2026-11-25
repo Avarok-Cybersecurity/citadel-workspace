@@ -89,7 +89,7 @@ export function NameStep(props: NameStepProps): JSX.Element {
           <div
             className={cn(
               'flex h-11 min-w-0 items-center overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring',
-              availability.state === 'available' ? 'border-success' : 'border-input',
+              availability.state === 'available' ? 'border-success' : 'border-control-border',
             )}
           >
             <input

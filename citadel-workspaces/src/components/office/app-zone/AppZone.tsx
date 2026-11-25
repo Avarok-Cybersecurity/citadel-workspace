@@ -14,6 +14,7 @@ import { AppZoneContext, type AppZoneEnvironment, type AppZoneHandle, type AppZo
 import { AppZoneRequired, placeholderFor, type PlaceholderView } from './AppZoneRequired';
 import { readZoneProps, type ZoneProps, type ZoneView } from './zone-state';
 import { usePlacedApp, useRuntimeMount, type PlacedApp } from './use-placed-app';
+import { TopicJoinNotice } from './TopicJoinNotice';
 
 interface AppZoneMdxProps {
   app?: unknown;
@@ -44,6 +45,7 @@ function RuntimeHost({ runtime, view, reasonFor, props, nodeId, me }: RuntimeHos
   return (
     <div className="not-prose my-4 w-full">
       <div ref={toolbar} data-testid="app-zone-toolbar-slot" />
+      <TopicJoinNotice installId={install.id} appName={app.manifest.name} />
       <div ref={host} data-testid="app-zone-host" className="w-full" style={{ height: `${props.height}px` }} />
     </div>
   );

@@ -15,5 +15,6 @@ import { CALENDAR_CHECKS } from './lib/polish-harness/checks-calendar.mjs';
 import { CALENDAR_PANEL_CHECKS } from './lib/polish-harness/checks-calendar-panels.mjs';
 import { CALENDAR_CHANGE_CHECKS } from './lib/polish-harness/checks-calendar-changes.mjs';
 import { CALENDAR_TEAM_CHECKS } from './lib/polish-harness/checks-calendar-teams.mjs';
+import { CALENDAR_FORM_PLACE_CHECKS } from './lib/polish-harness/checks-calendar-form-place.mjs';
 
-process.exit(await runChecks({ ...CALENDAR_CHECKS, ...CALENDAR_PANEL_CHECKS, ...CALENDAR_CHANGE_CHECKS, ...CALENDAR_TEAM_CHECKS }));
+process.exit(await runChecks({ ...CALENDAR_CHECKS, ...CALENDAR_PANEL_CHECKS, ...CALENDAR_CHANGE_CHECKS, ...CALENDAR_TEAM_CHECKS, ...CALENDAR_FORM_PLACE_CHECKS }));

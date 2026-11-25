@@ -24,6 +24,14 @@ export enum NotificationPriority {
   HIGH = 'high'
 }
 
+/**
+ * Where a notification may go beyond the page's list (os-decision.ts): nowhere; the system's
+ * notification centre while the window is not in front (a chat message, whose in-app toast covers
+ * a window in front); or the system's centre whenever it arrives (a notice the member sent to this
+ * device, such as a Calendar reminder, which calendar apps show whether or not they are in front).
+ */
+export type OsReach = 'never' | 'when-away' | 'always';
+
 export interface Notification {
   id: string;
   type: NotificationType;
@@ -38,7 +46,7 @@ export interface Notification {
   timestamp: number;
   actionButtons?: NotificationAction[];
   data?: Record<string, unknown>; // Additional data specific to the notification type
-  inAppOnly?: boolean; // Never the system's notification centre or its chime, only the page's list
+  osReach: OsReach;
 }
 
 export interface NotificationAction {
