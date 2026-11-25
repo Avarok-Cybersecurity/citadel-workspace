@@ -127,6 +127,19 @@ jobs:
       - uses: ./.github/actions/rust-toolchain
       - name: Run Cargo Clippy
         run: cargo clippy -p ${{ matrix.crate }} -- -D warnings
+      # The integration image's kernel (`ci-first-party-root`) is linted like the rest, and a build
+      # marked as a deploy is refused it by build.rs. Same check profile as above: only the kernel
+      # recompiles.
+      - name: The kernel's CI first-party root - linted, and refused to a deploy
+        if: matrix.crate == 'citadel-workspace-server-kernel'
+        run: |
+          set -euo pipefail
+          cargo clippy -p citadel-workspace-server-kernel --features ci-first-party-root -- -D warnings
+          if CITADEL_DEPLOY=1 cargo clippy -p citadel-workspace-server-kernel --features ci-first-party-root > "$RUNNER_TEMP/deploy-refusal.log" 2>&1; then
+            echo "::error::a build marked CITADEL_DEPLOY=1 was allowed the ci-first-party-root feature"
+            exit 1
+          fi
+          grep -F 'CITADEL_DEPLOY=1 marks a deploy' "$RUNNER_TEMP/deploy-refusal.log"
 
   # tools/release-sign is its own workspace, so the crate matrices above never build it. The release
   # workflow tests it too, but only when an agent is released: here a PR that breaks it, or puts the
@@ -1069,6 +1082,10 @@ jobs:
         run: node scripts/check-workspace-missing-parity.mjs
       - name: Check no shipped binary carries a test-only cargo feature
         run: node scripts/check-no-test-features-shipped.mjs
+      - name: The CI first-party root stays in the integration image
+        run: |
+          node --test scripts/lib/ci-first-party-root-rules.test.mjs scripts/lib/ci-first-party-key.test.mjs
+          node scripts/check-ci-first-party-root-stays-in-ci.mjs
       # Last in this job so a red here cannot hide the node gates above, and with its own
       # toolchain: every other step of this job needs only node.
       - uses: ./.github/actions/rust-toolchain
@@ -1856,6 +1873,19 @@ jobs:
         uses: ./.github/actions/free-runner-disk
       - name: Pull base images (retried)
         run: ./scripts/pull-base-images.sh
+      # The server provisions the first-party apps as production does, signed with the published
+      # CI seed: its image's kernel (and no other) trusts that key (docker/ci/compose.ci-first-party.yml).
+      - name: Sign the first-party apps with the CI seed (server image)
+        if: matrix.service == 'server'
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          pin="$(sed -n 's/^channel = "\(.*\)"$/\1/p' apps/first-party/compute-pool/rust-toolchain.toml)"
+          test -n "$pin" || { echo "::error::no channel in apps/first-party/compute-pool/rust-toolchain.toml"; exit 1; }
+          rustup toolchain install "$pin" --profile minimal
+          dir="$RUNNER_TEMP/ci-first-party-signed"
+          timeout 15m node scripts/build-first-party-apps.mjs --sign "$dir" --ci-key
+          echo "CI_FIRST_PARTY_SIGNED_DIR=$dir" >> "$GITHUB_ENV"
       - name: Build the image
         # The same env Start Services had, so compose interpolates the same build args.
         env:

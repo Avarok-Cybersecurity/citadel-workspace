@@ -24,6 +24,8 @@
 
 pub mod artifact;
 pub mod audience;
+#[cfg(any(test, feature = "ci-first-party-root"))]
+pub mod ci_first_party_root;
 pub mod egress;
 #[cfg(not(target_family = "wasm"))]
 pub mod egress_native;

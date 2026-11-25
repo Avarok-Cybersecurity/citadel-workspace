@@ -9,6 +9,9 @@ license.workspace = true
 [features]
 # localhost-testing = ["citadel_sdk/localhost-testing"]
 # vendored = ["citadel-internal-service/vendored"]
+# The integration image's kernel only: trusts the CI first-party root (`kernel::apps::ci_first_party_root`).
+# build.rs refuses it for a deploy and for wasm32.
+ci-first-party-root = []
 
 [[bin]]
 name = "citadel-workspace-server-kernel"
