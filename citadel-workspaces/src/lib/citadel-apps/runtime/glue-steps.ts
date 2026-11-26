@@ -15,13 +15,12 @@ import { glueInstance, type GlueInstance, type StorageChange } from '../host/glu
 import { instanceLimits, type HostPolicy } from '../host/limits';
 import type { InstanceSlots } from '../host/instance-slots';
 import type { HostPorts } from '../host/ports';
-import type { AppEvent } from '../sdk/generated/AppEvent';
 import { rosterMembersPort } from './first-party-ports';
 import { hostPortsFor, type BoundPorts, type PortWorld } from './host-ports';
 import type { InstallPlaneRegistry } from './install-plane-registry';
 import { treeNodesPort } from './nodes-port';
 import { runsOn } from './placement';
-import { onStorageChanged } from './storage-changed';
+import { onInstallChanges } from './storage-changed';
 import { scopeKeyOf } from './zone-context';
 
 export interface GlueDeps {
@@ -56,10 +55,7 @@ export function bindGlue(tab: GlueTabMount, deps: GlueDeps, planes: InstallPlane
       nodes: treeNodesPort(install.scope, firstParty.tree),
       members: rosterMembersPort(firstParty.roster),
     };
-    const changes = (listener: (change: StorageChange) => void): (() => void) =>
-      onStorageChanged(world.pushes, install.id, (event: AppEvent): void => {
-        if (typeof event === 'object' && 'storage_changed' in event) listener(event.storage_changed);
-      });
+    const changes = (listener: (change: StorageChange) => void): (() => void) => onInstallChanges(world.pushes, world.ownWrites, install.id, listener);
     instance = glueInstance({
       appId: install.app_id, ports, held: bound.held, policy: deps.policy, limits: instanceLimits(manifest.limits),
       clock: deps.clock, wallNow: world.nowMs, pageUrl: deps.pageUrl(), storageChanges: changes,

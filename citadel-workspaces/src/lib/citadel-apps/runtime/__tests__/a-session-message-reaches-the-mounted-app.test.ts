@@ -51,6 +51,8 @@ function mounted(agent: FakeAgent): { r: Rig; host: HTMLDivElement } {
       peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (): void => undefined,
       // The app raises no notification, and is not granted `notifications`.
       notices: (): void => undefined,
+      // A worker app hears no storage changes, so there is nobody to announce its own-store writes to.
+      ownWrites: null,
     }),
   });
   rigs.push(r);

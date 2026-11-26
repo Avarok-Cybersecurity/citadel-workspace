@@ -102,7 +102,7 @@ export interface CalendarPorts {
    * it is from (it names them only if the server told it of that change); null when there is none.
    */
   readonly notify: (kind: NoticeKind, title: string, body: string, about: NotifyAbout | null) => Promise<void>;
-  /** What the kernel announced, and what this instance wrote to the member's own store (which the kernel does not announce). */
+  /** What the kernel announced, and what this member's instances wrote to their own store, here or in another window (own-store-writes.ts). */
   readonly onStorageChanged: (listener: (change: StorageChange) => void) => Unsubscribe;
   /** The only "now" the Calendar reads: the date from the instance's wall clock, waits on its dispatch clock. */
   readonly clock: DispatchClock;
@@ -131,20 +131,12 @@ export function calendarPorts(glue: GlueInstance): CalendarPorts {
   const done = async <N extends OpName>(name: N, args: OpArgs[N]): Promise<void> => {
     await ok(name, args);
   };
-  // The kernel announces node stores' writes, never a member's own (storage_notice.rs), so this
-  // instance tells its own listeners what it wrote there; another window hears nothing.
-  const own: Set<(change: StorageChange) => void> = new Set();
-  const wrote = async (store: CalendarStore, keys: readonly string[], write: Promise<void>): Promise<void> => {
-    await write;
-    if (store.kind !== 'user') return;
-    for (const key of keys) for (const listener of [...own]) listener({ backend: 'user', key });
-  };
   return {
     storage: {
       get: async (store, key) => (await ok('KvGet', { backend: backendOf(store), key })).value,
-      set: (store, key, value) => wrote(store, [key], done('KvSet', { backend: backendOf(store), key, value })),
-      setMany: (store, entries) => wrote(store, entries.map((e) => e.key), done('KvSetMany', { backend: backendOf(store), entries: entries.map((e) => ({ key: e.key, value: e.value })) })),
-      remove: (store, key) => wrote(store, [key], done('KvDelete', { backend: backendOf(store), key })),
+      set: (store, key, value) => done('KvSet', { backend: backendOf(store), key, value }),
+      setMany: (store, entries) => done('KvSetMany', { backend: backendOf(store), entries: entries.map((e) => ({ key: e.key, value: e.value })) }),
+      remove: (store, key) => done('KvDelete', { backend: backendOf(store), key }),
       keys: (store, prefix) => paged('KvList', async (cursor) => {
         const page: KvPage = await ok('KvList', { backend: backendOf(store), prefix, cursor });
         return { items: page.keys, next: page.next };
@@ -174,14 +166,7 @@ export function calendarPorts(glue: GlueInstance): CalendarPorts {
       const said: NotifyKind | null = NOTIFY_KIND[kind];
       return done('Notify', { title, body, ...(said === null ? {} : { kind: said }), ...(about === null ? {} : { about }) });
     },
-    onStorageChanged: (listener) => {
-      own.add(listener);
-      const kernel: Unsubscribe = glue.onStorageChanged(listener);
-      return (): void => {
-        own.delete(listener);
-        kernel();
-      };
-    },
+    onStorageChanged: glue.onStorageChanged,
     clock: { now: glue.wallNow, after: glue.clock.after },
   };
 }
