@@ -54,7 +54,7 @@ async function agentAnswers(fields: Record<string, unknown>): Promise<void> {
 function appNotice(title: string): void {
   notificationService.addNotification({
     type: NotificationType.SYSTEM, priority: NotificationPriority.NORMAL, title, content: 'Starts at 10:00', senderName: 'Calendar',
-    recipient_cid: '5', data: { appId: 'net.avarok.calendar', nodeId: 'workspace-root' },
+    recipient_cid: '5', data: { appId: 'net.avarok.calendar', nodeId: 'workspace-root', senderLine: null },
     osReach: 'always',
   });
 }
@@ -111,14 +111,14 @@ describe('an app notice for a window that is not in front', () => {
 });
 
 describe('what the agent is handed', () => {
-  const invitation: Pick<Notification, 'id' | 'title' | 'content' | 'senderName' | 'data'> = { id: 'n1', title: 'Invitation: Salary review', content: 'From bob, Friday', senderName: 'Calendar', data: { appId: 'net.avarok.calendar', nodeId: 'workspace-root' } };
-  it('names its sender line, which says none of the notice\'s words', () => {
-    const line: string | undefined = appNoticeOf(invitation)?.sender_only;
-    expect(line).toBe('Calendar: new notice');
-    expect(line).not.toContain('Salary');
-    expect(line).not.toContain('bob');
+  const invitation: Pick<Notification, 'id' | 'title' | 'content' | 'data'> = { id: 'n1', title: 'Invitation: Salary review', content: 'From bob, Friday', data: { appId: 'net.avarok.calendar', nodeId: 'workspace-root', senderLine: 'Calendar: new invitation from bob' } };
+  it('names the sender line the host wrote for it', () => {
+    expect(appNoticeOf(invitation)?.sender_only).toBe('Calendar: new invitation from bob');
+  });
+  it('names none for the app\'s own notice, which the host wrote no sender line for: its title shows', () => {
+    expect(appNoticeOf({ ...invitation, data: { appId: 'net.avarok.calendar', nodeId: 'workspace-root', senderLine: null } })?.sender_only).toBeUndefined();
   });
   it('is nothing for a notice that names no app', () => {
-    expect(appNoticeOf({ ...invitation, senderName: undefined })).toBeNull();
+    expect(appNoticeOf({ ...invitation, data: { nodeId: 'workspace-root', senderLine: null } })).toBeNull();
   });
 });

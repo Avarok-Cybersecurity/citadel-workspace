@@ -16,7 +16,7 @@ const cid: { now: bigint | null; } = vi.hoisted(() => ({ now: null as bigint | n
 vi.mock('@/lib/p2p/current-cid', () => ({ getCurrentCid: async (): Promise<bigint | null> => cid.now }));
 
 const settle = (): Promise<void> => new Promise<void>((r) => setTimeout(r, 0));
-const NOTICE: AppNoticeEntry = { from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-3', title: 'New booking', body: 'Intro with ana' };
+const NOTICE: AppNoticeEntry = { from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-3', title: 'New booking', body: 'Intro with ana', senderLine: 'x: new notice' };
 
 afterEach(() => { vi.restoreAllMocks(); });
 

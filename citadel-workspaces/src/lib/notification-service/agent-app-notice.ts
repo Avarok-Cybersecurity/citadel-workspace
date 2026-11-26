@@ -3,9 +3,10 @@
  * 'hand-to-agent'). Whether the agent showed it: when it did not (nothing listens on its side,
  * a refusal, no answer), the caller shows it in the browser, so it is never shown by neither.
  *
- * It carries someone else's words (an invitation, a booking, a poll), so it names its sender
- * line: all the agent shows while the account keeps previews off. The page knows the app that
- * raised it, not the person: an app's `Notify` names no sender.
+ * One that may carry someone else's words (an invitation, a booking, a poll) names its sender
+ * line, all the agent shows while the account keeps previews off: the one the host wrote for it
+ * (citadel-apps/runtime/first-party-ports.ts `senderLine`), never one the app gave. The app's own
+ * notice to its member has none, and its title shows.
  */
 import type { AppNotice } from 'citadel-internal-service-wasm-client';
 import { postAppNotice } from '@/lib/agent-apps/app-notice-requests';
@@ -14,17 +15,18 @@ import type { Notification } from './types';
 const ID_MAX: number = 160;
 
 /** The notice the agent is handed, or null when the notification names no app, node or session. */
-export function appNoticeOf(n: Pick<Notification, 'id' | 'title' | 'content' | 'data' | 'senderName'>): AppNotice | null {
+export function appNoticeOf(n: Pick<Notification, 'id' | 'title' | 'content' | 'data'>): AppNotice | null {
   const appId: unknown = n.data?.appId;
   const nodeId: unknown = n.data?.nodeId;
-  if (typeof appId !== 'string' || typeof nodeId !== 'string' || n.senderName === undefined) return null;
+  const senderLine: unknown = n.data?.senderLine;
+  if (typeof appId !== 'string' || typeof nodeId !== 'string') return null;
   return {
     id: `page:${n.id}`.replace(/[^A-Za-z0-9:_.-]/g, '-').slice(0, ID_MAX),
     app_id: appId,
     node_id: nodeId,
     title: n.title,
     body: n.content,
-    sender_only: `${n.senderName}: new notice`,
+    sender_only: typeof senderLine === 'string' ? senderLine : undefined,
     fire_at_ms: undefined,
     start_ms: undefined,
   };

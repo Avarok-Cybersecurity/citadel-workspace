@@ -35,7 +35,7 @@ function Opener({ onClose }: { onClose: () => void }): null {
 
 describe("an app's notification card", () => {
   it('opens the node its app is mounted on, and closes the panel', async () => {
-    pageAppNotices({ from: 'synchronized.work', appId: 'work.synchronized', nodeId: 'n-7', title: 'Build finished', body: 'ana: tests green' });
+    pageAppNotices({ from: 'synchronized.work', appId: 'work.synchronized', nodeId: 'n-7', title: 'Build finished', body: 'ana: tests green', senderLine: 'x: new notice' });
     await settle();
     const raised: Notification | undefined = notificationService.getNotificationsForCid('42').find((n: Notification) => n.title === 'Build finished');
     if (raised === undefined) throw new Error('the notification was not added');

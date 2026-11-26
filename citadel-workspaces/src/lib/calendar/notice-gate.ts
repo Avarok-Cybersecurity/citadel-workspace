@@ -6,6 +6,7 @@
  * recorded with the page before it is raised (citadel-apps/app-notice-delivery.ts).
  */
 import { decodePrefs, NOTIFY_PREFS_KEY, PREFS_BEFORE_CHOICE, allows, type NoticeKind, type NotifyPrefs } from './notify-prefs';
+import type { NotifyAbout } from '@/lib/citadel-apps/sdk/generated/NotifyAbout';
 import type { CalendarPorts, CalendarStorage } from './ports';
 
 /** The member's settings as kept; what applies before they choose; unreadable ones are said, then treated as unchosen. */
@@ -21,11 +22,11 @@ export async function readPrefs(storage: Pick<CalendarStorage, 'get'>): Promise<
 export function withNoticePrefs(ports: CalendarPorts, record: (system: boolean) => void): CalendarPorts {
   return {
     ...ports,
-    notify: async (kind: NoticeKind, title: string, body: string): Promise<void> => {
+    notify: async (kind: NoticeKind, title: string, body: string, about: NotifyAbout | null): Promise<void> => {
       const prefs: NotifyPrefs = await readPrefs(ports.storage);
       if (!allows(prefs, kind)) return;
       record(prefs.delivery === 'system');
-      await ports.notify(kind, title, body);
+      await ports.notify(kind, title, body, about);
     },
   };
 }

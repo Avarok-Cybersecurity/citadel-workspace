@@ -66,8 +66,8 @@ describe('members.list and notifications for a glue app', () => {
 
   it("badges every notification with the app's name and the node it was given", () => {
     const seen: AppNoticeEntry[] = [];
-    const port: NotifyPort = badgedNotifyPort({ id: 'net.avarok.calendar', name: 'Calendar', nodeId: 'n-4' }, (n: AppNoticeEntry): void => { seen.push(n); });
+    const port: NotifyPort = badgedNotifyPort({ id: 'net.avarok.calendar', name: 'Calendar', nodeId: 'n-4' }, (n: AppNoticeEntry): void => { seen.push(n); }, (): string | null => null);
     expect(port.Notify({ title: 'Standup in 10 minutes', body: 'Platform, 9:00 AM' })).toEqual({ ok: null });
-    expect(seen).toEqual([{ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-4', title: 'Standup in 10 minutes', body: 'Platform, 9:00 AM' }]);
+    expect(seen).toEqual([{ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-4', title: 'Standup in 10 minutes', body: 'Platform, 9:00 AM', senderLine: null }]);
   });
 });

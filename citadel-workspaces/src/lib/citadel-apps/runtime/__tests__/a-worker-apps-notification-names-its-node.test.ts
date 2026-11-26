@@ -37,7 +37,7 @@ function notifyAtInit(): Uint8Array {
 /** The manifest asks for `notifications` either way; the install's grant is what differs. */
 const ASKS: Parameters<typeof release>[2] = { capabilities: [cap('canvas'), cap('notifications')] };
 
-const noticeOn = (nodeId: string): AppNoticeEntry => ({ from: 'Kanban', appId: APP_ID, nodeId, title: 'Task done', body: 'ana finished the build' });
+const noticeOn = (nodeId: string): AppNoticeEntry => ({ from: 'Kanban', appId: APP_ID, nodeId, title: 'Task done', body: 'ana finished the build', senderLine: null });
 const stateOf = (host: HTMLElement): string | undefined => host.dataset.appState;
 const settle = (): Promise<void> => new Promise<void>((done) => setTimeout(done, 100));
 const portReplies = (sent: readonly ToWorker[]): number => sent.filter((m: ToWorker) => m.kind === 'port_reply').length;

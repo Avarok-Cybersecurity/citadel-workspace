@@ -60,12 +60,12 @@ export function startCalendarBackground(d: BackgroundDeps): () => void {
     rescanMs: RESCAN_MS,
     fire: async (due: Due): Promise<void> => {
       const zone: string = await zoneOf(d);
-      await ports.notify('reminders', due.title, reminderBody(due, zone, d.nodeName));
+      await ports.notify('reminders', due.title, reminderBody(due, zone, d.nodeName), null);
     },
     missed: async (late: readonly Due[]): Promise<void> => {
       const zone: string = await zoneOf(d);
       const title: string = late.length === 1 ? 'A reminder you missed' : `${late.length} reminders you missed`;
-      await ports.notify('reminders', title, missedSummary(late, (due: Due): string => `${due.title} (${startOf(d, zone, due.fire.start_ms)})`));
+      await ports.notify('reminders', title, missedSummary(late, (due: Due): string => `${due.title} (${startOf(d, zone, due.fire.start_ms)})`), null);
     },
   });
   runner.tick().catch((e: unknown): void => d.report('[calendar] reminders could not be handled', e));
