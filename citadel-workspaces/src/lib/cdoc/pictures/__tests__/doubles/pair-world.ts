@@ -15,6 +15,7 @@ import { browserClock } from '@/lib/browser-clock';
 import { FakeChannel } from '../../../chat/__tests__/doubles/fake-channel';
 import { FakeAgentLocalDb } from '../../../chat/__tests__/doubles/fake-agent-local-db';
 import { localDbChatStore } from '../../../chat/chat-local-db';
+import { aloneInBrowser } from '../../../chat/__tests__/doubles/browser-tabs';
 import type { ChatStoreBackend, ChatTransport } from '../../../chat/chat-ports';
 import type { PictureAccess } from '../../document-pictures';
 import { sha256ContentId } from '../../content-id';
@@ -74,7 +75,7 @@ export interface ChannelOf {
 
 export function pairSide(channel: ChannelOf, self: bigint, peer: bigint, config: PairPictureConfig = TEST_PAIR): PairSide {
   const db: FakeAgentLocalDb = new FakeAgentLocalDb();
-  const store: ChatStoreBackend = localDbChatStore(self, db.connection([self]));
+  const store: ChatStoreBackend = localDbChatStore(self, db.connection([self]), aloneInBrowser());
   const transport: ChatTransport = channel.transport(self, peer);
   const ports: PairPicturePorts = {
     transport,
