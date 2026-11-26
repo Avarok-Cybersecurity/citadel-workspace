@@ -15,9 +15,16 @@
  *
  * Keys: with the real editor focused, Ctrl/Cmd+B is the editor's (bold) and never the sidebar's,
  * whose window-wide shortcut folded it while bolding; from the page, the shortcut still folds it.
+ *
+ * Pictures: inserted, then closed and reopened in a fresh editor, painted again in the same place;
+ * a box while held, never the picture when refused (lib/docs-harness/pictures-scenario.mjs). In
+ * every engine POLISH_ENGINES names (Chromium and WebKit unless CI's Chromium-only install says
+ * otherwise), at desktop and phone width, light and dark.
  */
 import { chromium } from 'playwright';
 import { serveDocsHarness } from './lib/docs-harness/serve.mjs';
+import { picturesSurviveReopen } from './lib/docs-harness/pictures-scenario.mjs';
+import { ENGINES } from './lib/polish-harness/run-checks.mjs';
 
 const VIEWPORTS = [{ name: 'desktop', width: 1280, height: 900 }, { name: 'phone', width: 390, height: 844 }];
 const WASM = '**/cdoc/cdoc_wasm_editor_bg.wasm';
@@ -161,6 +168,19 @@ try {
     if (viewport.name === 'desktop') {
       console.log(`\nKeys, ${viewport.name}`);
       await keysStayInTheEditor(browser, viewport);
+    }
+  }
+  for (const [engine, type] of Object.entries(ENGINES)) {
+    const pictures = engine === 'chromium' ? browser : await type.launch();
+    try {
+      for (const viewport of VIEWPORTS) {
+        for (const scheme of ['light', 'dark']) {
+          console.log(`\nPictures, ${engine}, ${viewport.name}, ${scheme}`);
+          await picturesSurviveReopen(pictures, engine, viewport, scheme, harness.origin, check);
+        }
+      }
+    } finally {
+      if (pictures !== browser) await pictures.close();
     }
   }
 } finally {

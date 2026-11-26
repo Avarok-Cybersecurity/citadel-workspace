@@ -128,6 +128,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             self.backend_tx_manager.delete_document_log(id).await?;
             // And the files shared in their chats, which also frees the storage they counted.
             self.backend_tx_manager.purge_chat_attachments(id).await?;
+            // And the pictures of its page and of its chat documents, which count the same way.
+            self.backend_tx_manager.purge_document_pictures(id).await?;
         }
 
         // Remove all deleted nodes

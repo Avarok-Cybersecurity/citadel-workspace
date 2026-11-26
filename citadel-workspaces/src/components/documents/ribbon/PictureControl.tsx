@@ -7,7 +7,7 @@ import { useRef, useState, type ChangeEvent, type RefObject } from 'react';
 import { Image } from 'lucide-react';
 import type { AddedImage } from '@/lib/cdoc/editor/controller';
 import type { RibbonEditor } from './editor-context';
-import { MAX_IMAGE_BYTES } from '@/lib/cdoc/engine/engine-limits';
+import { describePictureFailure, PICTURE_NOT_ADDED as NOT_ADDED } from '@/lib/cdoc/pictures/picture-port';
 import { PICTURE_TYPES } from './picture';
 import { RibbonButton } from './RibbonButton';
 import { useRibbon, type Ribbon } from './ribbon-context';
@@ -15,9 +15,11 @@ import { useRibbon, type Ribbon } from './ribbon-context';
 async function added(file: File, editor: RibbonEditor, ribbon: Ribbon): Promise<AddedImage> {
   const bytes: Uint8Array = await ribbon.environment.readBytes(file);
   try {
-    return await editor.addImage(bytes, MAX_IMAGE_BYTES);
+    return await editor.addImage(bytes);
   } catch (error: unknown) {
-    // The engine's decode message is not addressed to anyone; the cause is the file.
+    // A refusal by the document's store is addressed to the member; the engine's decode message is
+    // not, and its cause is the file.
+    if (error instanceof Error && error.message.startsWith(NOT_ADDED)) throw error;
     console.warn('[PictureControl] the editor did not take', file.name, error);
     throw new Error(`${file.name} could not be read as a picture.`);
   }
@@ -25,7 +27,9 @@ async function added(file: File, editor: RibbonEditor, ribbon: Ribbon): Promise<
 
 async function insertPicture(file: File, editor: RibbonEditor, ribbon: Ribbon): Promise<void> {
   if (!PICTURE_TYPES.includes(file.type)) throw new Error(`${file.name} is not a PNG or JPEG picture.`);
-  if (file.size > MAX_IMAGE_BYTES) throw new Error(`${file.name} is larger than ${MAX_IMAGE_BYTES / 1_048_576} MB.`);
+  // The document's limit (its store's), asked before the file is read: a picture over it is never read or sent.
+  const max: number = await editor.pictureLimit();
+  if (file.size > max) throw new Error(`${file.name} is too large. ${describePictureFailure({ kind: 'tooLarge', maxBytes: max })}`);
   const image: AddedImage = await added(file, editor, ribbon);
   await editor.execute({ name: 'insertImageFitted', contentId: image.contentId });
 }

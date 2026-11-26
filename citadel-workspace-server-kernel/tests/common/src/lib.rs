@@ -4,6 +4,7 @@ pub mod booking_guest_test_utils;
 pub mod chat_attachment_test_utils;
 pub mod chat_document_test_utils;
 pub mod crdt_test_utils;
+pub mod document_picture_test_utils;
 pub mod documents_test_utils;
 pub mod group_channel_test_utils;
 pub mod identity_kat;

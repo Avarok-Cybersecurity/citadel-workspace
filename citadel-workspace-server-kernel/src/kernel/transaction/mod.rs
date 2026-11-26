@@ -25,6 +25,7 @@ pub(crate) mod chat_attachments_store;
 #[cfg(test)]
 mod chat_attachments_store_tests;
 pub(crate) mod chat_documents_store;
+pub(crate) mod document_pictures_store;
 pub(crate) mod documents_store;
 #[cfg(test)]
 mod documents_store_tests;

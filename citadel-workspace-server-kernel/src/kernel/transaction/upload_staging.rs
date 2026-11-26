@@ -2,9 +2,14 @@
 //! artifact and a chat file share: chunks may arrive in any order and more than once, a different
 //! upload replaces the one in progress, and the whole is checked against its digest once every
 //! chunk is in. The caller holds the lock its slot's writes are serialised under.
+//!
+//! Beside it, what the chat-file and the document-picture uploads share around that step: the
+//! bytes an upload in progress reserves toward the workspace's storage (each kind's own staging
+//! root, one namespace per member), and keeping a verified whole as a blob under its root.
 
 use super::BackendTransactionManager;
 use crate::kernel::apps::records::{UploadSlot, UploadStaging};
+use crate::kernel::apps::storage::{Namespace, StorageRoot};
 use citadel_app_signature::sha256;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 
@@ -65,5 +70,66 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         staging.complete = true;
         self.save_app_upload(slot, &staging).await?;
         Ok(Staged::Complete { whole: Some(whole) })
+    }
+
+    /// The whole of the upload in `slot` when an earlier chunk already completed it (a client
+    /// sending its last chunk again).
+    pub(crate) async fn completed_upload(
+        &self,
+        slot: UploadSlot<'_>,
+    ) -> Result<Vec<u8>, NetworkError> {
+        let staging = self.app_upload(slot).await?;
+        match staging {
+            Some(staging) => self.assemble_app_upload(slot, &staging).await?,
+            None => None,
+        }
+        .ok_or_else(|| NetworkError::msg("a complete upload lost a chunk"))
+    }
+
+    /// The bytes every member's upload in progress under `staging` reserves, and `actor`'s share.
+    pub(crate) async fn staging_reserved(
+        &self,
+        staging: &StorageRoot,
+        actor: &str,
+    ) -> Result<(u64, u64), NetworkError> {
+        let ledger = self.app_ledger(staging).await?;
+        let mine = staging.namespace_id(&Namespace::User(actor.to_string()));
+        let own = ledger.namespaces.get(&mine).copied().unwrap_or(0);
+        Ok((ledger.total_bytes(), own))
+    }
+
+    /// Records that `actor`'s upload in progress under `staging` reserves `bytes` (`None`: none).
+    pub(crate) async fn reserve_staging(
+        &self,
+        staging: &StorageRoot,
+        actor: &str,
+        bytes: Option<u64>,
+    ) -> Result<(), NetworkError> {
+        let mut ledger = self.app_ledger(staging).await?;
+        let mine = staging.namespace_id(&Namespace::User(actor.to_string()));
+        match bytes {
+            Some(bytes) => ledger.namespaces.insert(mine, bytes),
+            None => ledger.namespaces.remove(&mine),
+        };
+        self.save_app_ledger(staging, &ledger).await
+    }
+
+    /// Store `bytes`, whose SHA-256 the caller verified is `id`, as a blob of `root`: in its
+    /// ledger first, then the chunks, so a store that fails part way leaves nothing a purge of the
+    /// root cannot find. A blob the root already holds whole is left as it is.
+    pub(crate) async fn keep_blob(
+        &self,
+        root: &StorageRoot,
+        id: &str,
+        bytes: &[u8],
+    ) -> Result<(), NetworkError> {
+        let mut ledger = self.app_ledger(root).await?;
+        if !ledger.blobs.contains_key(id) {
+            ledger.blobs.insert(id.to_string(), bytes.len() as u64);
+            self.save_app_ledger(root, &ledger).await?;
+        } else if self.blob_complete(root, id).await? {
+            return Ok(());
+        }
+        self.store_blob(root, id, bytes).await
     }
 }

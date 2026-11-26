@@ -28,6 +28,7 @@ pub mod command_processor;
 mod default_tabs_provisioning;
 pub mod display_name;
 /// The Documents relay: configuration and the log's rules.
+pub mod document_pictures;
 pub mod documents;
 pub mod group_access;
 pub mod group_chat_gates;

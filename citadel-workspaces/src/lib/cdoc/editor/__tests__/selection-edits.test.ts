@@ -8,10 +8,11 @@ import { inProcessRuntime, type TestRuntime } from '../../__tests__/wasm-rig';
 import { createEditorOpener } from '../editor-opener';
 import type { EditorSession } from '../editor-session';
 import type { EditorState } from '../controller';
+import { NO_PICTURES } from '../../__tests__/no-pictures';
 
 async function blank(): Promise<EditorSession> {
   const runtime: TestRuntime = inProcessRuntime('worker');
-  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => b.fill(0x31))({ kind: 'blank' });
+  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => b.fill(0x31))({ kind: 'blank' });
 }
 
 async function text(editor: EditorSession): Promise<string> {

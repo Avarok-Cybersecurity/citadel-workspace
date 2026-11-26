@@ -3,6 +3,7 @@ import { measurePaint, type PaintPerf } from './paint-perf';
 import { measureKeystrokes, type KeystrokePerf } from './keystroke-perf';
 import { measureSelectAll, type SelectAllPerf } from './select-all-perf';
 import { measureImagePage, type ImagePagePerf } from './image-perf';
+import { measurePictureFetch, type PictureFetchPerf } from './picture-fetch-perf';
 
 const [runs, zoom, dpr]: number[] = process.argv.slice(2).map(Number);
 const r: PaintPerf = await measurePaint(runs, zoom, dpr);
@@ -25,3 +26,7 @@ const img: ImagePagePerf = await measureImagePage(200, true);
 const imgControl: ImagePagePerf = await measureImagePage(200, false);
 console.log(`keystroke to paint on a page with images: p50 ${img.p50Ms.toFixed(2)} ms, p95 ${img.p95Ms.toFixed(2)} ms, ${img.decodesPerKeystroke.toFixed(2)} decodes per keystroke`);
 console.log(`  control, no image cache: p50 ${imgControl.p50Ms.toFixed(2)} ms, p95 ${imgControl.p95Ms.toFixed(2)} ms, ${imgControl.decodesPerKeystroke.toFixed(2)} decodes per keystroke`);
+
+const pf: PictureFetchPerf = await measurePictureFetch(100, 200);
+console.log(`a reopened ${pf.pages}-page document of ${pf.pictures} pictures, every fetch held open: keystroke to paint p50 ${pf.keyP50Ms.toFixed(2)} ms, p95 ${pf.keyP95Ms.toFixed(2)} ms; page paint p50 ${pf.pageP50Ms.toFixed(2)} ms`);
+console.log(`  store fetches in flight while held: ${pf.heldGets}; once released: ${pf.totalGets} fetches of ${pf.distinctGets} pictures`);

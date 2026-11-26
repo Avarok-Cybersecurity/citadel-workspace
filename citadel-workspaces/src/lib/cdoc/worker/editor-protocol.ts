@@ -6,6 +6,7 @@
  */
 import type { EditorOrigin } from '../editor/controller';
 import type { ExportTarget } from '../editor/file-formats';
+import type { ImageLookup } from '../paint/image-resolve';
 
 export type EditorRequestBody =
   /** Opens the editor as replica `client` from a blank document, a CRDT snapshot or file bytes. */
@@ -30,7 +31,12 @@ export type EditorRequestBody =
   | { readonly kind: 'addImage'; readonly bytes: Uint8Array; readonly maxBytes: number }
   | { readonly kind: 'selectionText' }
   | { readonly kind: 'styles' }
+  /** What the editor holds of a picture: its record, or that it is pending or missing. */
   | { readonly kind: 'image'; readonly contentId: string }
+  /** The picture could not be fetched: draw it as a box saying `label` (retry: it may be asked again). */
+  | { readonly kind: 'pictureMissing'; readonly contentId: string; readonly label: string; readonly retry: boolean }
+  /** Every picture the document names (pictures/referenced-pictures.ts). */
+  | { readonly kind: 'pictureIds' }
   | { readonly kind: 'exportAs'; readonly target: ExportTarget }
   /** The languages the document now needs patterns for that the replica was not opened with. */
   | { readonly kind: 'missingPatterns' }
@@ -68,8 +74,9 @@ export interface EditorResults {
   selectionText: { readonly text: string };
   /** A "CDS" style sheet. */
   styles: { readonly record: Uint8Array };
-  /** A "CDB" image record. */
-  image: { readonly record: Uint8Array };
+  image: { readonly lookup: ImageLookup };
+  pictureMissing: { readonly contentId: string };
+  pictureIds: { readonly ids: readonly string[] };
   /**
    * The file and its `{"losses"}` report as the engine wrote it. Null for a PDF: the PDF
    * writer reports no losses (pm_to_pdf returns only bytes).
@@ -81,4 +88,4 @@ export interface EditorResults {
 
 export type EditorKind = EditorRequestBody['kind'];
 
-export const EDITOR_KINDS: readonly EditorKind[] = ['editorOpen', 'apply', 'applyRemote', 'hitTest', 'snapshot', 'awareness', 'peerView', 'pageSizes', 'invalidatePages', 'stateVector', 'encodeDiff', 'encodeDiffChunked', 'gc', 'addImage', 'selectionText', 'styles', 'image', 'exportAs', 'missingPatterns'];
+export const EDITOR_KINDS: readonly EditorKind[] = ['editorOpen', 'apply', 'applyRemote', 'hitTest', 'snapshot', 'awareness', 'peerView', 'pageSizes', 'invalidatePages', 'stateVector', 'encodeDiff', 'encodeDiffChunked', 'gc', 'addImage', 'selectionText', 'styles', 'image', 'pictureMissing', 'pictureIds', 'exportAs', 'missingPatterns'];
