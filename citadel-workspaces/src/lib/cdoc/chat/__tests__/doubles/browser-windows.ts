@@ -4,7 +4,9 @@
  * per-tab queues) is its own, exactly as in two tabs. What windows share is shared here too: the
  * agent's LocalDB (fake: it is behind a WebSocket), Node's real BroadcastChannel, the browser's
  * locks (memory: Node 20 has no Web Locks API) and time. Replicas are the production
- * EditorSession on the real cdoc wasm.
+ * EditorSession on the real cdoc wasm, and each open document view has ONE runtime, as
+ * use-docs-document gives it: every replica the view's keeper opens goes into that runtime,
+ * which holds one editor (a second open replaces the first there, as in the app).
  */
 import { BroadcastChannel } from 'node:worker_threads';
 import { vi } from 'vitest';
@@ -12,7 +14,9 @@ import type { EditorSession } from '../../../editor/editor-session';
 import type { EditorOrigin } from '../../../editor/controller';
 import type { HexColor } from '../../../editor/model-values';
 import { ManualClock } from '../../../collab/__tests__/doubles/manual-clock';
-import { realReplicas } from '../../../collab/__tests__/doubles/real-replicas';
+import { inProcessRuntime, type TestRuntime } from '../../../__tests__/wasm-rig';
+import { NO_PICTURES } from '../../../__tests__/no-pictures';
+import { createEditorOpener } from '../../../editor/editor-opener';
 import { CHAT_SYNC, type ChatSyncConfig } from '../../chat-config';
 import type { LocalDbPort } from '../../chat-local-db';
 import type { ChatStoreBackend, ChatTransport } from '../../chat-ports';
@@ -23,6 +27,7 @@ import type { CdocChatCommandEvent } from '@/types/cdoc-chat-sync';
 import type { ExclusiveLocks, TabChannel } from '../../chat-tabs';
 import { memoryExclusiveLocks } from './browser-tabs';
 import { FakeAgentLocalDb } from './fake-agent-local-db';
+import { apartSnapshotDiff } from './apart-snapshot-diff';
 
 export interface Browser {
   readonly db: FakeAgentLocalDb;
@@ -82,8 +87,11 @@ export async function openWindow(browser: Browser, account: bigint, port: LocalD
     let editor: EditorSession | null = null;
     let disposed: () => void = (): void => undefined;
     const gone: Promise<void> = new Promise<void>((resolve: () => void): void => { disposed = resolve; });
+    const runtime: TestRuntime = inProcessRuntime('worker');
+    const opener: (from: EditorOrigin) => Promise<EditorSession> = createEditorOpener(
+      { client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => crypto.getRandomValues(b));
     const replica = async (from: EditorOrigin): Promise<EditorSession> => {
-      const opened: EditorSession = await realReplicas().open(from);
+      const opened: EditorSession = await opener(from);
       const dispose: () => void = opened.dispose.bind(opened);
       opened.dispose = (): void => { dispose(); if (opened === editor) disposed(); };
       return opened;
@@ -92,7 +100,7 @@ export async function openWindow(browser: Browser, account: bigint, port: LocalD
     await new Promise<void>((resolve: () => void, reject: (error: unknown) => void): void => {
       teardown = chatReplicaKeeper<EditorSession>(docId, origin, config, {
         transport, clock: browser.clock, wallClock: (): number => 1_700_000_000_000 + browser.clock.now(),
-        identify: (): { readonly name: string; readonly color: HexColor } => ({ name: 'Peer', color: COLOR }), store,
+        identify: (): { readonly name: string; readonly color: HexColor } => ({ name: 'Peer', color: COLOR }), store, snapshotDiff: apartSnapshotDiff,
       }, {
         report: (problem: ChatSyncProblem): void => { problems.push(problem); },
         titled: (): void => undefined,

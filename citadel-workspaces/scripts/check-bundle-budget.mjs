@@ -282,8 +282,14 @@ const dist = join(root, 'dist');
  * each loadable with the surface that uses it: the file openers (with the file browser and a
  * chat's files), the billing portal request (with its dialog), the node envelope (with a node's
  * page) and the expiry notice's copy.
+ *
+ * 348 -> 349 (2026-11-26), for chat documents open in two windows (rel-1124/cdoc-tabs, PR #318):
+ * its first commit measured under 348; bringing in another window's stored snapshot through a
+ * Citadel Docs runtime of its own (cdoc/chat/chat-snapshot-diff.ts) loads lazily, but the lazy
+ * import adds its entry to the entry chunk's preload map, and the path measured 348.007. Nothing
+ * new runs on the landing page.
  */
-const BUDGET_KB = 348;
+const BUDGET_KB = 349;
 
 /**
  * Modules that must stay OFF the critical path, checked against the source

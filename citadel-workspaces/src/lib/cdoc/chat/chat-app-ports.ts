@@ -18,6 +18,7 @@ import type { ChatKeeperPorts } from './chat-replica-keeper';
 import { CHAT_SYNC } from './chat-config';
 import { recordClosedDocumentCommand, type InboxOutcome } from './chat-inbox';
 import { localChatTransport } from './chat-local-transport';
+import { runtimeOfItsOwnDiff } from './chat-snapshot-diff';
 import { CHAT_TABS_CHANNEL, chatTabs, webLocks } from './chat-tabs';
 import { isSelfConversation } from '@/lib/scratchpad/self-conversation';
 
@@ -74,6 +75,7 @@ export function chatKeeperPorts(selfCid: bigint, peer: ChatPeer): ChatKeeperPort
     wallClock: (): number => Date.now(),
     identify,
     store: appChatStore(selfCid),
+    snapshotDiff: runtimeOfItsOwnDiff,
   };
 }
 

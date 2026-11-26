@@ -13,7 +13,7 @@ import type { CdocChatTitleStamp } from '@/types/cdoc-chat-sync';
 import type { EditorController, EditorOrigin } from '../editor/controller';
 import type { Keeper } from '../collab/replica-keeper';
 import type { ChatSyncConfig } from './chat-config';
-import type { ChatIndexEntry, ChatStoreBackend, StoredBase } from './chat-ports';
+import type { ChatIndexEntry, ChatStoreBackend, SnapshotDiff, StoredBase } from './chat-ports';
 import { ChatSyncError, type ChatSyncProblem } from './chat-problems';
 import { ChatReplicaStore } from './chat-replica-store';
 import { ChatDocumentSync, type ChatSyncPorts } from './chat-sync';
@@ -28,6 +28,8 @@ export type ChatDocumentOrigin =
 
 export interface ChatKeeperPorts extends ChatSyncPorts {
   readonly store: ChatStoreBackend;
+  /** Brings in a snapshot another writer stored, never through the shown view's runtime. */
+  readonly snapshotDiff: SnapshotDiff;
 }
 
 export interface ChatKeeperHost {
@@ -71,16 +73,6 @@ export async function seed(editor: EditorController, text: string): Promise<void
   }
 }
 
-/** What `snapshot` holds that `editor` lacks, applied to it: read through a replica opened over it, disposed after. */
-async function absorbSnapshot<E extends EditorController>(open: (from: EditorOrigin) => Promise<E>, editor: E, snapshot: Uint8Array): Promise<void> {
-  const other: E = await open({ kind: 'snapshot', snapshot });
-  try {
-    await editor.applyRemote(await other.encodeDiff(await editor.stateVector()));
-  } finally {
-    other.dispose();
-  }
-}
-
 export function chatReplicaKeeper<E extends EditorController>(
   docId: string,
   origin: ChatDocumentOrigin,
@@ -104,7 +96,9 @@ export function chatReplicaKeeper<E extends EditorController>(
       const kept: ChatReplicaStore = new ChatReplicaStore(ports.store, docId, config, ports.clock,
         { base: copy.base === null ? null : copy.base.snapshot, pending: copy.pending }, {
           snapshot: (): Promise<Uint8Array> => editor.snapshot(),
-          absorbSnapshot: (snapshot: Uint8Array): Promise<void> => absorbSnapshot(open, editor, snapshot),
+          absorbSnapshot: async (snapshot: Uint8Array): Promise<void> => {
+            await editor.applyRemote(await ports.snapshotDiff(snapshot, await editor.stateVector()));
+          },
           absorbUpdate: async (update: Uint8Array): Promise<void> => { await editor.applyRemote(update); },
           report: host.report,
         });

@@ -22,6 +22,7 @@ import type { ChatDocumentSync } from '../../chat-sync';
 import type { Keeper } from '../../../collab/replica-keeper';
 import { CLEAN, FakeChannel, type Faults } from './fake-channel';
 import { FakeAgentLocalDb } from './fake-agent-local-db';
+import { apartSnapshotDiff } from './apart-snapshot-diff';
 import { Rng } from './rng';
 
 export const ALICE: bigint = 10_000_000_000_000_000_001n;
@@ -65,6 +66,7 @@ export async function openSide(world: World, self: bigint, peer: bigint, db: Fak
     wallClock,
     identify: (): { readonly name: string; readonly color: HexColor } => ({ name: 'Peer', color: COLOR }),
     store: localDbChatStore(self, db.connection([self]), aloneInBrowser()),
+    snapshotDiff: apartSnapshotDiff,
   }, {
     report: (problem: ChatSyncProblem): void => { problems.push(problem); },
     titled: (stamp: CdocChatTitleStamp): void => { titles.push(stamp); },

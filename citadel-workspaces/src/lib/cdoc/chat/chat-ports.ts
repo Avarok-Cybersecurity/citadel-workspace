@@ -17,6 +17,13 @@ export interface ChatTransport {
   onConnected(listener: () => void): () => void;
 }
 
+/**
+ * What a stored snapshot holds beyond `stateVector`, as one update: read by a replica opened over
+ * the snapshot in a runtime of its own. A cdoc runtime holds one editor, so a replica opened in
+ * the shown document's runtime would replace the shown replica there.
+ */
+export type SnapshotDiff = (snapshot: Uint8Array, stateVector: Uint8Array) => Promise<Uint8Array>;
+
 /** Wall-clock milliseconds, for title stamps compared across devices (never performance.now). */
 export type WallClock = () => number;
 
