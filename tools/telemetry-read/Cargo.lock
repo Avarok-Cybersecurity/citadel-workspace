@@ -265,7 +265,7 @@ dependencies = [
 [[package]]
 name = "citadel_io"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=b3d440db#b3d440dbd384c526c7ecba4859016df5abf6835d"
 dependencies = [
  "bincode",
  "bytes",
@@ -285,7 +285,7 @@ dependencies = [
 [[package]]
 name = "citadel_io_macros"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=b3d440db#b3d440dbd384c526c7ecba4859016df5abf6835d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -295,7 +295,7 @@ dependencies = [
 [[package]]
 name = "citadel_types"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=b3d440db#b3d440dbd384c526c7ecba4859016df5abf6835d"
 dependencies = [
  "bincode",
  "bytes",
@@ -1750,7 +1750,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

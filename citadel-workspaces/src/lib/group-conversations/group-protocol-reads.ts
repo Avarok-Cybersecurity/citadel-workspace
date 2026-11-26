@@ -11,7 +11,7 @@ import type {
 import { toCid, variant } from './group-wire-variants';
 
 const NOT_DELIVERED: readonly NotDelivered[] = ['Offline', 'BacklogFull', 'Unreachable'];
-const NOT_RELAYED: readonly NotRelayed[] = ['SessionEnded', 'UnknownGroup', 'NoGroupKey'];
+const NOT_RELAYED: readonly NotRelayed[] = ['SessionEnded', 'UnknownGroup', 'NoGroupKey', 'AlreadyRelayed', 'NotPositioned'];
 const SOURCES: readonly GroupStateSource[] = ['ThisDevice', 'Backup', 'Rejoined', 'Refounded'];
 const END_REASONS: readonly GroupEndReason[] = ['ClosedByOwner', 'Removed', 'HierarchyOwnerGone'];
 

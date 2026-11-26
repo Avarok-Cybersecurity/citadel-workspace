@@ -24,11 +24,15 @@ const NOT_DELIVERED: Record<NotDelivered, string> = {
   Unreachable: 'unreachable',
 };
 
-const NOT_RELAYED: Record<NotRelayed, string> = {
+const NOT_RELAYED: Record<Exclude<NotRelayed, 'AlreadyRelayed'>, string> = {
   SessionEnded: 'the session ended',
   UnknownGroup: 'this group no longer exists',
   NoGroupKey: "this device does not hold the group's keys yet",
+  NotPositioned: "the server could not place it in the group's order",
 };
+
+/** The answer to a message sent again under its id: the first send was relayed, so this one is not a failure. */
+const ALREADY_RELAYED: SendOutcomeNote = { complete: false, failed: false, text: 'Sent already; not sent again' };
 
 /** Why a refused message reached no one. */
 export function refusalText(refusal: GroupMessageRefusal): string {
@@ -38,7 +42,10 @@ export function refusalText(refusal: GroupMessageRefusal): string {
 }
 
 function deliveryNote(delivery: GroupDelivery, nameOf: (cid: bigint) => string): SendOutcomeNote {
-  if ('NotRelayed' in delivery) return { complete: false, failed: true, text: `Not sent: ${NOT_RELAYED[delivery.NotRelayed]}` };
+  if ('NotRelayed' in delivery) {
+    if (delivery.NotRelayed === 'AlreadyRelayed') return ALREADY_RELAYED;
+    return { complete: false, failed: true, text: `Not sent: ${NOT_RELAYED[delivery.NotRelayed]}` };
+  }
   const { delivered, stored, not_delivered } = delivery.Relayed;
   const parts: string[] = [];
   if (stored.length > 0) parts.push(`Delivered to ${delivered.length} · held for ${stored.length} offline`);
