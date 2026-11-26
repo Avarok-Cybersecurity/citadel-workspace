@@ -10,7 +10,7 @@ import { type AckResult } from './outbound-queue';
 import { debugLog, debugEnabled } from '@/lib/debug-config';
 import { describeForwarded } from '@/lib/p2p/message-fingerprint';
 import { CHANNEL_NAME, type ChannelMessage } from './channel-types';
-import { relinquishLeadership as relinquish, startLeaderElection, type LeaderElectionState } from './channel-leader-election';
+import { relinquishLeadership as relinquish, startLeaderElection, stopLeaderElection, type LeaderElectionState } from './channel-leader-election';
 import { replayOutboundRequest } from './channel-messaging';
 import { setupPageDepartureHandlers } from './channel-lifecycle';
 import { ownEnvelope } from './channel-envelope';
@@ -33,7 +33,6 @@ class InstanceChannel {
       initTime: Date.now(), challenge: null,
       send: (msg): void => this.send(msg),
     };
-    this.initialize();
   }
 
   public static getInstance(): InstanceChannel {
@@ -43,7 +42,9 @@ class InstanceChannel {
     return InstanceChannel.instance;
   }
 
-  private initialize(): void {
+  /** Joins the tab group: opens the channel and starts the election. Called once at boot, never at import. */
+  start(): void {
+    if (this.channel) return;
     if (typeof BroadcastChannel === 'undefined') {
       debugLog('InstanceChannel', 'BroadcastChannel API not supported');
       return;
@@ -234,8 +235,7 @@ class InstanceChannel {
   }
 
   destroy(): void {
-    if (this.electionState.heartbeatInterval) clearInterval(this.electionState.heartbeatInterval);
-    if (this.electionState.leaderCheckInterval) clearInterval(this.electionState.leaderCheckInterval);
+    stopLeaderElection(this.electionState);
     this.announceGoodbye();
     if (this.channel) { this.channel.close(); this.channel = null; }
     debugLog('InstanceChannel', '[InstanceChannel] Destroyed');

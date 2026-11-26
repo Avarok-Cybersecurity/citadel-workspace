@@ -64,6 +64,7 @@ export async function uploadFileToPeer(
     fileName,
     content,
     virtualDir: byteKey,
+    pushId: metadata.fileId,
   });
 
   if (result.type !== 'backend-send-file') throw new Error(`the upload of "${fileName}" was answered with ${result.type}`);

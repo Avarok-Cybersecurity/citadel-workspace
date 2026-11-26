@@ -134,6 +134,7 @@ export function handleLeaderHeartbeat(state: LeaderElectionState, message: Chann
 
 export function startLeaderElection(state: LeaderElectionState): void {
   const INITIAL_WAIT_MS: number = HEARTBEAT_INTERVAL_MS + 500;
+  state.initTime = Date.now();
 
   state.leaderCheckInterval = setInterval(() => {
     const now: number = Date.now();
@@ -152,12 +153,22 @@ export function startLeaderElection(state: LeaderElectionState): void {
     }
   }, HEARTBEAT_INTERVAL_MS);
 
-  setTimeout(() => {
+  state.initialWait = setTimeout(() => {
     if (!instanceManager.leaderId && state.lastLeaderHeartbeat === 0) {
       debugLog('InstanceChannel', '[InstanceChannel] No leader detected after initial wait, attempting to become leader');
       tryBecomeLeader(state);
     }
   }, INITIAL_WAIT_MS);
+}
+
+/** Stops every timer startLeaderElection or a challenge left running. */
+export function stopLeaderElection(state: LeaderElectionState): void {
+  if (state.leaderCheckInterval) clearInterval(state.leaderCheckInterval);
+  if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+  clearTimeout(state.initialWait);
+  withdrawChallenge(state);
+  state.leaderCheckInterval = null;
+  state.heartbeatInterval = null;
 }
 
 /**

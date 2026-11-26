@@ -34,7 +34,10 @@ if (import.meta.env.DEV) {
 
 // Initialize instance inbound router (routes WebSocket responses to correct instance)
 // Must be imported early to set up event listeners before any messages are processed
-import './lib/multi-instance';
+import { startInstanceCoordination } from './lib/multi-instance';
+import { broadcastChannelService } from './lib/broadcast-channel-service';
+startInstanceCoordination();
+broadcastChannelService.start();
 import { startInstallPromptCapture } from '@/components/pwa/install-prompt-store';
 import { showStorageVersionRecovery } from './storage-version-recovery';
 import { REJECTION_TAG, WINDOW_ERROR_TAG } from './lib/telemetry/window-error-tags';
