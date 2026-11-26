@@ -134,6 +134,8 @@ export function rigWorld(kernel: AppsTransport, listeners: Set<(answer: unknown)
     // agentSession is null, so the peer plane is absent; these are never asked.
     peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string): void => { reports.push(what); },
     notices: (n: AppNotice): void => { notices.push(n); },
+    // No member is signed in to announce own-store writes for (own-store-writes.ts is tested on its own).
+    ownWrites: null,
   };
 }
 

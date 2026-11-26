@@ -19,6 +19,7 @@ import { saveEvent } from '@/lib/calendar/event-save';
 import { calendarPorts } from '@/lib/calendar/ports';
 import { event } from '@/lib/calendar/__tests__/event-fixture';
 import { MemoryStore } from '@/lib/calendar/__tests__/memory-store';
+import { oneWindow } from '@/lib/citadel-apps/runtime/__tests__/one-window';
 import { VIEWER } from '@/lib/calendar/__tests__/placement-fixture';
 import { glueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY } from '@/lib/citadel-apps/host/limits';
@@ -40,10 +41,12 @@ function hours() {
 
 async function seeded(engine) {
   const store = new MemoryStore(VIEWER);
+  // The member's own-store writes are heard as the page hears them (one-window.ts).
+  const page = oneWindow(store.port());
   const ports = calendarPorts(glueInstance({
-    appId: 'net.avarok.calendar', ports: { storage: store.port(), nodes: treeNodesPort('Workspace', () => TREE) },
+    appId: 'net.avarok.calendar', ports: { storage: page.storage, nodes: treeNodesPort('Workspace', () => TREE) },
     held: new Set(['storage.user', 'storage.node', 'storage.node.authored', 'nodes.read']),
-    policy: { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_000 }, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, wallNow: PAGE_CLOCK.now, pageUrl: window.location.href, storageChanges: () => () => {},
+    policy: { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_000 }, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, wallNow: PAGE_CLOCK.now, pageUrl: window.location.href, storageChanges: page.ownChanges,
   }));
   const [first, second] = hours();
   const review = event({ id: 'review', origin_node: 'n1', author: VIEWER, hosts: [VIEWER], title: 'Quarterly review', when: first, zone: ZONE, propagate: { down: true, up_to: null } });

@@ -1,7 +1,8 @@
 /**
  * TEST RIG: the Calendar tab as the registry mounts it, over the real ports and gate and an
- * in-memory store signed in as `me`, with a hook to push the kernel's StorageChanged. The test
- * file mocks the core's loader (jsdom cannot fetch the binary); see the mount tests.
+ * in-memory store signed in as `me`, with a hook to push the kernel's StorageChanged, and the
+ * member's own-store writes announced as one window's are (one-window.ts). The test file mocks
+ * the core's loader (jsdom cannot fetch the binary); see the mount tests.
  */
 import { render } from '@testing-library/react';
 import type { AppInstall, AppManifest } from 'citadel-workspace-client-ts';
@@ -12,6 +13,7 @@ import { STANDARD_HOST_POLICY, type IhttpLimits } from '@/lib/citadel-apps/host/
 import type { IhttpPort } from '@/lib/citadel-apps/host/ports';
 import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { MemoryStore } from '@/lib/calendar/__tests__/memory-store';
+import { oneWindow, type OneWindow } from '@/lib/citadel-apps/runtime/__tests__/one-window';
 import { CalendarMount } from '../CalendarMount';
 import type { DomainNode } from 'citadel-workspace-client-ts';
 
@@ -53,12 +55,18 @@ function pinnedClocks(): RigClocks {
 
 export function mountRig(me: string, store: MemoryStore = new MemoryStore(me), extra: RigExtra | null = null, clocks: RigClocks = pinnedClocks()): MountRig {
   const listeners: Set<(c: StorageChange) => void> = new Set();
+  const page: OneWindow = oneWindow(store.port());
+  const storage = page.storage;
   const glue: GlueInstance = glueInstance({
     appId: 'net.avarok.calendar', policy: POLICY,
-    ports: extra === null ? { storage: store.port() } : { storage: store.port(), ihttp: extra.ihttp },
+    ports: extra === null ? { storage } : { storage, ihttp: extra.ihttp },
     held: new Set<Capability>([...HELD, ...(extra?.held ?? [])]),
     limits: { topics: null, p2p: null }, clock: clocks.dispatch, wallNow: clocks.wallNow, pageUrl: 'https://w.example/n1',
-    storageChanges: (l) => { listeners.add(l); return () => listeners.delete(l); },
+    storageChanges: (l) => {
+      listeners.add(l);
+      const offOwn = page.ownChanges(l);
+      return (): void => { listeners.delete(l); offOwn(); };
+    },
   });
   return { store, glue, change: (c: StorageChange): void => { for (const l of listeners) l(c); } };
 }

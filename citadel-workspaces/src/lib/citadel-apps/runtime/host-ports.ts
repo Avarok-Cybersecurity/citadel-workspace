@@ -13,6 +13,7 @@ import { advertiseService, callHost, ihttpSend, withdrawService } from '@/lib/wo
 import type { EventsPort, HostNetPort, HostPorts, LogPort, NotifyPort, StoragePort, UiPort } from '../host/ports';
 import { badgedNotifyPort, type NoticeOrigin, type NoticeSink } from './first-party-ports';
 import { agentKvPort, splitStorage } from './agent-kv-port';
+import { announcingStorage, type OwnWrites } from './own-store-writes';
 import { agentFetchPort } from './agent-fetch-port';
 import { agentSessionPort, type OwnedSessionPort } from './agent-session-port';
 import { relayIhttpPort, type RelayIhttpPort } from './ihttp-relay-port';
@@ -26,6 +27,8 @@ export interface PortWorld extends PeerWorld {
   readonly log: LogPort;
   /** Where a held `notifications` call lands: the page's list (app-notices.ts). */
   readonly notices: NoticeSink;
+  /** Where writes to the member's own stores are announced (own-store-writes.ts); null when nobody is signed in here. */
+  readonly ownWrites: OwnWrites | null;
 }
 
 export interface BoundPorts {
@@ -81,8 +84,9 @@ export function hostPortsFor(install: AppInstall, limits: AppLimits, instance: s
   });
   const peer: PeerPorts = peerPorts(install, scopeKey, limits, ihttp, seat, w);
   const notify: NotifyPort | null = peer.held.has('notifications') ? badgedNotifyPort(origin, w.notices) : null;
+  const storage: StoragePort = splitStorage(serverStorage(call), local);
   const ports: HostPorts = {
-    storage: splitStorage(serverStorage(call), local), blob: serverBlob(call), storeFiles: serverFiles(call),
+    storage: w.ownWrites === null ? storage : announcingStorage(storage, install.id, w.ownWrites), blob: serverBlob(call), storeFiles: serverFiles(call),
     serverNet: serverNet(call), ihttp: peer.ihttp, log: w.log,
     ...(zone === null ? {} : { events: zone.events, ui: zone.ui }),
     ...(hostNet === null ? {} : { hostNet }), ...(peer.topic === null ? {} : { topic: peer.topic }),

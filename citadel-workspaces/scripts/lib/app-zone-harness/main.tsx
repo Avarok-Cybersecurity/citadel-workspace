@@ -130,6 +130,8 @@ async function start(): Promise<void> {
       // No agent session here, so no peer plane: nobody to reach and no answer of one's own.
       peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string, detail: unknown): void => console.warn(what, detail),
       notices: (n: AppNotice): void => console.info(`[harness] ${n.from} notified: ${n.title}`),
+      // A worker app hears no storage changes, so there is nobody to announce its own-store writes to.
+      ownWrites: null,
     }),
     pageUrl: () => window.location.href, locale: () => 'en', dpr: () => window.devicePixelRatio, theme: () => ({}),
     opened: new OpenedFiles(),
