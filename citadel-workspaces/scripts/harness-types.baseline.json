@@ -1,0 +1,97 @@
+{
+  "scripts/lib/polish-harness/main.jsx": {
+    "TS2339": 1,
+    "TS2538": 1,
+    "TS2345": 1
+  },
+  "scripts/lib/polish-harness/scenarios-account-switch.jsx": {
+    "TS2322": 1,
+    "TS2339": 1
+  },
+  "scripts/lib/polish-harness/scenarios-app-settings.jsx": {
+    "TS2345": 1,
+    "TS2322": 3
+  },
+  "scripts/lib/polish-harness/scenarios-app-toolbar.jsx": {
+    "TS18047": 1
+  },
+  "scripts/lib/polish-harness/scenarios-at-rest.jsx": {
+    "TS2345": 1
+  },
+  "scripts/lib/polish-harness/scenarios-chat-files.jsx": {
+    "TS2345": 1,
+    "TS2322": 1
+  },
+  "scripts/lib/polish-harness/scenarios-file-manager.jsx": {
+    "TS2345": 2,
+    "TS2322": 10,
+    "TS2740": 1,
+    "TS2741": 1
+  },
+  "scripts/lib/polish-harness/scenarios-file-openers.jsx": {
+    "TS2322": 6,
+    "TS2740": 3,
+    "TS2741": 1
+  },
+  "scripts/lib/polish-harness/scenarios-members-filter.jsx": {
+    "TS2322": 1,
+    "TS2345": 1,
+    "TS2741": 1
+  },
+  "scripts/lib/polish-harness/scenarios-node-chat.jsx": {
+    "TS2322": 2,
+    "TS2739": 1
+  },
+  "scripts/lib/polish-harness/scenarios-node-tabs.jsx": {
+    "TS2739": 1,
+    "TS2322": 3,
+    "TS2741": 1
+  },
+  "scripts/lib/polish-harness/scenarios-peer-consent.jsx": {
+    "TS2345": 1
+  },
+  "scripts/lib/polish-harness/scenarios-people.jsx": {
+    "TS2739": 1,
+    "TS2741": 2
+  },
+  "scripts/lib/polish-harness/scenarios-permissions.jsx": {
+    "TS2739": 2
+  },
+  "scripts/lib/polish-harness/scenarios-recovery.jsx": {
+    "TS2339": 3,
+    "TS2532": 1,
+    "TS2684": 1,
+    "TS18048": 1,
+    "TS2322": 1
+  },
+  "scripts/lib/polish-harness/scenarios-ribbons.jsx": {
+    "TS2741": 1
+  },
+  "scripts/lib/polish-harness/scenarios-scratchpad.jsx": {
+    "TS2740": 1
+  },
+  "scripts/lib/polish-harness/scenarios-screens.jsx": {
+    "TS2739": 1
+  },
+  "scripts/lib/polish-harness/scenarios-server-files.jsx": {
+    "TS18047": 4,
+    "TS2322": 2
+  },
+  "scripts/lib/polish-harness/scenarios-share.jsx": {
+    "TS18047": 3,
+    "TS2322": 4
+  },
+  "scripts/lib/polish-harness/scenarios-sidebar.jsx": {
+    "TS2339": 1,
+    "TS2345": 1
+  },
+  "scripts/lib/polish-harness/scenarios-spacing.jsx": {
+    "TS2739": 1,
+    "TS2741": 1,
+    "TS2322": 1
+  },
+  "scripts/lib/polish-harness/scenarios.jsx": {
+    "TS2322": 5,
+    "TS2739": 1
+  }
+}

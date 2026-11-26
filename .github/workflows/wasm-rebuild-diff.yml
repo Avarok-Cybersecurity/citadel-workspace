@@ -7,8 +7,26 @@ name: WASM rebuild diff
 # on any difference. Two clean builds on different runners were byte-identical
 # (run 44557022429), so a difference here is the committed pkg, not the runner.
 
+#
+# Keyed on inputs.agent_ref, not github.event_name: called from a dispatched
+# workflow, event_name is 'workflow_dispatch' here too.
+# Dispatched with agent_ref, it builds the pkg for that agent commit instead and
+# always uploads it as 'pkg-rebuilt': a pointer move to an agent commit that is
+# not agent master gets its committed pkg and stamp from here (types-bump builds
+# master only, and a Mac build never matches).
+
+# Shown for a dispatch only (a called workflow keeps its caller's title); scripts/dispatch-workflow.mjs
+# finds the run by it.
+run-name: WASM rebuild for agent ${{ inputs.agent_ref }}
+
 on:
   workflow_call:
+  workflow_dispatch:
+    inputs:
+      agent_ref:
+        description: 'Full 40-character citadel-internal-service commit to build the pkg for'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -26,11 +44,25 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: The agent commit asked for
+        if: inputs.agent_ref != ''
+        env:
+          AGENT_REF: ${{ inputs.agent_ref }}
+        run: |
+          if ! printf '%s' "$AGENT_REF" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::agent_ref must be a full 40-character lowercase commit id, not '$AGENT_REF'"
+            exit 1
+          fi
+          git -C citadel-internal-service fetch --no-tags origin "$AGENT_REF"
+          git -C citadel-internal-service checkout --detach "$AGENT_REF"
+          git -C citadel-internal-service submodule update --init --recursive
+          echo "Building the pkg for agent $AGENT_REF"
       - name: The pinned toolchain
         run: bash scripts/install-wasm-toolchain.sh
       - name: Rebuild the committed pkg
         run: bash scripts/regenerate-committed-pkg.sh
       - name: Nothing changed
+        if: inputs.agent_ref == ''
         run: |
           changed=$(git status --porcelain -- citadel-workspace-client-ts/pkg)
           if [ -n "$changed" ]; then
@@ -42,7 +74,8 @@ jobs:
           fi
           echo "OK: the committed pkg is byte-for-byte what its source builds to."
       - uses: actions/upload-artifact@v4
-        if: failure()
+        # Called: the rebuild that differs. Dispatched: the build asked for, only when it finished.
+        if: (failure() && inputs.agent_ref == '') || (success() && inputs.agent_ref != '')
         with:
           name: pkg-rebuilt
           path: |

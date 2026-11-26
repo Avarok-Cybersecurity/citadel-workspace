@@ -29,13 +29,26 @@ errors in either case, so only an explicit check notices.
 
 Two suites, for historical reasons, both real:
 
+Both recreate, pause or restart containers, so their helpers refuse to run
+`docker compose` unless the run opts in and names the stack's project:
+
 ```bash
 cd citadel-workspaces/integration-tests
+export CITADEL_INTEGRATION_COMPOSE=1 COMPOSE_PROJECT_NAME=citadel-it   # a stack of its own, up under that name
 
 npx playwright test                       # accessibility, responsive, keyboard,
                                           # login, P2P, multi-tab, office CRUD
 npm run build && node dist/tests/<name>.test.js   # the legacy runner
 ```
+
+CI sets both on its integration jobs (`validate.yml`). Without them a helper
+fails at once (`integration-tests/src/lib/compose-guard.ts`), and `vitest` started
+at the repository root refuses to run at all (`vitest.config.mjs`): a root run
+once collected these suites as ordinary tests and recreated a developer's stack.
+Outside CI (`CI` unset) the helpers also refuse the project compose derives for
+the checkout's directory and the literal `citadel-workspace`: those name the
+developer's own stack, whose containers the helpers would recreate. CI keeps
+`citadel-workspace`, the name its workflow's image and container names expect.
 
 The Playwright suite includes gates that are easy to lose and hard to notice
 losing:

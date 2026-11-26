@@ -17,7 +17,8 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const at = process.argv.indexOf('--remote');
 const remote = at >= 0 ? process.argv[at + 1] : undefined;
@@ -31,6 +32,12 @@ if (process.env.npm_lifecycle_event !== undefined) {
 }
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+// Without core.hooksPath there is no hook to run, and the push after it would run none either.
+const hooks = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), 'check-hooks-are-installed.mjs')], { stdio: 'inherit' });
+if (hooks.status !== 0) {
+  console.error('pre-push-tier: the hooks are not installed in this clone, so neither this tier nor the push would be judged.\n  fix: scripts/bootstrap.sh');
+  process.exit(1);
+}
 const ZERO = '0'.repeat(40);
 let url;
 try {

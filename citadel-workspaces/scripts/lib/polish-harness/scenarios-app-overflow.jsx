@@ -22,21 +22,36 @@ import { ConfirmDialogProvider } from '@/components/shared/confirm-dialog';
 import { VIEWER } from '@/lib/calendar/__tests__/placement-fixture';
 import calendarManifest from '../../../../apps/first-party/calendar/manifest.json';
 import { TREE, seededGlue, useCalendarEngine } from './scenarios-calendar.jsx';
+import { workspaceState } from './workspace-state';
 
 const CALENDAR = calendarManifest.id;
+/** @type {import('citadel-workspace-client-ts').Capability[]} */
 const GRANTED = ['storage.user', 'storage.node', 'storage.node.authored', 'nodes.read'];
-const INSTALL = { id: 'cal', app_id: CALENDAR, version: calendarManifest.version, scope: 'Workspace', granted: GRANTED, state: 'Active' };
+/** @type {import('citadel-workspace-client-ts').AppInstall} */
+const INSTALL = {
+  id: 'cal', app_id: CALENDAR, version: calendarManifest.version, manifest_sha256: '1'.repeat(64), artifact_sha256: '0'.repeat(64),
+  pinned_publisher_key: 'ab'.repeat(1952), scope: 'Workspace', granted: GRANTED,
+  details: { host_network_hosts: [], server_network_hosts: [], ihttp_routes: [], ihttp_call_targets: [], ihttp_p2p_routes: [], topics: [] },
+  installed_by: VIEWER, installed_at_ms: 1n, state: 'Active', previous: null, injected_header_into: [], source: { Global: { catalogue_version: 1n } },
+};
 const LISTED = listedApps([{
   source: { WorkspaceRegistry: { entry_id: CALENDAR } },
   manifest_bytes: Array.from(new TextEncoder().encode(JSON.stringify(calendarManifest))),
   signature: '0'.repeat(6618),
 }])[0];
-const STATE = { members: {}, currentUser: { id: VIEWER, username: VIEWER, name: VIEWER }, nodes: TREE, workspace: { metadata: [] }, treeSchema: null, loading: { workspace: false, members: false, nodes: false } };
+const STATE = workspaceState({ currentUser: { id: VIEWER, username: VIEWER, name: VIEWER }, nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: [] } });
 const REFUSE = () => { throw new Error('this scenario mounts the Calendar only'); };
 const NO_WRITES = { writeNodeTabs: async () => undefined, setDefaultAppTabs: async () => undefined };
 
+/**
+ * @param {import('@/lib/citadel-apps/host/glue-instance').GlueInstance} glue
+ * @returns {import('@/components/office/app-zone/app-zone-environment').AppZoneEnvironment}
+ */
 function environment(glue) {
-  const bound = { ready: Promise.resolve({ kind: 'bound', instance: glue }), close: async () => undefined };
+  /** @type {import('@/components/office/app-zone/app-zone-environment').GlueBound} */
+  const ready = { kind: 'bound', instance: glue };
+  /** @type {import('@/components/office/app-zone/app-zone-environment').GlueHandle} */
+  const bound = { ready: Promise.resolve(ready), close: async () => undefined };
   return {
     nodeId: 'n1', me: VIEWER, ancestors: ['company'], mayInstall: 'yes',
     runtime: { mount: REFUSE, mountPane: REFUSE, mountPage: REFUSE, bindGlue: () => bound },
