@@ -10,6 +10,7 @@ import type { CdocChatCommandEvent } from '@/types/cdoc-chat-sync';
 import type { EditorSession } from '../../editor/editor-session';
 import { realReplicas, snapshotText, typeInto } from '../../collab/__tests__/doubles/real-replicas';
 import { CHAT_SYNC } from '../chat-config';
+import type { InboxOutcome } from '../chat-inbox';
 import type { LocalDbPort } from '../chat-local-db';
 import type { StoredBase } from '../chat-ports';
 import { newBrowser, openWindow, type Browser, type BrowserWindow, type OpenDocument } from './doubles/browser-windows';
@@ -59,7 +60,13 @@ async function reopenedText(docId: string): Promise<string> {
 }
 
 /** `port`, with its first write of a document's updates held until release(). */
-function holdingFirstPendingWrite(port: LocalDbPort): { readonly port: LocalDbPort; readonly reached: Promise<void>; release(): void } {
+interface HeldPort {
+  readonly port: LocalDbPort;
+  readonly reached: Promise<void>;
+  release(): void;
+}
+
+function holdingFirstPendingWrite(port: LocalDbPort): HeldPort {
   let reach: () => void = (): void => undefined;
   let release: () => void = (): void => undefined;
   const reached: Promise<void> = new Promise<void>((resolve: () => void): void => { reach = resolve; });
@@ -69,7 +76,7 @@ function holdingFirstPendingWrite(port: LocalDbPort): { readonly port: LocalDbPo
     reached,
     release: (): void => release(),
     port: {
-      get: (cid: bigint, key: string) => port.get(cid, key),
+      get: (cid: bigint, key: string): Promise<{ readonly value: readonly number[] } | null> => port.get(cid, key),
       set: async (cid: bigint, key: string, value: number[]): Promise<void> => {
         if (!held && key.endsWith('#pending')) {
           held = true;
@@ -103,9 +110,9 @@ describe('a chat document closed in one window and open in another', () => {
   it('loses neither write when the recording interleaves with the open window\'s write, and shows the peer\'s edit', async () => {
     const docId: string = 'chat-doc-interleaved';
     const { doc, base } = await openHere(docId);
-    const held = holdingFirstPendingWrite(browser.db.connection([ALICE]));
+    const held: HeldPort = holdingFirstPendingWrite(browser.db.connection([ALICE]));
     const closedHere: BrowserWindow = await openWindow(browser, ALICE, held.port);
-    const recorded = closedHere.record(await bobsEdit(docId, base, 'peer-edit-P'));
+    const recorded: Promise<InboxOutcome> = closedHere.record(await bobsEdit(docId, base, 'peer-edit-P'));
     // The closed window has read the stored updates and is about to write them back with Bob's.
     await held.reached;
     await typeInto(doc.editor(), 'own-edit-Y');
