@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { InstallScope } from 'citadel-workspace-client-ts';
-import { badgedNotifyPort, rosterMembersPort, type AppNotice } from '../first-party-ports';
+import { badgedNotifyPort, rosterMembersPort, type AppNoticeEntry } from '../first-party-ports';
 import { treeNodesPort, type PageNode } from '../nodes-port';
 import type { MembersPort, NodesPort, NotifyPort } from '@/lib/citadel-apps/host/ports';
 
@@ -65,8 +65,8 @@ describe('members.list and notifications for a glue app', () => {
   });
 
   it("badges every notification with the app's name and the node it was given", () => {
-    const seen: AppNotice[] = [];
-    const port: NotifyPort = badgedNotifyPort({ id: 'net.avarok.calendar', name: 'Calendar', nodeId: 'n-4' }, (n: AppNotice): void => { seen.push(n); });
+    const seen: AppNoticeEntry[] = [];
+    const port: NotifyPort = badgedNotifyPort({ id: 'net.avarok.calendar', name: 'Calendar', nodeId: 'n-4' }, (n: AppNoticeEntry): void => { seen.push(n); });
     expect(port.Notify({ title: 'Standup in 10 minutes', body: 'Platform, 9:00 AM' })).toEqual({ ok: null });
     expect(seen).toEqual([{ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-4', title: 'Standup in 10 minutes', body: 'Platform, 9:00 AM' }]);
   });

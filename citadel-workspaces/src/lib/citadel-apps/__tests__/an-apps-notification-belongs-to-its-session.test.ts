@@ -10,13 +10,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { notificationService } from '@/lib/notification-service/service';
 import type { Notification } from '@/lib/notification-service/types';
 import { pageAppNotices } from '../app-notices';
-import type { AppNotice } from '../runtime/first-party-ports';
+import type { AppNoticeEntry } from '../runtime/first-party-ports';
 
 const cid: { now: bigint | null; } = vi.hoisted(() => ({ now: null as bigint | null }));
 vi.mock('@/lib/p2p/current-cid', () => ({ getCurrentCid: async (): Promise<bigint | null> => cid.now }));
 
 const settle = (): Promise<void> => new Promise<void>((r) => setTimeout(r, 0));
-const NOTICE: AppNotice = { from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-3', title: 'New booking', body: 'Intro with ana' };
+const NOTICE: AppNoticeEntry = { from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-3', title: 'New booking', body: 'Intro with ana' };
 
 afterEach(() => { vi.restoreAllMocks(); });
 

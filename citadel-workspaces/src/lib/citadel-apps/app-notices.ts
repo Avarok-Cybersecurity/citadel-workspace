@@ -14,14 +14,14 @@ import { notificationService } from '@/lib/notification-service/service';
 import { NotificationPriority, NotificationType } from '@/lib/notification-service/types';
 import { getCurrentCid } from '@/lib/p2p/current-cid';
 import { appOsReach } from './app-notice-delivery';
-import type { AppNotice, NoticeSink } from './runtime/first-party-ports';
+import type { AppNoticeEntry, NoticeSink } from './runtime/first-party-ports';
 
 /** What an app notification asks the page to open when activated: the node its instance is on. */
 export interface AppNoticeTarget {
   readonly nodeId: string;
 }
 
-export const pageAppNotices: NoticeSink = (notice: AppNotice): void => {
+export const pageAppNotices: NoticeSink = (notice: AppNoticeEntry): void => {
   getCurrentCid().then((cid: bigint | null): void => {
     if (cid === null) {
       console.warn(`[apps] ${notice.from} raised a notification with no session signed in; it was not shown`);

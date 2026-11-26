@@ -41,7 +41,7 @@ export interface NoticeOrigin {
 }
 
 /** One notification as the page's list shows it: who it is from, its title and its text, and the node it opens. */
-export interface AppNotice {
+export interface AppNoticeEntry {
   readonly from: string;
   readonly appId: string;
   readonly nodeId: string;
@@ -49,7 +49,7 @@ export interface AppNotice {
   readonly body: string;
 }
 
-export type NoticeSink = (notice: AppNotice) => void;
+export type NoticeSink = (notice: AppNoticeEntry) => void;
 
 export function badgedNotifyPort(origin: NoticeOrigin, sink: NoticeSink): NotifyPort {
   return {

@@ -15,7 +15,7 @@ enum WorkspaceLink {
     }
 
     /// `target` is what a notice names to open there: `conversation:<cid>`, `call:<cid>`,
-    /// `requests` or `settings:notifications`. Never content: a link lands in history.
+    /// `node:<node id>` (an app's notice), `requests` or `settings:notifications`. Never content: a link lands in history.
     static func open(username: String, server: String?, target: String?, origin: URL, log: LogFile) {
         let query = [URLQueryItem(name: "account", value: username)]
             + (server.map { [URLQueryItem(name: "server", value: $0)] } ?? [])

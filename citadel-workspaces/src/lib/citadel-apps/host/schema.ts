@@ -53,6 +53,15 @@ export function nullable<T>(s: Schema<T>): Schema<T | null> {
   return (v) => (v === null ? { v: null } : s(v));
 }
 
+const OMITTABLE: WeakSet<Schema<unknown>> = new WeakSet<Schema<unknown>>();
+
+/** An Option serde leaves out when it is None (`skip_serializing_if`): absent, or null, is None. */
+export function omittable<T>(s: Schema<T>): Schema<T | null | undefined> {
+  const o: Schema<T | null | undefined> = (v) => (v === null || v === undefined ? { v: undefined } : s(v));
+  OMITTABLE.add(o as Schema<unknown>);
+  return o;
+}
+
 export function array<T>(s: Schema<T>): Schema<T[]> {
   return (v) => {
     if (!Array.isArray(v)) return null;
@@ -71,13 +80,16 @@ export const pair: Schema<[string, string]> = (v) =>
 
 type Fields<T> = { readonly [K in keyof T]-?: Schema<T[K]> };
 
-/** A struct: every field present (an Option is written as null, never omitted, by ciborium). */
+/** A struct: every field present (an Option is written as null by ciborium), except an `omittable` one. */
 export function struct<T extends object>(fields: Fields<T>): Schema<T> {
   return (v) => {
     if (!isCborMap(v)) return null;
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(fields) as (keyof T & string)[]) {
-      if (!Object.hasOwn(v, key)) return null;
+      if (!Object.hasOwn(v, key)) {
+        if (OMITTABLE.has(fields[key] as Schema<unknown>)) continue;
+        return null;
+      }
       const r: Parsed<T[keyof T]> = (fields[key] as Schema<T[keyof T]>)((v as CborMap)[key]);
       if (r === null) return null;
       out[key] = r.v;

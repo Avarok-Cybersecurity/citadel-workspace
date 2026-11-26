@@ -6,8 +6,9 @@
  */
 import { playNotificationChime } from './chime';
 import { showBrowserNotification } from './browser-notification';
-import { notificationOwner } from './owner';
-import { agentCapabilities, noticesHeard } from '@/lib/agent-conversations/capabilities';
+import { notificationOwner, type NotificationOwner } from './owner';
+import { agentCapabilities, appNotices, noticesHeard } from '@/lib/agent-conversations/capabilities';
+import { handedToAgent } from './agent-app-notice';
 import type { Notification } from './types';
 import { accountPreview } from './account-preview';
 import { osContent, type OsContent } from './os-preview';
@@ -26,7 +27,9 @@ async function interruptNow(notification: Notification): Promise<void> {
   // A failed answer leaves none attached, so the browser is not silenced too.
   await agentCapabilities().catch((): null => null);
   // Read after the await: the agent's answer, and every change since, set it (capabilities.ts).
-  if (notificationOwner(notification, { notifierAttached: noticesHeard.get() }) !== 'browser') return;
+  const owner: NotificationOwner = notificationOwner(notification, { notifierAttached: noticesHeard.get(), appNotices: appNotices.get() });
+  if (owner === 'agent') return;
+  if (owner === 'hand-to-agent' && (await handedToAgent(notification))) return;
   // What it may say on the lock screen: the account's preview setting (os-preview.ts).
   const said: OsContent = osContent(notification, await accountPreview(notification.recipient_cid));
   showBrowserNotification({ ...notification, title: said.title, content: said.body });

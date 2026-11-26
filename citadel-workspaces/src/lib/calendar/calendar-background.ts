@@ -15,6 +15,7 @@ import type { Event } from './generated/Event';
 import { formatDayShort, formatTimeIn } from './format';
 import { tellAbout } from './invite-notices';
 import type { CalendarPorts } from './ports';
+import { reminderBody } from './agent-reminders';
 import { reminderStore, ReminderRunner } from './reminder-runner';
 import type { Due } from './reminder-scheduler';
 import { decodeSettings, displayZoneOf, SETTINGS_KEY, type CalendarSettings } from './zones';
@@ -59,7 +60,7 @@ export function startCalendarBackground(d: BackgroundDeps): () => void {
     rescanMs: RESCAN_MS,
     fire: async (due: Due): Promise<void> => {
       const zone: string = await zoneOf(d);
-      await ports.notify('reminders', due.title, `Starts at ${formatTimeIn(due.fire.start_ms, zone)} · ${d.nodeName(due.node)}`);
+      await ports.notify('reminders', due.title, reminderBody(due, zone, d.nodeName));
     },
     missed: async (late: readonly Due[]): Promise<void> => {
       const zone: string = await zoneOf(d);
