@@ -31,7 +31,7 @@ function marker(title: string): void { notificationService.addSystemNotification
 /** A follower's view: the leader says whether a notifier is attached to its agent. */
 function agentSays(noticesHeard: boolean): void {
   forgetCapabilities();
-  registerCapabilityRoute({ isLeader: () => false, askLeader: async () => ({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, noticesHeard }) });
+  registerCapabilityRoute({ isLeader: () => false, askLeader: async () => ({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, noticesHeard, appNotices: false }) });
 }
 
 
@@ -47,13 +47,13 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); Reflect.deletePro
 describe('who owns a notification', () => {
   const p2p: { type: NotificationType; data: Record<string, unknown> } = { type: NotificationType.MESSAGE, data: { peerCid: '9' } };
   it('a conversation\'s message is the agent\'s when a notifier is attached to it', () => {
-    expect(notificationOwner(p2p, { notifierAttached: true })).toBe('agent');
+    expect(notificationOwner(p2p, { notifierAttached: true, appNotices: false })).toBe('agent');
   });
   it('the browser\'s when nothing on the agent\'s side would show it (Windows has no notifier)', () => {
-    expect(notificationOwner(p2p, { notifierAttached: false })).toBe('browser');
+    expect(notificationOwner(p2p, { notifierAttached: false, appNotices: false })).toBe('browser');
   });
   it('what is not a conversation\'s message stays the browser\'s', () => {
-    const both: { notifierAttached: boolean } = { notifierAttached: true };
+    const both: { notifierAttached: boolean; appNotices: boolean } = { notifierAttached: true, appNotices: false };
     expect(notificationOwner({ type: NotificationType.MESSAGE, data: { groupId: 'g' } }, both)).toBe('browser');
     expect(notificationOwner({ type: NotificationType.SYSTEM }, both)).toBe('browser');
   });

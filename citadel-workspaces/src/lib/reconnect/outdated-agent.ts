@@ -22,7 +22,7 @@ import type { OutageKind } from './outage';
  * (citadel-workspace-server-kernel/tests/a_protocol_step_ships_with_its_update_notice.rs): a
  * server that starts refusing older agents cannot ship without this page beside it.
  */
-export const PROTOCOL_STEPS_WITH_AN_UPDATE_NOTICE: readonly string[] = ['0.12.6'];
+export const PROTOCOL_STEPS_WITH_AN_UPDATE_NOTICE: readonly string[] = ['0.12.6', '0.12.7'];
 
 export type OutageView =
   | { kind: 'service'; outage: OutageKind }

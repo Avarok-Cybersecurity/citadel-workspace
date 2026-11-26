@@ -20,6 +20,7 @@ import type { ReminderPlan } from '../generated/ReminderPlan';
 import { engine } from './booking-rig';
 import { event, utc } from './event-fixture';
 import { MemoryStore } from './memory-store';
+import { NO_AGENT } from './no-agent';
 
 const HELD: Capability[] = ['storage.user', 'storage.node', 'storage.node.authored'];
 /** A page loaded five seconds ago reads 5 000 on its dispatch clock. */
@@ -64,7 +65,7 @@ describe("the Calendar's clock", () => {
     const fired: Due[] = [];
     const runner: ReminderRunner = new ReminderRunner({
       ...reminderStore(ports, engine), engine, clock: ports.clock, isLeader: (): true => true,
-      fire: async (d: Due): Promise<void> => { fired.push(d); }, missed: async (): Promise<void> => {}, rescanMs: 60_000,
+      fire: async (d: Due): Promise<void> => { fired.push(d); }, missed: async (): Promise<void> => {}, rescanMs: 60_000, ...NO_AGENT,
     });
     await runner.tick();
     for (let minute: number = 0; minute < 6; minute += 1) {

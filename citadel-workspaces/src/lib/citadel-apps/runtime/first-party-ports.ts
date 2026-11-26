@@ -10,6 +10,8 @@
  */
 import type { Member } from '../sdk/generated/Member';
 import type { MembersPort, NotifyPort } from '../host/ports';
+import type { NotifyAbout } from '../sdk/generated/NotifyAbout';
+import type { NotifyKind } from '../sdk/generated/NotifyKind';
 
 /** One roster entry as the page holds it. `isOnline` null means nobody has said. */
 export interface RosterMember {
@@ -40,21 +42,38 @@ export interface NoticeOrigin {
   readonly nodeId: string;
 }
 
-/** One notification as the page's list shows it: who it is from, its title and its text, and the node it opens. */
-export interface AppNotice {
+/**
+ * One notification as the page's list shows it: who it is from, its title and its text, the node
+ * it opens, and its sender line, all it says while the member keeps previews off. A notice with no
+ * `kind` is the app's own to its member (a reminder): it has no sender line and its title shows.
+ */
+export interface AppNoticeEntry {
   readonly from: string;
   readonly appId: string;
   readonly nodeId: string;
   readonly title: string;
   readonly body: string;
+  readonly senderLine: string | null;
 }
 
-export type NoticeSink = (notice: AppNotice) => void;
+const NOUNS: Readonly<Record<NotifyKind, string>> = { invitation: 'invitation', booking: 'booking', poll: 'poll', other: 'notice' };
 
-export function badgedNotifyPort(origin: NoticeOrigin, sink: NoticeSink): NotifyPort {
+/** The app, what the notice is about, and who it is from when the server said so (told-authors.ts). */
+export function senderLine(app: string, kind: NotifyKind, from: string | null): string {
+  return `${app}: new ${NOUNS[kind]}${from === null ? '' : ` from ${from}`}`;
+}
+
+/** The author of `about` when it is a change the server told this install of; otherwise no one. */
+export type AuthorOf = (about: NotifyAbout) => string | null;
+
+export type NoticeSink = (notice: AppNoticeEntry) => void;
+
+export function badgedNotifyPort(origin: NoticeOrigin, sink: NoticeSink, authorOf: AuthorOf): NotifyPort {
   return {
-    Notify: ({ title, body }): ReturnType<NotifyPort['Notify']> => {
-      sink({ from: origin.name, appId: origin.id, nodeId: origin.nodeId, title, body });
+    Notify: ({ title, body, kind, about }): ReturnType<NotifyPort['Notify']> => {
+      const from: string | null = about === undefined || about === null ? null : authorOf(about);
+      const line: string | null = kind === undefined || kind === null ? null : senderLine(origin.name, kind, from);
+      sink({ from: origin.name, appId: origin.id, nodeId: origin.nodeId, title, body, senderLine: line });
       return { ok: null };
     },
   };

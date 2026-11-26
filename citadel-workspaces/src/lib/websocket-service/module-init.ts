@@ -135,6 +135,6 @@ export async function askLeaderForCapabilities(): Promise<LeaderAnswer> {
   const result: AckResult = await instanceChannel.sendToLeader({ __agentCapabilitiesProxy: true }, requestId);
   if (result.status === 'error') throw new Error(`The leader could not say what the agent hosts: ${result.error}`);
   const data: unknown = result.data;
-  const said: { supervisesP2p?: unknown; stagesUploads?: unknown; nativePicker?: unknown; takesConsole?: unknown; servesApps?: unknown; notesToSelf?: unknown; noticesHeard?: unknown } = typeof data === 'object' && data !== null ? data : {};
-  return { supervisesP2p: said.supervisesP2p === true, stagesUploads: said.stagesUploads === true, nativePicker: said.nativePicker === true, takesConsole: said.takesConsole === true, servesApps: said.servesApps === true, notesToSelf: said.notesToSelf === true, noticesHeard: said.noticesHeard === true };
+  const said: { supervisesP2p?: unknown; stagesUploads?: unknown; nativePicker?: unknown; takesConsole?: unknown; servesApps?: unknown; notesToSelf?: unknown; noticesHeard?: unknown; appNotices?: unknown } = typeof data === 'object' && data !== null ? data : {};
+  return { supervisesP2p: said.supervisesP2p === true, stagesUploads: said.stagesUploads === true, nativePicker: said.nativePicker === true, takesConsole: said.takesConsole === true, servesApps: said.servesApps === true, notesToSelf: said.notesToSelf === true, noticesHeard: said.noticesHeard === true, appNotices: said.appNotices === true };
 }
