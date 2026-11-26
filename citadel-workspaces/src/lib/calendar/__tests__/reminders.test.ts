@@ -16,6 +16,7 @@ import { event, NY, utc } from './event-fixture';
 import { IhttpRelay } from './ihttp-relay';
 import type { Schedule } from '@/lib/calendar/reminder-scheduler';
 import type { ReminderPlan } from '@/lib/calendar/generated/ReminderPlan';
+import { NO_AGENT } from './no-agent';
 
 const USER = { kind: 'user' } as const;
 const at = (iso: string): bigint => utc(iso);
@@ -72,7 +73,7 @@ describe('the reminder runner', () => {
   it('fires a due reminder once across two windows, from the leader only', async () => {
     const { store } = await rig('2024-07-16T12:30:00Z');
     const fired: Due[] = [];
-    const tab = (leader: boolean): ReminderRunner => new ReminderRunner({ ...store, engine, clock: clockAt('2024-07-16T13:05:00Z'), isLeader: () => leader, fire: async (d: Due): Promise<void> => { fired.push(d); }, missed: async (): Promise<void> => {}, rescanMs: 60_000 });
+    const tab = (leader: boolean): ReminderRunner => new ReminderRunner({ ...store, engine, clock: clockAt('2024-07-16T13:05:00Z'), isLeader: () => leader, fire: async (d: Due): Promise<void> => { fired.push(d); }, missed: async (): Promise<void> => {}, rescanMs: 60_000, ...NO_AGENT });
     await Promise.all([tab(true).tick(), tab(false).tick()]);
     expect(fired.map((d: Due) => d.fire.at_ms)).toEqual([at('2024-07-16T13:00:00Z')]);
   });
@@ -81,7 +82,7 @@ describe('the reminder runner', () => {
     const { store } = await rig('2024-07-16T12:30:00Z');
     const fired: Due[] = [];
     const clock: DispatchClock & { set: (iso: string) => void; } = clockAt('2024-07-16T15:00:00Z');
-    const runner: ReminderRunner = new ReminderRunner({ ...store, engine, clock, isLeader: (): true => true, fire: async (d: Due): Promise<void> => { fired.push(d); }, missed: async (): Promise<void> => {}, rescanMs: 60_000 });
+    const runner: ReminderRunner = new ReminderRunner({ ...store, engine, clock, isLeader: (): true => true, fire: async (d: Due): Promise<void> => { fired.push(d); }, missed: async (): Promise<void> => {}, rescanMs: 60_000, ...NO_AGENT });
     expect((await runner.tick()).map((d: Due) => d.fire.at_ms)).toEqual([at('2024-07-16T13:00:00Z'), at('2024-07-16T13:50:00Z')]);
     expect(await runner.tick()).toEqual([]);
     expect(fired).toEqual([]);

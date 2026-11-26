@@ -14,6 +14,7 @@ import { engine, member, type Member } from './booking-rig';
 import { event, NY, utc } from './event-fixture';
 import { IhttpRelay } from './ihttp-relay';
 import type { ReminderPlan } from '@/lib/calendar/generated/ReminderPlan';
+import { NO_AGENT } from './no-agent';
 
 const USER = { kind: 'user' } as const;
 const NODE = { kind: 'node', node: 'n1' } as const;
@@ -32,7 +33,7 @@ async function rig(): Promise<{ ana: Member; bo: Member; fired: Due[]; tick: () 
   await ana.ports.storage.set(USER, `${REMINDER_PREFIX}m1`, engine.encodeReminderPlan(plan));
   await ana.ports.storage.set(USER, HANDLED_KEY, encodeHandled(utc('2024-07-16T13:00:00Z')));
   const fired: Due[] = [];
-  const runner: ReminderRunner = new ReminderRunner({ ...reminderStore(ana.ports, engine), engine, clock, isLeader: (): true => true, fire: async (d: Due): Promise<void> => { fired.push(d); }, missed: async (): Promise<void> => {}, rescanMs: 60_000 });
+  const runner: ReminderRunner = new ReminderRunner({ ...reminderStore(ana.ports, engine), engine, clock, isLeader: (): true => true, fire: async (d: Due): Promise<void> => { fired.push(d); }, missed: async (): Promise<void> => {}, rescanMs: 60_000, ...NO_AGENT });
   return { ana, bo, fired, tick: () => runner.tick() };
 }
 

@@ -1,8 +1,8 @@
 /**
  * The member's reminders handed to the agent, which fires them itself, with no window open
  * (agent kernel/reminders), when it takes app notices (`appNotices`, capabilities.ts). The plans
- * stay the member's (`cal/reminders/<event_id>`); the agent is told the whole set after each
- * change and on every connect, and keeps only the times. A reminder's id is the same on both
+ * stay the member's (`cal/reminders/<event_id>`); the agent is told the whole set when it changes,
+ * and again whenever it comes to take app notices (each connect), and keeps only the times. A reminder's id is the same on both
  * paths (`reminderId`), so a reminder already fired is never fired twice.
  */
 import type { AppNotice } from 'citadel-internal-service-wasm-client';
@@ -37,7 +37,34 @@ export function remindersOf(plans: readonly ReminderPlan[], bodyOf: (due: Due) =
   })));
 }
 
-/** Replace session `cid`'s reminders on the agent with `plans`; rejects with `AgentNoticeRefused`. */
-export function syncRemindersToAgent(cid: bigint, plans: readonly ReminderPlan[], bodyOf: (due: Due) => string): Promise<void> {
-  return syncAppReminders(cid, CALENDAR_APP_ID, remindersOf(plans, bodyOf));
+/** Replace session `cid`'s reminders on the agent with `notices`; rejects with `AgentNoticeRefused`. */
+export function syncRemindersToAgent(cid: bigint, notices: readonly AppNotice[]): Promise<void> {
+  return syncAppReminders(cid, CALENDAR_APP_ID, [...notices]);
+}
+
+/** What makes two sets of reminders the same to the agent: each one's id, place, words and start. */
+function sameness(notices: readonly AppNotice[]): string {
+  return notices.map((n: AppNotice): string => [n.id, n.node_id, n.title, n.body, String(n.start_ms)].join('\u0000')).join('\u0001');
+}
+
+export interface ReminderHandover {
+  /** Tells the agent `notices`, unless it was last told exactly these. */
+  readonly handOver: (notices: readonly AppNotice[]) => Promise<void>;
+  /** The agent may not hold what it was told (a new socket, or it takes app notices again). */
+  readonly forget: () => void;
+}
+
+/** Tells the agent the whole set only when it changed; a failed send is told again next time. */
+export function reminderHandover(send: (notices: readonly AppNotice[]) => Promise<void>): ReminderHandover {
+  let told: string | null = null;
+  return {
+    handOver: async (notices: readonly AppNotice[]): Promise<void> => {
+      const now: string = sameness(notices);
+      if (now === told) return;
+      told = null;
+      await send(notices);
+      told = now;
+    },
+    forget: (): void => { told = null; },
+  };
 }
