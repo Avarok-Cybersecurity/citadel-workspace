@@ -40,7 +40,6 @@ export class BroadcastChannelService extends PollingService {
   private constructor() {
     super();
     this.tabId = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    this.initialize();
   }
 
   protected getPollingIntervalMs(): number {
@@ -72,7 +71,9 @@ export class BroadcastChannelService extends PollingService {
     return BroadcastChannelService.instance;
   }
 
-  private initialize(): void {
+  /** Opens the sync channel and starts its sweep. Called once at boot, never at import. */
+  public start(): void {
+    if (this.channel) return;
     if (typeof BroadcastChannel === 'undefined') {
       debugLog('BroadcastChannelService', 'BroadcastChannel API not supported in this browser');
       return;

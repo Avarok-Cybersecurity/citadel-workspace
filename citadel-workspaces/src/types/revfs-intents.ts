@@ -40,6 +40,8 @@ export type RevfsIntent =
       fileName: string;
       content: Uint8Array;
       virtualDir: string;
+      /** Names the push to whoever shows its progress (push-phase-events.ts): the file's id. */
+      pushId: string;
     }
   | { type: 'backend-download-file'; cid: bigint; peerCid: bigint | null; virtualDir: string }
   | { type: 'backend-delete-file'; cid: bigint; peerCid: bigint | null; virtualDir: string }

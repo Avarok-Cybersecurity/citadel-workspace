@@ -45,6 +45,7 @@
 
 import { isVariant } from 'citadel-workspace-client-ts';
 import type { FileTransferTickNotification } from './protocol-types';
+import { transferFailureReason } from './transfer-failure';
 
 export type TickDirection = 'outgoing' | 'incoming' | 'unknown';
 
@@ -97,7 +98,8 @@ function asCount(value: number | bigint): number {
   return Number(value);
 }
 
-function percentage(group: number, total: number): number {
+/** How far `group` of `total` is, as a whole percentage; 0 while the total is unknown. */
+export function percentage(group: number, total: number): number {
   return total > 0 ? Math.min(100, Math.round((group / total) * 100)) : 0;
 }
 
@@ -199,11 +201,13 @@ export function parseTickNotification(
     };
   }
 
-  if (isVariant(status, 'Fail')) {
+  // Both failure statuses end the transfer: `Fail(text)` and the SDK's coded `Failed`.
+  const failure: string | null = transferFailureReason(status);
+  if (failure !== null) {
     if (isForeign) return null;
     return {
       kind: 'complete', direction: 'unknown', transferId: resolved,
-      cid, peerCid, success: false, errorMessage: status.Fail,
+      cid, peerCid, success: false, errorMessage: failure,
     };
   }
 

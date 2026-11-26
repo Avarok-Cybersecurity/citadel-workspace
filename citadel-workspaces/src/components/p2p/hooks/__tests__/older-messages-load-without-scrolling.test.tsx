@@ -21,6 +21,7 @@ import { useRef, type RefObject, type MutableRefObject } from 'react';
 import { ConfirmDialogProvider } from '@/components/shared/confirm-dialog';
 import { registerConversationSender } from '@/lib/agent-conversations/requests';
 import { eventEmitter } from '@/lib/event-emitter';
+import { instanceManager } from '@/lib/multi-instance/instance-manager';
 import { useP2PMessages } from '../useP2PMessages';
 import { MessageList } from '@/components/chat/pane/MessageList';
 import { listProps } from '@/components/chat/pane/__tests__/doubles/list-props';
@@ -99,6 +100,8 @@ const olderControl: () => Promise<HTMLElement> = (): Promise<HTMLElement> => wit
 const thread: () => HTMLElement = (): HTMLElement => screen.getByRole('log', { name: 'Conversation' });
 
 beforeEach(async () => {
+  // This tab is the leader that hosts the agent; it says so rather than waiting to win an election.
+  instanceManager.setLeader(true, instanceManager.instanceId);
   await installHostingAgent();
   answerPages();
   transport = peerTransportFor({ cid: PEER, name: 'Josef' }, OWN);
