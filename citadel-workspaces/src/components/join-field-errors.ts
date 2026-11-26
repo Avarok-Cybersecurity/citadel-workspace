@@ -15,7 +15,7 @@ import { validateFullName, validateUsername, validatePassword } from '@/lib/cred
  *    noise, not help.
  *
  * The rules themselves are the SDK's, enforced server-side; checking here means
- * the user learns about the 17-character password maximum while typing rather
+ * the user learns about the password maximum while typing rather
  * than after a round trip.
  */
 export interface JoinFieldErrorsResult {

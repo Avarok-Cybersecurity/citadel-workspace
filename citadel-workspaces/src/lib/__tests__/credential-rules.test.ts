@@ -11,7 +11,7 @@ describe('credential rules mirror the SDK contract', () => {
     expect(validateUsername('abc')).toBeNull();
     expect(validateUsername('a'.repeat(37))).toBeNull();
     expect(validatePassword('a'.repeat(7))).toBeNull();
-    expect(validatePassword('a'.repeat(17))).toBeNull();
+    expect(validatePassword('a'.repeat(64))).toBeNull();
     expect(validateFullName('Jo')).toBeNull();
     expect(validateFullName('a'.repeat(77))).toBeNull();
   });
@@ -20,7 +20,7 @@ describe('credential rules mirror the SDK contract', () => {
     expect(validateUsername('ab')).toMatch(/at least 3/);
     expect(validateUsername('a'.repeat(38))).toMatch(/37 characters or fewer/);
     expect(validatePassword('a'.repeat(6))).toMatch(/at least 7/);
-    expect(validatePassword('a'.repeat(18))).toMatch(/17 characters or fewer/);
+    expect(validatePassword('a'.repeat(65))).toMatch(/64 characters or fewer/);
     expect(validateFullName('J')).toMatch(/at least 2/);
     expect(validateFullName('a'.repeat(78))).toMatch(/77 characters or fewer/);
   });
@@ -40,17 +40,30 @@ describe('credential rules mirror the SDK contract', () => {
     expect(validateUsername(nineteenAccents)).toMatch(/37 characters or fewer/);
 
     // A 4-byte emoji is a single UTF-16 pair but 4 bytes to Rust.
-    expect(validatePassword('🔒'.repeat(5))).toMatch(/17 characters or fewer/);
+    expect(validatePassword('🔒'.repeat(17))).toMatch(/64 characters or fewer/);
   });
 
-  it('rejects a password-manager-length password, the rule users actually hit', () => {
-    // Typical 1Password/Bitwarden default output.
-    expect(validatePassword('Xk4$mQ2!vB9#nR7&pL')).toMatch(/17 characters or fewer/);
+  it('counts a non-ASCII password in bytes at the 64-byte maximum', () => {
+    // 'é' is 2 bytes and 1 UTF-16 unit.
+    const atMax: string = `${'a'.repeat(60)}é${'b'.repeat(2)}`;
+    expect([atMax.length, new TextEncoder().encode(atMax).length]).toEqual([63, 64]);
+    expect(validatePassword(atMax)).toBeNull();
+
+    const overMax: string = `${'a'.repeat(61)}é${'b'.repeat(2)}`;
+    expect([overMax.length, new TextEncoder().encode(overMax).length]).toEqual([64, 65]);
+    expect(validatePassword(overMax)).toMatch(/64 characters or fewer/);
+  });
+
+  it('accepts a password-manager-length password, the rule users used to hit', () => {
+    // Typical 1Password/Bitwarden default output, refused when the maximum was 17.
+    const managerLength: string = `${'Xk4$'.repeat(4)}pL`; // 18 characters, every class
+    expect(managerLength.length).toBe(18);
+    expect(validatePassword(managerLength)).toBeNull();
   });
 
   it('exposes the limits for maxLength attributes to consume', () => {
     expect(CREDENTIAL_LIMITS.username.max).toBe(37);
-    expect(CREDENTIAL_LIMITS.password.max).toBe(17);
+    expect(CREDENTIAL_LIMITS.password.max).toBe(64);
     expect(CREDENTIAL_LIMITS.fullName.max).toBe(77);
   });
 });

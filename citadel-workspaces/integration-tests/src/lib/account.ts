@@ -188,7 +188,7 @@ export async function createAccount(page: Page, username: string, options: Creat
   }
 
   // The server can reject a registration outright — the SDK enforces a
-  // credential contract (3-37 char username, 7-17 char password, no spaces)
+  // credential contract (3-37 char username, 7-64 byte password, no spaces)
   // and a duplicate username is refused. This used to return an unconditional
   // `true`, so every caller's `expect(await createAccount(...)).toBe(true)`
   // asserted a constant: a run whose registration was refused reported success

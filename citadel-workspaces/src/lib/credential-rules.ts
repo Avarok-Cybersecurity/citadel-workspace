@@ -7,13 +7,13 @@
  * for a round-trip, and read a toast saying "Something went wrong: Username
  * must be between 3 and 37 characters".
  *
- * The password rule is the one that actually bites: the maximum is 17, which is
- * SHORTER than what every password manager generates by default. Users with the
- * best credential hygiene were the ones getting rejected, with no hint why.
+ * The password maximum was once 17, SHORTER than what every password manager
+ * generates by default, so users with the best credential hygiene were the ones
+ * rejected. The SDK now allows 64 bytes.
  *
  * SOURCE OF TRUTH — citadel_user/src/credentials.rs (citadel-protocol):
  *   MIN_USERNAME_LENGTH = 3    MAX_USERNAME_LENGTH = 37   + must not contain ' '
- *   MIN_PASSWORD_LENGTH = 7    MAX_PASSWORD_LENGTH = 17   + must not contain ' '
+ *   MIN_PASSWORD_LENGTH = 7    MAX_PASSWORD_LENGTH = 64   + must not contain ' '
  *   MIN_NAME_LENGTH     = 2    MAX_NAME_LENGTH     = 77
  *
  * These constants are duplicated across a language boundary, which the SSOT
@@ -31,9 +31,9 @@
  */
 export const byteLength = (value: string): number => new TextEncoder().encode(value).length;
 
-export const CREDENTIAL_LIMITS: { readonly username: { readonly min: 3; readonly max: 37; }; readonly password: { readonly min: 7; readonly max: 17; }; readonly fullName: { readonly min: 2; readonly max: 77; }; } = {
+export const CREDENTIAL_LIMITS: { readonly username: { readonly min: 3; readonly max: 37; }; readonly password: { readonly min: 7; readonly max: 64; }; readonly fullName: { readonly min: 2; readonly max: 77; }; } = {
   username: { min: 3, max: 37 },
-  password: { min: 7, max: 17 },
+  password: { min: 7, max: 64 },
   fullName: { min: 2, max: 77 },
 } as const;
 

@@ -25,7 +25,7 @@ use citadel_user::credentials::{
 /// test would pass no matter what the TypeScript said, which is the failure
 /// mode it exists to prevent.
 const TS_USERNAME: (u8, u8) = (3, 37);
-const TS_PASSWORD: (u8, u8) = (7, 17);
+const TS_PASSWORD: (u8, u8) = (7, 64);
 const TS_FULL_NAME: (u8, u8) = (2, 77);
 
 #[test]
