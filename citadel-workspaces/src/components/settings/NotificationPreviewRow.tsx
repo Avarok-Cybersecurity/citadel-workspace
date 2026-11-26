@@ -51,6 +51,7 @@ export function NotificationPreviewRow(): JSX.Element | null {
       <div className="min-w-0">
         <Label htmlFor="notification-preview" className="text-sm font-medium">Message Text in Notifications</Label>
         <p className="text-xs text-muted-foreground">Off: a notification says who wrote, not what. For this account only.</p>
+        <p data-testid="notification-preview-apps" className="text-xs text-muted-foreground">It covers apps' notices that carry someone else's words too: an invitation says only "Calendar: new invitation". Your own reminders show their title.</p>
         {error && <p role="alert" className="text-xs text-destructive mt-1">{error}</p>}
       </div>
       <Switch id="notification-preview" data-testid="notification-preview-switch" checked={shows} disabled={account === null} onCheckedChange={change} />

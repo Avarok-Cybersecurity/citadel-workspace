@@ -3,13 +3,16 @@
  * Calendar and under Apps in the workspace's Settings: whether the Calendar notifies at all, which
  * kinds, the reminders a new event starts with, and whether a notice may also reach this device's
  * notification centre, with a preview of a reminder as it would arrive. Each change is saved as it
- * is made (use-notify-prefs.ts); nothing here reads a store. Choosing this device is a click, so
+ * is made (use-notify-prefs.ts); nothing here reads the Calendar's stores, and when reminders
+ * reach the member is the agent's to say (use-reminder-reach.ts). Choosing this device is a click, so
  * the browser's permission is asked for right there; the control below says what it answered.
  */
 import { useId } from 'react';
 import { MemberAvatar } from '@/components/shared/MemberAvatar';
 import { LEAD_CHOICES, leadLabel, NOTICE_KINDS, type NoticeDelivery, type NoticeKind, type NotifyPrefs } from '@/lib/calendar/notify-prefs';
 import type { PrefsState } from './use-notify-prefs';
+import { SETTINGS_COPY, type ReminderReach } from '@/lib/calendar/reminder-reach';
+import { useReminderReach } from './use-reminder-reach';
 import { OsNotificationsControl } from '@/components/notification/OsNotificationsControl';
 import type { OsPermissionState } from '@/components/notification/use-os-permission';
 
@@ -64,6 +67,7 @@ function Preview({ prefs }: { prefs: NotifyPrefs }): JSX.Element {
 
 export function NotificationSettings({ state, os }: { state: Extract<PrefsState, { kind: 'ready' }>; os: OsPermissionState }): JSX.Element {
   const base: string = useId();
+  const reach: ReminderReach = useReminderReach();
   const { prefs, save } = state;
   const off: boolean = !prefs.enabled;
   const lead: number[] = [...new Set([...LEAD_CHOICES, ...prefs.leadMinutes])].sort((a: number, b: number) => a - b);
@@ -120,7 +124,7 @@ export function NotificationSettings({ state, os }: { state: Extract<PrefsState,
       <div className="flex min-w-0 flex-col gap-1">
         <p role="status" className="text-sm text-muted-foreground">{state.saving ? 'Saving…' : ''}</p>
         {state.error !== null && <p role="alert" className="text-sm text-destructive-emphasis">{state.error}</p>}
-        <p className="text-sm text-muted-foreground">Notices, reminders included, need one of your Citadel windows open: nothing runs while none is. A reminder that falls due while none is open is listed once when you return; invitations and polls made meanwhile are in the Calendar, without a notice.</p>
+        <p className="text-sm text-muted-foreground">{SETTINGS_COPY[reach]}</p>
       </div>
     </div>
   );

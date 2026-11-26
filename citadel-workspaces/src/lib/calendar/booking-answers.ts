@@ -7,7 +7,8 @@
  * private copy, as a live booking does; the booker is told either way; and the request is removed,
  * so each answer is taken once.
  */
-import { BOOKING_PREFIX, bookingAckOf, ownCopy } from './booking';
+import { BOOKING_ACK_PREFIX, BOOKING_PREFIX, bookingAckOf, ownCopy } from './booking';
+import type { NotifyAbout } from '@/lib/citadel-apps/sdk/generated/NotifyAbout';
 import { TYPE_PREFIX } from './booking-pages';
 import type { CalendarEngine } from './engine/calendar-engine';
 import type { Booking } from './generated/Booking';
@@ -36,9 +37,10 @@ function answers(ack: Booking, request: Booking, me: string): boolean {
   return ack.id === request.id && ack.host === request.host && 'member' in ack.booker && ack.booker.member.username === me;
 }
 
-async function tell(d: AnswerDeps, title: string, body: string): Promise<void> {
+/** `about`: the host's answer, in its own namespace. */
+async function tell(d: AnswerDeps, title: string, body: string, about: NotifyAbout): Promise<void> {
   // The answer is taken whether or not the booker can be shown a notification (an install without `notifications`).
-  await d.ports.notify('bookings', title, body).catch((e: unknown): void => { console.error('[calendar] the booker was not told of an answer', e); });
+  await d.ports.notify('bookings', title, body, about).catch((e: unknown): void => { console.error('[calendar] the booker was not told of an answer', e); });
 }
 
 /** Takes every answer to the member's requests on the node; returns how many it took. */
@@ -52,11 +54,12 @@ export async function takeAnswers(d: AnswerDeps): Promise<number> {
     const ack: Booking | null = await bookingAckOf(d.ports, d.engine, d.node, request.host, request.id);
     if (ack === null || !answers(ack, request, d.me)) continue;
     const title: string = await titleOf(d, request);
+    const about: NotifyAbout = { node_id: d.node, author: request.host, key: `${BOOKING_ACK_PREFIX}${request.id}` };
     if (ack.state === 'confirmed') {
       await d.ports.storage.set({ kind: 'user' }, `${PRIVATE_PREFIX}${ack.id}`, d.engine.encodeEvent(ownCopy(ack, { node: d.node, me: d.me, title, nowMs: d.nowMs })));
-      await tell(d, 'Booking confirmed', `${title} is booked.`);
+      await tell(d, 'Booking confirmed', `${title} is booked.`, about);
     } else {
-      await tell(d, 'Booking not made', `${title} was not booked; pick another time.`);
+      await tell(d, 'Booking not made', `${title} was not booked; pick another time.`, about);
     }
     await d.ports.storage.remove(mine, key);
     taken += 1;

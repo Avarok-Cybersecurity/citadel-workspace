@@ -33,7 +33,8 @@ async function deliver(notification: AppNotification): Promise<void> {
   const options: NotificationOptions = {
     body: notification.content,
     icon: '/favicon.ico',
-    tag: notification.id,
+    // One the agent knows by an id of its own (a reminder it fired) is shown once under it.
+    tag: typeof notification.data?.osTag === 'string' ? notification.data.osTag : notification.id,
   };
   try {
     const registration: ServiceWorkerRegistration | undefined =

@@ -16,28 +16,35 @@ afterEach((): void => { vi.restoreAllMocks(); });
 describe('the follower\'s reading of the leader\'s ack', () => {
   it('takes both capabilities', async (): Promise<void> => {
     leaderSays({ supervisesP2p: true });
-    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: true, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false });
+    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: true, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, appNotices: false });
     leaderSays({ supervisesP2p: true });
-    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: true, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false });
+    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: true, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, appNotices: false });
     leaderSays({ supervisesP2p: false });
-    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false });
+    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, appNotices: false });
   });
 
   it('reads a leader that does not say as not supervising', async (): Promise<void> => {
     leaderSays({});
-    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false });
+    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, appNotices: false });
+  });
+
+  it('takes whether the agent keeps apps\' notices, and a leader that does not say as not', async (): Promise<void> => {
+    leaderSays({ supervisesP2p: false, appNotices: true });
+    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, appNotices: true });
+    leaderSays({ supervisesP2p: false, appNotices: 'yes' });
+    expect((await askLeaderForCapabilities()).appNotices).toBe(false);
   });
 
   it('takes whether the agent stages uploads', async (): Promise<void> => {
     leaderSays({ supervisesP2p: false, stagesUploads: true });
-    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: true, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false });
+    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: true, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, appNotices: false });
   });
 
   it('takes whether a notifier is attached to the agent, and a leader that does not say as none', async (): Promise<void> => {
     leaderSays({ supervisesP2p: false, noticesHeard: true, stagesUploads: false, takesConsole: false, servesApps: false });
-    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: true, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false });
+    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: true, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, appNotices: false });
     leaderSays({ supervisesP2p: false });
-    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false });
+    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, appNotices: false });
   });
 
   it('takes whether the agent serves apps, and a leader that does not say as no', async (): Promise<void> => {
@@ -63,7 +70,7 @@ describe('the follower\'s reading of the leader\'s ack', () => {
 
   it('reads an empty ack as neither', async (): Promise<void> => {
     leaderSays(undefined);
-    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false });
+    expect(await askLeaderForCapabilities()).toEqual({ supervisesP2p: false, noticesHeard: false, stagesUploads: false, nativePicker: false, takesConsole: false, servesApps: false, notesToSelf: false, appNotices: false });
   });
 
   it('fails when the leader could not answer', async (): Promise<void> => {

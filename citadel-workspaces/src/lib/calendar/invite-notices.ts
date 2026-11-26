@@ -90,5 +90,6 @@ export async function tellAbout(change: StorageChange, d: TellDeps): Promise<voi
   const marker: string = `${TOLD_PREFIX}${notice.told}`;
   if ((await d.ports.storage.get({ kind: 'user' }, marker)) !== null) return;
   await d.ports.storage.set({ kind: 'user' }, marker, new Uint8Array([1]));
-  await d.ports.notify(notice.kind, notice.title, notice.body);
+  const store: CalendarStore = watched.store;
+  await d.ports.notify(notice.kind, notice.title, notice.body, store.kind === 'authored' && store.author !== null ? { node_id: store.node, author: store.author, key: watched.key } : null);
 }

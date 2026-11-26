@@ -7,14 +7,19 @@
  * (invite-notices.ts). Everything it raises goes through `ports.notify`, which the mount has put
  * under the member's notification settings (notice-gate.ts) and the install's grant.
  *
- * With no window open nothing runs: that needs server-side timers (Signals), not this.
+ * While the agent takes app notices (agent-reminders.ts) it holds the member's reminders and fires
+ * them itself, with no window open: this hands them over instead of firing them, and lists those
+ * the agent fired (fired-reminders.ts). Without such an agent, nothing runs with no window open.
  */
+import type { AppNotice } from 'citadel-internal-service-wasm-client';
 import type { StorageChange, Unsubscribe } from '@/lib/citadel-apps/host/glue-instance';
 import type { CalendarEngine } from './engine/calendar-engine';
 import type { Event } from './generated/Event';
+import type { ReminderPlan } from './generated/ReminderPlan';
 import { formatDayShort, formatTimeIn } from './format';
 import { tellAbout } from './invite-notices';
 import type { CalendarPorts } from './ports';
+import { reminderBody, reminderHandover, remindersOf, type ReminderHandover } from './agent-reminders';
 import { reminderStore, ReminderRunner } from './reminder-runner';
 import type { Due } from './reminder-scheduler';
 import { decodeSettings, displayZoneOf, SETTINGS_KEY, type CalendarSettings } from './zones';
@@ -24,6 +29,18 @@ export const RESCAN_MS: number = 60_000;
 /** How many missed reminders the notice names before it counts the rest. */
 const NAMED: number = 3;
 
+/** The agent's side of the member's reminders (page-agent-reminders.ts). */
+export interface AgentReminders {
+  /** Whether the agent fires the member's reminders now (it takes app notices). */
+  readonly takes: () => boolean;
+  /** Hears each change of `takes`: the agent came, went, or a new socket answered again. */
+  readonly onTakesChange: (listener: () => void) => Unsubscribe;
+  /** Replaces the session's reminders on the agent with these. */
+  readonly sync: (notices: readonly AppNotice[]) => Promise<void>;
+  /** Lists in the bell each reminder the agent fires for the session, until unsubscribed. */
+  readonly listFired: () => Unsubscribe;
+}
+
 export interface BackgroundDeps {
   readonly ports: CalendarPorts;
   readonly engine: CalendarEngine;
@@ -32,6 +49,7 @@ export interface BackgroundDeps {
   /** The zone this device shows, for a member who has not chosen one: a notice is read here. */
   readonly deviceZone: string;
   readonly report: (what: string, error: unknown) => void;
+  readonly agent: AgentReminders;
 }
 
 /** The zone the member reads times in: their choice, else this device's. */
@@ -51,23 +69,32 @@ export function missedSummary(late: readonly Due[], describe: (due: Due) => stri
 /** Starts the work; the returned function stops it. */
 export function startCalendarBackground(d: BackgroundDeps): () => void {
   const { ports, engine } = d;
+  const handover: ReminderHandover = reminderHandover(d.agent.sync);
   const runner: ReminderRunner = new ReminderRunner({
     ...reminderStore(ports, engine),
     engine,
     clock: ports.clock,
     isLeader: (): boolean => true,
     rescanMs: RESCAN_MS,
+    agentTakes: d.agent.takes,
+    handOver: async (plans: readonly ReminderPlan[]): Promise<void> => {
+      const zone: string = await zoneOf(d);
+      await handover.handOver(remindersOf(plans, (due: Due): string => reminderBody(due, zone, d.nodeName)));
+    },
     fire: async (due: Due): Promise<void> => {
       const zone: string = await zoneOf(d);
-      await ports.notify('reminders', due.title, `Starts at ${formatTimeIn(due.fire.start_ms, zone)} · ${d.nodeName(due.node)}`);
+      await ports.notify('reminders', due.title, reminderBody(due, zone, d.nodeName), null);
     },
     missed: async (late: readonly Due[]): Promise<void> => {
       const zone: string = await zoneOf(d);
       const title: string = late.length === 1 ? 'A reminder you missed' : `${late.length} reminders you missed`;
-      await ports.notify('reminders', title, missedSummary(late, (due: Due): string => `${due.title} (${startOf(d, zone, due.fire.start_ms)})`));
+      await ports.notify('reminders', title, missedSummary(late, (due: Due): string => `${due.title} (${startOf(d, zone, due.fire.start_ms)})`), null);
     },
   });
-  runner.tick().catch((e: unknown): void => d.report('[calendar] reminders could not be handled', e));
+  const handle = (): void => { runner.tick().catch((e: unknown): void => d.report('[calendar] reminders could not be handled', e)); };
+  handle();
+  const offTakes: Unsubscribe = d.agent.onTakesChange((): void => { handover.forget(); handle(); });
+  const offFired: Unsubscribe = d.agent.listFired();
   // One change at a time, in arrival order, so one change heard twice is told once.
   let turn: Promise<void> = Promise.resolve();
   const off: Unsubscribe = ports.onStorageChanged((change: StorageChange): void => {
@@ -79,6 +106,8 @@ export function startCalendarBackground(d: BackgroundDeps): () => void {
   return (): void => {
     runner.stop();
     off();
+    offTakes();
+    offFired();
   };
 }
 

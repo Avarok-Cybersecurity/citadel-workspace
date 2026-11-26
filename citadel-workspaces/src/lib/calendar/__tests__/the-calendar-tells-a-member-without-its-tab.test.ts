@@ -18,6 +18,7 @@ import { event, NY, utc } from './event-fixture';
 import { noticeMember, settle, type NoticeMember } from './notice-rig';
 import type { ReminderPlan } from '@/lib/calendar/generated/ReminderPlan';
 import type { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
+import { NO_AGENT_SIDE } from './no-agent';
 
 const engine: CalendarEngine = realEngine();
 const USER = { kind: 'user' } as const;
@@ -26,7 +27,7 @@ const stops: (() => void)[] = [];
 afterEach(() => { stops.splice(0).forEach((stop) => stop()); });
 
 function start(m: NoticeMember, me: string): void {
-  stops.push(startCalendarBackground({ ports: m.ports, engine, me, nodeName: (id: string) => (id === 'n1' ? 'Engineering' : id), deviceZone: NY, report: (what: string, e: unknown): void => { throw new Error(`${what}: ${String(e)}`); } }));
+  stops.push(startCalendarBackground({ ports: m.ports, engine, me, nodeName: (id: string) => (id === 'n1' ? 'Engineering' : id), deviceZone: NY, report: (what: string, e: unknown): void => { throw new Error(`${what}: ${String(e)}`); }, agent: NO_AGENT_SIDE }));
 }
 
 async function withPlan(m: NoticeMember, ev: Event, handledIso: string): Promise<void> {

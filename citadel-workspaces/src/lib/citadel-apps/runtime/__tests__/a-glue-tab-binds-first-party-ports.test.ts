@@ -37,8 +37,9 @@ describe('a glue tab binding', () => {
     expect((await ports.node('n-1')).name).toBe('Platform');
     tree = { 'n-1': { id: 'n-1', name: 'Platform team', parent_id: null, children: [] } };
     expect((await ports.node('n-1')).name).toBe('Platform team');
-    await ports.notify('bookings', 'New booking', 'Intro with ana');
-    expect(r.notices).toEqual([{ appId: kernel.rel.install.app_id, from: 'Kanban', nodeId: 'n-1', title: 'New booking', body: 'Intro with ana' }]);
+    await ports.notify('bookings', 'New booking', 'Intro with ana', { node_id: 'n-1', author: 'mallory', key: 'cal/booking-ack/1' });
+    // The app named mallory; the server told this install of no such change, so no one is named.
+    expect(r.notices).toEqual([{ appId: kernel.rel.install.app_id, from: 'Kanban', nodeId: 'n-1', title: 'New booking', body: 'Intro with ana', senderLine: 'Kanban: new booking' }]);
   });
 
   it("dates by the page's wall clock, not the dispatch clock it waits on", async () => {

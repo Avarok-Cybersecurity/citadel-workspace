@@ -1,9 +1,10 @@
 /**
  * When the member is reminded of an event they make (design §3.7, §3.10): a few offsets to tick,
- * and, in words, the interim limitation until Signals timers ship: a reminder fires only while one
- * of their workspace windows is open, and one missed while none was is listed once on return.
+ * and, in words, when a reminder reaches them on this computer (reminder-reach.ts).
  */
 import { useId } from 'react';
+import { PICKER_COPY, type ReminderReach } from '@/lib/calendar/reminder-reach';
+import { useReminderReach } from './use-reminder-reach';
 import { LEAD_CHOICES, leadLabel } from '@/lib/calendar/notify-prefs';
 
 
@@ -14,6 +15,7 @@ interface ReminderPickerProps {
 
 export function ReminderPicker({ chosen, onChange }: ReminderPickerProps): JSX.Element {
   const help: string = useId();
+  const reach: ReminderReach = useReminderReach();
   const offered: number[] = [...new Set([...LEAD_CHOICES, ...chosen])].sort((a: number, b: number) => a - b);
   return (
     <fieldset className="flex min-w-0 flex-col gap-2" aria-describedby={help}>
@@ -28,7 +30,7 @@ export function ReminderPicker({ chosen, onChange }: ReminderPickerProps): JSX.E
         ))}
       </div>
       <p id={help} className="text-sm text-muted-foreground">
-        A reminder arrives while one of your workspace windows is open, whichever page it shows. One that falls due while none is open is listed once in your notifications when you come back.
+        {PICKER_COPY[reach]}
       </p>
     </fieldset>
   );
