@@ -17,7 +17,7 @@
 use super::chat_attachment_keep::{keep, reserve};
 use crate::kernel::apps::records::UploadSlot;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
-use crate::kernel::chat_attachments::root_of;
+use crate::kernel::chat_attachments::{root_of, staging_root};
 use crate::kernel::group_access::authorize_node_channel;
 use crate::kernel::transaction::apps_store::APPS_LOCK;
 use crate::kernel::transaction::upload_staging::Staged;
@@ -126,22 +126,19 @@ async fn upload<R: Ratchet + Send + Sync + 'static>(
     {
         Staged::Partial => return Ok(Ok(stored(chunk, false))),
         Staged::Mismatch => {
-            backend.reserve_chat_staging(actor, None).await?;
+            backend
+                .reserve_staging(&staging_root(), actor, None)
+                .await?;
             return Ok(Err(Refusal::Mismatch));
         }
         Staged::Complete { whole: Some(whole) } => whole,
-        Staged::Complete { whole: None } => {
-            let staging = backend.app_upload(slot).await?;
-            match staging {
-                Some(staging) => backend.assemble_app_upload(slot, &staging).await?,
-                None => None,
-            }
-            .ok_or_else(|| NetworkError::msg("a complete chat upload lost a chunk"))?
-        }
+        Staged::Complete { whole: None } => backend.completed_upload(slot).await?,
     };
     // Kept or refused, the slot is done with: a refused file is uploaded again from the start.
     // Its reservation goes first, so the file is not counted twice when `keep` admits it.
-    backend.reserve_chat_staging(actor, None).await?;
+    backend
+        .reserve_staging(&staging_root(), actor, None)
+        .await?;
     let kept = keep(
         kernel,
         actor,

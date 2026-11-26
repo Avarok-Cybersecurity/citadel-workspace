@@ -12,6 +12,7 @@ import { EditorSession } from '../../editor/editor-session';
 import type { EditorPosition, EditorState } from '../../editor/controller';
 import { realHost } from '../wasm-rig';
 import { nullPort, nullTarget } from './null-canvas';
+import { NO_PICTURES } from '../no-pictures';
 
 export interface KeystrokePerf {
   readonly pages: number;
@@ -32,7 +33,7 @@ const percentile = (xs: number[], p: number): number => [...xs].sort((a: number,
 export async function measureKeystrokes(pages: number, keystrokes: number): Promise<KeystrokePerf> {
   const client: InProcessCdocClient = new InProcessCdocClient(realHost(nullPort, (): typeof nullTarget => nullTarget));
   const renderer: WorkerPageRenderer = new WorkerPageRenderer(client, (): OffscreenCanvas => ({}) as OffscreenCanvas);
-  const editor: EditorSession = await EditorSession.open({ client, renderer }, 1n, { kind: 'blank' });
+  const editor: EditorSession = await EditorSession.open({ client, renderer, pictures: NO_PICTURES }, 1n, { kind: 'blank' });
   while (editor.state.pageCount < pages) await editor.execute({ name: 'insertText', text: `${PARAGRAPH}\n`.repeat(40) });
   // Into the middle of the document, as a writer editing an existing draft would be.
   const middle: EditorPosition = await editor.hitTest(Math.floor(pages / 2), 7200, 20_000);

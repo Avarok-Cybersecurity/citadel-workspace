@@ -7,6 +7,7 @@
  * engine for the paths it can reach. The polish harness uses it too, to give the real ribbon
  * an editor in a browser page with no cdoc worker.
  */
+import { SHIPPED_MAX_BYTES } from '@/lib/cdoc/pictures/__tests__/scripted-server';
 import type { AddedImage, CaretFormatting, DocumentStyle, EditorCommand, EditorEventName, EditorEvents, EditorPosition, EditorState } from '@/lib/cdoc/editor/controller';
 import type { KnownFormatting, ListState, ParagraphKey, RunKey } from '@/lib/cdoc/editor/caret-formatting';
 import type { PageSetup, ParagraphProperties, RunPropertiesPatch } from '@/lib/cdoc/editor/model-values';
@@ -68,7 +69,9 @@ export class FakeEditor implements RibbonEditor {
   private readonly listeners: Map<EditorEventName, Set<Listener>> = new Map<EditorEventName, Set<Listener>>();
   private refusal: string | null = null;
   /** The images handed to addImage, in order; each is answered `image-<n>`. */
-  readonly images: { readonly bytes: Uint8Array; readonly maxBytes: number }[] = [];
+  readonly images: { readonly bytes: Uint8Array }[] = [];
+  /** What `pictureLimit` answers: the store's limit as the shipped server keeps it (25 MiB), or why there is none. */
+  pictureLimitIs: number | string = SHIPPED_MAX_BYTES;
   /** The pixel size addImage reports (the ribbon leaves sizing to the editor). */
   imagePixels: { readonly width: number; readonly height: number } = { width: 800, height: 600 };
   private imageRefusal: string | null = null;
@@ -84,8 +87,13 @@ export class FakeEditor implements RibbonEditor {
     this.state = editorState(caretFormatting);
   }
 
-  async addImage(bytes: Uint8Array, maxBytes: number): Promise<AddedImage> {
-    this.images.push({ bytes, maxBytes });
+  async pictureLimit(): Promise<number> {
+    if (typeof this.pictureLimitIs === 'string') throw new Error(this.pictureLimitIs);
+    return this.pictureLimitIs;
+  }
+
+  async addImage(bytes: Uint8Array): Promise<AddedImage> {
+    this.images.push({ bytes });
     if (this.imageHeld !== null) await this.imageHeld;
     const refusal: string | null = this.imageRefusal;
     this.imageRefusal = null;

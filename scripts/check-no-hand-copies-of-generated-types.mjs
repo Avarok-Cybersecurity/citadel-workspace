@@ -65,6 +65,7 @@ const SOURCE = /\.(ts|tsx|mts|cts|mjs|cjs|js)$/;
 const ALLOW = new Map(Object.entries({
   // Geometry and UI shapes that share common field names with a generated type by coincidence.
   'citadel-workspaces/src/lib/cdoc/display-list/types.ts#Rect': 'document layout geometry; DrawCommand.fill_rect is a canvas op that happens to share x/y/w/h',
+  'citadel-workspaces/src/lib/cdoc/pictures/picture-port.ts#PictureDocument': 'which document a picture belongs to across four stores (page, node chat, direct chat, scratchpad); the wire PictureDocument is the server\'s node_id/chat_doc address for two of them, mapped in server-pictures.ts',
   'citadel-workspaces/src/lib/cdoc/paint/units.ts#PixelRect': 'device-pixel geometry, not a canvas draw op',
   'citadel-workspaces/src/lib/cdoc/paint/page-painter.ts#LinkArea': 'a hit-test rectangle with an href, not a canvas draw op',
   'citadel-workspaces/src/components/documents/__tests__/page-images.test.tsx#Box': 'a test layout box, not a canvas draw op',

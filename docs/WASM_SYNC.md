@@ -185,3 +185,38 @@ unrelated bugs at once.
 3. **Test CID handling** with large values to ensure no precision loss
 4. **Document WASM API changes** in both Rust and TypeScript sides
 5. **Keep package.json files** in sync across all client directories
+## Moving the agent pointer in a lane PR
+
+Two things stop a PR that moves `citadel-internal-service` (or touches anything else the agent is
+built from) before the release it belongs to is ready. Neither is a flake; both are expected.
+
+### The committed pkg for an agent commit that is not agent master
+
+The committed `citadel-workspace-client-ts/pkg` and its `.wasm-source-tree` stamp must be the Linux
+build of the agent commit the pointer names ("wasm matches its source" refuses the commit otherwise).
+A Mac build never matches, and the types-bump workflow builds agent master only. For any other agent
+commit, dispatch **WASM rebuild diff** with `agent_ref` set to the full 40-character commit:
+
+```bash
+node scripts/dispatch-workflow.mjs --repo Avarok-Cybersecurity/citadel-workspace \
+  --workflow wasm-rebuild-diff.yml --ref <your parent branch> \
+  --since "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --input agent_ref=<agent commit>
+```
+
+It checks that commit out (with its nested submodule), rebuilds with `scripts/wasm-toolchain.env`'s
+pinned recipe, and uploads the result as the artifact `pkg-rebuilt`. Commit those files into
+`citadel-workspace-client-ts/pkg`, stamp included, together with the pointer move.
+
+### The agent version gate fails before the release line moves
+
+CI's job **The agent's version moves with the agent** (`agent-release-in-step`, running
+`scripts/agent-release-state.mjs --pr`) fails a PR with `needs-bump` when it changes any path in
+`AGENT_INPUTS` (in that script) while `citadel-workspace-internal-service/Cargo.toml` still claims
+the version that is already released: deploying it would serve a site that expects an agent nobody
+can download.
+
+A lane PR into a release's integration branch (`batch/<id>`) therefore fails this job until that
+branch moves the release line, which the integration branch does once for the whole release. A lane
+does **not** bump the agent version itself; the red job on such a PR is expected and is reported as
+"version gate, awaiting the release line", not fixed in the lane. It goes green once the lane is
+folded into a branch whose version has moved.

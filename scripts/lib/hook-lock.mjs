@@ -7,12 +7,16 @@
  * rename. Nothing but a breaker ever removes a lock it does not own, and breakers are serialised,
  * so the lock a breaker judged is the lock it moves: a live holder's lock is never broken. A
  * breaker that dies holding `.break` leaves it for a human (printed); it is never auto-broken.
+ *
+ * Waiters queue: each files a ticket in `<lock>.queue/`, and only the earliest live one may take
+ * the lock (queueTurn), so a later arrival never passes an earlier waiter. A ticket whose waiter is
+ * gone is cleared by whoever sees it.
  */
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { foreignLockHolds, lockVerdict, parseOwner, timesRow } from './hook-lock-rules.mjs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import { foreignLockHolds, lockVerdict, parseOwner, queueTurn, ticketLive, ticketName, timesRow } from './hook-lock-rules.mjs';
 
 const SAY_EVERY_MS = 60 * 1000;
 
@@ -122,6 +126,38 @@ function breakIfStillStale(lock) {
   }
 }
 
+/** Files this waiter's ticket, written whole (a temporary name, then rename), named by arrival. */
+function fileTicket(queue, token) {
+  mkdirSync(queue, { recursive: true });
+  const name = ticketName(Date.now(), token);
+  const temporary = join(queue, `.${name}.tmp`);
+  writeFileSync(temporary, JSON.stringify({ pid: process.pid, start: processStart(process.pid) ?? '' }));
+  renameSync(temporary, join(queue, name));
+  return join(queue, name);
+}
+
+function readTicket(path) {
+  try {
+    const t = JSON.parse(readFileSync(path, 'utf8'));
+    return Number.isInteger(t.pid) && typeof t.start === 'string' ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+/** How many live waiters are ahead of `mine` (0: its turn); clears the tickets of waiters that are gone. */
+function waitersAhead(queue, mine) {
+  const names = readdirSync(queue).filter((n) => n.endsWith('.json') && !n.startsWith('.'));
+  const tickets = names.map((name) => {
+    const t = readTicket(join(queue, name));
+    return { name, live: ticketLive(t, t === null ? null : processStart(t.pid)) };
+  });
+  const { first, dead } = queueTurn(tickets);
+  for (const name of dead) rmSync(join(queue, name), { force: true });
+  if (first === basename(mine)) return 0;
+  return tickets.filter((t) => t.live && t.name < basename(mine)).length;
+}
+
 /**
  * Takes the lock, waiting while a live holder has it, until `deadline` (epoch ms; Infinity waits for good).
  * `honour`: another tool's lock directory to wait for as well (null for none); see foreignLockHolds.
@@ -135,6 +171,13 @@ export async function acquire({ lock, what, say, waitMs, deadline, honour }) {
   mkdirSync(dirname(lock), { recursive: true });
   const token = randomUUID();
   const started = Date.now();
+  const queue = `${lock}.queue`;
+  let ticket = fileTicket(queue, token);
+  const dropTicket = () => {
+    rmSync(ticket, { force: true });
+    process.off('exit', dropTicket);
+  };
+  process.on('exit', dropTicket);
   let said = -SAY_EVERY_MS;
   for (;;) {
     if (honour !== null && foreignHolds(honour)) {
@@ -142,7 +185,22 @@ export async function acquire({ lock, what, say, waitMs, deadline, honour }) {
         say(`hook lock: waiting for ${honour} (${readOr(join(honour, 'owner'), 'held')}; never broken from here)`);
         said = Date.now();
       }
-      if (Date.now() + waitMs > deadline) return null;
+      if (Date.now() + waitMs > deadline) { dropTicket(); return null; }
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      continue;
+    }
+    // Cleared by mistake (it never should be): file again, at the back, and say so.
+    if (!existsSync(ticket)) {
+      say('hook lock: this waiter\'s ticket was cleared; queueing again');
+      ticket = fileTicket(queue, token);
+    }
+    const ahead = waitersAhead(queue, ticket);
+    if (ahead > 0) {
+      if (Date.now() - said >= SAY_EVERY_MS) {
+        say(`hook lock: waiting in line, ${ahead} waiter(s) arrived first (${queue})`);
+        said = Date.now();
+      }
+      if (Date.now() + waitMs > deadline) { dropTicket(); return null; }
       await new Promise((resolve) => setTimeout(resolve, waitMs));
       continue;
     }
@@ -150,6 +208,7 @@ export async function acquire({ lock, what, say, waitMs, deadline, honour }) {
       mkdirSync(lock);
       const start = processStart(process.pid) ?? '';
       writeFileSync(join(lock, 'owner.json'), JSON.stringify({ token, pid: process.pid, start, what, since: Date.now() }));
+      dropTicket();
       break;
     } catch (error) {
       if (error.code !== 'EEXIST') throw error;
@@ -160,7 +219,7 @@ export async function acquire({ lock, what, say, waitMs, deadline, honour }) {
       say(`hook lock: waiting, ${verdict.why} (${lock})`);
       said = Date.now();
     }
-    if (Date.now() + waitMs > deadline) return null;
+    if (Date.now() + waitMs > deadline) { dropTicket(); return null; }
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
   const waitedMs = Date.now() - started;

@@ -46,7 +46,7 @@ describe('the editor worker kinds', () => {
   // Exhaustive at compile time: a kind added to EditorRequestBody is a type error here.
   const EVERY: { readonly [K in EditorKind]: K } = {
     editorOpen: 'editorOpen', apply: 'apply', applyRemote: 'applyRemote', hitTest: 'hitTest',
-    snapshot: 'snapshot', awareness: 'awareness', peerView: 'peerView', pageSizes: 'pageSizes', invalidatePages: 'invalidatePages', stateVector: 'stateVector', encodeDiff: 'encodeDiff', encodeDiffChunked: 'encodeDiffChunked', gc: 'gc', addImage: 'addImage', selectionText: 'selectionText', styles: 'styles', image: 'image', exportAs: 'exportAs', missingPatterns: 'missingPatterns',
+    snapshot: 'snapshot', awareness: 'awareness', peerView: 'peerView', pageSizes: 'pageSizes', invalidatePages: 'invalidatePages', stateVector: 'stateVector', encodeDiff: 'encodeDiff', encodeDiffChunked: 'encodeDiffChunked', gc: 'gc', addImage: 'addImage', selectionText: 'selectionText', styles: 'styles', image: 'image', pictureMissing: 'pictureMissing', pictureIds: 'pictureIds', exportAs: 'exportAs', missingPatterns: 'missingPatterns',
   };
 
   it('lists each kind once', () => {

@@ -9,6 +9,7 @@ import { hyphenated, inProcessRuntime, type TestRuntime } from '@/lib/cdoc/__tes
 import { createEditorOpener } from '@/lib/cdoc/editor/editor-opener';
 import type { EditorSession } from '@/lib/cdoc/editor/editor-session';
 import { hyphenationNotice, languageName, useHyphenationNotice, type Delay } from '../page-view/use-hyphenation-notice';
+import { NO_PICTURES } from '@/lib/cdoc/__tests__/no-pictures';
 
 class ManualDelay {
   private tasks: Map<number, () => void> = new Map<number, () => void>();
@@ -36,7 +37,7 @@ class ManualDelay {
 async function session(): Promise<EditorSession> {
   const runtime: TestRuntime = inProcessRuntime('main-thread');
   let n: number = 1;
-  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => b.map((): number => n++))(hyphenated(null, 'bonjour le monde '.repeat(8)));
+  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => b.map((): number => n++))(hyphenated(null, 'bonjour le monde '.repeat(8)));
 }
 
 describe('the hyphenation notice', () => {

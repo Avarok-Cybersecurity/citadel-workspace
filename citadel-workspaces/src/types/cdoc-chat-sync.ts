@@ -38,11 +38,29 @@ export type CdocChatSync =
 
 export type CdocChatSyncKind = CdocChatSync['kind'];
 
+/**
+ * A document's pictures between the two peers, by content id (`sha256-<hex>`): the document
+ * names a picture, these carry its bytes (lib/cdoc/pictures/pair-pictures.ts). Not CRDT
+ * traffic: a document's sync never reads them, and they are checked where they are read
+ * (lib/cdoc/chat/picture-wire.ts).
+ */
+export type CdocChatPictureSync =
+  /** The sender now keeps this picture of the document: the receiver may want it. */
+  | { readonly kind: 'picture_have'; readonly content_id: string }
+  /** Asks for the bytes, answered with every `picture_chunk` or one `picture_none`. */
+  | { readonly kind: 'picture_want'; readonly content_id: string }
+  /** Chunk `index` of `count` of a picture of `size` bytes. */
+  | { readonly kind: 'picture_chunk'; readonly content_id: string; readonly index: number; readonly count: number; readonly size: number; readonly chunk: Uint8Array }
+  /** The sender does not give this picture of the document (it keeps none, or the document is not shared with the asker). */
+  | { readonly kind: 'picture_none'; readonly content_id: string };
+
+export type CdocChatPictureSyncKind = CdocChatPictureSync['kind'];
+
 export interface CdocChatSyncPayload {
   readonly doc_id: string;
   /** The CRDT wire format the sender writes (cdoc-crdt's VERSION byte); a mismatch is refused. */
   readonly doc_version: number;
-  readonly sync: CdocChatSync;
+  readonly sync: CdocChatSync | CdocChatPictureSync;
 }
 
 /** What `cdoc:chat-command` carries: who sent it, the session it is addressed to, and the payload. */
@@ -53,7 +71,13 @@ export interface CdocChatCommandEvent {
   readonly payload: CdocChatSyncPayload;
 }
 
-const KINDS: readonly string[] = ['hello', 'diff', 'update', 'awareness', 'rename'] satisfies readonly CdocChatSyncKind[];
+const PICTURE_KINDS: readonly string[] = ['picture_have', 'picture_want', 'picture_chunk', 'picture_none'] satisfies readonly CdocChatPictureSyncKind[];
+const KINDS: readonly string[] = [...(['hello', 'diff', 'update', 'awareness', 'rename'] satisfies readonly CdocChatSyncKind[]), ...PICTURE_KINDS];
+
+/** Whether `sync` carries a picture rather than the document's CRDT state. */
+export function isPictureSync(sync: CdocChatSyncPayload['sync']): sync is CdocChatPictureSync {
+  return PICTURE_KINDS.includes(sync.kind);
+}
 
 /** The envelope only: each kind's fields are checked where they are read (lib/cdoc/chat/chat-wire.ts). */
 export function isCdocChatSyncPayload(payload: unknown): payload is CdocChatSyncPayload {

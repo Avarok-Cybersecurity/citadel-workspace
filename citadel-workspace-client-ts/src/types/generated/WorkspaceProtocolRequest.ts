@@ -2,6 +2,7 @@
 import type { AppsRequest } from "./AppsRequest";
 import type { ChatAttachmentsRequest } from "./ChatAttachmentsRequest";
 import type { ChatDocumentsRequest } from "./ChatDocumentsRequest";
+import type { DocumentPicturesRequest } from "./DocumentPicturesRequest";
 import type { DocumentsRequest } from "./DocumentsRequest";
 import type { GroupMessageType } from "./GroupMessageType";
 import type { MessagingTrustRequest } from "./MessagingTrustRequest";
@@ -165,4 +166,4 @@ is_default: boolean | null,
  * the workspace), `citadel_app` may not change, any other key is kept as sent. Needs
  * `UpdateNodeSettings` on the node.
  */
-metadata?: Array<number>, } } | { "SetDefaultAppTabs": { app_tabs: Array<string>, } } | { "SetMembersVisible": { node_id: string, visible: boolean, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes" | { "Telemetry": TelemetryRequest } | { "MessagingTrust": MessagingTrustRequest } | { "Roles": RolesRequest } | { "Documents": DocumentsRequest } | { "ChatDocuments": ChatDocumentsRequest } | { "ChatAttachments": ChatAttachmentsRequest } | { "SecureLinks": SecureLinksRequest } | { "Apps": AppsRequest } | { "ServerIdentityChallenge": ServerIdentityChallenge };
+metadata?: Array<number>, } } | { "SetDefaultAppTabs": { app_tabs: Array<string>, } } | { "SetMembersVisible": { node_id: string, visible: boolean, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes" | { "Telemetry": TelemetryRequest } | { "MessagingTrust": MessagingTrustRequest } | { "Roles": RolesRequest } | { "Documents": DocumentsRequest } | { "ChatDocuments": ChatDocumentsRequest } | { "ChatAttachments": ChatAttachmentsRequest } | { "DocumentPictures": DocumentPicturesRequest } | { "SecureLinks": SecureLinksRequest } | { "Apps": AppsRequest } | { "ServerIdentityChallenge": ServerIdentityChallenge };

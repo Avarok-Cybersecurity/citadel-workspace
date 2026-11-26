@@ -63,3 +63,34 @@ export function timesRow({ at, what, root, waitedMs, ranMs, status }) {
   const s = (ms) => `${Math.round(ms / 1000)}s`;
   return `${new Date(at).toISOString()}\t${what}\t${root}\twaited ${s(waitedMs)}\tran ${s(ranMs)}\t${status}\n`;
 }
+
+/**
+ * Waiters take the lock in the order they arrived. Polling alone let whichever waiter looked first
+ * after a release take it, so a commit waited 31+ minutes while two later pushes went ahead of it.
+ * Each waiter files a ticket named by its arrival; only the earliest live ticket may take the lock.
+ * @param {number} arrivedMs @param {string} token @returns {string}
+ */
+export function ticketName(arrivedMs, token) {
+  if (!Number.isInteger(arrivedMs) || arrivedMs < 0) throw new Error('ticketName: arrivedMs must be a time');
+  return `${String(arrivedMs).padStart(16, '0')}-${token}.json`;
+}
+
+/**
+ * Whose turn it is, and which tickets to clear: a ticket whose waiter is gone is never waited for.
+ * @param {{ name: string, live: boolean }[]} tickets
+ * @returns {{ first: string|null, dead: string[] }}
+ */
+export function queueTurn(tickets) {
+  const live = tickets.filter((t) => t.live).map((t) => t.name).sort();
+  return { first: live[0] ?? null, dead: tickets.filter((t) => !t.live).map((t) => t.name) };
+}
+
+/**
+ * Whether a ticket's waiter is alive: the same PID-plus-start rule as a lock holder (lockVerdict).
+ * @param {{ pid: number, start: string }|null} ticket null when unreadable (a ticket is written whole, by rename)
+ * @param {string|null} startOfPid
+ */
+export function ticketLive(ticket, startOfPid) {
+  if (ticket === null || startOfPid === null) return false;
+  return ticket.start === '' || startOfPid === '' || ticket.start === startOfPid;
+}

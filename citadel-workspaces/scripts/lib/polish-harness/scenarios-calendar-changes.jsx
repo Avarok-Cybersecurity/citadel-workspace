@@ -12,6 +12,7 @@ import * as glue from '../../../vendor/calendar/calendar_glue.js';
 import wasmUrl from '../../../public/calendar/calendar_glue_bg.wasm?url';
 import { CalendarPane } from '@/components/calendar/CalendarPane';
 import { WorkspaceContext } from '@/contexts/WorkspaceContext';
+import { domainNode, workspaceState } from './workspace-state';
 import { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
 import { intlOffsetAt } from '@/lib/calendar/engine/intl-offsets';
 import { saveEvent } from '@/lib/calendar/event-save';
@@ -25,9 +26,9 @@ import { treeNodesPort } from '@/lib/citadel-apps/runtime/nodes-port';
 
 const PAGE_CLOCK = pinnedClock();
 const TREE = {
-  company: { id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: [] },
-  n1: { id: 'n1', name: 'Platform', parent_id: 'company', children: ['n2'], metadata: [] },
-  n2: { id: 'n2', name: 'Team', parent_id: 'n1', children: [], metadata: [] },
+  company: domainNode({ id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: [] }),
+  n1: domainNode({ id: 'n1', name: 'Platform', parent_id: 'company', children: ['n2'], metadata: [] }),
+  n2: domainNode({ id: 'n2', name: 'Team', parent_id: 'n1', children: [], metadata: [] }),
 };
 const ZONE = 'America/New_York';
 
@@ -62,7 +63,7 @@ async function seeded(engine) {
 }
 
 function Changes() {
-  const [ready, setReady] = useState(null);
+  const [ready, setReady] = useState(/** @type {{ engine: CalendarEngine, ports: import('@/lib/calendar/ports').CalendarPorts } | null} */ (null));
   useEffect(() => {
     glue.default({ module_or_path: wasmUrl }).then(async () => {
       const engine = new CalendarEngine(glue, intlOffsetAt());
@@ -70,7 +71,7 @@ function Changes() {
     });
   }, []);
   if (ready === null) return <p>Loading the calendar</p>;
-  const state = { nodes: TREE, members: {}, workspace: { metadata: [] } };
+  const state = workspaceState({ nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: [] } });
   return (
     <WorkspaceContext.Provider value={{ state }}>
       <main className="mx-auto max-w-6xl">

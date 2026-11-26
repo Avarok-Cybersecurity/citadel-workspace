@@ -61,6 +61,7 @@ export function keystrokePaint(win: Window & BenchWindow): KeystrokePaint {
       unmount: (slot: number): void => inner.unmount(slot),
       reset: (): void => inner.reset(),
       invalidate: (pages: readonly number[]): Promise<void> => inner.invalidate(pages),
+      onPendingPictures: (listener: Parameters<PageRenderer['onPendingPictures']>[0]): (() => void) => inner.onPendingPictures(listener),
       paint: async (slot: number, pageNumber: number, zoom: number, dpr: number, priority: PaintPriority): Promise<PaintOutcome> => {
         const issuedAt: number = win.performance.now();
         const outcome: PaintOutcome = await inner.paint(slot, pageNumber, zoom, dpr, priority);

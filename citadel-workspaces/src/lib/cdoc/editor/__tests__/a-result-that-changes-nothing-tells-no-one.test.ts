@@ -10,11 +10,12 @@ import { createEditorOpener } from '../editor-opener';
 import type { EditorSession } from '../editor-session';
 import type { EditorState } from '../controller';
 import { sameValue } from '../same-value';
+import { NO_PICTURES } from '../../__tests__/no-pictures';
 
 async function blank(): Promise<EditorSession> {
   let next: number = 1;
   const runtime: TestRuntime = inProcessRuntime('worker');
-  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff))({ kind: 'blank' });
+  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff))({ kind: 'blank' });
 }
 
 function selections(editor: EditorSession): EditorState[] {

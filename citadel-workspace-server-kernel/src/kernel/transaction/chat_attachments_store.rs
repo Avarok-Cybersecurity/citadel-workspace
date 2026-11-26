@@ -12,8 +12,7 @@
 //! that fails part way leaves nothing the node's purge, or the sweep, cannot find.
 
 use super::BackendTransactionManager;
-use crate::kernel::apps::storage::Namespace;
-use crate::kernel::chat_attachments::{root_of, staging_root, AttachmentIndex};
+use crate::kernel::chat_attachments::{root_of, AttachmentIndex};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use std::collections::BTreeSet;
 
@@ -54,19 +53,11 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         id: &str,
         bytes: &[u8],
     ) -> Result<(), NetworkError> {
-        let root = root_of(node_id);
-        let mut ledger = self.app_ledger(&root).await?;
-        if !ledger.blobs.contains_key(id) {
-            let mut nodes = self.chat_attachment_nodes().await?;
-            if nodes.insert(node_id.to_string()) {
-                self.backend_save(NODES_KEY, &nodes).await?;
-            }
-            ledger.blobs.insert(id.to_string(), bytes.len() as u64);
-            self.save_app_ledger(&root, &ledger).await?;
-        } else if self.blob_complete(&root, id).await? {
-            return Ok(());
+        let mut nodes = self.chat_attachment_nodes().await?;
+        if nodes.insert(node_id.to_string()) {
+            self.backend_save(NODES_KEY, &nodes).await?;
         }
-        self.store_blob(&root, id, bytes).await
+        self.keep_blob(&root_of(node_id), id, bytes).await
     }
 
     /// Delete `files` (id, size) of `node_id`'s: each file's bytes, then the ledger without them.
@@ -126,32 +117,5 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             Some(node_id) => self.backend_save(SWEEP_CURSOR_KEY, &node_id).await,
             None => self.backend_delete(SWEEP_CURSOR_KEY).await,
         }
-    }
-
-    /// The bytes every member's chat upload in progress reserves, and `actor`'s share of them.
-    pub(crate) async fn chat_staging_reserved(
-        &self,
-        actor: &str,
-    ) -> Result<(u64, u64), NetworkError> {
-        let ledger = self.app_ledger(&staging_root()).await?;
-        let mine = staging_root().namespace_id(&Namespace::User(actor.to_string()));
-        let own = ledger.namespaces.get(&mine).copied().unwrap_or(0);
-        Ok((ledger.total_bytes(), own))
-    }
-
-    /// Records that `actor`'s upload in progress reserves `bytes` (`None`: none).
-    pub(crate) async fn reserve_chat_staging(
-        &self,
-        actor: &str,
-        bytes: Option<u64>,
-    ) -> Result<(), NetworkError> {
-        let root = staging_root();
-        let mut ledger = self.app_ledger(&root).await?;
-        let mine = root.namespace_id(&Namespace::User(actor.to_string()));
-        match bytes {
-            Some(bytes) => ledger.namespaces.insert(mine, bytes),
-            None => ledger.namespaces.remove(&mine),
-        };
-        self.save_app_ledger(&root, &ledger).await
     }
 }

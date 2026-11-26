@@ -13,6 +13,7 @@ import type { CdocRuntimeFactory } from '@/lib/cdoc/runtime-loader';
 import type { DocumentSource } from '@/lib/cdoc/document-source';
 import type { EditorSession } from '@/lib/cdoc/editor/editor-session';
 import { useDocsDocument, type DocsDocument, type DocumentEditing } from '../use-docs-document';
+import { memoryPicturePlan, memoryPictures } from '@/lib/cdoc/pictures/__tests__/doubles/memory-pictures';
 
 const READ_ONLY: DocumentEditing = { kind: 'readOnly', reason: 'Read only here.' };
 const loadRuntime: CdocRuntimeFactory = (): Promise<CdocRuntime> => Promise.resolve(inProcessRuntime('main-thread'));
@@ -64,7 +65,7 @@ describe('a document given to a keeper', () => {
     const editing: DocumentEditing = {
       kind: 'replica',
       save: null,
-      pictures: null,
+      pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }),
       keep: (open, show, fail): (() => Promise<void>) => {
         asked.push('keep');
         open({ kind: 'blank' }).then(show, fail);

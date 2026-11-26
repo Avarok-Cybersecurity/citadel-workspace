@@ -91,7 +91,9 @@ describe('the header breadcrumbs', () => {
     show('standup', 'Standup');
     await user.click(screen.getByRole('button', { name: 'HQ' }));
     const expected: string = selectNodePath('?nodeId=standup&showP2P=true&section=files', 'hq');
-    expect(screen.getByTestId('where').textContent).toBe(expected);
+    // The select navigates after the leave-the-editor check resolves, as a router transition React
+    // renders on its scheduler's own turn, which can come after the click returns: wait for the URL.
+    expect((await screen.findByText(expected)).getAttribute('data-testid')).toBe('where');
     expect(expected).toMatch(/nodeId=hq/);
     expect(expected).not.toMatch(/showP2P|section/);
   });

@@ -20,6 +20,7 @@ import { useAppTabNames, type AppTabName } from './use-app-tab-names';
 import { TabRow } from './TabRow';
 import { TabMenu } from './TabMenu';
 import { TabNotices } from './TabNotices';
+import { panelOverflowClass } from './panel-overflow';
 
 interface NodeTabsProps {
   model: NodeTabsModel;
@@ -148,7 +149,7 @@ export function NodeTabs({
           <TabsContent
             key={tab.key}
             value={tab.key}
-            className={tab.kind === 'content' ? 'mt-0 flex-1 overflow-auto' : tab.kind === 'chat' ? 'mt-0 flex-1 overflow-hidden' : 'mt-0 flex-1 min-h-0 overflow-hidden flex flex-col'}
+            className={panelOverflowClass(tab.kind)}
           >
             {panel(tab)}
           </TabsContent>

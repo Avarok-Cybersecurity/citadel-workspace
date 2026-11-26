@@ -14,6 +14,7 @@ import type { CdocRuntime } from '@/lib/cdoc/runtime';
 import DocsCanvas from '../DocsCanvas';
 import type { DocumentEditing, ReplicaKeeper } from '../use-docs-document';
 import { recordingDocumentFiles, type RecordingDocumentFiles } from '@/test-utils/recording-document-files';
+import { memoryPicturePlan, memoryPictures } from '@/lib/cdoc/pictures/__tests__/doubles/memory-pictures';
 
 // Any fixed instant: this test downloads nothing.
 const FILES: RecordingDocumentFiles = recordingDocumentFiles('2026-10-18T00:00:00Z');
@@ -32,7 +33,7 @@ describe('the Docs pane while it loads', () => {
       showOpened = async (): Promise<void> => show(await open({ kind: 'blank' }));
       return (): Promise<void> => Promise.resolve();
     };
-    const editing: DocumentEditing = { kind: 'replica', keep: keeper, save: null, pictures: null };
+    const editing: DocumentEditing = { kind: 'replica', keep: keeper, save: null, pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }) };
     render(<DocsCanvas documentSource={{ kind: 'blank' }} loadRuntime={loadRuntime} editing={editing} statusBar={null} edit={{ enabled: true, reason: null }} commentAuthor="Ada" title="Untitled" files={FILES} original={null} />);
 
     expect(screen.getByTestId('app-loading-pane')).toBeInTheDocument();

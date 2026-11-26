@@ -8,7 +8,7 @@ import { assertParity, newParityContext } from '../ci-parity.mjs';
 
 const AVAILABLE = { chromium, webkit };
 // CI installs Chromium only; a machine with WebKit sets POLISH_ENGINES=chromium,webkit (the default).
-const ENGINES = Object.fromEntries(
+export const ENGINES = Object.fromEntries(
   (process.env.POLISH_ENGINES ?? 'chromium,webkit').split(',').map((name) => {
     if (!AVAILABLE[name]) throw new Error(`POLISH_ENGINES names an engine this gate cannot drive: ${name}`);
     return [name, AVAILABLE[name]];

@@ -9,6 +9,7 @@ import type { CaretFormatting } from '@/lib/cdoc/editor/controller';
 import { editorState, FakeEditor, knownCaret } from './fake-editor';
 import { FIXED_ENVIRONMENT, MAY_EDIT, renderRibbon } from './render-ribbon';
 import { MAX_IMAGE_BYTES } from '@/lib/cdoc/engine/engine-limits';
+import { SHIPPED_MAX_BYTES } from '@/lib/cdoc/pictures/__tests__/scripted-server';
 
 /** A paragraph the engine reports with no direct spacing or indent, so Layout's fields can be set. */
 const PLAIN: CaretFormatting = knownCaret({}, {});
@@ -87,13 +88,13 @@ describe('the Insert ribbon', () => {
     expect(screen.getByTestId('ribbon-link-address')).toHaveAttribute('aria-invalid', 'true');
   });
 
-  it('hands a picture’s bytes to the editor under the size cap, then has the editor fit its content id to the column', async () => {
+  it('hands a picture’s bytes to the editor, then has the editor fit its content id to the column', async () => {
     const { editor, user } = setUp('Ada');
     await openTab(user, 'insert');
     const png: File = new File([new Uint8Array([137, 80, 78, 71])], 'chart.png', { type: 'image/png' });
     await user.upload(screen.getByTestId('ribbon-picture-file'), png);
     await waitFor((): void => expect(editor.sent).toEqual([{ name: 'insertImageFitted', contentId: 'image-1' }]));
-    expect(editor.images.map((i: { maxBytes: number; bytes: Uint8Array }): [number, number[]] => [i.maxBytes, [...i.bytes]])).toEqual([[MAX_IMAGE_BYTES, [137, 80, 78, 71]]]);
+    expect(editor.images.map((i: { bytes: Uint8Array }): number[] => [...i.bytes])).toEqual([[137, 80, 78, 71]]);
   });
 
   it('refuses a picture type the outputs cannot draw, and says so', async () => {
@@ -117,13 +118,24 @@ describe('the Insert ribbon', () => {
     expect(editor.sent).toEqual([]);
   });
 
-  it('refuses a picture over the size cap before reading it', async () => {
+  it('refuses a picture over the document store\'s limit before reading it, with the limit', async () => {
     const { editor, user } = setUp('Ada');
+    // Between the server's 25 MiB and the engine's 32 MiB: the store's limit is the one that holds.
+    editor.pictureLimitIs = SHIPPED_MAX_BYTES;
     await openTab(user, 'insert');
-    const huge: File = new File([new Uint8Array(MAX_IMAGE_BYTES + 1)], 'scan.png', { type: 'image/png' });
+    const between: number = (SHIPPED_MAX_BYTES + MAX_IMAGE_BYTES) / 2;
+    const huge: File = new File([new Uint8Array(between)], 'scan.png', { type: 'image/png' });
     await user.upload(screen.getByTestId('ribbon-picture-file'), huge);
-    await waitFor((): void => expect(screen.getByTestId('docs-ribbon-status')).toHaveTextContent('scan.png is larger than 32 MB.'));
+    await waitFor((): void => expect(screen.getByTestId('docs-ribbon-status')).toHaveTextContent('scan.png is too large. Pictures in this document can be at most 25 MB.'));
     expect(editor.images).toEqual([]);
+  });
+
+  it('passes on the document store\'s refusal as it is, not as an unreadable file', async () => {
+    const { editor, user } = setUp('Ada');
+    editor.refuseNextImage('The picture was not added. The workspace\'s storage is full.');
+    await openTab(user, 'insert');
+    await user.upload(screen.getByTestId('ribbon-picture-file'), new File([new Uint8Array([137, 80, 78, 71])], 'chart.png', { type: 'image/png' }));
+    await waitFor((): void => expect(screen.getByTestId('docs-ribbon-status')).toHaveTextContent('Could not insert the picture. The picture was not added. The workspace\'s storage is full.'));
   });
 
   it('blocks a second picture while one is being inserted', async () => {

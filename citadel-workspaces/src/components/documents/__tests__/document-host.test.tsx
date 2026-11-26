@@ -12,8 +12,9 @@ import { DocumentHost, UnreadableDocument, type DocumentHostProps } from '../Doc
 import { keepBlankReplica } from '../blank-replica';
 import type { DocumentEditing } from '../use-docs-document';
 import { saveControl, type BindableSaveControl } from '../save/save-control';
+import { memoryPicturePlan, memoryPictures } from '@/lib/cdoc/pictures/__tests__/doubles/memory-pictures';
 
-const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: null };
+const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }) };
 
 const EDITABLE: DocumentHostProps = {
   nodeId: 'plan-1',
@@ -57,7 +58,7 @@ describe('DocumentHost', () => {
   it('puts the save controls in the title bar of a document someone saves, and Ctrl/Cmd+S over its editor to them', () => {
     const save: BindableSaveControl = saveControl('plan-1');
     save.inputs.set({ autoSave: true, link: 'up', unacknowledged: 0, syncRequested: false, local: 'written', halted: false, locked: false });
-    render(<DocumentHost {...EDITABLE} editing={{ kind: 'replica', keep: keepBlankReplica, save, pictures: null }} />);
+    render(<DocumentHost {...EDITABLE} editing={{ kind: 'replica', keep: keepBlankReplica, save, pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }) }} />);
     const header: HTMLElement = screen.getByRole('banner');
     expect(within(header).getByTestId('docs-save-status')).toHaveAttribute('data-status', 'saved');
     const region: HTMLElement = screen.getByRole('region', { name: 'Citadel Docs editor' });
