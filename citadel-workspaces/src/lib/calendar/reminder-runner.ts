@@ -10,8 +10,11 @@
  * shown, each plan is checked against its event as it is now (reminder-reconcile.ts), so a
  * reminder never fires for an event someone else cancelled, deleted or moved.
  *
- * A reminder fires only while one of the member's workspace windows is open: the limitation is
- * said where reminders are chosen, until Signals timers and the durable inbox replace this.
+ * While the agent takes app notices (`agentTakes`), the leader fires nothing: it hands the plans,
+ * as they are now, to the agent (`handOver`), which fires them with no window open
+ * (agent-reminders.ts). Should the agent refuse them, this window fires them after all: a
+ * duplicate at worst, never a silence. Without such an agent a reminder fires only while one of
+ * the member's workspace windows is open, as is said where reminders are chosen.
  */
 import type { DispatchClock } from '@/lib/citadel-apps/host/dispatch';
 import type { CalendarEngine } from './engine/calendar-engine';
@@ -55,6 +58,10 @@ export interface ReminderDeps {
   readonly missed: (late: readonly Due[]) => Promise<void>;
   /** The longest the runner waits before reading the plans again. */
   readonly rescanMs: number;
+  /** Whether the agent fires the member's reminders now, instead of this window. */
+  readonly agentTakes: () => boolean;
+  /** Gives the agent the plans as they are now; rejects when it would not keep them. */
+  readonly handOver: (plans: readonly ReminderPlan[]) => Promise<void>;
 }
 
 /** The runner's deps over the Calendar's own ports; `isLeader` and `fire` are the mount's. */
@@ -87,6 +94,8 @@ export function reminderStore(ports: CalendarPorts, engine: Pick<CalendarEngine,
 export class ReminderRunner {
   private cancel: (() => void) | null = null;
   private stopped: boolean = false;
+  /** One tick at a time: a tick asked for while one runs (the agent came or went) waits for it. */
+  private turn: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly deps: ReminderDeps) {}
 
@@ -94,7 +103,13 @@ export class ReminderRunner {
    * Handles what is due now and waits for the next; answers what was missed, which the leader
    * has already passed to `missed`.
    */
-  async tick(): Promise<Due[]> {
+  tick(): Promise<Due[]> {
+    const mine: Promise<Due[]> = this.turn.then(() => this.tickNow());
+    this.turn = mine.catch((): void => undefined);
+    return mine;
+  }
+
+  private async tickNow(): Promise<Due[]> {
     this.cancel?.();
     this.cancel = null;
     const now: bigint = BigInt(Math.floor(this.deps.clock.now()));
@@ -102,8 +117,10 @@ export class ReminderRunner {
     const plans: ReminderPlan[] = await this.checked(stored, since ?? now);
     const schedule: Schedule = nextDue(plans, now, since ?? now);
     if (this.deps.isLeader()) {
-      for (const due of schedule.due) await this.deps.fire(due);
-      if (schedule.missed.length > 0) await this.deps.missed(schedule.missed);
+      if (!(await this.handedOver(plans))) {
+        for (const due of schedule.due) await this.deps.fire(due);
+        if (schedule.missed.length > 0) await this.deps.missed(schedule.missed);
+      }
       await this.deps.setHandled(now);
     }
     if (!this.stopped) {
@@ -136,6 +153,18 @@ export class ReminderRunner {
       if (check.kind === 'drop') await this.deps.drop(plan.event_id);
     }
     return kept;
+  }
+
+  /** Whether the agent now holds the plans and fires them itself. */
+  private async handedOver(plans: readonly ReminderPlan[]): Promise<boolean> {
+    if (!this.deps.agentTakes()) return false;
+    try {
+      await this.deps.handOver(plans);
+      return true;
+    } catch (e: unknown) {
+      console.error('[calendar] the agent would not keep the reminders, so this window fires them', e);
+      return false;
+    }
   }
 
   stop(): void {

@@ -36,7 +36,8 @@ export type CalendarReach =
   | { readonly kind: 'placeholder'; readonly view: PlaceholderView; readonly actions: PlaceholderActions; readonly icon: AppIcon | null }
   /** Its binding stopped or its core did not load: `why` says why, for a member to read. */
   | { readonly kind: 'absent'; readonly why: string }
-  | { readonly kind: 'ready'; readonly ports: CalendarPorts; readonly engine: CalendarEngine };
+  /** `name`: the Calendar's, as its manifest says it, for what is listed from it. */
+  | { readonly kind: 'ready'; readonly ports: CalendarPorts; readonly engine: CalendarEngine; readonly name: string };
 
 interface WithCalendarProps {
   me: string;
@@ -62,7 +63,7 @@ function Bound({ runtime, tab, children }: { runtime: AppZoneRuntime; tab: AppTa
   if (binding.kind === 'stopped') return <>{children({ kind: 'absent', why: binding.why })}</>;
   if (engine === 'failed') return <>{children({ kind: 'absent', why: 'The Calendar could not be loaded. Reload the page to try again.' })}</>;
   if (ports === null || engine === 'loading') return <>{children({ kind: 'waiting' })}</>;
-  return <>{children({ kind: 'ready', ports, engine })}</>;
+  return <>{children({ kind: 'ready', ports, engine, name: tab.manifest.name })}</>;
 }
 
 function Placed({ me, purpose, children }: WithCalendarProps): JSX.Element {

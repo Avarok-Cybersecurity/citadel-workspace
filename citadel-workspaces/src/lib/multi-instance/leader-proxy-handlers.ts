@@ -54,6 +54,6 @@ export async function handleAgentCapabilitiesProxy(
   request: ProxyRequest,
   sendAck: SendAckFn
 ): Promise<void> {
-  const { agentCapabilities, noticesHeard } = await import('../agent-conversations/capabilities');
-  sendAck(request.senderInstanceId, request.requestId, 'processed', undefined, { ...(await agentCapabilities()), noticesHeard: noticesHeard.get() });
+  const { agentCapabilities, noticesHeard, appNotices } = await import('../agent-conversations/capabilities');
+  sendAck(request.senderInstanceId, request.requestId, 'processed', undefined, { ...(await agentCapabilities()), noticesHeard: noticesHeard.get(), appNotices: appNotices.get() });
 }

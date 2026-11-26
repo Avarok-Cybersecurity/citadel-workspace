@@ -15,6 +15,8 @@ export interface LeaderElectionState {
   initTime: number;
   /** A challenge sent and not yet answered; see tryBecomeLeader. */
   challenge: ReturnType<typeof setTimeout> | null;
+  /** The one-shot check after the first wait; see startLeaderElection. */
+  initialWait?: ReturnType<typeof setTimeout>;
   send: (message: Omit<ChannelMessage, 'senderInstanceId' | 'timestamp'> & { senderInstanceId?: string; timestamp?: number }) => void;
 }
 

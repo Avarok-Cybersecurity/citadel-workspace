@@ -124,7 +124,7 @@ export class BookingHost {
     await announce(ports, engine, { node: this.d.node, key: `${EVENT_PREFIX}${booking.id}` });
     // The booking is made once it is written; telling the host is not part of it, so a refused
     // notification (an install without `notifications`) is reported, never the booking failed.
-    await ports.notify('bookings', 'New booking', event.title).catch((e: unknown): void => { console.error('[calendar] the host was not notified of a booking', e); });
+    await ports.notify('bookings', 'New booking', event.title, null).catch((e: unknown): void => { console.error('[calendar] the host was not notified of a booking', e); });
   }
 
   private ack(id: string): Promise<Booking | null> {
@@ -151,7 +151,7 @@ export class BookingHost {
     await ports.storage.setMany(this.mine, writes);
     if (bytes !== null) await announce(ports, engine, { node: this.d.node, key: `${EVENT_PREFIX}${id}` });
     if (why === 'cancelled' && by !== this.d.me) {
-      await ports.notify('bookings', 'Booking cancelled', `${by} cancelled${reason === null ? '' : `: ${reason}`}`).catch((e: unknown): void => { console.error('[calendar] the host was not told of a cancellation', e); });
+      await ports.notify('bookings', 'Booking cancelled', `${by} cancelled${reason === null ? '' : `: ${reason}`}`, null).catch((e: unknown): void => { console.error('[calendar] the host was not told of a cancellation', e); });
     }
     return reply(200, engine.encodeBooking(cancelled));
   }

@@ -21,6 +21,15 @@ describe('the link target', () => {
     expect(parse('account=alice&open=settings:notifications')).toEqual({ username: 'alice', open: { kind: 'settings' } });
   });
 
+  it('reads the node an app\'s notice names, and nothing that is not a node id', () => {
+    expect(parse('account=alice&open=node:workspace-root')).toEqual({ username: 'alice', open: { kind: 'node', nodeId: 'workspace-root' } });
+    const id: string = '3f2b8c1e-0a4d-4e6b-9c2f-7d1e5a9b0c3d';
+    expect(parse(`account=alice&open=node:${id}`)).toEqual({ username: 'alice', open: { kind: 'node', nodeId: id } });
+    for (const open of ['node:', 'node:a/b', 'node:https://evil.example', 'node:a?b', 'node:a#b', 'node:a b', `node:${'n'.repeat(129)}`]) {
+      expect(parse(`account=alice&open=${encodeURIComponent(open)}`), open).toBeNull();
+    }
+  });
+
   it('reads it through the scheme link too', () => {
     const link: string = encodeURIComponent('web+citadel://open?account=alice&open=conversation:7');
     expect(parse(`link=${link}`)).toEqual({ username: 'alice', open: { kind: 'conversation', peerCid: 7n } });

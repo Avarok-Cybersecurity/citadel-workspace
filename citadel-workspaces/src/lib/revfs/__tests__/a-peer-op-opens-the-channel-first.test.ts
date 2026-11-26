@@ -50,7 +50,7 @@ describe('a peer-scoped RE-VFS operation', () => {
   });
 
   it('opens the channel before uploading bytes to the peer', async () => {
-    void new RevfsIO(deps).execute({ type: 'backend-send-file', cid: LOCAL, peerCid: PEER, fileName: 'a.bin', content: new Uint8Array([1]), virtualDir: '/a.bin' });
+    void new RevfsIO(deps).execute({ type: 'backend-send-file', cid: LOCAL, peerCid: PEER, fileName: 'a.bin', content: new Uint8Array([1]), virtualDir: '/a.bin', pushId: 'push-1' });
     await settled();
     expect(events).toEqual([`open:${PEER}`, 'request:SendFile']);
   });
@@ -76,7 +76,7 @@ describe('a peer-scoped RE-VFS operation', () => {
   });
 
   it('does not wait on any peer for server storage', async () => {
-    void new RevfsIO(deps).execute({ type: 'backend-send-file', cid: LOCAL, peerCid: null, fileName: 'a.bin', content: new Uint8Array([1]), virtualDir: '/a.bin' });
+    void new RevfsIO(deps).execute({ type: 'backend-send-file', cid: LOCAL, peerCid: null, fileName: 'a.bin', content: new Uint8Array([1]), virtualDir: '/a.bin', pushId: 'push-2' });
     await settled();
     expect(events).toEqual(['request:SendFile']);
   });

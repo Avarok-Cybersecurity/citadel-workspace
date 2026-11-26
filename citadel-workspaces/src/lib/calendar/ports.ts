@@ -8,6 +8,8 @@
  * Storage addresses a store, not a backend: the member's own (`user`), a node's official events
  * (`node`), and what members posted on a node (`authored`, `author` null for every author).
  */
+import type { NotifyAbout } from '@/lib/citadel-apps/sdk/generated/NotifyAbout';
+import type { NotifyKind } from '@/lib/citadel-apps/sdk/generated/NotifyKind';
 import type { NoticeKind } from './notify-prefs';
 import type { DispatchClock } from '@/lib/citadel-apps/host/dispatch';
 import type { GlueInstance, StorageChange, Unsubscribe } from '@/lib/citadel-apps/host/glue-instance';
@@ -83,6 +85,9 @@ export interface CalendarIhttp {
   onFrame: (listener: (inbound: InboundIhttpFrame) => void) => Unsubscribe;
 }
 
+/** What each kind of the Calendar's notices is, as the host says it without the notice's words; none for the member's own reminders, whose title shows. */
+const NOTIFY_KIND: Readonly<Record<NoticeKind, NotifyKind | null>> = { reminders: null, invitations: 'invitation', bookings: 'booking', polls: 'poll' };
+
 export interface CalendarPorts {
   readonly storage: CalendarStorage;
   readonly topics: CalendarTopics;
@@ -93,8 +98,10 @@ export interface CalendarPorts {
   /**
    * A notification in the page's list, badged with the Calendar's name by the port. The port posts
    * every kind it is given; the member's choice of kinds is applied over it (notice-gate.ts).
+   * `about`: the change in someone's own namespace the notice is about, so the host can say who
+   * it is from (it names them only if the server told it of that change); null when there is none.
    */
-  readonly notify: (kind: NoticeKind, title: string, body: string) => Promise<void>;
+  readonly notify: (kind: NoticeKind, title: string, body: string, about: NotifyAbout | null) => Promise<void>;
   /** What the kernel announced, and what this member's instances wrote to their own store, here or in another window (own-store-writes.ts). */
   readonly onStorageChanged: (listener: (change: StorageChange) => void) => Unsubscribe;
   /** The only "now" the Calendar reads: the date from the instance's wall clock, waits on its dispatch clock. */
@@ -155,7 +162,10 @@ export function calendarPorts(glue: GlueInstance): CalendarPorts {
     members: async () => (await ok('MembersList', {})).members,
     node: (id) => ok('NodeGet', { node_id: id }),
     children: async (id) => (await ok('NodeChildren', { node_id: id })).nodes,
-    notify: (_kind, title, body) => done('Notify', { title, body }),
+    notify: (kind, title, body, about): Promise<void> => {
+      const said: NotifyKind | null = NOTIFY_KIND[kind];
+      return done('Notify', { title, body, ...(said === null ? {} : { kind: said }), ...(about === null ? {} : { about }) });
+    },
     onStorageChanged: glue.onStorageChanged,
     clock: { now: glue.wallNow, after: glue.clock.after },
   };

@@ -11,32 +11,41 @@
  */
 import { eventEmitter } from '@/lib/event-emitter';
 import { notificationService } from '@/lib/notification-service/service';
-import { NotificationPriority, NotificationType } from '@/lib/notification-service/types';
+import { NotificationPriority, NotificationType, type Notification } from '@/lib/notification-service/types';
 import { getCurrentCid } from '@/lib/p2p/current-cid';
 import { appOsReach } from './app-notice-delivery';
-import type { AppNotice, NoticeSink } from './runtime/first-party-ports';
+import type { AppNoticeEntry, NoticeSink } from './runtime/first-party-ports';
 
 /** What an app notification asks the page to open when activated: the node its instance is on. */
 export interface AppNoticeTarget {
   readonly nodeId: string;
 }
 
-export const pageAppNotices: NoticeSink = (notice: AppNotice): void => {
+/** Opens the node an app notification is about, when its card is activated. */
+export function openAppNode(nodeId: string): () => void {
+  return (): void => {
+    const target: AppNoticeTarget = { nodeId };
+    eventEmitter.emit('apps:open-node', target);
+  };
+}
+
+/** The list entry for an app's notice, for session `cid`. Pure: the sink below adds it. */
+export function appNoticeNotification(notice: AppNoticeEntry, cid: bigint): Omit<Notification, 'id' | 'timestamp' | 'read'> {
+  return {
+    type: NotificationType.SYSTEM, priority: NotificationPriority.NORMAL,
+    title: notice.title, content: notice.body, senderName: notice.from, recipient_cid: cid.toString(), data: {
+      appId: notice.appId, nodeId: notice.nodeId, senderLine: notice.senderLine, onCardClick: openAppNode(notice.nodeId),
+    },
+    osReach: appOsReach(notice.appId),
+  };
+}
+
+export const pageAppNotices: NoticeSink = (notice: AppNoticeEntry): void => {
   getCurrentCid().then((cid: bigint | null): void => {
     if (cid === null) {
       console.warn(`[apps] ${notice.from} raised a notification with no session signed in; it was not shown`);
       return;
     }
-    notificationService.addNotification({
-      type: NotificationType.SYSTEM, priority: NotificationPriority.NORMAL,
-      title: notice.title, content: notice.body, senderName: notice.from, recipient_cid: cid.toString(), data: {
-        appId: notice.appId, nodeId: notice.nodeId,
-        onCardClick: (): void => {
-          const target: AppNoticeTarget = { nodeId: notice.nodeId };
-          eventEmitter.emit('apps:open-node', target);
-        },
-      },
-      osReach: appOsReach(notice.appId),
-    });
+    notificationService.addNotification(appNoticeNotification(notice, cid));
   }, (error: unknown): void => { console.error(`[apps] ${notice.from}'s notification could not be shown`, error); });
 };

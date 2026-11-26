@@ -55,7 +55,7 @@ final class NoticePoster: NSObject, UNUserNotificationCenterDelegate {
         content.threadIdentifier = String(notice.cid)
         content.userInfo = ["account": notice.account, "server": notice.serverHost ?? "", "open": notice.open]
         if notice.kind == "IncomingCall" { content.interruptionLevel = .timeSensitive }
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        let request = UNNotificationRequest(identifier: notice.osIdentifier, content: content, trigger: nil)
         center.add(request) { [log] error in
             if let error { log.write("a notification could not be shown: \(error)") }
         }

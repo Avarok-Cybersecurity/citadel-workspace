@@ -51,7 +51,6 @@ class InstanceInboundRouter {
     setP2PReplay((message) => this.processLocalMessage(message));
     debugLog('InstanceInboundRouter', '[ILM-Router] Constructor called, setting up event listeners...');
     this.setupEventListeners();
-    this.startCleanupInterval();
     debugLog('InstanceInboundRouter', '[ILM-Router] Constructor complete');
   }
 
@@ -119,9 +118,17 @@ class InstanceInboundRouter {
 
   // ── Cleanup ──────────────────────────────────────────────────────────
 
-  private startCleanupInterval(): void {
+  /** Starts the pending-request sweep. Called once at boot, never at import. */
+  start(): void {
+    if (this.cleanupInterval !== null) return;
     this.cleanupInterval = startPendingRequestCleanup(
       this.pendingRequestMap, REQUEST_TRACKING_TIMEOUT_MS, INTERVAL.CLEANUP_MS);
+  }
+
+  /** Stops the pending-request sweep start() began. */
+  stop(): void {
+    if (this.cleanupInterval !== null) clearInterval(this.cleanupInterval);
+    this.cleanupInterval = null;
   }
 
   registerPendingRequest(requestId: string, instanceId: string): void {

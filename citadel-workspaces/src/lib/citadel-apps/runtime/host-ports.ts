@@ -12,6 +12,8 @@ import type { AppsResult } from '@/lib/workspace-service/apps-operations';
 import { advertiseService, callHost, ihttpSend, withdrawService } from '@/lib/workspace-service/apps-runtime-operations';
 import type { EventsPort, HostNetPort, HostPorts, LogPort, NotifyPort, StoragePort, UiPort } from '../host/ports';
 import { badgedNotifyPort, type NoticeOrigin, type NoticeSink } from './first-party-ports';
+import { onStorageChanged } from './storage-changed';
+import { toldAuthors, type ToldAuthors } from './told-authors';
 import { agentKvPort, splitStorage } from './agent-kv-port';
 import { announcingStorage, type OwnWrites } from './own-store-writes';
 import { agentFetchPort } from './agent-fetch-port';
@@ -83,7 +85,11 @@ export function hostPortsFor(install: AppInstall, limits: AppLimits, instance: s
     withdraw: () => withdrawService(w.transport, install.id, instance),
   });
   const peer: PeerPorts = peerPorts(install, scopeKey, limits, ihttp, seat, w);
-  const notify: NotifyPort | null = peer.held.has('notifications') ? badgedNotifyPort(origin, w.notices) : null;
+  const told: ToldAuthors | null = peer.held.has('notifications') ? toldAuthors() : null;
+  const stopTold: () => void = told === null ? (): void => undefined : onStorageChanged(w.pushes, install.id, (event): void => {
+    if (typeof event === 'object' && 'storage_changed' in event) told.heard(event.storage_changed.backend, event.storage_changed.key);
+  });
+  const notify: NotifyPort | null = told === null ? null : badgedNotifyPort(origin, w.notices, told.authorOf);
   const storage: StoragePort = splitStorage(serverStorage(call), local);
   const ports: HostPorts = {
     storage: w.ownWrites === null ? storage : announcingStorage(storage, install.id, w.ownWrites), blob: serverBlob(call), storeFiles: serverFiles(call),
@@ -97,6 +103,7 @@ export function hostPortsFor(install: AppInstall, limits: AppLimits, instance: s
     held: peer.held,
     withdraw: ihttp.withdraw,
     stop: async (): Promise<void> => {
+      stopTold();
       hostNet?.closeAll();
       session?.closeAll();
       await peer.stop();

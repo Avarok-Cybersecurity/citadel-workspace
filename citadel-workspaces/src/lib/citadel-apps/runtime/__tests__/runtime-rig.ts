@@ -20,7 +20,7 @@ import { appModule, callGroup, type AppModuleOptions } from '../../host/__tests_
 import { fakeSign, fakeVerifier, sha256Hex } from '../../host/__tests__/fake-verifier';
 import { inProcess, realClock, type InProcess } from '../../host/__tests__/in-process';
 import type { AgentLink } from '../agent-link';
-import type { AppNotice } from '../first-party-ports';
+import type { AppNoticeEntry } from '../first-party-ports';
 import type { PortWorld } from '../host-ports';
 import type { ZoneAudit } from '../zone-close';
 import { createAppZoneRuntime } from '../zone-runtime';
@@ -122,18 +122,18 @@ export interface Rig {
   /** The inbox files are offered to, as the file browser offers them. */
   opened: OpenedFiles;
   /** Every notification an instance raised, as the page's sink was handed it. */
-  notices: AppNotice[];
+  notices: AppNoticeEntry[];
 }
 
 /** The world the rig's ports are bound in, over `kernel`: no agent session, so no peer plane. */
-export function rigWorld(kernel: AppsTransport, listeners: Set<(answer: unknown) => void>, reports: string[], notices: AppNotice[]): Omit<PortWorld, 'policy'> {
+export function rigWorld(kernel: AppsTransport, listeners: Set<(answer: unknown) => void>, reports: string[], notices: AppNoticeEntry[]): Omit<PortWorld, 'policy'> {
   return {
     transport: kernel, agent: quietAgent, agentSession: null, log: { LogWrite: () => ({ ok: null }) },
     pushes: (l: (answer: unknown) => void) => { listeners.add(l); return (): void => { listeners.delete(l); }; }, sha256Hex: async (b: Uint8Array): Promise<string> => sha256Hex(b),
     nowMs: (): number => Date.now(), every: () => (): void => undefined,
     // agentSession is null, so the peer plane is absent; these are never asked.
     peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string): void => { reports.push(what); },
-    notices: (n: AppNotice): void => { notices.push(n); },
+    notices: (n: AppNoticeEntry): void => { notices.push(n); },
     // No member is signed in to announce own-store writes for (own-store-writes.ts is tested on its own).
     ownWrites: null,
   };
@@ -150,7 +150,7 @@ export function rig(kernel: FakeRuntimeKernel, over: Partial<ZoneRuntimeDeps> = 
   const reports: string[] = [];
   const listeners: Set<(answer: unknown) => void> = new Set<(answer: unknown) => void>();
   const opened: OpenedFiles = new OpenedFiles();
-  const notices: AppNotice[] = [];
+  const notices: AppNoticeEntry[] = [];
   const runtime: AppZoneRuntime = createAppZoneRuntime({
     watch, newInstanceId: (): string => `zone-${++instances}`,
     audit: (line: ZoneAudit): void => { audits.push(line); },

@@ -44,7 +44,7 @@ export interface AgentOffers {
 }
 
 /** What the leader tells a follower: its agent's capabilities, and `noticesHeard` as it stands. */
-export type LeaderAnswer = AgentOffers & { noticesHeard: boolean };
+export type LeaderAnswer = AgentOffers & { noticesHeard: boolean; appNotices: boolean };
 
 /** Set once by the websocket service: which tab this is, and how a follower asks the leader. */
 export interface CapabilityRoute {
@@ -63,6 +63,13 @@ export const supervision: ValueStore<boolean | null> = createValueStore<boolean 
  * that shows nothing reaches nobody.
  */
 export const noticesHeard: ValueStore<boolean> = createValueStore<boolean>('agent-notices-heard', false);
+
+/**
+ * Whether the agent takes apps' notices and keeps their reminders, firing them with no window
+ * open (`AgentCapabilities.app_notices`; agent kernel/reminders). An older agent does not say,
+ * which reads as false: the page keeps its reminders and shows its notices itself.
+ */
+export const appNotices: ValueStore<boolean> = createValueStore<boolean>('agent-app-notices', false);
 
 /** Watches a new socket's first message, the agent's greeting, for what it offers. */
 export interface Greeting {
@@ -134,6 +141,7 @@ async function declare(client: DeclaringClient, greeting: Greeting): Promise<Age
   await client.sendDirectToInternalService(declareRequest(requestId, offers.servesApps));
   const answered: Record<string, unknown> = await answer;
   noticesHeard.set(answered.notices_heard === true);
+  appNotices.set(answered.app_notices === true);
   return offers;
 }
 
@@ -178,10 +186,11 @@ export function agentCapabilities(): Promise<AgentOffers> {
   // The leader's own socket has not declared yet: its answer is the one.
   if (route.isLeader()) return new Promise<AgentOffers>((resolve, reject) => { leaderWaiters.push((a) => a.then(resolve, reject)); });
   const asked: Promise<AgentOffers> = route.askLeader().then(
-    ({ noticesHeard: heard, ...caps }: LeaderAnswer): AgentOffers => {
+    ({ noticesHeard: heard, appNotices: takesAppNotices, ...caps }: LeaderAnswer): AgentOffers => {
       supervision.set(caps.supervisesP2p);
       // Kept current afterwards by the leader's broadcast (notices-heard-relay.ts).
       noticesHeard.set(heard);
+      appNotices.set(takesAppNotices);
       return caps;
     },
     (error: unknown): never => {
@@ -218,5 +227,6 @@ export function forgetCapabilities(): void {
   decided = null;
   supervision.set(null);
   noticesHeard.set(false);
+  appNotices.set(false);
   agentFacts.set({});
 }

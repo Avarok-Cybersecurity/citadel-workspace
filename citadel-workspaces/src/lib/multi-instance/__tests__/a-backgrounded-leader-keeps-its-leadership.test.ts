@@ -73,7 +73,7 @@ async function openTab(): Promise<Tab> {
 
 beforeEach((): void => { vi.useFakeTimers(); tabs.length = 0; });
 afterEach((): void => {
-  for (const t of tabs) if (t.state.leaderCheckInterval) clearInterval(t.state.leaderCheckInterval);
+  for (const t of tabs) t.election.stopLeaderElection(t.state);
   vi.useRealTimers();
 });
 

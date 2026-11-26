@@ -27,7 +27,7 @@
     "test": "npm run build && node scripts/assert-tests-exist.mjs && node --test $(node scripts/assert-tests-exist.mjs --print)"
   },
   "dependencies": {
-    "@avarok/citadel-protocol-types": "^0.15.1",
+    "@avarok/citadel-protocol-types": "^0.15.4",
     "citadel-internal-service-wasm-client": "file:../citadel-internal-service/typescript-client"
   },
   "devDependencies": {

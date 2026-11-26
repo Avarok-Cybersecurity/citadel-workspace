@@ -37,7 +37,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); delivered.splice(
 describe("an app's notices", () => {
   it('reach the bell but never the system when the member keeps them to the page', async () => {
     recordAppNoticeDelivery('net.avarok.calendar', false);
-    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Quiet standup', body: 'Starts at 9:00' });
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Quiet standup', body: 'Starts at 9:00', senderLine: 'Calendar: new notice' });
     await settle();
     expect(raised('Quiet standup')).toHaveLength(1);
     expect(delivered.map((n) => n.title)).not.toContain('Quiet standup');
@@ -46,9 +46,9 @@ describe("an app's notices", () => {
   it('reach the system too when the member allows it, and another app is untouched by the choice', async () => {
     recordAppNoticeDelivery('net.avarok.calendar', false);
     recordAppNoticeDelivery('net.avarok.calendar', true);
-    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Loud standup', body: 'Starts at 9:00' });
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Loud standup', body: 'Starts at 9:00', senderLine: 'Calendar: new notice' });
     recordAppNoticeDelivery('com.acme.board', false);
-    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Still loud', body: 'Starts at 10:00' });
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Still loud', body: 'Starts at 10:00', senderLine: 'Calendar: new notice' });
     await settle();
     expect(delivered.map((n) => n.title)).toEqual(['Loud standup', 'Still loud']);
   });
@@ -56,14 +56,14 @@ describe("an app's notices", () => {
   it('reach the system with the window in front too, when the member sends them to this device', async () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     recordAppNoticeDelivery('net.avarok.calendar', true);
-    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Due now', body: 'Starts at 9:10' });
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Due now', body: 'Starts at 9:10', senderLine: 'Calendar: new notice' });
     await settle();
     expect(delivered.map((n) => n.title)).toEqual(['Due now']);
   });
 
   it("follow the page's rule while the app has recorded no choice: not with the window in front", async () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(true);
-    pageAppNotices({ from: 'Board', appId: 'com.acme.unrecorded', nodeId: 'n-1', title: 'Unrecorded', body: 'b' });
+    pageAppNotices({ from: 'Board', appId: 'com.acme.unrecorded', nodeId: 'n-1', title: 'Unrecorded', body: 'b', senderLine: 'Board: new notice' });
     await settle();
     expect(raised('Unrecorded')).toHaveLength(1);
     expect(delivered).toEqual([]);

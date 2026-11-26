@@ -11,7 +11,7 @@ import { encodeCbor } from '../../host/cbor';
 import { STANDARD_HOST_POLICY } from '../../host/limits';
 import { until } from '../../host/__tests__/in-process';
 import { appModule, callGroup, type AppModuleOptions } from '../../host/__tests__/app-fixtures';
-import type { AppNotice } from '../first-party-ports';
+import type { AppNoticeEntry } from '../first-party-ports';
 import { hostPortsFor, type BoundPorts, type PortWorld } from '../host-ports';
 import { InstallPlaneRegistry } from '../install-plane-registry';
 import type { ToWorker } from '../../host/worker-protocol';
@@ -37,7 +37,7 @@ function notifyAtInit(): Uint8Array {
 /** The manifest asks for `notifications` either way; the install's grant is what differs. */
 const ASKS: Parameters<typeof release>[2] = { capabilities: [cap('canvas'), cap('notifications')] };
 
-const noticeOn = (nodeId: string): AppNotice => ({ from: 'Kanban', appId: APP_ID, nodeId, title: 'Task done', body: 'ana finished the build' });
+const noticeOn = (nodeId: string): AppNoticeEntry => ({ from: 'Kanban', appId: APP_ID, nodeId, title: 'Task done', body: 'ana finished the build', senderLine: null });
 const stateOf = (host: HTMLElement): string | undefined => host.dataset.appState;
 const settle = (): Promise<void> => new Promise<void>((done) => setTimeout(done, 100));
 const portReplies = (sent: readonly ToWorker[]): number => sent.filter((m: ToWorker) => m.kind === 'port_reply').length;
@@ -84,6 +84,6 @@ describe("a worker app's notification", () => {
     r.runtime.mount(slotsOf(hostOf(320)), { ...zoneOf(kernel.rel), zoneId: 'other', nodeId: 'n-2' });
     await until(() => r.notices.length >= 2, 4000);
     await settle();
-    expect([...r.notices].sort((a: AppNotice, b: AppNotice) => a.nodeId.localeCompare(b.nodeId))).toEqual([noticeOn('n-1'), noticeOn('n-2')]);
+    expect([...r.notices].sort((a: AppNoticeEntry, b: AppNoticeEntry) => a.nodeId.localeCompare(b.nodeId))).toEqual([noticeOn('n-1'), noticeOn('n-2')]);
   });
 });
