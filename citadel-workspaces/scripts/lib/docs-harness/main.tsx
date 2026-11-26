@@ -14,7 +14,10 @@
  * - `?save=controls`: the title bar's save controls over a control no session binds;
  *   `window.docsHarnessSaveInputs(inputs)` sets where the edits are, for the geometry check
  *   (check-docs-pane-states.mjs) to step the status through every state.
+ * - `?pictures=reopen`: a document kept across `window.docsHarnessReopen()`, its pictures in a
+ *   store a check can hold or fail (picture-reopen.ts).
  */
+import { useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { SidebarProvider, useSidebar } from '@/components/ui/sidebar';
 import '@/index.css';
@@ -28,6 +31,9 @@ import { browserDocumentFiles } from '@/lib/document-files';
 import { keepBlankReplica } from '@/components/documents/blank-replica';
 import { saveControl, type BindableSaveControl } from '@/components/documents/save/save-control';
 import type { SaveInputs } from '@/lib/document-save/save-status';
+import type { PicturePlan } from '@/lib/cdoc/pictures/picture-plan';
+import { memoryPicturePlan, memoryPictures, type MemoryPictures } from '@/lib/cdoc/pictures/__tests__/doubles/memory-pictures';
+import { exposePictures, snapshotKeeper } from './picture-reopen';
 
 declare global {
   interface Window {
@@ -67,24 +73,35 @@ function keepFile(url: string): ReplicaKeeper {
   };
 }
 
+/** The harness's pictures live in this page's memory: a reopen within the page finds them (check:docs-pane-states). */
+const STORE: MemoryPictures = memoryPictures();
+const HARNESS_PICTURES: PicturePlan = memoryPicturePlan(STORE, { kind: 'page', nodeId: 'docs-harness' });
+const reopening: boolean = params.get('pictures') === 'reopen';
+if (reopening) exposePictures(STORE);
 const save: BindableSaveControl | null = params.get('save') === 'controls' ? saveControl('harness') : null;
 if (save !== null) window.docsHarnessSaveInputs = (inputs: SaveInputs): void => save.inputs.set(inputs);
-const EDITING: DocumentEditing = { kind: 'replica', keep: doc === null ? keepBlankReplica : keepFile(doc), save, pictures: null };
+const EDITING: DocumentEditing = { kind: 'replica', keep: reopening ? snapshotKeeper() : doc === null ? keepBlankReplica : keepFile(doc), save, pictures: HARNESS_PICTURES };
 const app: Root = createRoot(root);
 function SidebarState(): JSX.Element {
   const { isMobile, openMobile, state } = useSidebar();
   // A phone's sidebar is a sheet, opened and closed; a wider screen's is expanded or collapsed.
   return <output data-testid="harness-sidebar-state" className="sr-only">{isMobile ? (openMobile ? 'open' : 'closed') : state}</output>;
 }
-const host: JSX.Element = (
-  // min-h-0: #root is a flex column (index.css), and a flex item does not shrink below its
-  // content without it, so the page view would grow to the document's height instead of scrolling.
-  <div className="h-screen min-h-0" style={{ paddingLeft: offset }}>
-    <DocumentHost
-      nodeId="harness" appId="docs" title="Harness" permissions={{ edit: { enabled: true, reason: null } }}
-      documentSource={{ kind: 'blank' }} loadCdocRuntime={loadCdocRuntime} commentAuthor="Harness"
-      files={browserDocumentFiles} original={null} editing={EDITING}
-    />
-  </div>
-);
+/** The host, mounted afresh on every `docsHarnessReopen()` (a closed and reopened document); the same layout otherwise. */
+function Host(): JSX.Element {
+  const [opening, setOpening] = useState<number>(0);
+  if (reopening) window.docsHarnessReopen = (): void => setOpening((n: number): number => n + 1);
+  return (
+    // min-h-0: #root is a flex column (index.css), and a flex item does not shrink below its
+    // content without it, so the page view would grow to the document's height instead of scrolling.
+    <div key={opening} className="h-screen min-h-0" style={{ paddingLeft: offset }}>
+      <DocumentHost
+        nodeId="harness" appId="docs" title="Harness" permissions={{ edit: { enabled: true, reason: null } }}
+        documentSource={{ kind: 'blank' }} loadCdocRuntime={loadCdocRuntime} commentAuthor="Harness"
+        files={browserDocumentFiles} original={null} editing={EDITING}
+      />
+    </div>
+  );
+}
+const host: JSX.Element = <Host />;
 app.render(params.get('sidebar') === '1' ? <SidebarProvider><SidebarState />{host}</SidebarProvider> : host);

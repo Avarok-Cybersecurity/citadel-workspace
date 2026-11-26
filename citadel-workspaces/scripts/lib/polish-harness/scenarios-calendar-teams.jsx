@@ -14,6 +14,7 @@ import * as glue from '../../../vendor/calendar/calendar_glue.js';
 import wasmUrl from '../../../public/calendar/calendar_glue_bg.wasm?url';
 import { CalendarPane } from '@/components/calendar/CalendarPane';
 import { WorkspaceContext } from '@/contexts/WorkspaceContext';
+import { domainNode, workspaceState } from './workspace-state';
 import { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
 import { intlOffsetAt } from '@/lib/calendar/engine/intl-offsets';
 import { calendarPorts } from '@/lib/calendar/ports';
@@ -29,8 +30,8 @@ import { saveConsent } from '@/lib/calendar/sdk-store';
 
 const PAGE_CLOCK = pinnedClock();
 const TREE = {
-  company: { id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: [] },
-  n1: { id: 'n1', name: 'Platform', parent_id: 'company', children: [], metadata: [] },
+  company: domainNode({ id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: [] }),
+  n1: domainNode({ id: 'n1', name: 'Platform', parent_id: 'company', children: [], metadata: [] }),
 };
 const ZONE = 'America/New_York';
 const ROSTER = ['ana', 'bo', 'cy', VIEWER].map((u) => ({ username: u, displayName: u, isOnline: true }));
@@ -78,7 +79,7 @@ function build(engine) {
 }
 
 function Teams() {
-  const [ready, setReady] = useState(null);
+  const [ready, setReady] = useState(/** @type {{ engine: CalendarEngine, ports: import('@/lib/calendar/ports').CalendarPorts } | null} */ (null));
   useEffect(() => {
     glue.default({ module_or_path: wasmUrl }).then(() => {
       const engine = new CalendarEngine(glue, intlOffsetAt());
@@ -86,7 +87,7 @@ function Teams() {
     });
   }, []);
   if (ready === null) return <p>Loading the calendar</p>;
-  const state = { nodes: TREE, members: {}, workspace: { metadata: [] } };
+  const state = workspaceState({ nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: [] } });
   return (
     <WorkspaceContext.Provider value={{ state }}>
       <main className="mx-auto max-w-6xl">

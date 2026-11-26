@@ -49,6 +49,7 @@ export function peerRegistrationNotification(params: {
     sourceId: params.requestId,
     recipient_cid: params.recipient_cid,
     priority: NotificationPriority.HIGH,
+    osReach: 'when-away',
     actionButtons: [
       { id: 'accept', label: 'Accept', variant: 'default', onClick: params.onAccept },
       { id: 'decline', label: 'Decline', variant: 'destructive', onClick: params.onDecline },

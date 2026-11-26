@@ -5,8 +5,8 @@
  * `editing` arm, the title to show and the rename to offer. Everything it runs is loaded on
  * first open, so neither the sync nor cdoc is in the shell's bundle (types only from cdoc).
  *
- * Always live, so there is no Save control. Pictures cannot be inserted yet: a chat has no
- * content store, so the other person would see an empty box where the picture is.
+ * Always live, so there is no Save control. Its pictures are kept on this device: a scratchpad's
+ * only here, a direct chat's on each person's device, exchanged over the same P2P channel.
  */
 import { toast } from 'sonner';
 import type { EditorSession } from '@/lib/cdoc/editor/editor-session';
@@ -17,11 +17,11 @@ import type { ChatDocumentSync } from '@/lib/cdoc/chat/chat-sync';
 import type { ChatSyncProblem } from '@/lib/cdoc/chat/chat-problems';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 import type { DocumentEditing, ReplicaKeeper } from './use-docs-document';
+import type { PicturePlan } from '@/lib/cdoc/pictures/picture-plan';
+import { isSelfConversation } from '@/lib/scratchpad/self-conversation';
 
 export type { ChatDocumentOrigin } from '@/lib/cdoc/chat/chat-replica-keeper';
 export type { ChatPeer } from '@/lib/cdoc/chat/chat-app-ports';
-
-export const CHAT_PICTURES_UNAVAILABLE: string = 'Pictures cannot be added to a chat document yet: the other person would see an empty box where the picture is.';
 
 export interface ChatDocumentRequest {
   /** The id the chat message named the document by. */
@@ -44,6 +44,15 @@ export interface ChatDocument {
    * is not one. Null where nothing carries a rename, so no rename control is offered.
    */
   readonly rename: ((title: string) => Promise<void>) | null;
+}
+
+/** Where a chat document's pictures are kept: a scratchpad's on this device, a direct chat's on both people's. */
+function chatPictures(peer: ChatPeer, request: ChatDocumentRequest): PicturePlan {
+  const { selfCid, docId } = request;
+  return {
+    kind: 'stored',
+    load: () => import('@/lib/cdoc/pictures/app-pictures').then((m) => (isSelfConversation(selfCid, peer.cid) ? m.scratchpadPictures(selfCid, docId) : m.pairPictures(selfCid, peer.cid, docId))),
+  };
 }
 
 /** A document of the 1:1 chat with `peer`. */
@@ -74,7 +83,7 @@ export function openChatDocument(peer: ChatPeer, request: ChatDocumentRequest): 
     };
   };
   return {
-    editing: { kind: 'replica', keep, save: null, pictures: CHAT_PICTURES_UNAVAILABLE },
+    editing: { kind: 'replica', keep, save: null, pictures: chatPictures(peer, request) },
     title,
     rename: async (next: string): Promise<void> => {
       if (bound === null) throw new Error('The document is not open.');

@@ -13,9 +13,10 @@ import { DocumentHost, type DocumentHostProps } from '../../DocumentHost';
 import { recordingDocumentFiles } from '@/test-utils/recording-document-files';
 import { keepBlankReplica } from '../../blank-replica';
 import type { DocumentEditing } from '../../use-docs-document';
+import { memoryPicturePlan, memoryPictures } from '@/lib/cdoc/pictures/__tests__/doubles/memory-pictures';
 
 // A document nobody shares: the commands, not the collaboration, are under test here.
-const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: null };
+const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }) };
 
 const BLANK: DocumentHostProps = {
   nodeId: 'plan-1',

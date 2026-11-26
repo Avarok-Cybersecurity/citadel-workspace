@@ -160,11 +160,14 @@ export interface EditorController {
    */
   collectGarbage(known: readonly Uint8Array[]): Promise<Collected>;
   /**
-   * Holds an image file (PNG or JPEG, read from its signature) of at most `maxBytes` bytes, and
-   * resolves with its content id and pixel size; `insertImage` then places it. Store the bytes
-   * in the workspace's content store under that id before relaying the insertImage update.
+   * Holds an image file (PNG or JPEG, read from its signature) no larger than the document's
+   * picture store keeps, stores it there under its content id, and resolves with that id and
+   * its pixel size; `insertImage` then places it. A picture over the limit, or one the store
+   * refuses, rejects with what the member is told, and nothing is held.
    */
-  addImage(bytes: Uint8Array, maxBytes: number): Promise<AddedImage>;
+  addImage(bytes: Uint8Array): Promise<AddedImage>;
+  /** The largest picture this document takes (its store's limit); rejects with why it takes none. */
+  pictureLimit(): Promise<number>;
   /** The selection as plain text, empty when it is collapsed: what copy and cut put on the clipboard. */
   selectionText(): Promise<string>;
   /** The document's style sheet, each style as it resolves, for the styles gallery. */

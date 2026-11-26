@@ -12,7 +12,7 @@ describe('a notification card age', () => {
   it('reads like every other relative time in the app', () => {
     const n: Notification = {
       id: 'n1', type: NotificationType.SYSTEM, title: 'T', content: 'c',
-      timestamp: Date.now() - 3 * 60 * 60 * 1000 - 5_000, read: false, priority: NotificationPriority.NORMAL,
+      timestamp: Date.now() - 3 * 60 * 60 * 1000 - 5_000, read: false, priority: NotificationPriority.NORMAL, osReach: 'when-away',
     };
     render(<NotificationItem notification={n} />);
     expect(screen.getByText('3 hours ago')).toBeInTheDocument();

@@ -106,7 +106,8 @@ Every check passed is stamped over its exact inputs (every file, the installs, t
 environment; \`scripts/lib/preflight-stamp.mjs\`), so a retried push or a second tier run over the
 same tree is instant, and any changed input runs that check again. Variables are inputs: run the
 tier and the push with the same \`CARGO_*\`, \`RUSTFLAGS\`, \`NODE_OPTIONS\`. Heavy runs on one machine
-queue on one lock (\`~/.cache/citadel-preflight/hook.lock\`, times in \`hook-times.tsv\` beside it).
+queue on one lock (\`~/.cache/citadel-preflight/hook.lock\`, times in \`hook-times.tsv\` beside it),
+first come first served: a later arrival never takes it ahead of a waiter.
 
 The only bypass is git's own, \`--no-verify\`, for one commit or push.
 
@@ -119,6 +120,19 @@ the agent repo's open PRs and moves its pointer inside the parent's master.
 \`check:mobile\`) makes Chromium report CI's runner (4 cores, deviceMemory 8) so Animations=Auto resolves as
 on CI, throttles the CPU 4x, and asserts the Node major. It reproduces neither the Docker stack
 nor Linux or Windows rendering; scenarios that pin a motion tier keep it.
+
+A sidebar motion sample in which nothing was painted for 50 ms or more is not evidence about the motion,
+and is not judged by it (\`citadel-workspaces/scripts/lib/polish-harness/stall-attribution.mjs\`). This is the
+re-measurement of an invalid sample, not a retry of a failed assertion. The same transition is measured again
+from fresh tabs until 5 clean samples exist (8 attempts at most), and the stalled sample is attributed against
+them. Main-thread, renderer and GPU-process CPU are each allowed max(2 measured ticks, min(2 sd, gap/4)) over
+their clean mean. Any counter above that blames the page: red, named, never re-measured. None above blames the
+runner: the sample is discarded and printed, pass or fail, and the verdict needs every clean sample to pass the
+unchanged rules. Too few clean samples within the cap is red, and so are discards above 10% of the sweep's
+attributable transitions. Each counter's tick is measured at the start of the run. A counter coarser than
+20 ms, or one that does not advance, is left out; without the main thread or the renderer, nothing is
+discarded. WebKit and every CPU-throttled run (CDP counts throttling as CPU time) never discard: a long frame
+there is judged as sampled and named.
 `;
 for (const [dir, list] of byDir) {
   out += `\n## \`${dir}/\`\n\n| gate | what it fails on |\n|---|---|\n`;

@@ -16,6 +16,7 @@ import type { CanvasPort } from '../../paint/canvas-port';
 import type { DecodedImage } from '../../paint/image-cache';
 import { realHost } from '../wasm-rig';
 import { nullPort, nullTarget } from './null-canvas';
+import { NO_PICTURES } from '../no-pictures';
 
 export interface ImagePagePerf {
   readonly keystrokes: number;
@@ -42,7 +43,7 @@ export async function measureImagePage(keystrokes: number, cached: boolean): Pro
   const options: typeof RASTERIZER_OPTIONS = cached ? RASTERIZER_OPTIONS : { ...RASTERIZER_OPTIONS, imageCacheBytes: 0 };
   const renderer: MainThreadPageRenderer = new MainThreadPageRenderer(client, port, options, (): typeof nullTarget => nullTarget);
   const bytes: Uint8Array = new Uint8Array(readFileSync(DOCX));
-  const editor: EditorSession = await EditorSession.open({ client, renderer }, 1n, { kind: 'bytes', bytes, format: 'docx' });
+  const editor: EditorSession = await EditorSession.open({ client, renderer, pictures: NO_PICTURES }, 1n, { kind: 'bytes', bytes, format: 'docx' });
   await renderer.mount(0, {} as HTMLCanvasElement);
   await renderer.paint(0, 0, 1, 2, 'visible');
   const firstPaint: number = decodes;

@@ -16,6 +16,7 @@ import type { DocsImportFormat } from '../../../citadel-apps/docs-file-kinds';
 import { replicaOrigin } from '../../document-source';
 import { createEditorOpener } from '../../editor/editor-opener';
 import type { EditorSession } from '../../editor/editor-session';
+import { NO_PICTURES } from '../../__tests__/no-pictures';
 
 const MD: string = '# Quarterly plan\n\nShip **open** and *export*.\n';
 const NOW: string = '2031-02-03T04:05:06Z';
@@ -23,7 +24,7 @@ const NOW: string = '2031-02-03T04:05:06Z';
 function openFile(format: DocsImportFormat, bytes: Uint8Array): Promise<EditorSession> {
   const runtime: TestRuntime = inProcessRuntime('worker');
   let next: number = 1;
-  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff))(replicaOrigin({ kind: 'file', format, bytes }));
+  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff))(replicaOrigin({ kind: 'file', format, bytes }));
 }
 
 const openedMarkdown = (): Promise<EditorSession> => openFile('md', bytesOf(MD));

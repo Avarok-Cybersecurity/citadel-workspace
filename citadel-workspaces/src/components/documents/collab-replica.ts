@@ -13,11 +13,13 @@ import type { DocumentSessionError } from '@/lib/cdoc/collab/session-errors';
 import { registerDocumentSync } from '@/lib/document-sync-requests';
 import { saveControl, type BindableSaveControl } from './save/save-control';
 import type { DocumentEditing, ReplicaKeeper } from './use-docs-document';
+import type { PicturePlan } from '@/lib/cdoc/pictures/picture-plan';
 
 /** A workspace document's editing arm: kept collaboratively, saved from the title bar. Memoise it per node. */
 export function collaborationEditing(nodeId: string): DocumentEditing {
   const save: BindableSaveControl = saveControl(nodeId);
-  return { kind: 'replica', keep: collaborationKeeper(nodeId, save), save, pictures: null };
+  const pictures: PicturePlan = { kind: 'stored', load: () => import('@/lib/cdoc/pictures/app-pictures').then((m) => m.serverPictures({ kind: 'page', nodeId })) };
+  return { kind: 'replica', keep: collaborationKeeper(nodeId, save), save, pictures };
 }
 
 export function collaborationKeeper(nodeId: string, save: BindableSaveControl): ReplicaKeeper {

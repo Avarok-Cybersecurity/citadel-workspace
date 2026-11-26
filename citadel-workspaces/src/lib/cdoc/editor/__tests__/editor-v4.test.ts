@@ -10,11 +10,12 @@ import type { EditorSession } from '../editor-session';
 import type { DocumentStyle, EditorState } from '../controller';
 import { CLEAR_FORMATTING } from '../caret-formatting';
 import { decodeResult } from '../wire/decode-result';
+import { NO_PICTURES } from '../../__tests__/no-pictures';
 
 async function blank(): Promise<EditorSession> {
   let next: number = 1;
   const runtime: TestRuntime = inProcessRuntime('worker');
-  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff))({ kind: 'blank' });
+  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff))({ kind: 'blank' });
 }
 
 const utf8: TextDecoder = new TextDecoder();

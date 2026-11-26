@@ -10,15 +10,39 @@
  * latest request of a slot winning): a zoom gesture can request several, and a scroll paints
  * pages ahead without delaying the one coming into view.
  */
+import { notifyEach } from '@/lib/notify-listeners';
 import { openDisplayList } from '../display-list/decoder';
 import type { CdocClient } from '../worker/cdoc-client';
 import type { GlyphPathBatch } from '../engine/cdoc-engine';
 import type { CanvasPort, PaintTarget } from './canvas-port';
 import { PageRasterizer, type PaintOutcome, type RasterizerOptions } from './page-rasterizer';
 import { deviceScale } from './units';
-import { ImageResolver } from './image-resolve';
+import { ImageResolver, type ImageLookup } from './image-resolve';
 import { PaintQueue, type PaintPriority } from './paint-queue';
 import { PAINT_CONCURRENCY } from './paint-config';
+
+/** Pictures a painted page drew as boxes that are worth fetching. */
+export interface PendingPictures {
+  readonly pageNumber: number;
+  readonly contentIds: readonly string[];
+}
+
+type PendingListener = (pending: PendingPictures) => void;
+
+/** Tells the editor session (its only listener) which pictures a paint is waiting for. */
+class PendingPicturesHub {
+  private readonly listeners: Set<PendingListener> = new Set<PendingListener>();
+
+  on(listener: PendingListener): () => void {
+    this.listeners.add(listener);
+    return (): void => { this.listeners.delete(listener); };
+  }
+
+  painted(pageNumber: number, outcome: PaintOutcome): PaintOutcome {
+    if (outcome.pendingImages.length > 0) notifyEach(this.listeners, 'pending pictures', { pageNumber, contentIds: outcome.pendingImages });
+    return outcome;
+  }
+}
 
 export interface PageRenderer {
   mount(slot: number, canvas: HTMLCanvasElement): Promise<void>;
@@ -28,10 +52,13 @@ export interface PageRenderer {
   reset(): void;
   /** Forget `pages` (an edit changed them); resolves once the next paint of each re-fetches it. */
   invalidate(pages: readonly number[]): Promise<void>;
+  /** Hears each paint that drew pictures still to be fetched; returns the unsubscribe. */
+  onPendingPictures(listener: PendingListener): () => void;
 }
 
 export class WorkerPageRenderer implements PageRenderer {
   private readonly queue: PaintQueue = new PaintQueue(PAINT_CONCURRENCY);
+  private readonly pending: PendingPicturesHub = new PendingPicturesHub();
 
   constructor(
     private readonly client: CdocClient,
@@ -43,7 +70,12 @@ export class WorkerPageRenderer implements PageRenderer {
   }
 
   paint(slot: number, pageNumber: number, zoom: number, dpr: number, priority: PaintPriority): Promise<PaintOutcome> {
-    return this.queue.run(slot, priority, () => this.client.request({ kind: 'paintCanvas', slot, pageNumber, zoom, dpr }));
+    return this.queue.run(slot, priority, () => this.client.request({ kind: 'paintCanvas', slot, pageNumber, zoom, dpr }))
+      .then((outcome: PaintOutcome): PaintOutcome => this.pending.painted(pageNumber, outcome));
+  }
+
+  onPendingPictures(listener: PendingListener): () => void {
+    return this.pending.on(listener);
   }
 
   /**
@@ -70,6 +102,7 @@ export class MainThreadPageRenderer implements PageRenderer {
   private readonly targets: Map<number, PaintTarget> = new Map<number, PaintTarget>();
   private rasterizer: PageRasterizer;
   private readonly images: ImageResolver;
+  private readonly pending: PendingPicturesHub = new PendingPicturesHub();
 
   constructor(
     private readonly client: CdocClient,
@@ -78,11 +111,11 @@ export class MainThreadPageRenderer implements PageRenderer {
     private readonly targetOf: (canvas: HTMLCanvasElement) => PaintTarget,
   ) {
     this.rasterizer = new PageRasterizer(port, options);
-    this.images = new ImageResolver(port, (contentId: string): Promise<Uint8Array | null> => this.client.request({ kind: 'image', contentId }).then(
-      ({ record }): Uint8Array => record,
-      // Not held by the editor (a peer's image, or a read-only document): drawn as "not available".
-      (): null => null,
-    ));
+    this.images = new ImageResolver(port, async (contentId: string): Promise<ImageLookup> => (await this.client.request({ kind: 'image', contentId })).lookup);
+  }
+
+  onPendingPictures(listener: PendingListener): () => void {
+    return this.pending.on(listener);
   }
 
   mount(slot: number, canvas: HTMLCanvasElement): Promise<void> {
@@ -103,9 +136,9 @@ export class MainThreadPageRenderer implements PageRenderer {
         const batch: GlyphPathBatch = await this.client.request({ kind: 'glyphPaths', face: rasterizer.faceKey(faceId), glyphIds: glyphIds.slice() });
         rasterizer.addOutlines(faceId, glyphIds, batch.records, batch.offsets);
       }
-      await this.images.fill(rasterizer, pageNumber);
-      return rasterizer.paint(target, pageNumber, deviceScale(zoom, dpr));
-    });
+      const pendingImages: string[] = await this.images.fill(rasterizer, pageNumber);
+      return { ...rasterizer.paint(target, pageNumber, deviceScale(zoom, dpr)), pendingImages };
+    }).then((outcome: PaintOutcome): PaintOutcome => this.pending.painted(pageNumber, outcome));
   }
 
   unmount(slot: number): void {

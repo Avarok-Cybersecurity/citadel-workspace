@@ -12,7 +12,8 @@ import { PageRasterizer, type PaintOutcome, type RasterizerOptions } from '../pa
 import { deviceScale } from '../paint/units';
 import { transferablesOf, type CdocKind, type CdocRequest, type CdocResponse, type CdocResults, type RequestOf } from './protocol';
 import { openEditor, serveEditor } from './editor-host';
-import { ImageResolver } from '../paint/image-resolve';
+import { ImageResolver, UNAVAILABLE_IMAGE_LABEL, type ImageLookup } from '../paint/image-resolve';
+import { referencedPictureIds } from '../pictures/referenced-pictures';
 
 export interface CdocHostDeps {
   /** Called once, on the first request that needs the engine. */
@@ -39,10 +40,12 @@ export class CdocHost {
   private source: PaintSource | null = null;
   private editor: EditorEngine | null = null;
   private readonly images: ImageResolver;
+  /** Pictures the session could not fetch, by id: drawn as a box saying why. */
+  private readonly missing: Map<string, { readonly label: string; readonly retry: boolean }> = new Map();
 
   constructor(private readonly deps: CdocHostDeps) {
     this.painter = new PageRasterizer(deps.port, deps.rasterizer);
-    this.images = new ImageResolver(deps.port, (contentId: string): Promise<Uint8Array | null> => this.imageRecord(contentId));
+    this.images = new ImageResolver(deps.port, (contentId: string): Promise<ImageLookup> => Promise.resolve(this.lookup(contentId)));
   }
 
   private getEngine(): Promise<CdocEngine> {
@@ -55,6 +58,7 @@ export class CdocHost {
     this.editor?.dispose();
     this.editor = editor;
     this.source = source;
+    this.missing.clear();
     this.painter.dispose();
     this.painter = new PageRasterizer(this.deps.port, this.deps.rasterizer);
   }
@@ -69,15 +73,19 @@ export class CdocHost {
     return this.editor;
   }
 
-  /** The editor's image record; null for an id it does not hold, or a read-only document. */
-  private async imageRecord(contentId: string): Promise<Uint8Array | null> {
-    if (this.editor === null) return null;
+  /**
+   * What is known of a picture: held by the editor, missing (the session said why), or pending
+   * (its bytes are being fetched from the document's store). A static document has no store.
+   */
+  private lookup(contentId: string): ImageLookup {
+    if (this.editor === null) return { kind: 'missing', label: UNAVAILABLE_IMAGE_LABEL, retry: false };
     try {
-      return this.editor.image(contentId);
+      return { kind: 'held', record: this.editor.image(contentId) };
     } catch {
-      // An image from a peer lives in the content store, not here: drawn as "not available".
-      return null;
+      // Not held (cdoc-edit names the unknown id): fetched by the session, or missing.
     }
+    const missing: { readonly label: string; readonly retry: boolean } | undefined = this.missing.get(contentId);
+    return missing === undefined ? { kind: 'pending' } : { kind: 'missing', ...missing };
   }
 
   private async paintCanvas(engine: CdocEngine, req: RequestOf<'paintCanvas'>): Promise<PaintOutcome> {
@@ -88,8 +96,8 @@ export class CdocHost {
       const batch: GlyphPathBatch = engine.glyphPaths(this.painter.faceKey(faceId), glyphIds);
       this.painter.addOutlines(faceId, glyphIds, batch.records, batch.offsets);
     }
-    await this.images.fill(this.painter, req.pageNumber);
-    return this.painter.paint(target, req.pageNumber, deviceScale(req.zoom, req.dpr));
+    const pendingImages: string[] = await this.images.fill(this.painter, req.pageNumber);
+    return { ...this.painter.paint(target, req.pageNumber, deviceScale(req.zoom, req.dpr)), pendingImages };
   }
 
   private async result(req: CdocRequest): Promise<CdocResults[CdocKind]> {
@@ -118,8 +126,14 @@ export class CdocHost {
       case 'invalidatePages':
         this.painter.invalidate(req.pages);
         return { pages: req.pages };
+      case 'image': return { lookup: this.lookup(req.contentId) };
+      case 'pictureMissing':
+        this.requireEditor();
+        this.missing.set(req.contentId, { label: req.label, retry: req.retry });
+        return { contentId: req.contentId };
+      case 'pictureIds': return { ids: referencedPictureIds(this.requireEditor().modelJson()) };
       case 'apply': case 'applyRemote': case 'hitTest': case 'snapshot': case 'awareness': case 'peerView': case 'pageSizes':
-      case 'stateVector': case 'encodeDiff': case 'encodeDiffChunked': case 'gc': case 'addImage': case 'selectionText': case 'styles': case 'image': case 'exportAs': case 'missingPatterns':
+      case 'stateVector': case 'encodeDiff': case 'encodeDiffChunked': case 'gc': case 'addImage': case 'selectionText': case 'styles': case 'exportAs': case 'missingPatterns':
         return serveEditor(engine, this.requireEditor(), req);
       default: {
         const unrouted: never = req;

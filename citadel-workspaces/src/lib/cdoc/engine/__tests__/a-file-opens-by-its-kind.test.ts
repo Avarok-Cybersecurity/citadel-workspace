@@ -14,11 +14,12 @@ import { replicaOrigin } from '../../document-source';
 import { createEditorOpener } from '../../editor/editor-opener';
 import type { EditorSession } from '../../editor/editor-session';
 import type { ImportReport } from '../../editor/file-formats';
+import { NO_PICTURES } from '../../__tests__/no-pictures';
 
 function openFile(format: DocsImportFormat, bytes: Uint8Array): Promise<EditorSession> {
   const runtime: TestRuntime = inProcessRuntime('worker');
   let next: number = 1;
-  const open: ReturnType<typeof createEditorOpener> = createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff));
+  const open: ReturnType<typeof createEditorOpener> = createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff));
   return open(replicaOrigin({ kind: 'file', format, bytes }));
 }
 

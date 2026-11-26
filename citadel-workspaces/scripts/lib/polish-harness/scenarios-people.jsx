@@ -30,7 +30,7 @@ function People() {
           <AccountRow username="ada" host="demo.example" current={false} live lastConnected={null} signedOut={null} onSwitch={NOTHING} onDelete={null} />
           <MemberListItem member={{ ...ADA, isSelf: false, isContact: false }} variant="all" onSendMessage={NOTHING} onInvite={NOTHING} onSelect={NOTHING} />
           <UserProfileCard selectedUser={ADA} isSelf={false} isConnected={false} onClose={NOTHING} onSendMessage={NOTHING} onInvite={NOTHING} />
-          <NotificationItem notification={{ id: 'n1', type: NotificationType.MESSAGE, title: 'Ada sent a message', content: 'Hello', senderName: 'ada', priority: NotificationPriority.NORMAL, read: true, timestamp: Date.now() }} />
+          <NotificationItem notification={{ id: 'n1', type: NotificationType.MESSAGE, title: 'Ada sent a message', content: 'Hello', senderName: 'ada', priority: NotificationPriority.NORMAL, read: true, timestamp: Date.now(), osReach: 'when-away' }} />
         </div>
       </TooltipProvider>
     </WorkspaceProvider>

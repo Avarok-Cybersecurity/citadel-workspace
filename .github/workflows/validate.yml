@@ -499,11 +499,11 @@ jobs:
       - name: Publish skips re-validation only on proof that this tree passed
         run: node --test scripts/lib/publish-validation-decision.test.mjs
       - name: Preflight derives CI's gates, tiers a change, and plans merge previews correctly
-        run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/changed-paths.test.mjs scripts/lib/push-remote.test.mjs scripts/lib/merge-preview-planning.test.mjs
+        run: node --test scripts/lib/ci-gates.test.mjs scripts/lib/change-tiers.test.mjs scripts/lib/changed-paths.test.mjs scripts/lib/push-remote.test.mjs scripts/lib/prerequisites.test.mjs scripts/lib/ui-test-reads.test.mjs scripts/lib/merge-preview-planning.test.mjs
       - name: A hook skips a gate only on a pass stamped over identical inputs
         run: node --test scripts/lib/preflight-stamp.test.mjs scripts/lib/preflight-stamp-io.test.mjs scripts/lib/preflight-stamp-keys.test.mjs
       - name: The pre-push hook verifies the tier's stamps, pre-push covers what pre-commit leaves out, the hook lock is never broken while held, and node_modules is the one the lockfile describes
-        run: node --test scripts/lib/preflight-push.test.mjs scripts/lib/hook-lock.test.mjs scripts/lib/installed-modules.test.mjs scripts/lib/scratch-git.test.mjs
+        run: node --test scripts/lib/preflight-push.test.mjs scripts/lib/hook-lock.test.mjs scripts/lib/hook-lock-queue.test.mjs scripts/lib/cargo-gates.test.mjs scripts/lib/installed-modules.test.mjs scripts/lib/scratch-git.test.mjs scripts/lib/root-vitest.test.mjs
       - name: The flaky-spec report counts only attempts that failed
         run: node --test scripts/lib/retry-passes.test.mjs
       - name: Every required check is produced, every release step has a PR twin, no dispatch is blind
@@ -630,6 +630,10 @@ jobs:
       - name: Every browser gate serves on a port chosen per run
         # Fixed ports with --strictPort made concurrent runs collide (4198, 4203 were seen).
         run: node --test scripts/lib/fixed-ports.test.mjs && node scripts/check-preview-ports-are-chosen-per-run.mjs
+        working-directory: citadel-workspaces
+      - name: A motion sample is judged only when the page painted
+        # stall-attribution.mjs decides which stalled samples the sidebar sweep may discard (docs/GATES.md).
+        run: node --test scripts/lib/polish-harness/stall-attribution.test.mjs
         working-directory: citadel-workspaces
       - name: Service logs survive a failing test
         # `if: failure()` on a step reads as "run if anything failed" and is not:
@@ -1261,6 +1265,10 @@ jobs:
         # workflow. It refuses to skip in that case -- deliberately -- so the
         # only correct home is a job that has run `npm ci`.
         run: node scripts/check-workflows-parse.mjs
+      - name: The installed npm tree satisfies every workspace's package.json
+        # npm ci installs what package-lock.json lists without checking it against the manifests'
+        # ranges; npm ls does. Ratcheted against scripts/npm-tree.baseline.json (empty).
+        run: node --test scripts/lib/npm-tree.test.mjs && node scripts/check-npm-tree-is-valid.mjs
       - name: The site's deploy is refused before the agent is released, never after
         # js-yaml, like the step above: this job has run `npm ci`.
         run: node --test scripts/lib/deploy-order.test.mjs && node scripts/check-deploy-order.mjs
@@ -1539,6 +1547,12 @@ jobs:
         # had no caller either, and the tree forgot every branch on reload. Both
         # read as working code, because the component honours the prop perfectly.
         run: node scripts/check-inert-props.mjs
+        working-directory: citadel-workspaces
+      - name: Check the harness scenarios gain no type error
+        # The polish-harness scenarios are .jsx, outside every typecheck, and build real components
+        # and app instances by hand: a required option added to one broke three calendar scenarios
+        # silently. Checked as JavaScript against the real types and ratcheted per file and code.
+        run: node scripts/check-harness-types.mjs
         working-directory: citadel-workspaces
       - name: No raw thrown value is shown to a user
         # toast.error(`Failed to delete: ${err}`) reads as ordinary defensive
@@ -1916,6 +1930,13 @@ jobs:
 
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
+    # The integration helpers run docker compose only when a run opts in, and only against the project
+    # named here, never one derived from a directory (integration-tests/src/lib/compose-guard.ts): a test
+    # runner started anywhere else cannot recreate a developer's stack. The name is the one compose derives
+    # from this checkout's directory, so the images ci-stack.sh builds, saves and loads keep their names.
+    env:
+      CITADEL_INTEGRATION_COMPOSE: '1'
+      COMPOSE_PROJECT_NAME: citadel-workspace
     # The cheap checks first. Measured: of five recent red runs, two failed ONLY in
     # 1-3 minute jobs (a lint, a crate-coverage gate) while seventy Docker jobs ran to
     # completion behind them -- about 1,250 runner-minutes spent proving nothing, in a
@@ -2258,6 +2279,13 @@ jobs:
     # out): the runner distributes specs across shards itself, so adding a spec
     # needs no matrix edit, and a slow spec no longer defines the critical path.
     name: Playwright - shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    # The integration helpers run docker compose only when a run opts in, and only against the project
+    # named here, never one derived from a directory (integration-tests/src/lib/compose-guard.ts): a test
+    # runner started anywhere else cannot recreate a developer's stack. The name is the one compose derives
+    # from this checkout's directory, so the images ci-stack.sh builds, saves and loads keep their names.
+    env:
+      CITADEL_INTEGRATION_COMPOSE: '1'
+      COMPOSE_PROJECT_NAME: citadel-workspace
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 41m; this is generous headroom over it, not a target.

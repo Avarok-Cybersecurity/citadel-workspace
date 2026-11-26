@@ -79,13 +79,14 @@ pub(crate) fn artifact_chunk_key(sha256: &str, index: u32) -> String {
     format!("{PREFIX}artifact_chunk.{sha256}.{index}")
 }
 
-/// Whose upload a staging area holds: the one app artifact a member is uploading, or the one file
-/// they are uploading to a node's chat (`chat_attachments`). Each is one per member, and the two
-/// never share keys.
+/// Whose upload a staging area holds: the one app artifact a member is uploading, the one file
+/// they are uploading to a node's chat (`chat_attachments`), or the one picture they are uploading
+/// to a document (`document_pictures`). Each is one per member, and no two share keys.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum UploadSlot<'a> {
     Artifact(&'a str),
     ChatAttachment(&'a str),
+    DocumentPicture(&'a str),
 }
 
 impl UploadSlot<'_> {
@@ -93,6 +94,7 @@ impl UploadSlot<'_> {
         match self {
             Self::Artifact(username) => format!("{PREFIX}upload.{username}"),
             Self::ChatAttachment(username) => format!("{PREFIX}chat_upload.{username}"),
+            Self::DocumentPicture(username) => format!("{PREFIX}picture_upload.{username}"),
         }
     }
 
@@ -102,6 +104,9 @@ impl UploadSlot<'_> {
             Self::Artifact(username) => format!("{PREFIX}upload_chunk.{index}.{username}"),
             Self::ChatAttachment(username) => {
                 format!("{PREFIX}chat_upload_chunk.{index}.{username}")
+            }
+            Self::DocumentPicture(username) => {
+                format!("{PREFIX}picture_upload_chunk.{index}.{username}")
             }
         }
     }

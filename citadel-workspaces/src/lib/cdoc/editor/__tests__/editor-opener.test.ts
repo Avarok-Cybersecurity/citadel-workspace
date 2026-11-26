@@ -11,6 +11,12 @@ import type { EditorSession } from '../editor-session';
 import type { AddedImage, EditorOrigin } from '../controller';
 import { createHash } from 'node:crypto';
 import { decodeAwareness, type Collected } from '../wire/decode-records';
+import { storedAccess } from '../../pictures/__tests__/picture-rig';
+import { memoryPictures, type MemoryPictures } from '../../pictures/__tests__/doubles/memory-pictures';
+import type { PictureAccess } from '../../pictures/document-pictures';
+
+/** addImage stores what it holds: this document's pictures are kept in memory. */
+const STORED: PictureAccess = storedAccess(memoryPictures(), { kind: 'page', nodeId: 'opener-test' });
 
 /** The smallest PNG: a 1x1 transparent pixel. */
 const PNG_1X1: Uint8Array = Uint8Array.from(Buffer.from(
@@ -19,7 +25,7 @@ const PNG_1X1: Uint8Array = Uint8Array.from(Buffer.from(
 
 async function opened(random: (bytes: Uint8Array) => Uint8Array, from: EditorOrigin): Promise<EditorSession> {
   const runtime: TestRuntime = inProcessRuntime('worker');
-  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, random)(from);
+  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: STORED }, random)(from);
 }
 
 /** A deterministic source standing in for crypto.getRandomValues: the id it yields is known. */
@@ -40,7 +46,7 @@ describe('the editor opener', () => {
 
   it('opens every replica with a fresh client id, which the engine then reports as its own', async () => {
     const runtime: TestRuntime = inProcessRuntime('worker');
-    const open: (from: EditorOrigin) => Promise<EditorSession> = createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, counting());
+    const open: (from: EditorOrigin) => Promise<EditorSession> = createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: STORED }, counting());
     const first: EditorSession = await open({ kind: 'blank' });
     const firstId: bigint = decodeAwareness(await first.awareness()).client;
     const second: EditorSession = await open({ kind: 'blank' });
@@ -62,11 +68,16 @@ describe('the editor opener', () => {
     expect(collected.units).toBeGreaterThan(0);
   });
 
-  it('holds a PNG, naming it by its sha256, and refuses a file over the limit', async () => {
+  it('holds a PNG, naming it by its sha256, and refuses a file over its store\'s limit', async () => {
     const editor: EditorSession = await opened(counting(), { kind: 'blank' });
-    const image: AddedImage = await editor.addImage(PNG_1X1, 1024);
+    const image: AddedImage = await editor.addImage(PNG_1X1);
     expect(image).toEqual({ contentId: `sha256-${createHash('sha256').update(PNG_1X1).digest('hex')}`, kind: 'png', width: 1, height: 1 });
-    await expect(editor.addImage(PNG_1X1, PNG_1X1.length - 1)).rejects.toThrow();
-    await expect(editor.addImage(Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]), 1024)).rejects.toThrow(/unsupported image type: GIF/);
+    await expect(editor.addImage(Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]))).rejects.toThrow(/unsupported image type: GIF/);
+    const small: MemoryPictures = memoryPictures();
+    small.limit(PNG_1X1.length - 1);
+    const runtime: TestRuntime = inProcessRuntime('worker');
+    const limited: EditorSession = await createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: storedAccess(small, { kind: 'page', nodeId: 'opener-test' }) }, counting())({ kind: 'blank' });
+    await expect(limited.addImage(PNG_1X1)).rejects.toThrow(/^The picture was not added\. Pictures in this document can be at most/);
+    expect(small.puts).toEqual([]);
   });
 });

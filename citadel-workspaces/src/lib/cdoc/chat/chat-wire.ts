@@ -30,16 +30,17 @@ export function encodeChatSync(payload: CdocChatSyncPayload): Uint8Array {
   return serializeP2PCommand(chatCommand(payload));
 }
 
-const fail = (message: string): never => {
+export const fail = (message: string): never => {
   throw new ChatWireError(message);
 };
 
-function bytes(value: unknown, field: string): Uint8Array {
+/** A byte string from the peer, copied into a buffer of its own. */
+export function bytes(value: unknown, field: string): Uint8Array {
   if (!ArrayBuffer.isView(value)) return fail(`${field} is not a byte string`);
   return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice();
 }
 
-function count(value: unknown, field: string): number {
+export function count(value: unknown, field: string): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) return fail(`${field} is not a count`);
   return value;
 }
@@ -80,6 +81,12 @@ export function readChatSync(payload: CdocChatSyncPayload): CdocChatSync {
       return { kind: 'awareness', record: bytes(s.record, 'awareness.record') };
     case 'rename':
       return { kind: 'rename', title: readTitleStamp(s.title) };
+    case 'picture_have':
+    case 'picture_want':
+    case 'picture_chunk':
+    case 'picture_none':
+      // A picture's bytes, not the document's state: picture-wire.ts reads these.
+      return fail(`${payload.sync.kind} is not a document edit`);
   }
 }
 

@@ -18,6 +18,7 @@ import type { AgentLink } from '@/lib/citadel-apps/runtime/agent-link';
 import { InstallPlaneRegistry } from '@/lib/citadel-apps/runtime/install-plane-registry';
 import { PeerAuthority } from '@/lib/citadel-apps/runtime/peer-authority';
 import { topicPort, type OwnedTopicPort } from '@/lib/citadel-apps/runtime/topic-port';
+import { admittedAfterJoin } from '@/lib/citadel-apps/runtime/__tests__/agent-admits-a-joiner';
 import { announce, CAL_TOPIC, listenCal } from '../cal-topic';
 import type { CalChange } from '../generated/CalChange';
 import { calendarPorts, type CalendarPorts } from '../ports';
@@ -48,12 +49,13 @@ function seat(cid: bigint, username: string): Seat {
       const [variant, body] = Object.entries(request)[0] as [RequestType, Record<string, unknown>];
       if (variant === 'GroupMessage') messages.push(body.message as number[]);
       queueMicrotask(() => handlers.forEach((h) => h({ [SUCCESS[variant] as string]: { cid, request_id: body.request_id, group_key: GROUP } })));
+      for (const added of admittedAfterJoin(variant, body, cid, GROUP)) queueMicrotask(() => handlers.forEach((h) => h(added)));
     },
   };
   const port: OwnedTopicPort = topicPort({
     seat: new InstallPlaneRegistry().attach(`inst-${username}`, 'net.avarok.calendar'), cid, agent, topics: [CAL_TOPIC], limits: LIMITS, timeoutMs: 1000,
     authority: new PeerAuthority(async (peerCid: bigint) => ({ ok: true, peer: { username: peerCid === 100n ? 'amy' : 'bob', cid: peerCid, app_id: 'net.avarok.calendar', install_id: 'i1' }, untilMs: 60_000n }), () => 0, 30),
-    topicGroup: async () => '5:9', record: { group: () => {}, request: () => {} }, refused: () => {},
+    topicGroup: async () => '5:9', record: { group: () => {}, request: () => {} }, refused: () => {}, notAMember: () => {},
   });
   const ports: CalendarPorts = calendarPorts(glueInstance({
     appId: 'net.avarok.calendar', ports: { topic: port }, held: new Set<Capability>(['group.topic.subscribe', 'group.topic.publish']),

@@ -8,6 +8,7 @@
 import type { EditorOrigin } from '../editor/controller';
 import { createEditorOpener } from '../editor/editor-opener';
 import type { EditorSession } from '../editor/editor-session';
+import type { PictureAccess } from '../pictures/document-pictures';
 import { loadCdocRuntime } from '../runtime-loader';
 import type { CdocRuntime } from '../runtime';
 import { DocumentSession } from './document-session';
@@ -20,6 +21,9 @@ import type { DocumentPlace } from '@/lib/document-replica-cache';
 import { WRITE_RESPONSE_TIMEOUT_MS } from '@/lib/workspace-service/await-write-response';
 
 export type HeadlessOutcome = 'nothingHeld' | 'synced' | 'stillHeld';
+
+/** It only sends held edits: their pictures were stored when they were added, and nothing is drawn. */
+const HEADLESS_PICTURES: PictureAccess = { kind: 'none', reason: 'Held edits are sent without opening the document.' };
 
 export interface HeadlessSession {
   readonly session: DocumentSession;
@@ -66,7 +70,7 @@ export async function syncHeldEditsHere(place: DocumentPlace): Promise<HeadlessO
   if (ports.cache === null) throw new Error('this device keeps no documents, so it holds no edits to send');
   const start = async (): Promise<HeadlessSession> => {
     const runtime: CdocRuntime = await loadCdocRuntime();
-    opener = createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => crypto.getRandomValues(b));
+    opener = createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: HEADLESS_PICTURES }, (b: Uint8Array): Uint8Array => crypto.getRandomValues(b));
     const session: DocumentSession = new DocumentSession({ ...R1_COLLABORATION, nodeId, clientSeqBase: randomClientSeqBase() }, ports);
     return { session, release: (): void => { for (const editor of opened.splice(0)) editor.dispose(); runtime.client.dispose(); } };
   };

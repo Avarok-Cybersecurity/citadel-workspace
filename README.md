@@ -66,7 +66,7 @@ Nested git submodules — commit innermost first (see [CLAUDE.md](CLAUDE.md)):
 ```bash
 git clone --recurse-submodules https://github.com/Avarok-Cybersecurity/citadel-workspace
 cd citadel-workspace
-npm ci                                   # from the ROOT: it is an npm workspace (needs Node >= 20)
+scripts/bootstrap.sh                     # the one setup: submodules, root npm ci, hooks on, both TS clients built
 
 cp .env.example .env                     # then edit it: set WORKSPACE_MASTER_PASSWORD
                                          # to a real value, e.g. `openssl rand -hex 32`
@@ -92,6 +92,12 @@ enforce that by default, so an older runtime gets no useful warning: the build
 runs most of the way and then dies with `ReferenceError: crypto is not defined`
 from a transitive dependency that expects the Web Crypto global Node added in
 19. CI runs Node 20.
+
+`scripts/bootstrap.sh` is the only supported way to set a clone up, fresh or reused. A clone
+without it has no hooks (git runs none until `core.hooksPath` is set, and says nothing), and the
+hooks' UI checks need both TypeScript clients built. `scripts/pre-push-tier.mjs` refuses when the
+hooks are off and the hooks refuse when the clients are missing, both up front and naming it. CI runs
+every gate regardless.
 
 `.env` is required, not optional. `docker-compose.yml` reads
 `WORKSPACE_MASTER_PASSWORD` with no fallback, and the workspace server
