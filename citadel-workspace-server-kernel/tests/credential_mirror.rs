@@ -36,7 +36,7 @@ fn ts_credential_rules_still_match_the_sdk() {
         "credential-rules.ts password.min"
     );
     assert_eq!(
-        reqs.max_password_length, 17,
+        reqs.max_password_length, 64,
         "credential-rules.ts password.max"
     );
     assert_eq!(reqs.min_name_length, 2, "credential-rules.ts fullName.min");

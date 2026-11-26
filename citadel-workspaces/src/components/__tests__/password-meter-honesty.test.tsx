@@ -6,12 +6,11 @@ import { CREDENTIAL_LIMITS } from '@/lib/credential-rules';
 /**
  * The strength meter must never certify a password the validator rejects.
  *
- * The maximum password length is 17 — shorter than what every password manager
- * generates by default. The meter rewarded length, so a 24-character generated
+ * The meter rewards length, so when the maximum was 17 a 24-character generated
  * password showed four green bars and "Strong" while the field beside it turned
  * red with "17 characters or fewer". The meter and the rule contradicted each
- * other on screen, at the same moment, for exactly the users with the best
- * credential hygiene.
+ * other on screen, at the same moment. Any password past the maximum (now 64)
+ * must read "Not accepted", however strong it is otherwise.
  */
 
 const renderWith = (password: string): RenderResult =>
@@ -25,7 +24,9 @@ const renderWith = (password: string): RenderResult =>
 describe('password strength meter', () => {
   it('does not call an over-length password strong', () => {
     // Strong by every other measure — case mix, digit, symbol — and too long.
-    const generated: "Xk9$mQ2#vL7@pR4!nT6&wZ" = 'Xk9$mQ2#vL7@pR4!nT6&wZ';
+    // 65 characters: one past the maximum.
+    const generated: string = `${'Aa1!'.repeat(16)}z`;
+    expect(generated.length).toBe(65);
     expect(generated.length).toBeGreaterThan(CREDENTIAL_LIMITS.password.max);
 
     renderWith(generated);
@@ -42,6 +43,16 @@ describe('password strength meter', () => {
     renderWith(good);
 
     expect(screen.getByText('Strong')).toBeInTheDocument();
+  });
+
+  it('calls a strong password at the 64-character maximum strong', () => {
+    const atMax: string = 'Aa1!'.repeat(16);
+    expect(atMax.length).toBe(64);
+
+    renderWith(atMax);
+
+    expect(screen.getByText('Strong')).toBeInTheDocument();
+    expect(screen.queryByText('Not accepted')).toBeNull();
   });
 
   it('states the length limit before the user can break it', () => {
