@@ -632,8 +632,9 @@ jobs:
         run: node --test scripts/lib/fixed-ports.test.mjs && node scripts/check-preview-ports-are-chosen-per-run.mjs
         working-directory: citadel-workspaces
       - name: A motion sample is judged only when the page painted
-        # stall-attribution.mjs decides which stalled samples the sidebar sweep may discard (docs/GATES.md).
-        run: node --test scripts/lib/polish-harness/stall-attribution.test.mjs
+        # stall-attribution.mjs decides which stalled samples the sidebar sweep may discard (docs/GATES.md);
+        # motion-probe.test.mjs pins what counts as a jump, at full and half frame rate.
+        run: node --test scripts/lib/polish-harness/stall-attribution.test.mjs scripts/lib/polish-harness/motion-probe.test.mjs
         working-directory: citadel-workspaces
       - name: Service logs survive a failing test
         # `if: failure()` on a step reads as "run if anything failed" and is not:

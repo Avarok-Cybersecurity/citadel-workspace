@@ -30,3 +30,18 @@ export { leaderOutboundHandler, LeaderOutboundHandler } from './leader-outbound-
 // Message queue and retry
 export { outboundQueue, OutboundQueue } from './outbound-queue';
 export type { QueuedMessage, AckResult } from './outbound-queue';
+
+import { instanceChannel } from './instance-channel';
+import { instanceInboundRouter } from './instance-inbound-router';
+
+/** Starts this tab's part in multi-tab coordination. Boot calls it; importing the module schedules nothing. */
+export function startInstanceCoordination(): void {
+  instanceChannel.start();
+  instanceInboundRouter.start();
+}
+
+/** Ends this tab's part: says goodbye, closes the channel and stops every timer start began. Final. */
+export function stopInstanceCoordination(): void {
+  instanceChannel.destroy();
+  instanceInboundRouter.stop();
+}

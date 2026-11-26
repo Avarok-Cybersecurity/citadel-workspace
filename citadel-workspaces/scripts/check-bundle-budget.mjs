@@ -283,11 +283,21 @@ const dist = join(root, 'dist');
  * chat's files), the billing portal request (with its dialog), the node envelope (with a node's
  * page) and the expiry notice's copy.
  *
- * 348 -> 349 (2026-11-26), for chat documents open in two windows (rel-1124/cdoc-tabs, PR #318):
- * its first commit measured under 348; bringing in another window's stored snapshot through a
- * Citadel Docs runtime of its own (cdoc/chat/chat-snapshot-diff.ts) loads lazily, but the lazy
- * import adds its entry to the entry chunk's preload map, and the path measured 348.007. Nothing
- * new runs on the landing page.
+ * 348 -> 349 (2026-11-26), for the multi-instance start fix in release 0.15.4 (PR #316): the
+ * batch measured 347.94 (356,287 B gzip), the PR 348.03 (356,381 B), +94 B. All of it is the
+ * coordination layer, which now starts from main.tsx instead of at import, so that importing it
+ * schedules no timers (raw bytes by source map, PR minus batch): channel-leader-election.ts +275
+ * (stop, and the initial wait taken at start), instance-inbound-router.ts +86 (idempotent
+ * start/stop), multi-instance/index.ts +35 (startInstanceCoordination), main.tsx +16, against
+ * instance-channel.ts -169 and the broadcast service -8 (the constructors' calls moved out).
+ * Leader election has to run before the landing page renders, so none of it can be deferred.
+ * The transfer work in the same PR (transfer-failure.ts, push-watch.ts, push-phase-events.ts,
+ * tick-events.ts, the revfs push timers) adds 0 B to the path: it loads with the file browser.
+ * The same 348 -> 349 raise also covers chat documents open in two windows (rel-1124/cdoc-tabs,
+ * PR #318): another window's stored snapshot is brought in through a Citadel Docs runtime of its
+ * own (cdoc/chat/chat-snapshot-diff.ts), loaded lazily; the lazy import only adds its entry to the
+ * entry chunk's preload map (alone it measured 348.007). Nothing new runs on the landing page.
+ * Both together, after merging #316 into #318, measured 348.10 (356,454 B gzip), under 349.
  */
 const BUDGET_KB = 349;
 
