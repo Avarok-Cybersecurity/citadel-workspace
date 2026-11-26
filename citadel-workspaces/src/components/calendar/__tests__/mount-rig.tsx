@@ -10,7 +10,7 @@ import { WorkspaceContext, type WorkspaceState } from '@/contexts/WorkspaceConte
 import type { Capability } from '@/lib/citadel-apps/host/capabilities';
 import { glueInstance, type GlueInstance, type StorageChange } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY, type IhttpLimits } from '@/lib/citadel-apps/host/limits';
-import type { IhttpPort } from '@/lib/citadel-apps/host/ports';
+import type { IhttpPort, StoragePort } from '@/lib/citadel-apps/host/ports';
 import { ManualClock } from '@/lib/citadel-apps/host/__tests__/fakes';
 import { MemoryStore } from '@/lib/calendar/__tests__/memory-store';
 import { oneWindow, type OneWindow } from '@/lib/citadel-apps/runtime/__tests__/one-window';
@@ -56,7 +56,7 @@ function pinnedClocks(): RigClocks {
 export function mountRig(me: string, store: MemoryStore = new MemoryStore(me), extra: RigExtra | null = null, clocks: RigClocks = pinnedClocks()): MountRig {
   const listeners: Set<(c: StorageChange) => void> = new Set();
   const page: OneWindow = oneWindow(store.port());
-  const storage = page.storage;
+  const storage: StoragePort = page.storage;
   const glue: GlueInstance = glueInstance({
     appId: 'net.avarok.calendar', policy: POLICY,
     ports: extra === null ? { storage } : { storage, ihttp: extra.ihttp },
@@ -64,7 +64,7 @@ export function mountRig(me: string, store: MemoryStore = new MemoryStore(me), e
     limits: { topics: null, p2p: null }, clock: clocks.dispatch, wallNow: clocks.wallNow, pageUrl: 'https://w.example/n1',
     storageChanges: (l) => {
       listeners.add(l);
-      const offOwn = page.ownChanges(l);
+      const offOwn: () => void = page.ownChanges(l);
       return (): void => { listeners.delete(l); offOwn(); };
     },
   });

@@ -11,7 +11,7 @@ import type { GlueBound, GlueTabMount } from '@/components/office/app-zone/app-z
 import { calendarPorts, type CalendarPorts } from '@/lib/calendar/ports';
 import type { StorageChange } from '../../host/glue-instance';
 import { appModule } from '../../host/__tests__/app-fixtures';
-import { ownWrites, type OwnWritesChannel } from '../own-store-writes';
+import { ownWrites, type OwnWrites, type OwnWritesChannel } from '../own-store-writes';
 import type { RosterMember } from '../first-party-ports';
 import { FakeRuntimeKernel, release, rig, rigWorld, tabOf, type Rig } from './runtime-rig';
 
@@ -31,7 +31,7 @@ function channel(): OwnWritesChannel {
 
 /** One window: its own page runtime over the shared kernel, acting for `member`. */
 async function openWindow(kernel: FakeRuntimeKernel, member: bigint): Promise<CalendarPorts> {
-  const own = ownWrites(member, channel);
+  const own: OwnWrites = ownWrites(member, channel);
   const r: Rig = rig(kernel, { portWorld: async () => ({ ...rigWorld(kernel, new Set(), [], []), ownWrites: own }) });
   rigs.push(r);
   const tab: GlueTabMount = { ...tabOf(kernel.rel), firstParty: { tree: () => ({}), roster: (): RosterMember[] => [] } };
