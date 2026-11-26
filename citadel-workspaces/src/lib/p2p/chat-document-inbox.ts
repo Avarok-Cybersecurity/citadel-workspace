@@ -1,6 +1,6 @@
 /**
  * Chat documents that are not open still hear their peer: an edit or a rename arriving while
- * the document is closed is recorded on this device (lib/cdoc/chat/chat-inbox.ts), so it
+ * the document is closed is recorded on this device (lib/cdoc/chat/chat-inbox.ts, by way of chat-app-ports.ts), so it
  * opens with it even when the peer is offline by then. A picture the peer asks for is answered
  * from this device, and one it announces is fetched to it (lib/cdoc/pictures/app-pair-pictures.ts).
  * Only the kinds that carry something to act on load their handler, on the first one, so the
@@ -24,7 +24,7 @@ export function bindChatDocumentInbox(listen: (event: string, handler: (data: Cd
       return;
     }
     if (!RECORDED_KINDS.has(event.payload.sync.kind)) return;
-    import('@/lib/cdoc/chat/chat-inbox').then(
+    import('@/lib/cdoc/chat/chat-app-ports').then(
       ({ recordForClosedDocument }): void => recordForClosedDocument(event),
       (error: unknown): void => errorLog('ChatDocumentInbox', 'The chat document recorder did not load:', error),
     );

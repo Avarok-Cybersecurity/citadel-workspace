@@ -14,6 +14,8 @@ import { wouldExceedQuota } from '@/lib/revfs/quota-check';
 import { TreeScope, type RevfsFileMetadata } from '@/types/revfs-types';
 import { uploadRefusal } from './upload-refusal';
 import { SERVER_STORAGE_CHECKING, type StorageOffer } from '@/lib/revfs/storage-offer';
+import { pushPhaseLabel, type PushPhase } from '@/lib/revfs/push-watch';
+import { onPushPhase } from '@/lib/revfs/push-phase-events';
 
 export interface DropUploadDeps {
   myCid: bigint | null;
@@ -82,7 +84,12 @@ export function useDropUpload(
     for (const file of fileArray) {
       // Between the drop and the acknowledgement nothing on screen changed, so a large file read as a
       // drop that did nothing. The progress toast is replaced by the outcome's own toast.
-      const progress: string | number = toast.loading(`Uploading ${file.name}…`);
+      // The same toast then follows the push: queued behind an earlier transfer, then its progress.
+      const fileId: string = crypto.randomUUID();
+      const progress: string | number = toast.loading(pushPhaseLabel(file.name, { kind: 'sending' }));
+      const stopHearing: () => void = onPushPhase(fileId, (phase: PushPhase): void => {
+        toast.loading(pushPhaseLabel(file.name, phase), { id: progress });
+      });
       try {
         // The file's CONTENTS, which this never read. Only name, size and type
         // were passed on, so the upload described a file whose bytes never left
@@ -92,7 +99,7 @@ export function useDropUpload(
           targetPath,
           file.name,
           {
-            fileId: crypto.randomUUID(), fileName: file.name, fileSize: file.size,
+            fileId, fileName: file.name, fileSize: file.size,
             fileType: file.type || 'application/octet-stream',
             virtualDirectory: targetPath, uploadedByCid: deps.myCid,
           },
@@ -102,6 +109,7 @@ export function useDropUpload(
       } catch (err) {
         toast.error(`Failed to upload ${file.name}: ${describeError(err)}`);
       } finally {
+        stopHearing();
         toast.dismiss(progress);
       }
     }

@@ -67,17 +67,32 @@ function runs(samples, prop) {
  * first paint back (measured: 30ms at 4x CPU throttle, 55ms at 6x), so that frame averages the curve's steep start
  * and its neighbour the tail, while the positions still sit on the 1x curve at the same times. So the first step
  * is held to the curve: no frame of a smooth glide averages faster than its peak, GLIDE_PEAK x its mean speed.
+ * That is true of every step that starts before the glide can have passed its peak, not only the first: an engine
+ * painting at half rate (WebKit here, measured at load 2 and at 50 alike: steady 33 ms frames, no paint gap) puts the steep
+ * start in the SECOND step, after a commit frame that barely moved, and a held-back first paint (+55 ms, then +65)
+ * puts it in the third. Until ACCELERATING_MS after the click a step is rightly faster than the one before it, so
+ * there it is a jump only when it is BOTH out of step with its neighbours and faster than the curve's peak: the
+ * half-rate glide fails only the first, and a 120 Hz sample under CPU throttling, whose frame clock runs a few
+ * percent past the curve's peak (measured: 2.75 px/ms against 2.72), fails only the second. A real jump fails
+ * both. After that window both neighbours judge a step, as before. Nothing about JUMP_PX changes.
  */
 const GLIDE_PEAK = 4.05; // the steepest slope of cubic-bezier(0.2, 0, 0, 1), tree-motion's GLIDE, computed numerically
-function spikes(series, steps, times) {
+/** The longest the click's commit was measured to hold the first paint back (6x CPU throttle). */
+const COMMIT_HOLD_MS = 55;
+/** Where that slope is reached: 0.118 of the curve's time (computed numerically), of MOTION_SECONDS.layout's 220 ms. */
+const GLIDE_PEAK_AT_MS = 26;
+/** Steps that begin before this, from the click, may be accelerating: a jump there must fail the curve and its neighbours. */
+const ACCELERATING_MS = COMMIT_HOLD_MS + GLIDE_PEAK_AT_MS;
+function spikes(series, steps, times, clickedAt) {
   const speed = steps.map((d, i) => d / Math.max(1, times[i + 1] - times[i]));
   const end = series[series.length - 1];
   const settled = Math.min(series.length - 1, series.findLastIndex((v) => Math.abs(v - end) > 0.5) + 1);
   const mean = Math.abs(end - series[0]) / Math.max(1, times[settled] - times[0]);
   // The last step has no successor to compare with; a track that ends by vanishing is judged as an appearance.
-  return steps.filter((d, i) => d > JUMP_PX && (i === 0
-    ? speed[0] > GLIDE_PEAK * mean
-    : i < steps.length - 1 && speed[i] > 2 * Math.max(speed[i - 1], speed[i + 1])));
+  const pastPeak = (i) => speed[i] > GLIDE_PEAK * mean;
+  const outOfStep = (i) => i < steps.length - 1 && speed[i] > 2 * Math.max(speed[i - 1], speed[i + 1]);
+  return steps.filter((d, i) => d > JUMP_PX && (i === 0 ? pastPeak(0)
+    : times[i] - clickedAt < ACCELERATING_MS ? pastPeak(i) && outOfStep(i) : outOfStep(i)));
 }
 
 /**
@@ -125,7 +140,7 @@ export function roughness(frames) {
         const steps = series.slice(1).map((v, i) => Math.abs(v - series[i]));
         // A row's clipped height changes as fast as the edge sweeping it moves: that edge's box is judged, not the row.
         const swept = prop === 'shown' && run[0].row;
-        const spiked = swept ? [] : spikes(series, steps, run.map((r) => r.t));
+        const spiked = swept ? [] : spikes(series, steps, run.map((r) => r.t), frames[0].t);
         if (spiked.length > 0) found.jump.push(`${label} ${Math.max(...spiked).toFixed(1)}px in one frame: ${series.map((v) => v.toFixed(0)).join(',')}`);
         if (Math.max(...steps) > JUMP_PX) found.steep.push(`${label} ${Math.max(...steps).toFixed(1)}px`);
         const first = series[0];

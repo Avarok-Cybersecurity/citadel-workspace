@@ -45,7 +45,7 @@ describe('a RE-VFS upload request', () => {
   });
 
   it('carries the file bytes as a ByteContents FileSource', async () => {
-    void backendSendFile(deps, CID, null, 'notes.txt', CONTENT, '/docs/notes.txt');
+    void backendSendFile(deps, CID, null, 'notes.txt', CONTENT, '/docs/notes.txt', 'push-1');
     await Promise.resolve();
 
     const source: { ByteContents?: { file_name: string; data: number[]; }; } = lastSendFile().source as { ByteContents?: { file_name: string; data: number[] } };
@@ -57,7 +57,7 @@ describe('a RE-VFS upload request', () => {
   });
 
   it('addresses the virtual filesystem, not a plain transfer', async () => {
-    void backendSendFile(deps, CID, null, 'notes.txt', CONTENT, '/docs/notes.txt');
+    void backendSendFile(deps, CID, null, 'notes.txt', CONTENT, '/docs/notes.txt', 'push-1');
     await Promise.resolve();
 
     const transferType: { RemoteEncryptedVirtualFilesystem?: { virtual_path: string; }; } = lastSendFile().transfer_type as {
@@ -70,7 +70,7 @@ describe('a RE-VFS upload request', () => {
   });
 
   it('sends the peer cid through for a peer-scoped upload', async () => {
-    void backendSendFile(deps, CID, 42n, 'notes.txt', CONTENT, '/docs/notes.txt');
+    void backendSendFile(deps, CID, 42n, 'notes.txt', CONTENT, '/docs/notes.txt', 'push-1');
     await Promise.resolve();
 
     // The peer path previously sent no bytes at all — only a tree op describing

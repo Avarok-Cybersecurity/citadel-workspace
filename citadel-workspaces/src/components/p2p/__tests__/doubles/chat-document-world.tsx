@@ -13,6 +13,7 @@
  * The test file declares the runtime-loader mock (vi.mock is per file); see useInProcessCdoc.
  */
 import { vi } from 'vitest';
+import { installMemoryWebLocks } from '@/lib/cdoc/chat/__tests__/doubles/browser-tabs';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { websocketService } from '@/lib/websocket-service';
@@ -55,6 +56,8 @@ export class ChatDocumentWorld {
   private readonly connection: LocalDbPort = this.db.connection([0n, ALICE, BOB]);
 
   install(): void {
+    // jsdom has no Web Locks API; the chat documents' store takes its turns through it.
+    installMemoryWebLocks();
     // The leader's answer to "what does the agent host": nothing, so this browser runs its own messaging.
     registerCapabilityRoute({
       isLeader: (): boolean => false,

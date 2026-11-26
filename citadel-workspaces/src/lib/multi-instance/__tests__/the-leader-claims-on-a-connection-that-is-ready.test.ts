@@ -80,6 +80,7 @@ import { websocketService } from '@/lib/websocket-service';
 import { instanceManager } from '@/lib/multi-instance/instance-manager';
 import { eventEmitter } from '@/lib/event-emitter';
 import { outboundQueue } from '@/lib/multi-instance/outbound-queue';
+import { startInstanceCoordination, stopInstanceCoordination } from '@/lib/multi-instance';
 
 const OWN_CID: bigint = 901n;
 const OTHER_CID: bigint = 902n;
@@ -94,6 +95,8 @@ const failedClaims: string[] = [];
 const realConsoleError: typeof console.error = console.error;
 
 beforeAll(async (): Promise<void> => {
+  // As main.tsx does at boot: the channel replays a proxied request to a new leader.
+  startInstanceCoordination();
   console.error = (...args: unknown[]): void => {
     if (String(args[0]).includes('FollowerSessionClaims')) failedClaims.push(args.map(String).join(' '));
   };
@@ -106,6 +109,7 @@ beforeAll(async (): Promise<void> => {
 });
 
 afterAll((): void => {
+  stopInstanceCoordination();
   console.error = realConsoleError;
   vi.useRealTimers();
 });

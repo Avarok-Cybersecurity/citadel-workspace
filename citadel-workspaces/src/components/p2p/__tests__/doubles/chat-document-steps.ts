@@ -3,6 +3,7 @@ import { expect } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 import { localDbChatStore } from '@/lib/cdoc/chat/chat-local-db';
+import { aloneInBrowser } from '@/lib/cdoc/chat/__tests__/doubles/browser-tabs';
 import type { StoredBase } from '@/lib/cdoc/chat/chat-ports';
 import { modelJson } from '@/lib/cdoc/chat/__tests__/doubles/chat-pair';
 import type { ChatDocumentWorld } from './chat-document-world';
@@ -36,7 +37,7 @@ export async function canvasOpen(where: HTMLElement, title: string): Promise<HTM
 export async function storedText(world: ChatDocumentWorld, where: HTMLElement, account: bigint, docId: string): Promise<string> {
   fireEvent.click(within(where).getByRole('button', { name: 'Messages' }));
   const stored: StoredBase = await waitFor(async (): Promise<StoredBase> => {
-    const base: StoredBase | null = await localDbChatStore(account, world.db.connection([account])).loadBase(docId);
+    const base: StoredBase | null = await localDbChatStore(account, world.db.connection([account]), aloneInBrowser()).loadBase(docId);
     if (base === null) throw new Error(`nothing stored for ${docId} yet`);
     return base;
   }, { timeout: CANVAS_MS });
