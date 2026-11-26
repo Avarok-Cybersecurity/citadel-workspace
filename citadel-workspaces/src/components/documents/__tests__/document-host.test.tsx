@@ -3,7 +3,8 @@
  * mounts in, the status bar it reserves, and a read-only notice when editing is not permitted.
  * No mocks: the Docs editor region runs the real cdoc wasm through the in-process runtime.
  */
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
+import { docsCanvasLoaded } from '@/test-utils/docs-canvas-loaded';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { inProcessRuntime } from '@/lib/cdoc/__tests__/wasm-rig';
 import type { CdocRuntime } from '@/lib/cdoc/runtime';
@@ -30,6 +31,9 @@ const EDITABLE: DocumentHostProps = {
   original: null,
   editing: EDIT_BLANK,
 };
+
+// The lazily loaded Docs canvas is awaited, not timed (test-utils/docs-canvas-loaded.ts).
+beforeAll(docsCanvasLoaded);
 
 describe('DocumentHost', () => {
   it('shows the document title and its app, and marks the editor region', () => {

@@ -6,7 +6,8 @@
  * Real cdoc wasm through the in-process runtime. The one double is the save port
  * (recording-document-files): jsdom has no Blob URLs or downloads to observe.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { docsCanvasLoaded } from '@/test-utils/docs-canvas-loaded';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { inProcessRuntime } from '@/lib/cdoc/__tests__/wasm-rig';
@@ -51,6 +52,9 @@ async function choose(label: RegExp): Promise<void> {
 }
 
 const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
+
+// The lazily loaded Docs canvas is awaited, not timed (test-utils/docs-canvas-loaded.ts).
+beforeAll(docsCanvasLoaded);
 
 describe('Download as…', () => {
   it('lists the six formats', async () => {

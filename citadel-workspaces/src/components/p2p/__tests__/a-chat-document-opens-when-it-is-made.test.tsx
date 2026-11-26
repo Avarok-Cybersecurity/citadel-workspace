@@ -15,13 +15,14 @@
  * the network, the agent's LocalDB and the conversation store (doubles/chat-document-world.tsx),
  * and the cdoc runtime's worker, run in process because jsdom has no Worker.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import type { CdocRuntime } from '@/lib/cdoc/runtime';
 import { statedViewport } from '@/components/documents/__tests__/editor-harness';
 import { ALICE, BOB, ChatDocumentWorld, chatOf, renderChats } from './doubles/chat-document-world';
 import { canvasOpen, chatPane, FLOW_MS, makeDocument, storedText } from './doubles/chat-document-steps';
+import { docsCanvasLoaded } from '@/test-utils/docs-canvas-loaded';
 
 vi.mock('@/lib/cdoc/runtime-loader', async () => {
   const { inProcessRuntime } = await import('@/lib/cdoc/__tests__/wasm-rig');
@@ -29,6 +30,8 @@ vi.mock('@/lib/cdoc/runtime-loader', async () => {
 });
 
 statedViewport();
+// The lazily loaded Docs canvas is awaited, not timed (test-utils/docs-canvas-loaded.ts).
+beforeAll(docsCanvasLoaded);
 
 let world: ChatDocumentWorld;
 beforeEach(() => {
