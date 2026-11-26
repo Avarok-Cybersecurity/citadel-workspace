@@ -12,6 +12,7 @@ import type { EditorSession } from '../../editor/editor-session';
 import type { EditorOrigin, PeerView } from '../../editor/controller';
 import { CHAT_SYNC } from '../chat-config';
 import { localDbChatStore, type LocalDbPort } from '../chat-local-db';
+import { aloneInBrowser } from './doubles/browser-tabs';
 import type { ChatStoreBackend } from '../chat-ports';
 import { ChatSyncError } from '../chat-problems';
 import { ALICE, BLANK, BOB, DOC, newWorld, openSide, sameDocument, settle, textOf, type ChatSide, type World } from './doubles/chat-pair';
@@ -54,7 +55,7 @@ describe('a chat document reopened from this device', () => {
     const live: Uint8Array = await closeAndWrite(alice);
     const again: ChatSide = await openSide(world, ALICE, BOB, db, BLANK);
     expect(sameBytes(await again.editor().snapshot(), live)).toBe(true);
-    const pending: readonly Uint8Array[] = await localDbChatStore(ALICE, db.connection([ALICE])).loadPending(DOC);
+    const pending: readonly Uint8Array[] = await localDbChatStore(ALICE, db.connection([ALICE]), aloneInBrowser()).loadPending(DOC);
     expect(pending.length).toBeLessThan(CHAT_SYNC.foldAfterUpdates);
   });
 
@@ -79,7 +80,7 @@ describe('a chat document reopened from this device', () => {
     // hyphenated() writes a snapshot as client 3.
     const written: EditorOrigin = hyphenated(null, 'stored text');
     if (written.kind !== 'snapshot') throw new Error('expected a snapshot');
-    await localDbChatStore(ALICE, db.connection([ALICE])).saveBase(DOC, { docVersion: CHAT_SYNC.docVersion, snapshot: written.snapshot });
+    await localDbChatStore(ALICE, db.connection([ALICE]), aloneInBrowser()).saveBase(DOC, { docVersion: CHAT_SYNC.docVersion, snapshot: written.snapshot });
     const clientOf = async (e: EditorSession): Promise<bigint> => ((await e.peerView(await e.awareness())) as PeerView).client;
     const first: ChatSide = await openSide(world, ALICE, BOB, db, BLANK);
     expect(await textOf(first.editor())).toContain('stored text');
@@ -94,7 +95,7 @@ describe('a chat document reopened from this device', () => {
   it('refuses a stored copy in another CRDT format, and leaves it as it is', async () => {
     const world: World = newWorld();
     const db: FakeAgentLocalDb = new FakeAgentLocalDb();
-    const store: ChatStoreBackend = localDbChatStore(ALICE, db.connection([ALICE]));
+    const store: ChatStoreBackend = localDbChatStore(ALICE, db.connection([ALICE]), aloneInBrowser());
     await store.saveBase(DOC, { docVersion: CHAT_SYNC.docVersion + 1, snapshot: new Uint8Array([1, 2, 3]) });
     const opened: Promise<ChatSide> = openSide(world, ALICE, BOB, db, BLANK);
     await expect(opened).rejects.toBeInstanceOf(ChatSyncError);
@@ -111,7 +112,7 @@ describe('a chat document reopened from this device', () => {
     const earlierIndex: number[] = Array.from(cborEncode({ entries: [{ doc_id: DOC, peer_cid: BOB, title: null, held_apart: true }] }));
     await port.set(ALICE, base, earlierBase);
     await port.set(ALICE, index, earlierIndex);
-    const store: ChatStoreBackend = localDbChatStore(ALICE, port);
+    const store: ChatStoreBackend = localDbChatStore(ALICE, port, aloneInBrowser());
     await expect(store.loadBase(DOC)).rejects.toThrow(/another layout \(store version 1; this client reads 2\)/);
     await expect(store.loadEntry(DOC)).rejects.toThrow(/another layout \(store version 1; this client reads 2\)/);
     expect((await port.get(ALICE, base))?.value).toEqual(earlierBase);
@@ -119,7 +120,7 @@ describe('a chat document reopened from this device', () => {
   });
 
   it('reads back the layout it writes', async () => {
-    const store: ChatStoreBackend = localDbChatStore(ALICE, new FakeAgentLocalDb().connection([ALICE]));
+    const store: ChatStoreBackend = localDbChatStore(ALICE, new FakeAgentLocalDb().connection([ALICE]), aloneInBrowser());
     await store.saveBase(DOC, { docVersion: CHAT_SYNC.docVersion, snapshot: new Uint8Array([4, 5]) });
     await store.saveEntry(DOC, { peerCid: BOB, title: null });
     expect(await store.loadBase(DOC)).toEqual({ docVersion: CHAT_SYNC.docVersion, snapshot: new Uint8Array([4, 5]) });
@@ -138,9 +139,9 @@ describe('the copy on this device belongs to the local account', () => {
     expect(db.requests.every((r): boolean => r.cid === ALICE && r.key.startsWith(`cdoc-chat:${ALICE.toString()}:`))).toBe(true);
     expect(db.keys(0n)).toEqual([]);
     // Another account on the same agent: its own cid finds nothing, and naming Alice's is refused.
-    const other: ChatStoreBackend = localDbChatStore(BOB, db.connection([BOB]));
+    const other: ChatStoreBackend = localDbChatStore(BOB, db.connection([BOB]), aloneInBrowser());
     expect(await other.loadBase(DOC)).toBeNull();
     await expect(db.connection([BOB]).get(ALICE, `cdoc-chat:${ALICE.toString()}:${DOC}#base`)).rejects.toThrow(/Refused/);
-    expect((): unknown => localDbChatStore(0n, db.connection([0n]))).toThrow(/local account/);
+    expect((): unknown => localDbChatStore(0n, db.connection([0n]), aloneInBrowser())).toThrow(/local account/);
   });
 });

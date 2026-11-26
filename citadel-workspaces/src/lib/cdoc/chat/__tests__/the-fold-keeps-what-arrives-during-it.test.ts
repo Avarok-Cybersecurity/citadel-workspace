@@ -10,6 +10,7 @@ import { realReplicas } from '../../collab/__tests__/doubles/real-replicas';
 import type { EditorSession } from '../../editor/editor-session';
 import { CHAT_SYNC } from '../chat-config';
 import { localDbChatStore } from '../chat-local-db';
+import { aloneInBrowser } from './doubles/browser-tabs';
 import type { ChatStoreBackend, StoredBase } from '../chat-ports';
 import type { ChatSyncProblem } from '../chat-problems';
 import { ChatReplicaStore } from '../chat-replica-store';
@@ -28,19 +29,22 @@ async function edit(editor: EditorSession, text: string): Promise<Uint8Array> {
 describe('a fold', () => {
   it('keeps pending the edit recorded while its snapshot was being taken', async () => {
     const live: EditorSession = await realReplicas().open({ kind: 'blank' });
-    const backend: ChatStoreBackend = localDbChatStore(ALICE, new FakeAgentLocalDb().connection([ALICE]));
+    const backend: ChatStoreBackend = localDbChatStore(ALICE, new FakeAgentLocalDb().connection([ALICE]), aloneInBrowser());
     const problems: ChatSyncProblem[] = [];
     let release: () => void = (): void => undefined;
     const held: Promise<void> = new Promise<void>((resolve: () => void): void => { release = resolve; });
     let inside: () => void = (): void => undefined;
     const snapshotting: Promise<void> = new Promise<void>((resolve: () => void): void => { inside = resolve; });
-    const store: ChatReplicaStore = new ChatReplicaStore(backend, DOC, CHAT_SYNC, new ManualClock(), { baseStored: false, pending: [] }, {
+    const store: ChatReplicaStore = new ChatReplicaStore(backend, DOC, CHAT_SYNC, new ManualClock(), { base: null, pending: [] }, {
       snapshot: async (): Promise<Uint8Array> => {
         const bytes: Uint8Array = await live.snapshot();
         inside();
         await held;
         return bytes;
       },
+      // The only writer of this copy: nothing stored is ever another's to bring in.
+      absorbSnapshot: (): Promise<void> => Promise.reject(new Error('no other writer stored a snapshot')),
+      absorbUpdate: async (update: Uint8Array): Promise<void> => { await live.applyRemote(update); },
       report: (problem: ChatSyncProblem): void => { problems.push(problem); },
     });
     store.added(await edit(live, 'before the fold'));

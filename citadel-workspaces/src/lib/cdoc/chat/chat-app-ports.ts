@@ -11,9 +11,15 @@ import { usernameAvatarColor } from '@/lib/avatar-color';
 import { CDOC_CHAT_COMMAND_EVENT, type CdocChatCommandEvent, type CdocChatSyncPayload } from '@/types/cdoc-chat-sync';
 import { hexColor, type HexColor } from '../editor/model-values';
 import type { PeerIdentity } from '../collab/ports';
-import type { ChatStoreBackend, ChatTransport } from './chat-ports';
+import { errorLog } from '@/lib/debug-config';
+import type { ChatStoreBackend, ChatTabs, ChatTransport } from './chat-ports';
 import { localDbChatStore, type LocalDbPort } from './chat-local-db';
 import type { ChatKeeperPorts } from './chat-replica-keeper';
+import { CHAT_SYNC } from './chat-config';
+import { recordClosedDocumentCommand, type InboxOutcome } from './chat-inbox';
+import { localChatTransport } from './chat-local-transport';
+import { runtimeOfItsOwnDiff } from './chat-snapshot-diff';
+import { CHAT_TABS_CHANNEL, chatTabs, webLocks } from './chat-tabs';
 import { isSelfConversation } from '@/lib/scratchpad/self-conversation';
 
 /** The chat's other person: who the document is kept in step with, and how their caret is labelled. */
@@ -29,8 +35,12 @@ export const agentLocalDb: LocalDbPort = {
   set: (cid: bigint, key: string, value: number[]): Promise<void> => websocketService.sendLocalDBSet(cid, key, value),
 };
 
+/** This window among the browser's others: opened on first use, kept for the page's life. */
+let tabs: ChatTabs | null = null;
+
 export function appChatStore(account: bigint): ChatStoreBackend {
-  return localDbChatStore(account, agentLocalDb);
+  tabs ??= chatTabs(webLocks(), new BroadcastChannel(CHAT_TABS_CHANNEL));
+  return localDbChatStore(account, agentLocalDb, tabs);
 }
 
 /** Whether a received command is the peer's, addressed to this account (the legacy path names no recipient). */
@@ -55,21 +65,6 @@ export function p2pChatTransport(selfCid: bigint, peerCid: bigint): ChatTranspor
   };
 }
 
-/**
- * A scratchpad document's channel: nobody is at the other end (lib/scratchpad), so nothing it
- * writes leaves this device and nothing arrives. It is kept in this account's LocalDB like any
- * chat document, and is live only in the sense that each pause writes it back.
- */
-export function localChatTransport(selfCid: bigint): ChatTransport {
-  return {
-    selfCid,
-    peerCid: selfCid,
-    send: async (): Promise<void> => undefined,
-    onMessage: (): (() => void) => (): void => undefined,
-    onConnected: (): (() => void) => (): void => undefined,
-  };
-}
-
 export function chatKeeperPorts(selfCid: bigint, peer: ChatPeer): ChatKeeperPorts {
   const color: HexColor = hexColor(usernameAvatarColor(peer.username));
   // Only the peer's records are ever heard here, so every caret is theirs.
@@ -80,5 +75,18 @@ export function chatKeeperPorts(selfCid: bigint, peer: ChatPeer): ChatKeeperPort
     wallClock: (): number => Date.now(),
     identify,
     store: appChatStore(selfCid),
+    snapshotDiff: runtimeOfItsOwnDiff,
   };
+}
+
+/** The app's inbox: the notification's recipient is the account; the legacy path, which names none, is not recorded. */
+export function recordForClosedDocument(event: CdocChatCommandEvent): void {
+  const account: bigint | undefined = event.recipient_cid;
+  if (account === undefined) return;
+  recordClosedDocumentCommand(account, event, appChatStore(account), CHAT_SYNC).then(
+    (outcome: InboxOutcome): void => {
+      if (outcome === 'refused' || outcome === 'full') errorLog('ChatDocumentInbox', `Not recorded for ${event.payload.doc_id}: ${outcome}`);
+    },
+    (error: unknown): void => errorLog('ChatDocumentInbox', `Recording for ${event.payload.doc_id} failed:`, error),
+  );
 }

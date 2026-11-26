@@ -10,13 +10,14 @@ import { typeInto } from '../../collab/__tests__/doubles/real-replicas';
 import { CHAT_SYNC } from '../chat-config';
 import { recordClosedDocumentCommand, type InboxOutcome } from '../chat-inbox';
 import { localDbChatStore } from '../chat-local-db';
+import { aloneInBrowser } from './doubles/browser-tabs';
 import type { ChatStoreBackend } from '../chat-ports';
 import { ALICE, BLANK, BOB, newWorld, openSide, settle, textOf, type ChatSide, type World } from './doubles/chat-pair';
 import { FakeAgentLocalDb } from './doubles/fake-agent-local-db';
 
 /** What bindChatDocumentInbox does in the app: every command Alice's session hears goes to the inbox. */
 function inboxFor(world: World, db: FakeAgentLocalDb): { readonly outcomes: Promise<InboxOutcome>[]; readonly store: ChatStoreBackend } {
-  const store: ChatStoreBackend = localDbChatStore(ALICE, db.connection([ALICE]));
+  const store: ChatStoreBackend = localDbChatStore(ALICE, db.connection([ALICE]), aloneInBrowser());
   const outcomes: Promise<InboxOutcome>[] = [];
   world.channel.transport(ALICE, BOB).onMessage((payload: CdocChatSyncPayload): void => {
     const event: CdocChatCommandEvent = { peerCid: BOB, recipient_cid: ALICE, payload };
@@ -53,7 +54,7 @@ describe('a closed chat document', () => {
     // A document no test here has open (the open set is the tab's, shared by every test in it).
     const doc: string = 'chat-doc-never-opened';
     const db: FakeAgentLocalDb = new FakeAgentLocalDb();
-    const store: ChatStoreBackend = localDbChatStore(ALICE, db.connection([ALICE]));
+    const store: ChatStoreBackend = localDbChatStore(ALICE, db.connection([ALICE]), aloneInBrowser());
     const update: CdocChatSyncPayload = { doc_id: doc, doc_version: CHAT_SYNC.docVersion, sync: { kind: 'update', updates: [new Uint8Array([1, 2])] } };
     expect(await recordClosedDocumentCommand(ALICE, { peerCid: BOB, recipient_cid: ALICE, payload: update }, store, CHAT_SYNC)).toBe('not kept');
     await store.saveEntry(doc, { peerCid: BOB, title: null });

@@ -7,24 +7,16 @@
  * hello catches up; a payload in another format is refused, never recorded.
  */
 import type { CdocChatCommandEvent, CdocChatSync } from '@/types/cdoc-chat-sync';
-import { errorLog } from '@/lib/debug-config';
-import { CHAT_SYNC, type ChatSyncConfig } from './chat-config';
+import type { ChatSyncConfig } from './chat-config';
 import type { ChatIndexEntry, ChatStoreBackend } from './chat-ports';
 import { isChatDocId, laterTitle, readChatSync } from './chat-wire';
 import { isOpenHere } from './open-chat-documents';
-import { appChatStore } from './chat-app-ports';
 
 /** What the inbox did with a command; the app logs the two that drop it. */
 export type InboxOutcome = 'recorded' | 'renamed' | 'open here' | 'not kept' | 'refused' | 'nothing to record' | 'full';
 
-const tails: Map<string, Promise<unknown>> = new Map<string, Promise<unknown>>();
-
-/** One document's records are read-modify-write, so its commands are recorded one at a time. */
-function inTurn<T>(key: string, step: () => Promise<T>): Promise<T> {
-  const next: Promise<T> = (tails.get(key) ?? Promise.resolve()).then(step, step);
-  tails.set(key, next.then((): void => undefined, (): void => undefined));
-  return next;
-}
+/** The writer the inbox announces its records as: never an open replica, so every open one hears them. */
+const INBOX: object = Object.freeze({ writer: 'chat-document-inbox' });
 
 async function record(account: bigint, event: CdocChatCommandEvent, store: ChatStoreBackend, config: ChatSyncConfig): Promise<InboxOutcome> {
   const { payload } = event;
@@ -43,23 +35,16 @@ async function record(account: bigint, event: CdocChatCommandEvent, store: ChatS
   const pending: readonly Uint8Array[] = await store.loadPending(payload.doc_id);
   if (pending.length + arrived.length > config.closedMaxPending) return 'full';
   await store.savePending(payload.doc_id, [...pending, ...arrived]);
+  store.wrote(payload.doc_id, INBOX);
   return 'recorded';
 }
 
-/** Records `event` for `account` when its document is kept here and closed. */
+/**
+ * Records `event` for `account` when its document is kept here and closed in this window. Its
+ * records are read-modify-write and another window may write the same copy (it has the document
+ * open, or records the same command), so the whole step takes the copy's browser-wide turn.
+ */
 export function recordClosedDocumentCommand(account: bigint, event: CdocChatCommandEvent, store: ChatStoreBackend, config: ChatSyncConfig): Promise<InboxOutcome> {
   if (!isChatDocId(event.payload.doc_id)) return Promise.resolve('not kept');
-  return inTurn(`${account.toString()}:${event.payload.doc_id}`, (): Promise<InboxOutcome> => record(account, event, store, config));
-}
-
-/** The app's inbox: the notification's recipient is the account; the legacy path, which names none, is not recorded. */
-export function recordForClosedDocument(event: CdocChatCommandEvent): void {
-  const account: bigint | undefined = event.recipient_cid;
-  if (account === undefined) return;
-  recordClosedDocumentCommand(account, event, appChatStore(account), CHAT_SYNC).then(
-    (outcome: InboxOutcome): void => {
-      if (outcome === 'refused' || outcome === 'full') errorLog('ChatDocumentInbox', `Not recorded for ${event.payload.doc_id}: ${outcome}`);
-    },
-    (error: unknown): void => errorLog('ChatDocumentInbox', `Recording for ${event.payload.doc_id} failed:`, error),
-  );
+  return store.exclusive(event.payload.doc_id, (): Promise<InboxOutcome> => record(account, event, store, config));
 }

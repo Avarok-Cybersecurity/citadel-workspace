@@ -13,7 +13,7 @@ import type { CdocChatTitleStamp } from '@/types/cdoc-chat-sync';
 import type { EditorController, EditorOrigin } from '../editor/controller';
 import type { Keeper } from '../collab/replica-keeper';
 import type { ChatSyncConfig } from './chat-config';
-import type { ChatIndexEntry, ChatStoreBackend, StoredBase } from './chat-ports';
+import type { ChatIndexEntry, ChatStoreBackend, SnapshotDiff, StoredBase } from './chat-ports';
 import { ChatSyncError, type ChatSyncProblem } from './chat-problems';
 import { ChatReplicaStore } from './chat-replica-store';
 import { ChatDocumentSync, type ChatSyncPorts } from './chat-sync';
@@ -28,6 +28,8 @@ export type ChatDocumentOrigin =
 
 export interface ChatKeeperPorts extends ChatSyncPorts {
   readonly store: ChatStoreBackend;
+  /** Brings in a snapshot another writer stored, never through the shown view's runtime. */
+  readonly snapshotDiff: SnapshotDiff;
 }
 
 export interface ChatKeeperHost {
@@ -92,8 +94,18 @@ export function chatReplicaKeeper<E extends EditorController>(
       else if (copy.entry.title !== null) host.titled(copy.entry.title);
       if (!live) return editor.dispose();
       const kept: ChatReplicaStore = new ChatReplicaStore(ports.store, docId, config, ports.clock,
-        { baseStored: copy.base !== null, pending: copy.pending },
-        { snapshot: (): Promise<Uint8Array> => editor.snapshot(), report: host.report });
+        { base: copy.base === null ? null : copy.base.snapshot, pending: copy.pending }, {
+          snapshot: (): Promise<Uint8Array> => editor.snapshot(),
+          absorbSnapshot: async (snapshot: Uint8Array): Promise<void> => {
+            await editor.applyRemote(await ports.snapshotDiff(snapshot, await editor.stateVector()));
+          },
+          absorbUpdate: async (update: Uint8Array): Promise<void> => { await editor.applyRemote(update); },
+          report: host.report,
+        });
+      // The member's other windows (and this window's inbox) write the same copy: each write comes in.
+      const unhear: () => void = ports.store.onWrote((written: string, writer: object | null): void => {
+        if (written === docId && writer !== kept) void kept.heard();
+      });
       const sync: ChatDocumentSync = new ChatDocumentSync(config, { docId, title: entry.title }, editor, ports, {
         report: host.report,
         applied: (update: Uint8Array): void => kept.added(update),
@@ -108,7 +120,10 @@ export function chatReplicaKeeper<E extends EditorController>(
       sync.start();
       host.bound(sync);
       show(editor);
+      // Anything written between this open's read and its listening.
+      void kept.heard();
       close = (): Promise<void> => {
+        unhear();
         host.bound(null);
         sync.stop();
         release();

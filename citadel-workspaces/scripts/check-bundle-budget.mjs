@@ -293,6 +293,11 @@ const dist = join(root, 'dist');
  * Leader election has to run before the landing page renders, so none of it can be deferred.
  * The transfer work in the same PR (transfer-failure.ts, push-watch.ts, push-phase-events.ts,
  * tick-events.ts, the revfs push timers) adds 0 B to the path: it loads with the file browser.
+ * The same 348 -> 349 raise also covers chat documents open in two windows (rel-1124/cdoc-tabs,
+ * PR #318): another window's stored snapshot is brought in through a Citadel Docs runtime of its
+ * own (cdoc/chat/chat-snapshot-diff.ts), loaded lazily; the lazy import only adds its entry to the
+ * entry chunk's preload map (alone it measured 348.007). Nothing new runs on the landing page.
+ * Both together, after merging #316 into #318, measured 348.10 (356,454 B gzip), under 349.
  */
 const BUDGET_KB = 349;
 
