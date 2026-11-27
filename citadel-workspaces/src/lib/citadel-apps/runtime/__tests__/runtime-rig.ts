@@ -132,7 +132,7 @@ export function rigWorld(kernel: AppsTransport, listeners: Set<(answer: unknown)
     pushes: (l: (answer: unknown) => void) => { listeners.add(l); return (): void => { listeners.delete(l); }; }, sha256Hex: async (b: Uint8Array): Promise<string> => sha256Hex(b),
     nowMs: (): number => Date.now(), every: () => (): void => undefined,
     // agentSession is null, so the peer plane is absent; these are never asked.
-    peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string): void => { reports.push(what); },
+    peerCid: () => null, presence: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string): void => { reports.push(what); },
     notices: (n: AppNoticeEntry): void => { notices.push(n); },
     // No member is signed in to announce own-store writes for (own-store-writes.ts is tested on its own).
     ownWrites: null,

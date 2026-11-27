@@ -1,7 +1,6 @@
 /**
  * The file manager's dialogs and its hidden file picker.
  */
-import { toast } from 'sonner';
 import { StorageLimitModal } from './StorageLimitModal';
 import { RevfsDisabledModal } from './RevfsDisabledModal';
 import { MoveToDialog } from './MoveToDialog';
@@ -43,12 +42,7 @@ export function FileManagerModals({ fm, v }: { fm: UseFileManagerContentResult; 
         onClose={() => fm.setRevfsDisabledModalOpen(false)}
         reason={fm.revfsDisabledReason}
         explanation={fm.storageOffer.kind === 'refused' ? fm.storageOffer.reason : ''}
-        onOpenSettings={() => {
-          // The dedicated P2P chat-settings UI doesn't exist yet, so the
-          // button visibly tells the user what to do via a toast.
-          toast.info('Open Chat Settings to configure P2P storage');
-          fm.setRevfsDisabledModalOpen(false);
-        }}
+        peer={fm.selectedPeerCid !== null && fm.myCid !== null ? { cid: fm.selectedPeerCid, name: fm.peerName, self: fm.myCid } : null}
       />
 
       {fm.tree && <MoveToDialog tree={fm.tree} nodes={v.moving} onMove={(nodes, to) => { void fm.handleMove(nodes, to); }} onClose={v.closeMove} />}

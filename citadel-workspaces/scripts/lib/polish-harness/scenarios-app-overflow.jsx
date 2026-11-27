@@ -23,6 +23,7 @@ import { VIEWER } from '@/lib/calendar/__tests__/placement-fixture';
 import calendarManifest from '../../../../apps/first-party/calendar/manifest.json';
 import { TREE, seededGlue, useCalendarEngine } from './scenarios-calendar.jsx';
 import { workspaceState } from './workspace-state';
+import { offerTopicRetry, showTopicJoin } from '@/lib/citadel-apps/topic-join-store';
 
 const CALENDAR = calendarManifest.id;
 /** @type {import('citadel-workspace-client-ts').Capability[]} */
@@ -100,6 +101,19 @@ function Page() {
   );
 }
 
+/** The Calendar's topic not joined: the notice the page shows above it, with Try again, under the tab row. */
+let seeded = false;
+function waitingOnTheTopic() {
+  // Once, before the notice subscribes: the store is the page's, as an instance's rejoin writes it.
+  if (!seeded) {
+    seeded = true;
+    offerTopicRetry(INSTALL.id, () => undefined);
+    showTopicJoin(INSTALL.id, 'cal', { kind: 'waiting', reason: 'owner-offline', owner: { username: 'a-member-whose-username-runs-long', cid: 5n }, wake: { kind: 'auto', deadlineMs: Date.UTC(2026, 10, 27, 15, 5) } });
+  }
+  return <Page />;
+}
+
 export const APP_OVERFLOW_SCENARIOS = {
   'app-tab-overflow': () => <Page />,
+  'app-tab-topic-waiting': waitingOnTheTopic,
 };

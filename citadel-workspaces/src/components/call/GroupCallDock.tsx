@@ -1,6 +1,7 @@
 import { CallStage } from './CallStage';
 import { useCall } from '@/lib/call/call-context';
 import { callRoomId } from '@/lib/call/call-state';
+import { callAgainOf, type CallAgain } from '@/lib/call/call-again';
 
 /**
  * The in-call stage, docked above one group conversation and no other.
@@ -26,6 +27,7 @@ export function GroupCallDock({ roomId }: { roomId: string }): JSX.Element | nul
     videoQuality,
     setVideoQuality,
     leave,
+    startCall,
   } = useCall();
 
   const docked: boolean =
@@ -37,6 +39,7 @@ export function GroupCallDock({ roomId }: { roomId: string }): JSX.Element | nul
   // The null check re-stated for the compiler: `docked` already implies it,
   // but boolean flags do not narrow the variable they were computed from.
   if (!docked || call === null) return null;
+  const again: CallAgain | null = call.status === 'failed' ? callAgainOf(call) : null;
 
   return (
     <CallStage
@@ -54,6 +57,7 @@ export function GroupCallDock({ roomId }: { roomId: string }): JSX.Element | nul
       videoQuality={videoQuality}
       onVideoQualityChange={setVideoQuality}
       onLeave={() => void leave()}
+      onCallAgain={again === null ? undefined : (): Promise<void> => startCall(again.peers, again.video, again.home)}
     />
   );
 }

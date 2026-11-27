@@ -1,4 +1,4 @@
-import { AlertTriangle, Settings, Server, UserCircle2 } from 'lucide-react';
+import { AlertTriangle, Server, UserCircle2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { RecoveryNotice } from '@/components/recovery-route/RecoveryNotice';
+import { recovery, type Recovery } from '@/lib/recovery-route/recovery';
+import { otherMember } from '@/lib/recovery-route/other-member';
+import type { OtherMember } from '@/lib/recovery-route/binding';
 
 type DisabledReason = 'peer_disabled' | 'server_disabled';
 
@@ -17,8 +21,17 @@ interface RevfsDisabledModalProps {
   reason: DisabledReason;
   /** The refused offer's own words (lib/revfs/storage-offer.ts): the server's reason, when it gave one. */
   explanation: string;
-  /** Called when user clicks "Open Settings" (only for P2P) */
-  onOpenSettings?: () => void;
+  /** The peer whose storage is off, and this account's CID; null in server storage. */
+  peer: { readonly cid: bigint; readonly name: string | null; readonly self: bigint } | null;
+}
+
+const PEER_DRAFT: string = 'Could you turn on remote storage in your Citadel settings? I would like to share files with you.';
+
+/** The way out: ask the peer (a message, drafted) or the admins (a Scratchpad note). */
+function wayOut(reason: DisabledReason, peer: RevfsDisabledModalProps['peer']): Recovery | null {
+  if (reason === 'server_disabled') return recovery('files.remote-storage-off.server', { askAbout: 'server file storage' });
+  const member: OtherMember | null = peer === null ? null : otherMember(peer.cid, peer.self, peer.name);
+  return member === null ? null : recovery('files.remote-storage-off.peer', { member, draft: PEER_DRAFT });
 }
 
 /**
@@ -30,9 +43,10 @@ export function RevfsDisabledModal({
   onClose,
   reason,
   explanation,
-  onOpenSettings,
+  peer,
 }: RevfsDisabledModalProps): JSX.Element {
   const isPeerDisabled: boolean = reason === 'peer_disabled';
+  const way: Recovery | null = wayOut(reason, peer);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -87,25 +101,20 @@ export function RevfsDisabledModal({
           </div>
         </div>
 
+        {way !== null && (
+          <RecoveryNotice
+            recovery={way}
+            message={isPeerDisabled ? 'Ask them to turn it on. Your message is drafted for you.' : 'An admin can turn it on.'}
+          />
+        )}
+
         <DialogFooter className="gap-2">
           <Button
             onClick={onClose}
             className="bg-card border-primary-accent text-foreground hover:bg-border hover:text-foreground"
           >
-            {isPeerDisabled ? 'OK' : 'Close'}
+            Close
           </Button>
-          {isPeerDisabled && onOpenSettings && (
-            <Button
-              onClick={() => {
-                onOpenSettings();
-                onClose();
-              }}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Open Settings
-            </Button>
-          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

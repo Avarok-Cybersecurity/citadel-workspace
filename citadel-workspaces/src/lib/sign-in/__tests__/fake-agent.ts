@@ -48,6 +48,8 @@ export class FakeAgent {
   readonly admission: FakeAdmission = new FakeAdmission();
   /** A server that has not enabled security keys: the SDK will not ask it to enrol one. */
   keysDisabled: boolean = false;
+  /** The next Register fails with this message (an agent or server fault), once. */
+  failNextRegister: string | null = null;
   private readonly pending: Map<string, Pending> = new Map<string, Pending>();
   private nextFactor: number = 10;
   private nextPhrase: number = 0;
@@ -123,6 +125,12 @@ export class FakeAgent {
   }
 
   private register(body: Req): void {
+    if (this.failNextRegister !== null) {
+      const message: string = this.failNextRegister;
+      this.failNextRegister = null;
+      this.emit('RegisterFailure', { request_id: body.request_id, message });
+      return;
+    }
     const refused: string | null = this.admission.check(body.admission_token);
     if (refused) { this.emit('RegisterFailure', { request_id: body.request_id, message: 'A human check is required', reason_code: refused, ...this.admission.published(refused) }); return; }
     // One account per username here, as the agent: another server's is refused, typed, not overwritten.

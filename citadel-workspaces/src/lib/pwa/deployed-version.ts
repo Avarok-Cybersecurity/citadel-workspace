@@ -31,6 +31,12 @@ export interface VersionManifest {
    * What the agent-update banner names (agent-update/released-agent.ts).
    */
   readonly agent: string;
+  /**
+   * The UX score recorded for this build (scripts/ux-score.baseline.json, RECOVERY-DESIGN.md §4.2):
+   * the build's own score is at least this, or the ux-score gate would have failed it. Carried so a
+   * running page and a problem report can name the score of the build they came from.
+   */
+  readonly ux: number;
 }
 
 export function versionManifest(manifest: VersionManifest): string {

@@ -1,3 +1,5 @@
+/// A member's ask of the admins, landed in their Scratchpads.
+pub mod admin_requests;
 /// Citadel Apps: capabilities, install scopes and audiences.
 pub mod apps;
 /// An app install as stored, and why an apps request is refused.
@@ -545,6 +547,9 @@ pub enum WorkspaceProtocolRequest {
     /// Who connects without asking; see `messaging_trust`.
     MessagingTrust(messaging_trust::MessagingTrustRequest),
 
+    /// A member's ask of the workspace's admins, landed in their Scratchpads; see `admin_requests`.
+    AdminRequests(admin_requests::AdminRequestsRequest),
+
     /// The workspace's role table; see `roles`.
     Roles(roles_protocol::RolesRequest),
 
@@ -800,6 +805,8 @@ pub enum WorkspaceProtocolResponse {
     Telemetry(telemetry::TelemetryResponse),
 
     MessagingTrust(messaging_trust::MessagingTrustResponse),
+
+    AdminRequests(admin_requests::AdminRequestsResponse),
 
     Roles(roles_protocol::RolesResponse),
 

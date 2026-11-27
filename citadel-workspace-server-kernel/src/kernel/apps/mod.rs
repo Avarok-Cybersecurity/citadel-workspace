@@ -142,6 +142,8 @@ mod kernel_session_tests;
 #[cfg(test)]
 mod kernel_storage_hardening_tests;
 #[cfg(test)]
+mod kernel_topic_replace_tests;
+#[cfg(test)]
 mod kernel_withdraw_tests;
 #[cfg(test)]
 mod md_header_tests;

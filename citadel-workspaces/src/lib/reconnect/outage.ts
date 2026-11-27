@@ -17,10 +17,31 @@ export const OUTAGE_CODE: Readonly<Record<OutageKind, string>> = {
   'workspace-timeout': 'CW-LOAD-TIMEOUT',
 };
 
-export const OUTAGE_COPY: { readonly title: string; readonly codeLabel: string; readonly retry: string } = {
-  title: 'The error is on us — please check back soon',
-  codeLabel: 'Error code',
-  retry: 'Retry',
+export const OUTAGE_COPY: { readonly codeLabel: string } = { codeLabel: 'Error code' };
+
+/**
+ * Whose failure an outage is, which decides what the page says and what its way out does. The
+ * person's own network comes first: offline, every kind reads as offline.
+ */
+export type OutageCause = 'offline' | 'reconnecting' | 'server-down' | 'load-timeout';
+
+export function outageCause(kind: OutageKind, online: boolean): OutageCause {
+  if (!online) return 'offline';
+  if (kind === 'reconnect-slow') return 'reconnecting';
+  if (kind === 'server-unreachable') return 'server-down';
+  return 'load-timeout';
+}
+
+/**
+ * Owner decision 2026-11-27 (REL-1127, recorded in RECOVERY-DESIGN.md §6): the owner's sentence
+ * only when the server is really down; offline says so and that it reconnects by itself; during a
+ * reconnect, that it is reconnecting.
+ */
+export const OUTAGE_TITLE: { readonly [K in OutageCause]: string } = {
+  'server-down': 'The error is on us — please check back soon',
+  offline: 'You’re offline. Citadel will reconnect automatically when your connection is back.',
+  reconnecting: 'Reconnecting to your workspace…',
+  'load-timeout': 'Your workspace is taking too long to load',
 };
 
 /** How long "Reconnecting" stays a strip over the workspace before it becomes the whole page. */

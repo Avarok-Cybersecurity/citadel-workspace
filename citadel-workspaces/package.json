@@ -40,6 +40,8 @@
     "check:a11y": "node scripts/check-accessibility.mjs",
     "check:agent-down": "node scripts/check-agent-down.mjs",
     "check:types": "node scripts/check-explicit-types.mjs",
+    "check:dead-ends": "node scripts/check-errors-declare-recovery.mjs",
+    "check:ux-score": "node scripts/ux-score.mjs",
     "check:spec-copy": "node scripts/check-specs-search-for-real-copy.mjs",
     "check:debug-args": "node scripts/check-debug-args-are-cheap.mjs",
     "check:gates-invoked": "node scripts/check-every-gate-is-invoked.mjs",

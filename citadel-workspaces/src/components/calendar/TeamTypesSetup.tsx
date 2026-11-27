@@ -10,10 +10,11 @@ import type { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
 import { TEAM_KINDS } from '@/lib/calendar/event-type-kind';
 import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
 import type { EventType } from '@/lib/calendar/generated/EventType';
-import { PortRefused, refusalCopy, type CalendarPorts } from '@/lib/calendar/ports';
+import { reasonOf, type CalendarPorts } from '@/lib/calendar/ports';
 import { readTeamTypes, removeTeamType, saveTeamType, teamHosts } from '@/lib/calendar/team-types';
 import type { Member } from '@/lib/citadel-apps/sdk/generated/Member';
 import { EventTypeEditor } from './EventTypeEditor';
+import { UnreadablePanel } from './UnreadablePanel';
 
 interface TeamTypesSetupProps {
   ports: CalendarPorts;
@@ -27,7 +28,6 @@ interface TeamTypesSetupProps {
 type Loaded = { kind: 'loading' } | { kind: 'failed'; reason: string } | { kind: 'ready'; types: EventType[]; members: string[] };
 type Editing = { kind: 'none' } | { kind: 'type'; id: string; type: EventType | null };
 
-const reasonOf = (e: unknown): string => (e instanceof PortRefused ? refusalCopy(e.refused) : 'something went wrong');
 const kindName = (t: EventType): string => (typeof t.kind === 'object' && 'collective' in t.kind ? 'all together' : 'in turn');
 
 export function TeamTypesSetup({ ports, engine, node, deviceZone, today, newId }: TeamTypesSetupProps): JSX.Element {
@@ -58,7 +58,7 @@ export function TeamTypesSetup({ ports, engine, node, deviceZone, today, newId }
   };
 
   if (loaded.kind === 'loading') return <p role="status" className="text-sm text-muted-foreground">Loading {node.name}&apos;s team types…</p>;
-  if (loaded.kind === 'failed') return <p role="alert" className="text-sm text-destructive-emphasis">{node.name}&apos;s team types could not be read: {loaded.reason}.</p>;
+  if (loaded.kind === 'failed') return <UnreadablePanel what={<>{node.name}&apos;s team types</>} reason={loaded.reason} retry={reload} />;
   return (
     <section aria-label={`Team event types on ${node.name}`} className="flex min-w-0 flex-col gap-2" data-testid="calendar-team-types">
       <h3 className="text-sm font-semibold text-foreground">Team event types on {node.name}</h3>

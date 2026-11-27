@@ -108,6 +108,7 @@ async fn topic_group(kernel: &Kernel, who: &str, id: &str, claim: Option<&str>) 
         install_id: id.into(),
         topic: "pool".into(),
         claim: claim.map(str::to_string),
+        replaces: None,
     };
     ask_on(kernel, who, None, request).await
 }

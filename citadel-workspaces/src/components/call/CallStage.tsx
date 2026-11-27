@@ -13,7 +13,9 @@ import { cameraControlUsable, mediaControlsUsable, type ControlAvailability } fr
 import { VideoSettingsModal } from './VideoSettingsModal';
 import { canShareScreen } from '@/lib/call/screen-capability';
 import type { VideoQuality } from '@/lib/call/video-quality';
-import { callLabel, ConnectingBanner, ErrorPanel, OutgoingCallPanel } from './CallStagePanels';
+import { callLabel, ConnectingBanner, ErrorPanel, FailureDetail, OutgoingCallPanel } from './CallStagePanels';
+import { RecoveryNotice } from '@/components/recovery-route/RecoveryNotice';
+import { recovery } from '@/lib/recovery-route/recovery';
 import { useStatusSince } from './use-status-since';
 import { failedCallTitle } from '@/lib/call/call-failure-detail';
 
@@ -38,6 +40,8 @@ interface CallStageProps {
   onToggleMic: () => void;
   onToggleCamera: () => void;
   onLeave: () => void;
+  /** Places the failed call again; absent when it knows nobody to call. */
+  onCallAgain?: () => Promise<void>;
 }
 
 /**
@@ -64,6 +68,7 @@ export function CallStage({
   videoQuality,
   onVideoQualityChange,
   onLeave,
+  onCallAgain,
 }: CallStageProps): JSX.Element {
   const [videoSettingsOpen, setVideoSettingsOpen] = useState<boolean>(false);
   // Tells OngoingCallBar to stand down: the call's own surface is on screen, so
@@ -111,10 +116,15 @@ export function CallStage({
       className="m-3 rounded-lg border border-border bg-card p-3"
     >
       {call.status === 'failed' ? (
-        <ErrorPanel
-          title={failedCallTitle(call.reason)}
-          detail={call.reason ?? 'Something went wrong setting up the call.'}
-        />
+        onCallAgain === undefined ? (
+          <ErrorPanel title={failedCallTitle(call.reason)} detail={call.reason ?? 'Something went wrong setting up the call.'} />
+        ) : (
+          <RecoveryNotice
+            recovery={recovery('call.failed', { retry: onCallAgain })}
+            title={failedCallTitle(call.reason)}
+            message={<FailureDetail detail={call.reason ?? 'Something went wrong setting up the call.'} />}
+          />
+        )
       ) : call.status === 'ringing-out' ? (
         <OutgoingCallPanel invitees={visible} onCancel={onLeave} />
       ) : (
