@@ -59,7 +59,7 @@ export interface ScriptedAgent {
   readonly playTail: (notifyTimes: number) => void;
 }
 
-const hex = (bytes: readonly number[]): string => bytes.map((b: number) => b.toString(16).padStart(2, '0')).join('');
+const hex = (bytes: Uint8Array): string => Array.from(bytes, (b: number) => b.toString(16).padStart(2, '0')).join('');
 const bytesOf = (h: string): Uint8Array => Uint8Array.from({ length: h.length / 2 }, (_: unknown, i: number) => parseInt(h.slice(i * 2, i * 2 + 2), 16));
 const variant = (request: Json): string => Object.keys(request)[0] ?? '(empty)';
 
@@ -99,7 +99,7 @@ export function scriptedAgent(t: Transcript): ScriptedAgent {
     deliverUntilExpect();
   };
   const onSend = (body: Json): void => {
-    const got: string = hex(Array.isArray(body.body) ? (body.body as number[]) : []);
+    const got: string = hex(ArrayBuffer.isView(body.body) ? new Uint8Array(body.body.buffer, body.body.byteOffset, body.body.byteLength) : new Uint8Array());
     if (record.mismatch !== null) return;
     const step: TranscriptStep | undefined = t.steps[cursor];
     if (step?.expect === undefined) {
