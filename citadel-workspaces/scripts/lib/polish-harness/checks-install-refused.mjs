@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { AxeBuilder } from '@axe-core/playwright';
 
 /**
- * A refused install (marketplace/InstallRefused.tsx) at 375px and on a desktop: the answer, the
+ * A refused install (marketplace/RefusalView.tsx) at 375px and on a desktop: the answer, the
  * managers' line and every next-step button sit inside the view, each a 44px target, no two
  * buttons overlap, nothing scrolls sideways, and the text to copy by hand (the clipboard refused)
  * wraps its long link instead of widening the page. No serious axe finding.
@@ -28,7 +28,7 @@ const theRefusalFits = (scenario, buttons, managersLine) => async ({ page, url, 
       assert.ok(s.height >= 44 && s.width >= 44, `${s.id} is a ${s.width}x${s.height} target`);
     }
     for (let i = 0; i < steps.length; i++) for (let j = i + 1; j < steps.length; j++) assert.ok(!overlap(steps[i], steps[j]), `${steps[i].id} overlaps ${steps[j].id}`);
-    await page.getByTestId(buttons[0] === 'apps-next-ask-admin' ? 'apps-next-ask-admin' : 'apps-next-report').click();
+    await page.getByTestId(buttons[0] === 'apps-next-ask-admin' ? 'apps-next-ask-admin' : 'apps-next-report-bug').click();
     const byHand = page.getByTestId('apps-next-not-copied');
     await byHand.waitFor({ state: 'visible' });
     const pre = await byHand.locator('pre').boundingBox();
@@ -46,6 +46,6 @@ const theRefusalFits = (scenario, buttons, managersLine) => async ({ page, url, 
 };
 
 export const INSTALL_REFUSED_CHECKS = {
-  aMembersRefusedInstallOffersAnAdminRequestThatFits: theRefusalFits('install-refused-member', ['apps-next-ask-admin', 'apps-next-change-choice'], false),
-  aManagersRefusedInstallSaysMoreAndFits: theRefusalFits('install-refused-manager', ['apps-next-change-choice', 'apps-next-report'], true),
+  aMembersRefusedInstallOffersAnAdminRequestThatFits: theRefusalFits('install-refused-member', ['apps-next-ask-admin', 'apps-next-fix-input'], false),
+  aManagersRefusedInstallSaysMoreAndFits: theRefusalFits('install-refused-manager', ['apps-next-fix-input', 'apps-next-report-bug'], true),
 };

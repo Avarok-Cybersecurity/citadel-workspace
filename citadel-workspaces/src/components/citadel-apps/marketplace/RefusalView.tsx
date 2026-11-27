@@ -1,12 +1,13 @@
 /**
- * An install the server refused: what it said, and a button for each next step
- * (refusal-next-step.ts), so the person always has something to press. Copying goes through the
+ * An apps request that did not do what was asked (an install the server refused, or the listing a
+ * link named): what happened, and a button for each next step (refusal-next-step.ts), so the
+ * person always has something to press. Copying goes through the
  * marketplace's clipboard; when the clipboard cannot be reached, the text is shown to copy by hand.
  */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
-  adminRequestText, NEXT_STEP_LABEL, refusalNextSteps, reportText,
+  adminRequestText, nextStepId, nextStepLabel, reportText,
   type RefusalGuidance, type RefusalNextStep, type RefusedInstall,
 } from '@/lib/citadel-apps/refusal-next-step';
 
@@ -14,20 +15,24 @@ export interface RefusalActions {
   retry: () => void;
   changeChoice: () => void;
   showInstalled: (installId: string) => void;
+  browse: () => void;
   copyText: (text: string) => Promise<void>;
 }
 
-interface InstallRefusedProps {
+interface RefusalViewProps {
+  /** What happened, in words. */
+  message: string;
+  /** The steps (refusal-next-step.ts `refusalNextSteps`, `linkedAppNextSteps`). */
+  guidance: RefusalGuidance;
+  /** What an admin request and a report say. */
   refused: RefusedInstall;
-  /** `AppManage` on the workspace: such a person is told more. */
-  manages: boolean;
   actions: RefusalActions;
+  testId: string;
 }
 
 type Copied = { kind: 'copied'; to: string } | { kind: 'not-copied'; text: string } | null;
 
-export function InstallRefused({ refused, manages, actions }: InstallRefusedProps): JSX.Element {
-  const guidance: RefusalGuidance = refusalNextSteps(refused.refusal, manages);
+export function RefusalView({ message, guidance, refused, actions, testId }: RefusalViewProps): JSX.Element {
   const [copied, setCopied] = useState<Copied>(null);
   const copy = async (text: string, to: string): Promise<void> => {
     try {
@@ -40,23 +45,23 @@ export function InstallRefused({ refused, manages, actions }: InstallRefusedProp
   const press = (step: RefusalNextStep): void => {
     switch (step.kind) {
       case 'retry': actions.retry(); return;
-      case 'change-choice': actions.changeChoice(); return;
-      case 'open-installed': actions.showInstalled(step.installId); return;
+      case 'fix-input': actions.changeChoice(); return;
+      case 'navigate': if (step.to.kind === 'installed-app') actions.showInstalled(step.to.installId); else actions.browse(); return;
       case 'ask-admin': void copy(adminRequestText(refused), 'Copied. Send it to a workspace admin.'); return;
-      case 'report': void copy(reportText(refused), 'Copied. Paste it into a message to the app’s publisher or to Avarok.'); return;
+      case 'report-bug': void copy(reportText(refused), 'Copied. Paste it into a message to the app’s publisher or to Avarok.'); return;
     }
   };
 
   return (
-    <div className="flex flex-col gap-[12px] py-[12px]" data-testid="apps-install-failed">
-      <p role="alert" className="break-words text-foreground">{refused.appName} was not installed. {refused.copy}</p>
+    <div className="flex flex-col gap-[12px] py-[12px]" data-testid={testId}>
+      <p role="alert" className="break-words text-foreground">{message}</p>
       {guidance.forManagers !== null && (
         <p className="break-words text-sm text-muted-foreground" data-testid="apps-install-failed-managers">{guidance.forManagers}</p>
       )}
       <div className="flex flex-wrap gap-[8px]">
         {guidance.steps.map((step: RefusalNextStep, i: number) => (
-          <Button key={step.kind} variant={i === 0 ? 'default' : 'outline'} className="min-h-[44px]" onClick={() => press(step)} data-testid={`apps-next-${step.kind}`}>
-            {NEXT_STEP_LABEL[step.kind]}
+          <Button key={nextStepId(step)} variant={i === 0 ? 'default' : 'outline'} className="min-h-[44px]" onClick={() => press(step)} data-testid={`apps-next-${nextStepId(step)}`}>
+            {nextStepLabel(step)}
           </Button>
         ))}
       </div>

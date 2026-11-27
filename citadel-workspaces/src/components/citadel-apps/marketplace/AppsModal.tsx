@@ -9,11 +9,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import type { AppsModalRequest, TabTarget } from '@/lib/citadel-apps/apps-modal-store';
 import type { ListedApp } from '@/lib/citadel-apps/listing-model';
-import { NOT_AVAILABLE_COPY } from '@/lib/citadel-apps/refusal-copy';
+import { NOT_AVAILABLE_COPY, refusalCopy } from '@/lib/citadel-apps/refusal-copy';
+import { linkedAppNextSteps } from '@/lib/citadel-apps/refusal-next-step';
+import { appLinkUrl, type AppLink } from '@/lib/citadel-apps/app-link';
 import { useMarketplaceData, type MarketplaceData } from './use-marketplace-data';
 import { useLinkedApp, type LinkedApp } from './use-linked-app';
 import { AppsBrowse, type TabBrowse } from './AppsBrowse';
 import { AppFlow } from './AppFlow';
+import { RefusalView } from './RefusalView';
 import { InstalledApps } from './InstalledApps';
 import type { MarketplaceDeps, MarketplaceViewer, MarketTab } from './marketplace-types';
 
@@ -66,12 +69,21 @@ export function AppsModal({ open, onOpenChange, request, deps, viewer }: AppsMod
         />
       </div>
     );
-  } else if (linked.kind === 'unavailable' || linked.kind === 'looking') {
+  } else if (linked.kind === 'looking') {
+    body = <p role="status" className="py-[12px] text-foreground" data-testid="apps-link-looking">Looking for the app…</p>;
+  } else if ((linked.kind === 'unavailable' || linked.kind === 'unreachable') && request.kind === 'link') {
+    const link: AppLink = request.link;
+    const copy: string = linked.kind === 'unreachable' ? refusalCopy(linked.failure) : NOT_AVAILABLE_COPY;
     body = (
-      <div className="flex flex-col gap-[12px] py-[12px]" data-testid={`apps-link-${linked.kind}`}>
-        <p role={linked.kind === 'unavailable' ? 'alert' : 'status'} className="text-foreground">{linked.kind === 'unavailable' ? NOT_AVAILABLE_COPY : 'Looking for the app…'}</p>
-        <Button variant="outline" className="min-h-[44px] self-start" onClick={back}>See all apps</Button>
-      </div>
+      <RefusalView
+        testId={`apps-link-${linked.kind}`} message={copy} guidance={linkedAppNextSteps(linked.kind, manages)}
+        refused={{
+          appName: link.appId, appId: link.appId, version: link.version ?? 'its latest version',
+          where: (link.nodeId === null ? null : viewer.nodeName(link.nodeId)) ?? 'this workspace',
+          link: appLinkUrl(viewer.origin, link), refusal: linked.kind === 'unreachable' ? linked.failure : 'Unavailable', copy,
+        }}
+        actions={{ retry: linked.kind === 'unreachable' ? linked.retry : back, changeChoice: back, showInstalled: back, browse: back, copyText: deps.copyText }}
+      />
     );
   } else {
     body = (

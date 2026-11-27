@@ -11,17 +11,21 @@
 import type { AppsRefusal } from 'citadel-workspace-client-ts';
 import type { AppsFailure } from '@/lib/workspace-service/apps-operations';
 
+/**
+ * The kinds and payload names are the recovery design's (`RecoveryRoute` in RECOVERY-DESIGN.md
+ * §2.1), so a general recovery framework takes these over by kind.
+ */
 export type RefusalNextStep =
   /** Send the same request again: the cause may have passed. */
   | { kind: 'retry' }
   /** Back to where to install it and what to allow. */
-  | { kind: 'change-choice' }
+  | { kind: 'fix-input'; field: 'install-choice' }
   /** Copy a message for a workspace admin, prefilled with the app, the place and the answer. */
-  | { kind: 'ask-admin' }
-  /** Show the install that is already there. */
-  | { kind: 'open-installed'; installId: string }
+  | { kind: 'ask-admin'; request: { kind: 'app-access' } }
+  /** The install that is already there, or every app. */
+  | { kind: 'navigate'; to: { kind: 'installed-app'; installId: string } | { kind: 'apps-browse' } }
   /** Copy the details for a problem report. */
-  | { kind: 'report' };
+  | { kind: 'report-bug' };
 
 export interface RefusalGuidance {
   steps: readonly [RefusalNextStep, ...RefusalNextStep[]];
@@ -30,13 +34,18 @@ export interface RefusalGuidance {
 }
 
 /** What a step's button says. */
-export const NEXT_STEP_LABEL: Record<RefusalNextStep['kind'], string> = {
-  retry: 'Try again',
-  'change-choice': 'Change where or what',
-  'ask-admin': 'Copy a request for an admin',
-  'open-installed': 'Show the installed app',
-  report: 'Copy details for a report',
-};
+export function nextStepLabel(step: RefusalNextStep): string {
+  switch (step.kind) {
+    case 'retry': return 'Try again';
+    case 'fix-input': return 'Change where or what';
+    case 'ask-admin': return 'Copy a request for an admin';
+    case 'navigate': return step.to.kind === 'installed-app' ? 'Show the installed app' : 'See all apps';
+    case 'report-bug': return 'Copy details for a report';
+  }
+}
+
+/** A step's test id suffix: its kind, or its destination for a navigation. */
+export const nextStepId = (step: RefusalNextStep): string => (step.kind === 'navigate' ? step.to.kind : step.kind);
 
 export const UNAVAILABLE_FOR_MANAGERS: string =
   'The server says this when the app is no longer offered to you here, or the page you chose is not there. Choose another page, or report it.';
@@ -45,7 +54,7 @@ type Unit = Extract<AppsRefusal, string>;
 type Keyed = Exclude<AppsRefusal, string>;
 type KeysOf<T> = T extends unknown ? keyof T : never;
 type Key = KeysOf<Keyed>;
-/** Whose step it is: the person (`change-choice`), an admin, the publisher or the network. */
+/** Whose step it is: the person (`fix-input`), an admin, the publisher or the network. */
 type Remedy = 'choice' | 'admin' | 'publisher' | 'transient';
 
 const UNIT_REMEDY: Record<Unit | 'Malformed' | 'NoAnswer', Remedy> = {
@@ -77,23 +86,39 @@ const KEYED_REMEDY: Record<Exclude<Key, 'AlreadyInstalled'>, Remedy> = {
   Limit: 'admin',
 };
 
+const RETRY: RefusalNextStep = { kind: 'retry' };
+const FIX: RefusalNextStep = { kind: 'fix-input', field: 'install-choice' };
+const ASK: RefusalNextStep = { kind: 'ask-admin', request: { kind: 'app-access' } };
+const REPORT: RefusalNextStep = { kind: 'report-bug' };
+const BROWSE: RefusalNextStep = { kind: 'navigate', to: { kind: 'apps-browse' } };
+
 function steps(remedy: Remedy, manages: boolean): RefusalGuidance['steps'] {
   switch (remedy) {
-    case 'choice': return [{ kind: 'change-choice' }];
+    case 'choice': return [FIX];
     // Someone who manages apps is the admin: a report reaches further than asking themselves.
-    case 'admin': return manages ? [{ kind: 'change-choice' }, { kind: 'report' }] : [{ kind: 'ask-admin' }, { kind: 'change-choice' }];
-    case 'publisher': return [{ kind: 'report' }];
-    case 'transient': return [{ kind: 'retry' }, { kind: 'report' }];
+    case 'admin': return manages ? [FIX, REPORT] : [ASK, FIX];
+    case 'publisher': return [REPORT];
+    case 'transient': return [RETRY, REPORT];
   }
 }
 
 /** The steps for `refusal`, for a person who does (`manages`) or does not manage apps here. */
 export function refusalNextSteps(refusal: AppsFailure, manages: boolean): RefusalGuidance {
   if (typeof refusal === 'object' && 'AlreadyInstalled' in refusal) {
-    return { steps: [{ kind: 'open-installed', installId: refusal.AlreadyInstalled.install_id }], forManagers: null };
+    return { steps: [{ kind: 'navigate', to: { kind: 'installed-app', installId: refusal.AlreadyInstalled.install_id } }], forManagers: null };
   }
   const remedy: Remedy = typeof refusal === 'string' ? UNIT_REMEDY[refusal] : KEYED_REMEDY[Object.keys(refusal)[0] as Exclude<Key, 'AlreadyInstalled'>];
   return { steps: steps(remedy, manages), forManagers: manages && refusal === 'Unavailable' ? UNAVAILABLE_FOR_MANAGERS : null };
+}
+
+/**
+ * A link that opened the marketplace on one app, when its listing could not be had
+ * (use-linked-app.ts): no answer or an unreadable one is tried again; a refusal, or a listing that
+ * does not read, is an admin's to grant, with every other app one press away.
+ */
+export function linkedAppNextSteps(outcome: 'unreachable' | 'unavailable', manages: boolean): RefusalGuidance {
+  if (outcome === 'unreachable') return { steps: [RETRY, BROWSE], forManagers: null };
+  return { steps: manages ? [BROWSE, REPORT] : [ASK, BROWSE], forManagers: manages ? UNAVAILABLE_FOR_MANAGERS : null };
 }
 
 /** The refusal's name, for a report: the variant, never its words. */

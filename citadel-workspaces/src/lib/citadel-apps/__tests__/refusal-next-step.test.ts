@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AppsFailure } from '@/lib/workspace-service/apps-operations';
 import {
-  adminRequestText, NEXT_STEP_LABEL, refusalNextSteps, reportText, UNAVAILABLE_FOR_MANAGERS,
+  adminRequestText, linkedAppNextSteps, nextStepId, nextStepLabel, refusalNextSteps, reportText, UNAVAILABLE_FOR_MANAGERS,
   type RefusalNextStep, type RefusedInstall,
 } from '../refusal-next-step';
 
@@ -20,7 +20,7 @@ const EVERY: readonly AppsFailure[] = [
 ];
 
 const kinds = (refusal: AppsFailure, manages: boolean): string[] =>
-  refusalNextSteps(refusal, manages).steps.map((s: RefusalNextStep) => s.kind);
+  refusalNextSteps(refusal, manages).steps.map(nextStepId);
 
 const REFUSED: RefusedInstall = {
   appName: 'synchronized.work', appId: 'work.synchronized.app', version: '0.1.0', where: 'Everyone on “Home”',
@@ -32,17 +32,17 @@ describe('the next step after an apps refusal', () => {
     for (const manages of [false, true]) {
       const steps: readonly RefusalNextStep[] = refusalNextSteps(refusal, manages).steps;
       expect(steps.length).toBeGreaterThan(0);
-      for (const step of steps) expect(NEXT_STEP_LABEL[step.kind]).toMatch(/\S/);
+      for (const step of steps) expect(nextStepLabel(step)).toMatch(/\S/);
     }
   });
 
   it('a member is sent to an admin for Unavailable and told nothing more', () => {
-    expect(kinds('Unavailable', false)).toEqual(['ask-admin', 'change-choice']);
+    expect(kinds('Unavailable', false)).toEqual(['ask-admin', 'fix-input']);
     expect(refusalNextSteps('Unavailable', false).forManagers).toBeNull();
   });
 
   it('someone who manages apps is told what Unavailable can mean, and may report it', () => {
-    expect(kinds('Unavailable', true)).toEqual(['change-choice', 'report']);
+    expect(kinds('Unavailable', true)).toEqual(['fix-input', 'report-bug']);
     expect(refusalNextSteps('Unavailable', true).forManagers).toBe(UNAVAILABLE_FOR_MANAGERS);
   });
 
@@ -51,10 +51,10 @@ describe('the next step after an apps refusal', () => {
   });
 
   it('a passing cause is retried, a publisher’s fault reported, an existing install shown', () => {
-    expect(kinds('ArtifactUnreachable', false)).toEqual(['retry', 'report']);
+    expect(kinds('ArtifactUnreachable', false)).toEqual(['retry', 'report-bug']);
     expect(kinds('NoAnswer', false)[0]).toBe('retry');
-    expect(kinds('BadSignature', false)).toEqual(['report']);
-    expect(refusalNextSteps({ AlreadyInstalled: { install_id: 'i-1' } }, false).steps).toEqual([{ kind: 'open-installed', installId: 'i-1' }]);
+    expect(kinds('BadSignature', false)).toEqual(['report-bug']);
+    expect(refusalNextSteps({ AlreadyInstalled: { install_id: 'i-1' } }, false).steps).toEqual([{ kind: 'navigate', to: { kind: 'installed-app', installId: 'i-1' } }]);
   });
 
   it('the request for an admin names the app, the place, the link and the answer', () => {
@@ -64,5 +64,12 @@ describe('the next step after an apps refusal', () => {
 
   it('the report names the variant, not only its words', () => {
     expect(reportText({ ...REFUSED, refusal: { PermissionRequired: 'AppInstallScoped' } })).toContain('Answer: PermissionRequired');
+  });
+
+  it('a link whose listing did not get through is asked again; one refused goes to an admin', () => {
+    expect(linkedAppNextSteps('unreachable', false).steps.map(nextStepId)).toEqual(['retry', 'apps-browse']);
+    expect(linkedAppNextSteps('unavailable', false).steps.map(nextStepId)).toEqual(['ask-admin', 'apps-browse']);
+    expect(linkedAppNextSteps('unavailable', false).forManagers).toBeNull();
+    expect(linkedAppNextSteps('unavailable', true)).toEqual({ steps: [{ kind: 'navigate', to: { kind: 'apps-browse' } }, { kind: 'report-bug' }], forManagers: UNAVAILABLE_FOR_MANAGERS });
   });
 });

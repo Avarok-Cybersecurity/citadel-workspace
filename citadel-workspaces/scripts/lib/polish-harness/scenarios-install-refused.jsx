@@ -1,5 +1,6 @@
 /** A refused install's next steps at their widest: a long app name, a long link, a member's and a manager's steps, and a clipboard that cannot be reached. */
-import { InstallRefused } from '@/components/citadel-apps/marketplace/InstallRefused';
+import { RefusalView } from '@/components/citadel-apps/marketplace/RefusalView';
+import { refusalNextSteps } from '@/lib/citadel-apps/refusal-next-step';
 
 const NOOP = () => {};
 const REFUSED = {
@@ -16,7 +17,8 @@ const unreachable = () => Promise.reject(new Error('The clipboard is not allowed
 function Refused({ manages }) {
   return (
     <div style={{ padding: 16, maxWidth: 640 }}>
-      <InstallRefused refused={REFUSED} manages={manages} actions={{ retry: NOOP, changeChoice: NOOP, showInstalled: NOOP, copyText: unreachable }} />
+      <RefusalView testId="apps-install-failed" message={`${REFUSED.appName} was not installed. ${REFUSED.copy}`} guidance={refusalNextSteps(REFUSED.refusal, manages)}
+        refused={REFUSED} actions={{ retry: NOOP, changeChoice: NOOP, showInstalled: NOOP, browse: NOOP, copyText: unreachable }} />
     </div>
   );
 }

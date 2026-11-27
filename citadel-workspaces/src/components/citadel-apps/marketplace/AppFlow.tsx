@@ -13,10 +13,11 @@ import { installScopeOf, scopeDomain, scopeOptions, type ScopeChoice, type Scope
 import { consentRows, grantOf, grantProblem, keyTrust, type ConsentRow } from '@/lib/citadel-apps/consent-model';
 import { scopeSentence } from '@/lib/citadel-apps/scope-sentence';
 import { refusalCopy } from '@/lib/citadel-apps/refusal-copy';
+import { refusalNextSteps } from '@/lib/citadel-apps/refusal-next-step';
 import { installApp, type AppsResult } from '@/lib/workspace-service/apps-operations';
 import { listingOffer } from '@/lib/citadel-apps/listing-offer';
 import { appLinkUrl } from '@/lib/citadel-apps/app-link';
-import { InstallRefused } from './InstallRefused';
+import { RefusalView } from './RefusalView';
 import { ListingDetail } from './ListingDetail';
 import { ScopePicker } from './ScopePicker';
 import { ConsentPanel } from './ConsentPanel';
@@ -135,11 +136,14 @@ export function AppFlow({ app, installs, deps, viewer, onInstalled, onDone, onSh
 
   const retry = (): void => { dispatch({ kind: 'retry' }); void install(s.scope, s.granted); };
   const link: string = appLinkUrl(viewer.origin, { appId: m.id, nodeId: scopeNode(s.scope), version: m.version, server: viewer.serverAddress });
+  const copy: string = refusalCopy(s.refusal);
   return (
-    <InstallRefused
-      refused={{ appName: m.name, appId: m.id, version: m.version, where: sentence(s.scope), link, refusal: s.refusal, copy: refusalCopy(s.refusal) }}
-      manages={viewer.authority.holds('AppManage', viewer.rootId) === 'yes'}
-      actions={{ retry, changeChoice: () => dispatch({ kind: 'back' }), showInstalled: onShowInstalled, copyText: deps.copyText }}
+    <RefusalView
+      testId="apps-install-failed"
+      message={`${m.name} was not installed. ${copy}`}
+      guidance={refusalNextSteps(s.refusal, viewer.authority.holds('AppManage', viewer.rootId) === 'yes')}
+      refused={{ appName: m.name, appId: m.id, version: m.version, where: sentence(s.scope), link, refusal: s.refusal, copy }}
+      actions={{ retry, changeChoice: () => dispatch({ kind: 'back' }), showInstalled: onShowInstalled, browse: onDone, copyText: deps.copyText }}
     />
   );
 }

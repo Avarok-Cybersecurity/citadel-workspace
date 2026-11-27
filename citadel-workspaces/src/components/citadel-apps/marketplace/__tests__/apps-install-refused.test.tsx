@@ -48,7 +48,7 @@ describe('after a refused install', () => {
     await refusedWith(h, { Refused: 'Unavailable' }, new Set([...MAY, 'AppManage']));
     expect(screen.getByTestId('apps-install-failed-managers').textContent).toBe(UNAVAILABLE_FOR_MANAGERS);
     expect(screen.queryByTestId('apps-next-ask-admin')).toBeNull();
-    fireEvent.click(screen.getByTestId('apps-next-report'));
+    fireEvent.click(screen.getByTestId('apps-next-report-bug'));
     await screen.findByTestId('apps-next-copied');
     expect(h.copied[0]).toContain('Answer: Unavailable');
   });
@@ -66,7 +66,7 @@ describe('after a refused install', () => {
   it('an app installed already is shown among the installed apps', async () => {
     const h: Harness = harness({ visible: [NOTES], permissions: new Set(MAY) }, catalogueText([]));
     await refusedWith(h, { Refused: { AlreadyInstalled: { install_id: 'i-9' } } });
-    fireEvent.click(screen.getByTestId('apps-next-open-installed'));
+    fireEvent.click(screen.getByTestId('apps-next-installed-app'));
     await waitFor(() => expect(screen.getByTestId('apps-tab-installed').getAttribute('data-state')).toBe('active'));
     expect(screen.queryByTestId('apps-install-failed')).toBeNull();
   });
