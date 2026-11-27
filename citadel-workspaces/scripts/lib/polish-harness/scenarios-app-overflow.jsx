@@ -37,7 +37,7 @@ const INSTALL = {
 };
 const LISTED = listedApps([{
   source: { WorkspaceRegistry: { entry_id: CALENDAR } },
-  manifest_bytes: Array.from(new TextEncoder().encode(JSON.stringify(calendarManifest))),
+  manifest_bytes: new TextEncoder().encode(JSON.stringify(calendarManifest)),
   signature: '0'.repeat(6618),
 }])[0];
 const STATE = workspaceState({ currentUser: { id: VIEWER, username: VIEWER, name: VIEWER }, nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: [] } });
