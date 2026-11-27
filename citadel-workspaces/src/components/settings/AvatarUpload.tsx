@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback , type RefObject , type ChangeEvent , type DragEvent } from 'react';
 import { Upload, X } from 'lucide-react';
 import type { ImageUploadKind } from './image-upload-kinds';
-import { processAvatarImage, validateAvatarFile, avatarToDataUrl } from '@/lib/image-processor';
+import { processAvatarImage, validateAvatarFile, avatarToDataUrl, avatarSource } from '@/lib/image-processor';
+import { photoDecoder } from '@/lib/photo-decode/photo-decoder-browser';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 import { activateOnKey } from '@/lib/a11y';
 
@@ -35,7 +36,12 @@ export function AvatarUpload({ kind, currentAvatar, onAvatarChange, disabled = f
 
     setIsProcessing(true);
     try {
-      const base64: string = await processAvatarImage(file, kind.maxDimension);
+      const source: Blob | string = await avatarSource(file, photoDecoder.decode);
+      if (typeof source === 'string') {
+        setError(source);
+        return;
+      }
+      const base64: string = await processAvatarImage(source, kind.maxDimension);
       const dataUrl: string = avatarToDataUrl(base64);
       setPreview(dataUrl);
       onAvatarChange(base64);
@@ -154,7 +160,7 @@ export function AvatarUpload({ kind, currentAvatar, onAvatarChange, disabled = f
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp"
+          accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif,image/tiff,.tif,.tiff"
           onChange={handleInputChange}
           className="hidden"
           disabled={disabled}

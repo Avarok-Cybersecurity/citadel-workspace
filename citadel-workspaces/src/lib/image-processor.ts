@@ -2,37 +2,33 @@
  * Image processing utilities for avatar uploads
  * Handles resizing and WebP conversion using Canvas API
  */
+import { MAX_PREVIEW_PIXELS } from '@/lib/received-files/image-preview';
+import { drawnOrRefused, type DecodePhoto, type DrawnPicture } from '@/lib/received-files/shown-picture';
+import { avatarRefusalSentence, type PhotoRefusal } from '@/lib/photo-decode/photo-refusal';
+
+/** The largest file accepted as an avatar, before it is scaled down. */
+const MAX_AVATAR_FILE_BYTES: number = 5 * 1024 * 1024;
 
 /**
- * Processes an image file for avatar use:
+ * Processes an image for avatar use:
  * - Resizes to fit within maxDimension (preserving aspect ratio)
  * - Converts to WebP format
  * - Returns base64-encoded string
  *
- * @param file - The image file to process
+ * The source is a picture the browser draws: avatarSource() checks the file and converts a HEIC
+ * or TIFF photo first.
+ *
+ * @param file - The image to process
  * @param maxDimension - Maximum width/height (default 256)
  * @param quality - WebP quality 0-1 (default 0.85)
  * @returns Promise resolving to base64-encoded WebP string
  */
 export async function processAvatarImage(
-  file: File,
+  file: Blob,
   maxDimension: number = 256,
   quality: number = 0.85
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('File must be an image'));
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    const maxSize: number = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      reject(new Error('Image must be smaller than 5MB'));
-      return;
-    }
-
     const img: HTMLImageElement = new Image();
     const reader: FileReader = new FileReader();
 
@@ -121,22 +117,13 @@ export function avatarToDataUrl(base64: string): string {
 }
 
 /**
- * Validates if a file is a valid image for avatar use
+ * Validates if a file is small enough for avatar use. What it is, is read from its bytes by
+ * avatarSource(), not from its declared type (a HEIC photo often declares none).
  * @param file - File to validate
  * @returns Object with isValid boolean and optional error message
  */
 export function validateAvatarFile(file: File): { isValid: boolean; error?: string } {
-  const validTypes: string[] = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  const maxSize: number = 5 * 1024 * 1024; // 5MB
-
-  if (!validTypes.includes(file.type)) {
-    return {
-      isValid: false,
-      error: 'Please upload a JPEG, PNG, GIF, or WebP image',
-    };
-  }
-
-  if (file.size > maxSize) {
+  if (file.size === 0 || file.size > MAX_AVATAR_FILE_BYTES) {
     return {
       isValid: false,
       error: 'Image must be smaller than 5MB',
@@ -144,4 +131,14 @@ export function validateAvatarFile(file: File): { isValid: boolean; error?: stri
   }
 
   return { isValid: true };
+}
+
+/**
+ * The picture an avatar is made from: the file itself when the browser draws it, a HEIC or TIFF
+ * photo converted by the page's decoder; or why it cannot be used, with what to do instead.
+ */
+export async function avatarSource(file: Blob, decode: DecodePhoto): Promise<Blob | string> {
+  const drawn: DrawnPicture | PhotoRefusal | string = await drawnOrRefused(new Uint8Array(await file.arrayBuffer()), decode);
+  if (typeof drawn === 'string') return 'Please upload a JPEG, PNG, GIF, WebP, HEIC or TIFF image';
+  return 'display' in drawn ? drawn.display : avatarRefusalSentence(drawn, MAX_PREVIEW_PIXELS);
 }

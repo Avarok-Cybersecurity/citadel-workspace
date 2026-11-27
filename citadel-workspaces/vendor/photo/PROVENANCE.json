@@ -1,0 +1,9 @@
+{
+  "source": "crates/photo-decode",
+  "heic_rs_version": "0.1.5",
+  "wasm_bindgen_version": "0.2.129",
+  "wasm_sha256": "46b1436cde6fc770d0a6a4f19c5ddb1ad744f583ead0aa5f60b0058f081c0102",
+  "wasm_bytes": 374223,
+  "glue_sha256": "6a59306be1c5231974326228382cfef750b7f709bc401904f33da56b920e751f",
+  "dts_sha256": "70db4b600eb9c62dda58ad5878f8f6883736cdaa3685feae4c84912d787ea25d"
+}

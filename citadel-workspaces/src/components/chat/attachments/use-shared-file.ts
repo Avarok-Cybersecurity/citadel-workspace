@@ -1,12 +1,14 @@
 /**
  * A shared file's bytes and, when they are a picture, the picture: read once, on demand for a
- * download and at once for a likely picture. A picture is shown only when its bytes are one of
- * the five raster formats and its header is within the decode limits (received-files/image-preview),
- * never by its name or declared type, and is drawn from a Blob of its sniffed type.
+ * download and at once for a likely picture. A picture is shown only when its bytes are a picture
+ * format within the decode limits (received-files/shown-picture: the browser's own formats as they
+ * are, HEIC, TIFF and camera RAW through the page's decoder), never by its name or declared type.
  */
 import { useCallback, useContext, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type { SharedFile } from '@/lib/chat/attachments/shared-file';
-import { looksLikePicture, pictureOf, type Picture } from '@/lib/received-files/image-preview';
+import { looksLikePicture } from '@/lib/received-files/image-preview';
+import { drawnPictureOf, type DrawnPicture } from '@/lib/received-files/shown-picture';
+import { photoDecoder } from '@/lib/photo-decode/photo-decoder-browser';
 import { blobTypeFor } from '@/lib/received-files/blob-type';
 import { safeDownloadName } from '@/lib/received-files/download-name';
 import { describeFailure } from '@/lib/failure-message';
@@ -43,10 +45,9 @@ export function useSharedFile(file: SharedFile): SharedFileView {
     if (io === null || !looksLikePicture(file.name, file.mime, file.size)) return;
     let url: string | null = null;
     let live: boolean = true;
-    read().then((data: Uint8Array): void => {
-      const picture: Picture | string = pictureOf(data);
-      if (!live || typeof picture === 'string') return;
-      url = URL.createObjectURL(new Blob([data.slice().buffer], { type: picture.mime }));
+    read().then((data: Uint8Array): Promise<DrawnPicture | string> => drawnPictureOf(data, photoDecoder.decode)).then((drawn: DrawnPicture | string): void => {
+      if (!live || typeof drawn === 'string') return;
+      url = URL.createObjectURL(drawn.display);
       setPictureUrl(url);
     }).catch((): void => undefined); // The download says why, if the person asks for it.
     return (): void => {

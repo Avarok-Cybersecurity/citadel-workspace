@@ -20,6 +20,7 @@
  * The upload toast that says a push waits for the earlier transfer fits the screen and wraps a long file name.
  * An app tab's tall views (the Calendar's notification settings, its event form) scroll to their last element and clip nothing,
  * and nothing any scenario draws clips content it cannot show.
+ * A HEIC and a TIFF in the picture viewer are decoded and drawn at their size inside the stage; a damaged one says why.
  * Serves the real components (see lib/polish-harness) and asserts bounding boxes, in Chromium and WebKit,
  * light and dark, at desktop and phone widths.
  */
@@ -50,5 +51,6 @@ import { OUTAGE_CHECKS } from './lib/polish-harness/checks-outage.mjs';
 import { UPLOAD_TOAST_CHECKS } from './lib/polish-harness/checks-upload-toast.mjs';
 import { APP_OVERFLOW_CHECKS } from './lib/polish-harness/checks-app-overflow.mjs';
 import { CLIPPING_CHECKS } from './lib/polish-harness/checks-clipping.mjs';
+import { PHOTO_CHECKS } from './lib/polish-harness/checks-photos.mjs';
 
-process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS, ...OUTAGE_CHECKS, ...UPLOAD_TOAST_CHECKS, ...APP_SETTINGS_CHECKS, ...BILLING_CHECKS, ...FILE_OPENER_CHECKS, ...DEV_MODE_CHECKS, ...AT_REST_CHECKS, ...APP_OVERFLOW_CHECKS, ...CLIPPING_CHECKS }));
+process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS, ...OUTAGE_CHECKS, ...UPLOAD_TOAST_CHECKS, ...APP_SETTINGS_CHECKS, ...BILLING_CHECKS, ...FILE_OPENER_CHECKS, ...DEV_MODE_CHECKS, ...AT_REST_CHECKS, ...APP_OVERFLOW_CHECKS, ...CLIPPING_CHECKS, ...PHOTO_CHECKS }));
