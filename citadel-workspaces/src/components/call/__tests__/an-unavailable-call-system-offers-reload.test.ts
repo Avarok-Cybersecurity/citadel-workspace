@@ -20,7 +20,8 @@ describe('an unavailable call system', () => {
     const { ports, calls }: { ports: RecoveryPorts; calls: PortCall[] } = recordingPorts({ kind: 'sent', admins: 0 });
     recoveryPortsStore.set(ports);
     reportCallSystemUnavailable(moment);
-    expect(shown).toHaveLength(1);
+    // The toast's way out loads with the first one shown (recovery-toast.ts), so it appears a moment later.
+    await vi.waitFor(() => expect(shown).toHaveLength(1));
     expect(shown[0].action?.label).toBe('Reload');
     shown[0].action?.onClick();
     await vi.waitFor(() => expect(calls.map((c: PortCall) => c.port)).toContain('reload'));

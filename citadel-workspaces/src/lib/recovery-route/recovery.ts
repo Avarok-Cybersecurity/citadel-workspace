@@ -3,8 +3,7 @@
  * read off the registry entry, so the compiler checks it against the plan the id names.
  */
 import type { BindingOf } from './binding';
-import { SURFACES, type SurfaceId, type SurfacePlan } from './surfaces';
-import type { RecoveryPlan } from './route';
+import type { SurfaceId, SurfacePlan } from './surfaces';
 
 /**
  * Distributive: `Recovery` with no argument is the union of every surface's own pairing, so a
@@ -18,8 +17,4 @@ export type Recovery<S extends SurfaceId = SurfaceId> = S extends SurfaceId
 export function recovery<S extends SurfaceId>(surface: S, binding: BindingOf<SurfacePlan<S>>): Recovery<S> {
   // The compiler cannot see a generic S through the distribution; for one S the shapes are equal.
   return { surface, binding } as Recovery<S>;
-}
-
-export function planOf(surface: SurfaceId): RecoveryPlan {
-  return SURFACES[surface];
 }

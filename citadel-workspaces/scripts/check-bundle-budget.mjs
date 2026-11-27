@@ -369,6 +369,21 @@ const DEFERRED_MODULES = [
   'src/components/documents/chat-replica.ts',
   'src/lib/cdoc/chat/chat-replica-keeper.ts',
   'src/lib/cdoc/chat/chat-sync.ts',
+  // RecoveryRoute: the plan registry, its renderer and controls load with the first notice or
+  // recovery toast (components/recovery-route/recovery-toast.ts by dynamic import, RecoveryNotice
+  // inside lazy pages); the ports and the bug reporter mount lazily (App.tsx), and asking an admin
+  // or a browser permission loads with its press. Boot keeps the console ring and the self-contained
+  // boot failure page (lib/recovery-route/dom-fallback.ts), which must work when chunks do not load.
+  'src/lib/recovery-route/surfaces/index.ts',
+  'src/lib/recovery-route/controls.ts',
+  'src/lib/recovery-route/labels.ts',
+  'src/components/recovery-route/RecoveryNotice.tsx',
+  'src/components/recovery-route/recovery-toast-view.ts',
+  'src/components/recovery-route/use-recovery-ports.ts',
+  'src/components/recovery-route/recovery-ports-ask.ts',
+  'src/lib/recovery-route/permission-how.ts',
+  'src/components/bug-report/BugReportHost.tsx',
+  'src/components/bug-report/BugReportDialog.tsx',
 ];
 
 /**
