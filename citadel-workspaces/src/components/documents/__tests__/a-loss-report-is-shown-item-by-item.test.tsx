@@ -4,7 +4,8 @@
  * (in-process runtime, real wasm), is not opened as a Docs document and offers no Download as.
  * The bar is given reports as data; the end-to-end case drives the production engine.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { docsCanvasLoaded } from '@/test-utils/docs-canvas-loaded';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { inProcessRuntime } from '@/lib/cdoc/__tests__/wasm-rig';
 import { fixture } from '@/lib/cdoc/__tests__/files-rig';
@@ -32,6 +33,9 @@ const LOSSY: ConversionReport = {
 const bar = (importReport: ConversionReport): void => {
   render(<DocsDocumentBar title="report.docx" files={FILES} importReport={importReport} refused={false} exporter={null} />);
 };
+
+// The lazily loaded Docs canvas is awaited, not timed (test-utils/docs-canvas-loaded.ts).
+beforeAll(docsCanvasLoaded);
 
 describe('the import report', () => {
   it('summarises, then lists every loss and problem when asked', () => {

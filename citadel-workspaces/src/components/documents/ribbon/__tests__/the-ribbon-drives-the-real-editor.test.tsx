@@ -4,7 +4,8 @@
  * engine lays out. The FakeEditor suites pin each control's exact command; this one proves the
  * commands land.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { docsCanvasLoaded } from '@/test-utils/docs-canvas-loaded';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { inProcessRuntime } from '@/lib/cdoc/__tests__/wasm-rig';
@@ -32,6 +33,9 @@ const BLANK: DocumentHostProps = {
   original: null,
   editing: EDIT_BLANK,
 };
+
+// The lazily loaded Docs canvas is awaited, not timed (test-utils/docs-canvas-loaded.ts).
+beforeAll(docsCanvasLoaded);
 
 describe('the ribbon over the real editor', () => {
   it('appears once the editor opens, and a page break from Insert adds a page; Undo takes it back', async () => {
