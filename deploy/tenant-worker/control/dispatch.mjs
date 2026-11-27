@@ -19,6 +19,8 @@ import { slugHost } from "./tenant-domains.mjs";
 import { serveUi } from "./ui.mjs";
 import { serveSupport, supportRoute } from "./support.mjs";
 import { SupportStore } from "./support-store.mjs";
+import { BugReportStore } from "./bug-report-store.mjs";
+import { receiveBugReport } from "./bug-reports.mjs";
 import { verifyAdminRequest, verifySupportRequest } from "./support-verifier.mjs";
 import { CouponStore } from "./coupon-store.mjs";
 import { previewCoupon } from "./coupons.mjs";
@@ -43,6 +45,7 @@ export function ioFor(env) {
     authVersions: new AuthVersionStore(env.CONTROL_DB),
     tenant: (slug) => objectFor(env, slug),
     support: new SupportStore(env.CONTROL_DB),
+    bugReports: new BugReportStore(env.CONTROL_DB),
     verifySupport: verifySupportRequest,
     coupons: new CouponStore(env.CONTROL_DB),
     verifyAdmin: verifyAdminRequest,
@@ -157,6 +160,7 @@ async function api(io, cfg, request, url) {
       if (body.error) return body.error;
       return await previewCoupon(io, body.value, request.headers.get("cf-connecting-ip"));
     }
+    if (method === "POST" && parts.length === 1 && parts[0] === "bug-reports") return await receiveBugReport(io, cfg, request);
     const support = supportRoute(method, parts);
     if (support !== null) return await serveSupport(io, cfg, request, support);
     const admin = couponAdminRoute(method, parts);

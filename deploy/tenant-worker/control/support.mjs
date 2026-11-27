@@ -3,6 +3,8 @@
  *
  *   POST /api/support/grants      -> 200 { grants: [{ tenant, until_ms }] }
  *   POST /api/support/telemetry   -> 200 the tenant kernel's ListTelemetry response, as JSON
+ *   POST /api/support/bugs        -> 200 { reports: [{ id, tenant, surface, contactable, received_at_ms }] }
+ *   POST /api/support/bug         -> 200 { report: { id, tenant, surface, contact, body, received_at_ms } }
  *
  * Each body is a signed support request (citadel-support-signature): `{ payload, signature }`,
  * an ML-DSA-65 signature by the key in CITADEL_SUPPORT_MLDSA_PUBLIC_KEY over the payload, whose
@@ -15,11 +17,12 @@
  */
 import { json, readText, refuse } from "./http.mjs";
 import { checkSlug } from "./slug.mjs";
+import { REPORT_ID } from "./bug-reports.mjs";
 
 /** `{ payload, signature }`: a payload of at most 4096 bytes and a 6618-character signature. */
 const SUPPORT_BODY_LIMIT = 12288;
 
-const ROUTES = { grants: "list_grants", telemetry: "fetch_telemetry" };
+const ROUTES = { grants: "list_grants", telemetry: "fetch_telemetry", bugs: "list_bug_reports", bug: "fetch_bug_report" };
 
 /** The route `parts` (after "api") name, or null when they are not a support route. */
 export const supportRoute = (method, parts) =>
@@ -41,7 +44,14 @@ export async function serveSupport(io, cfg, request, route) {
     return refuse("replayed", "this request has already been served", 409);
   }
   if (route === "grants") return json({ grants: await io.support.activeGrants(nowMs) });
+  if (route === "bugs") return json({ reports: await io.bugReports.list(verified.since_ms, nowMs) });
+  if (route === "bug") return fetchBugReport(io, verified.id, nowMs);
   return fetchTelemetry(io, verified, nowMs);
+}
+
+async function fetchBugReport(io, id, nowMs) {
+  const report = REPORT_ID.test(id) ? await io.bugReports.get(id, nowMs) : null;
+  return report === null ? refuse("not-found", "no such report, or it is past its 90 days", 404) : json({ report });
 }
 
 async function fetchTelemetry(io, verified, nowMs) {

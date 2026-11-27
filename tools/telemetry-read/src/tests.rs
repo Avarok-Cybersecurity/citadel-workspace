@@ -58,6 +58,10 @@ fn a_command_missing_or_misusing_a_flag_is_refused() {
         "list --private-key k".to_string(),
         format!("list {CONTROL} --tenant acme"),
         format!("fetch {CONTROL} --limit 5"),
+        format!("bugs {CONTROL}"),
+        format!("bugs {CONTROL} --since-ms soon"),
+        format!("bug {CONTROL}"),
+        format!("bug {CONTROL} --id br_1 --tenant acme"),
         format!("fetch {CONTROL} --tenant acme"),
         format!("fetch {CONTROL} --tenant acme --limit 0"),
         format!("fetch {CONTROL} --tenant acme --limit 501"),
@@ -93,4 +97,23 @@ fn a_request_is_signed_for_the_control_planes_host_and_verifies_there() {
     )
     .is_err());
     assert_eq!(Command::path(&verified.action), "/api/support/grants");
+}
+
+#[test]
+fn the_bug_report_reads_parse_and_go_to_their_routes() {
+    let action = |text: String| match parse(&args(&text)) {
+        Ok(Command::Read { action, .. }) => action,
+        other => panic!("{other:?}"),
+    };
+    let list = action(format!("bugs {CONTROL} --since-ms 5"));
+    assert_eq!(list, SupportAction::ListBugReports { since_ms: 5 });
+    assert_eq!(Command::path(&list), "/api/support/bugs");
+    let one = action(format!("bug {CONTROL} --id br_0123456789abcdef01234567"));
+    assert_eq!(
+        one,
+        SupportAction::FetchBugReport {
+            id: "br_0123456789abcdef01234567".into()
+        }
+    );
+    assert_eq!(Command::path(&one), "/api/support/bug");
 }

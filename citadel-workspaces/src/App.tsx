@@ -20,6 +20,7 @@ import { PeerRefusalNotice } from "./components/PeerRefusalNotice";
 import { SecurityKeyPromptHost } from "./components/sign-in/SecurityKeyPromptHost";
 import { CallLayer } from "./components/call/CallLayer";
 import { OngoingCallBar } from "./components/call/OngoingCallBar";
+import { RecoveryPortsProvider } from '@/components/recovery-route/RecoveryPortsProvider';
 
 // Off the landing critical path (check-bundle-budget): both leave a workspace whose session ended,
 // asking about unsaved editor text first, which only an open workspace can have.
@@ -92,6 +93,7 @@ const App: () => JSX.Element = (): JSX.Element => {
                   so its useNavigate() threw on every render and took the whole
                   app down to the error boundary. */}
               <OngoingCallBar />
+              <RecoveryPortsProvider />
               <FileOpenersProvider><AppRoutes /></FileOpenersProvider>
             </BrowserRouter>
             </CallLayer>
