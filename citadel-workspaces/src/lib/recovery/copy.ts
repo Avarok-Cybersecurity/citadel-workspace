@@ -11,6 +11,12 @@ export const PHRASE_COPY = {
   confirmBody: 'Type the words at these positions, so a phrase that was never written down is caught now.',
   confirmMismatch: "Those words don't match your phrase. Check what you wrote down and try again.",
   showAgain: 'Show the phrase again',
+  skip: 'Skip the check',
+  skipConsequence:
+    'If you skip it and the phrase is lost, nobody can recover your account. You can make a new phrase in Settings.',
+  uncheckedReminder:
+    "Your recovery phrase was never checked. If it wasn't written down, nobody can recover your account: make a new one.",
+  uncheckedFix: 'Make a new phrase',
   regenerate: 'New recovery phrase',
   regenerateWarning: 'Your current phrase stops working at once.',
   settingsTitle: 'Recovery phrase',

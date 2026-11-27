@@ -4,13 +4,18 @@
  * long username and server and a mistyped word already left, the same form once a workspace has asked
  * for a human check, and the recovery console on its welcome (devices signed out), task list and
  * set-password steps. The console's `send` never answers: these scenarios measure layout, not the agent.
+ * Settings' sign-in keys with the reminder an unchecked phrase leaves, over the browser's real store:
+ * the tab's account and its "never checked" record are written before the first render.
  */
 import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { RecoveryPhrasePanel } from '@/components/recovery/RecoveryPhrasePanel';
 import { RecoverAccountForm } from '@/components/recovery/RecoverAccountForm';
 import { RecoveryConsole } from '@/components/recovery/RecoveryConsole';
+import { SignInKeysSection } from '@/components/passkey/SignInKeysSection';
 import { getDefaultSecuritySettings } from '@/lib/security-utils';
+import { setSelectedUser } from '@/lib/tab-context';
+import { recordPhraseCheck } from '@/lib/recovery/phrase-unchecked';
 
 export const PHRASE = ['abandon', 'ability', 'able', 'about', 'above', 'absent', 'absorb', 'abstract', 'absurd', 'abuse', 'access', 'accident',
   'account', 'accuse', 'achieve', 'acid', 'acoustic', 'acquire', 'across', 'act', 'action', 'actor', 'actress', 'zoo'];
@@ -122,6 +127,17 @@ function Console({ view }) {
   );
 }
 
+function UncheckedPhraseSettings() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    void Promise.all([
+      setSelectedUser({ selectedUsername: ACCOUNT.username, selectedCid: ACCOUNT.cid, selectedServerAddress: ACCOUNT.tenant }),
+      recordPhraseCheck(ACCOUNT, false),
+    ]).then(() => setReady(true));
+  }, []);
+  return <Frame>{ready && <SignInKeysSection />}</Frame>;
+}
+
 export const RECOVERY_SCENARIOS = {
   'recovery-phrase': Phrase,
   'recovery-phrase-check': PhraseCheck,
@@ -130,4 +146,5 @@ export const RECOVERY_SCENARIOS = {
   'recovery-console-welcome': () => <Console view="welcome" />,
   'recovery-console-tasks': () => <Console view="tasks" />,
   'recovery-console-password': () => <Console view="password" />,
+  'settings-phrase-unchecked': UncheckedPhraseSettings,
 };

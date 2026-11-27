@@ -8,7 +8,7 @@
  * then applies its own outcome rather than re-listing (lib/sign-in/listing.ts).
  * A refusal is shown in the server's own words.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTabIdentity } from '@/hooks/use-tab-identity';
 import type { TabIdentity } from '@/lib/tab-identity';
 import { passkeysAvailableHere } from '@/lib/passkey';
@@ -21,6 +21,8 @@ import type { AddedKey } from '@/lib/sign-in/enrol-key';
 import {
   type Listing, listingOf, withKeyAdded, withKeyRemoved, withKeyRenamed, withNewPhrase, withPolicy,
 } from '@/lib/sign-in/listing';
+import { isPhraseUnchecked, recordPhraseCheck } from '@/lib/recovery/phrase-unchecked';
+import { errorLog } from '@/lib/debug-config';
 import type { AccountRef, SignInManagementOp, SignInManagementOutcome, SignInPolicy, StepUp } from '@/lib/sign-in/types';
 
 export interface SignInKeys {
@@ -32,7 +34,10 @@ export interface SignInKeys {
   message: string | null;
   /** A new recovery phrase, to show once and then forget. */
   freshPhrase: readonly string[] | null;
-  forgetPhrase: () => void;
+  /** This account's phrase was shown but its check skipped; only a new phrase fixes that. */
+  phraseUnchecked: boolean;
+  /** The fresh phrase's step is finished (checked or skipped): forget the words, remember which. */
+  finishPhrase: (checked: boolean) => Promise<void>;
   show: () => Promise<void>;
   add: (label: string) => Promise<boolean>;
   rename: (id: number, label: string) => Promise<boolean>;
@@ -55,6 +60,18 @@ export function useSignInKeys(requestStepUp: StepUpRequest): SignInKeys {
   const [busy, setBusy] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(null);
   const [freshPhrase, setFreshPhrase] = useState<readonly string[] | null>(null);
+  const [phraseUnchecked, setPhraseUnchecked] = useState<boolean>(false);
+  // The account object is rebuilt each render; its tenant and CID are what name it.
+  const tenant: string | null = account?.tenant ?? null;
+  const cid: bigint | null = account?.cid ?? null;
+  useEffect((): (() => void) | undefined => {
+    if (tenant === null || cid === null) return undefined;
+    let live: boolean = true;
+    isPhraseUnchecked({ tenant, cid }).then(
+      (unchecked: boolean): void => { if (live) setPhraseUnchecked(unchecked); },
+      (error: unknown): void => errorLog('Recovery', 'Could not read whether the phrase was checked', error));
+    return (): void => { live = false; };
+  }, [tenant, cid]);
 
   /** One request: step up, ask the server. Resolves with its result, or null if it did not happen. */
   const request = async <T>(run: Run<T>, done: string): Promise<T | null> => {
@@ -80,8 +97,14 @@ export function useSignInKeys(requestStepUp: StepUpRequest): SignInKeys {
   const apply = (next: (l: Listing) => Listing): void => setListing((l: Listing | null) => (l ? next(l) : l));
 
   return {
-    available, account, listing, busy, message, freshPhrase,
-    forgetPhrase: (): void => setFreshPhrase(null),
+    available, account, listing, busy, message, freshPhrase, phraseUnchecked,
+    finishPhrase: async (checked: boolean): Promise<void> => {
+      setFreshPhrase(null);
+      if (!account) return;
+      await recordPhraseCheck(account, checked)
+        .then((): void => setPhraseUnchecked(!checked))
+        .catch((error: unknown): void => setMessage(`This device could not remember whether the phrase was checked: ${keyFailureCopy(error)}`));
+    },
     show: async (): Promise<void> => {
       const outcome: SignInManagementOutcome | null = await request(op('ListCredentials'), '');
       if (outcome !== null) setListing(listingOf(outcome));

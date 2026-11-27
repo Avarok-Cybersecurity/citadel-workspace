@@ -9,6 +9,8 @@ import type { AccountRef } from '@/lib/sign-in/types';
 import { AddSecurityKeyCard } from './AddSecurityKeyCard';
 import type { RecoveryPhrase } from '@/lib/recovery/secret';
 import { FinishSignInStep } from './FinishSignInStep';
+import { recordPhraseCheck } from '@/lib/recovery/phrase-unchecked';
+import { errorLog } from '@/lib/debug-config';
 
 // Its own chunk: the phrase panel is met once per account, never on the landing path.
 const RecoveryPhrasePanel: LazyExoticComponent<typeof RecoveryPhrasePanelComponent> = lazy(() => import('@/components/recovery/RecoveryPhrasePanel').then((m) => ({ default: m.RecoveryPhrasePanel })));
@@ -50,11 +52,15 @@ export function PostRegistrationSteps({ session, username, serverAddress, passwo
 
   // Once: the caller's onDone opens the workspace, and a re-render must not open it again.
   const finished: React.MutableRefObject<boolean> = useRef<boolean>(false);
+  // Remembered once the account's CID is known: on the check-first path the phrase comes before it.
+  const phraseChecked: React.MutableRefObject<boolean> = useRef<boolean>(false);
   useEffect(() => {
     if (step !== undefined || cid === null || finished.current) return;
     finished.current = true;
+    recordPhraseCheck({ tenant: tenantOf(serverAddress), cid }, phraseChecked.current)
+      .catch((error: unknown): void => errorLog('Recovery', 'Could not remember whether the phrase was checked', error));
     onDone(cid);
-  }, [step, cid, onDone]);
+  }, [step, cid, onDone, serverAddress]);
   if (step === undefined) return null;
 
   return (
@@ -72,7 +78,8 @@ export function PostRegistrationSteps({ session, username, serverAddress, passwo
           )}
           {step === 'phrase' && (
             <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-              <RecoveryPhrasePanel words={recoveryPhrase} account={username} server={serverAddress} onDone={next} />
+              <RecoveryPhrasePanel words={recoveryPhrase} account={username} server={serverAddress}
+                onDone={(checked: boolean): void => { phraseChecked.current = checked; next(); }} />
             </Suspense>
           )}
           {step === 'sign-in' && (

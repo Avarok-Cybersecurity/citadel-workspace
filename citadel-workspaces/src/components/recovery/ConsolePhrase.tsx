@@ -6,6 +6,8 @@ import { RECOVERY_STEP_UP, regeneratePhrase } from '@/lib/recovery/console-ops';
 import type { Send } from '@/lib/sign-in/key-answer';
 import { keyFailureCopy } from '@/lib/sign-in/copy';
 import type { AccountRef } from '@/lib/sign-in/types';
+import { recordPhraseCheck } from '@/lib/recovery/phrase-unchecked';
+import { errorLog } from '@/lib/debug-config';
 import { RecoveryPhrasePanel } from './RecoveryPhrasePanel';
 
 /** The console's "Make a new recovery phrase": a warning, the server's new phrase, shown once and checked. */
@@ -19,7 +21,12 @@ export function ConsolePhrase({ send, account, serverAddress, onDone }: {
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (words !== null) return <RecoveryPhrasePanel words={words} account={account.username} server={serverAddress} onDone={onDone} />;
+  const finish = (checked: boolean): void => {
+    recordPhraseCheck(account, checked)
+      .catch((e: unknown): void => errorLog('Recovery', 'Could not remember whether the phrase was checked', e));
+    onDone();
+  };
+  if (words !== null) return <RecoveryPhrasePanel words={words} account={account.username} server={serverAddress} onDone={finish} />;
 
   const make = (): void => {
     setBusy(true);
