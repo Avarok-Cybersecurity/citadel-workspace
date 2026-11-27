@@ -66,7 +66,7 @@ function groupMessage(): Record<string, unknown> {
   });
   return {
     GroupMessageNotification: {
-      cid: SELF, peer_cid: ALICE, message: Array.from(body), group_key: { cid: ALICE, mgid: 3n }, request_id: null,
+      cid: SELF, peer_cid: ALICE, message: body, group_key: { cid: ALICE, mgid: 3n }, request_id: null,
     },
   };
 }

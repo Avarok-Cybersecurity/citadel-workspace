@@ -41,7 +41,7 @@ async function attach(deps: AttachDeps, cid: bigint, proof: AttachProof): Promis
     matcher: {
       matchSuccess: (m) => {
         const a: Record<string, unknown> | undefined = field(m, 'SessionAttached', requestId);
-        return a ? { role: a.role as SessionRole, token: Uint8Array.from(a.token as number[]) } : undefined;
+        return a ? { role: a.role as SessionRole, token: (a.token as Uint8Array).slice() } : undefined;
       },
       matchFailure: (m) => {
         const f: Record<string, unknown> | undefined = field(m, 'ConnectionManagementFailure', requestId);
@@ -53,7 +53,7 @@ async function attach(deps: AttachDeps, cid: bigint, proof: AttachProof): Promis
 
 /** Join with the password, and remember that this browser did. */
 export async function joinWithPassword(deps: AttachDeps, cid: bigint, password: string): Promise<SessionRole> {
-  const proof: AttachProof = { Password: Array.from(new TextEncoder().encode(password)) };
+  const proof: AttachProof = { Password: new TextEncoder().encode(password) };
   const joined: { role: SessionRole; token: Uint8Array } = await attach(deps, cid, proof);
   await rememberJoin(deps.tokens, cid, joined.token);
   return joined.role;
@@ -68,7 +68,7 @@ export async function joinWithRememberedToken(deps: AttachDeps, cid: bigint): Pr
   const token: Uint8Array | null = await recallJoin(deps.tokens, cid);
   if (!token) return false;
   try {
-    await attach(deps, cid, { Token: Array.from(token) });
+    await attach(deps, cid, { Token: token });
     return true;
   } catch (error: unknown) {
     if (!String(error).includes(TOKEN_REFUSED)) throw error;

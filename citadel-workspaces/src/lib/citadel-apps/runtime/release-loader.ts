@@ -47,7 +47,7 @@ const failed = (failure: ReleaseFailure): LoadedRelease => ({ ok: false, failure
 export async function loadRelease(t: AppsTransport, install: AppInstall, verifier: ArtifactVerifierPort, policy: HostPolicy): Promise<LoadedRelease> {
   const release: AppsResult<Release> = await getRelease(t, install.id);
   if (!release.ok) return failed({ step: 'release', refusal: release.refusal });
-  const manifestBytes: Uint8Array = Uint8Array.from(release.value.current.manifest_bytes);
+  const manifestBytes: Uint8Array = release.value.current.manifest_bytes.slice();
   const reading: ManifestReading = readManifestBytes(manifestBytes);
   if (!reading.ok) return failed({ step: 'manifest', why: `${reading.field}: ${reading.why}` });
   const manifest: AppManifest = reading.manifest;

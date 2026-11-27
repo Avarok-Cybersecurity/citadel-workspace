@@ -46,7 +46,12 @@ export function formatForDebug(obj: unknown): unknown {
     return obj.toString();
   }
   
-  // Handle arrays
+  // Byte fields as the WASM client and the workspace codec hand them over
+  if (ArrayBuffer.isView(obj)) {
+    return formatByteArray(new Uint8Array(obj.buffer, obj.byteOffset, obj.byteLength));
+  }
+
+  // Handle arrays (a JSON string parsed above still carries bytes as lists of numbers)
   if (Array.isArray(obj)) {
     // Check if it's a byte array (all elements are numbers 0-255)
     if (obj.length > 0 && obj.every(v => typeof v === 'number' && v >= 0 && v <= 255)) {
@@ -163,6 +168,7 @@ function shouldFormatAsBytesMap(fieldName: string, value: unknown): boolean {
 
   // Check if all values in the map are byte arrays
   for (const val of Object.values(value)) {
+    if (ArrayBuffer.isView(val)) continue;
     if (!Array.isArray(val) || !val.every((v: unknown) => typeof v === 'number' && v >= 0 && v <= 255)) {
       return false;
     }

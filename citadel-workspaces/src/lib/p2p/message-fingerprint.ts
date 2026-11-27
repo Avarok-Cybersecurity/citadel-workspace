@@ -10,6 +10,8 @@
  * Extracted here rather than duplicated: a second implementation that drifted
  * by one byte would silently break every join that depends on it.
  */
+import { isByteArray } from '@/lib/utils/encoding-utils';
+
 export function fnv1a64(bytes: Uint8Array): string {
   const M: bigint = 0xffffffffffffffffn;
   let fp: bigint = 0xcbf29ce484222325n;
@@ -31,8 +33,7 @@ export function describeForwarded(payload: unknown): string {
     const variant: string = Object.keys(record)[0] ?? '<empty>';
     const body: Record<string, unknown> | undefined = record[variant] as Record<string, unknown> | undefined;
     const raw: unknown = body?.message;
-    if (Array.isArray(raw)) return `type=${variant} fp=${fnv1a64(new Uint8Array(raw))}`;
-    if (raw instanceof Uint8Array) return `type=${variant} fp=${fnv1a64(raw)}`;
+    if (isByteArray(raw)) return `type=${variant} fp=${fnv1a64(raw)}`;
     return `type=${variant}`;
   } catch {
     return 'type=<undescribable>';

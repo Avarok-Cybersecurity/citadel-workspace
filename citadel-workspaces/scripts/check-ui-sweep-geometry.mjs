@@ -16,7 +16,8 @@
  * Dev mode (Settings -> Advanced) hides the Leader/Follower badge until switched on, then shows it live.
  * A document's encryption lock says what the device stores, takes focus with its tooltip, and opens Settings at Security.
  * A file's open entries (file manager menu and inspector, a chat file's keyboard-reached menu) name the app with its icon, 44px.
- * The outage notice is the whole page, opaque, its icon, sentence, code and Retry centred, at desktop and 390px.
+ * The outage notice is the whole page, opaque, its icon, sentence, code and Try again centred, at desktop and 390px;
+ * each cause says its own sentence. A way out drawn inline and the bug reporter fit a phone, 44px, axe clean.
  * The upload toast that says a push waits for the earlier transfer fits the screen and wraps a long file name.
  * An app tab's tall views (the Calendar's notification settings, its event form) scroll to their last element and clip nothing,
  * and nothing any scenario draws clips content it cannot show.
@@ -47,9 +48,10 @@ import { DEV_MODE_CHECKS } from './lib/polish-harness/checks-dev-mode.mjs';
 import { AT_REST_CHECKS } from './lib/polish-harness/checks-at-rest.mjs';
 import { FILE_OPENER_CHECKS } from './lib/polish-harness/checks-file-openers.mjs';
 import { OUTAGE_CHECKS } from './lib/polish-harness/checks-outage.mjs';
+import { RECOVERY_ROUTE_CHECKS } from './lib/polish-harness/checks-recovery-route.mjs';
 import { UPLOAD_TOAST_CHECKS } from './lib/polish-harness/checks-upload-toast.mjs';
 import { APP_OVERFLOW_CHECKS } from './lib/polish-harness/checks-app-overflow.mjs';
 import { CLIPPING_CHECKS } from './lib/polish-harness/checks-clipping.mjs';
 import { INSTALL_REFUSED_CHECKS } from './lib/polish-harness/checks-install-refused.mjs';
 
-process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS, ...OUTAGE_CHECKS, ...UPLOAD_TOAST_CHECKS, ...APP_SETTINGS_CHECKS, ...BILLING_CHECKS, ...FILE_OPENER_CHECKS, ...DEV_MODE_CHECKS, ...AT_REST_CHECKS, ...APP_OVERFLOW_CHECKS, ...INSTALL_REFUSED_CHECKS, ...CLIPPING_CHECKS }));
+process.exit(await runChecks({ ...PEOPLE_CHECKS, ...OVERLAY_CHECKS, ...CONTROL_CHECKS, ...SPACING_CHECKS, ...SIDEBAR_CHECKS, ...PERMISSION_CHECKS, ...FILE_MANAGER_CHECKS, ...BREADCRUMB_CHECKS, ...SHARE_CHECKS, ...RIBBON_CHECKS, ...APP_TOOLBAR_CHECKS, ...PEER_CONSENT_CHECKS, ...NODE_TAB_CHECKS, ...SERVER_FILE_CHECKS, ...DIALOG_FOOTER_CHECKS, ...SIGN_IN_CHECKS, ...RECOVERY_CHECKS, ...OUTAGE_CHECKS, ...RECOVERY_ROUTE_CHECKS, ...UPLOAD_TOAST_CHECKS, ...APP_SETTINGS_CHECKS, ...BILLING_CHECKS, ...FILE_OPENER_CHECKS, ...DEV_MODE_CHECKS, ...AT_REST_CHECKS, ...APP_OVERFLOW_CHECKS, ...INSTALL_REFUSED_CHECKS, ...CLIPPING_CHECKS }));

@@ -28,7 +28,7 @@ export async function createNode(
       entity_type: entityType,
       name,
       description,
-      metadata: options?.metadata ? Array.from(options.metadata) : null,
+      metadata: options?.metadata ?? null,
     },
   };
   // Resolves when the SERVER has accepted it, not when the frame leaves.

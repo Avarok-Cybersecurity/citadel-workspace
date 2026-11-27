@@ -4,6 +4,7 @@
  * u64 fields arrive as bigints (the client's codec decodes them by name).
  */
 import type { AppInstall, AppListing, Capability, InstallScope, InstallState, ListingSource } from 'citadel-workspace-client-ts';
+import { isByteArray } from '@/lib/utils/encoding-utils';
 import { CAPABILITIES } from '../manifest/manifest-shape';
 
 export type Json = Record<string, unknown>;
@@ -41,7 +42,7 @@ export function isListingSource(v: unknown): v is ListingSource {
     || single(v, 'WorkspaceRegistry', (x: unknown) => exactly(x, { entry_id: isString }));
 }
 
-export const isBytes = (v: unknown): v is number[] => Array.isArray(v) && v.every((b: unknown) => typeof b === 'number' && Number.isInteger(b) && b >= 0 && b <= 255);
+export const isBytes = (v: unknown): v is Uint8Array => isByteArray(v);
 
 export function isAppListing(v: unknown): v is AppListing {
   return exactly(v, { source: isListingSource, manifest_bytes: isBytes, signature: isString });

@@ -2,10 +2,10 @@ import { strict as assert } from 'node:assert';
 import { AxeBuilder } from '@axe-core/playwright';
 
 /**
- * A refused install (marketplace/RefusalView.tsx) at 375px and on a desktop: the answer, the
- * managers' line and every next-step button sit inside the view, each a 44px target, no two
- * buttons overlap, nothing scrolls sideways, and the text to copy by hand (the clipboard refused)
- * wraps its long link instead of widening the page. No serious axe finding.
+ * A refused install (marketplace/AppsRefusalNotice.tsx) at 375px and on a desktop: the answer,
+ * the managers' line and every way out sit inside the view, each a 44px target, no two buttons
+ * overlap, nothing scrolls sideways, and the sentence an ask comes back with wraps inside the view.
+ * No serious axe finding.
  */
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const inside = (inner, outer) => inner.x >= outer.x - 0.5 && inner.x + inner.width <= outer.x + outer.width + 0.5;
@@ -28,13 +28,13 @@ const theRefusalFits = (scenario, buttons, managersLine) => async ({ page, url, 
       assert.ok(s.height >= 44 && s.width >= 44, `${s.id} is a ${s.width}x${s.height} target`);
     }
     for (let i = 0; i < steps.length; i++) for (let j = i + 1; j < steps.length; j++) assert.ok(!overlap(steps[i], steps[j]), `${steps[i].id} overlaps ${steps[j].id}`);
-    await page.getByTestId(buttons[0] === 'apps-next-ask-admin' ? 'apps-next-ask-admin' : 'apps-next-report-bug').click();
-    const byHand = page.getByTestId('apps-next-not-copied');
-    await byHand.waitFor({ state: 'visible' });
-    const pre = await byHand.locator('pre').boundingBox();
-    assert.ok(inside(pre, box), `the text to copy ${JSON.stringify(pre)} overhangs the view ${JSON.stringify(box)}`);
-    const spill = await byHand.locator('pre').evaluate((n) => n.scrollWidth - n.clientWidth);
-    assert.ok(spill <= 0, `the text to copy runs ${spill}px past its box instead of wrapping`);
+    await page.getByTestId('recovery-control-ask-admin').click();
+    const said = page.getByTestId('recovery-said');
+    await said.waitFor({ state: 'visible' });
+    const saidBox = await said.boundingBox();
+    assert.ok(inside(saidBox, box), `the answer to the ask ${JSON.stringify(saidBox)} overhangs the view ${JSON.stringify(box)}`);
+    const spill = await said.evaluate((n) => n.scrollWidth - n.clientWidth);
+    assert.ok(spill <= 0, `the answer to the ask runs ${spill}px past its box instead of wrapping`);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(overflow <= 0, `the page scrolls sideways by ${overflow}px`);
     const { violations } = await new AxeBuilder({ page }).include('[data-testid="apps-install-failed"]').withTags(WCAG).analyze();
@@ -46,6 +46,6 @@ const theRefusalFits = (scenario, buttons, managersLine) => async ({ page, url, 
 };
 
 export const INSTALL_REFUSED_CHECKS = {
-  aMembersRefusedInstallOffersAnAdminRequestThatFits: theRefusalFits('install-refused-member', ['apps-next-ask-admin', 'apps-next-fix-input'], false),
-  aManagersRefusedInstallSaysMoreAndFits: theRefusalFits('install-refused-manager', ['apps-next-fix-input', 'apps-next-report-bug'], true),
+  aMembersRefusedInstallAsksTheAdminsAndFits: theRefusalFits('install-refused-member', ['recovery-control-ask-admin', 'recovery-control-navigate'], false),
+  aManagersRefusedInstallSaysMoreAndFits: theRefusalFits('install-refused-manager', ['recovery-control-ask-admin', 'recovery-control-navigate'], true),
 };

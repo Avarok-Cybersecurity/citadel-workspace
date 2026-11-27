@@ -3,9 +3,11 @@ import { AxeBuilder } from '@axe-core/playwright';
 
 /**
  * The outage notice (components/outage), measured in a real engine at desktop and 390px: it is
- * the whole page and opaque; its icon, sentence, code and Retry are stacked in that order, each
- * centred on the page, the group centred top to bottom; the sentence keeps a gutter and wraps
- * instead of leaving the screen; Retry is a 44px target that works; no serious axe finding.
+ * the whole page and opaque; its icon, sentence, code and Try again are stacked in that order,
+ * each centred on the page, the group centred top to bottom; the sentence keeps a gutter and wraps
+ * instead of leaving the screen; Try again is a 44px target that works; no serious axe finding.
+ * Each cause says its own sentence (owner decision 2026-11-27): the server's only when it is down,
+ * offline and reconnecting their own, and those two wait instead of offering Try again at once.
  */
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const GUTTER = 16;
@@ -23,16 +25,18 @@ async function parts(page) {
     icon: await box('service-unavailable-icon'),
     title: await box('service-unavailable-title'),
     code: await box('service-unavailable-code'),
-    retry: await box('service-unavailable-retry'),
+    retry: await box('recovery-control-retry'),
+    // Try again and any other way out share one row, and the row is what is centred.
+    ways: await page.getByTestId('recovery-control-retry').locator('..').boundingBox(),
     group: await page.getByRole('alert').boundingBox(),
   };
 }
 
 async function theNoticeIsCentredOnThePage({ page, url, viewport }) {
   await open(page, url, 'outage-notice');
-  const { icon, title, code, retry, group } = await parts(page);
+  const { icon, title, code, retry, ways, group } = await parts(page);
   const middle = viewport.width / 2;
-  for (const [what, box] of [['icon', icon], ['sentence', title], ['Retry', retry], ['group', group]]) {
+  for (const [what, box] of [['icon', icon], ['sentence', title], ['row of ways out', ways], ['group', group]]) {
     assert.ok(Math.abs(centreX(box) - middle) <= 1, `the ${what} is centred at ${centreX(box)}px, the page at ${middle}px`);
   }
   // The code sits in a line with its label, and the line is what is centred.
@@ -59,7 +63,7 @@ async function theNoticeIsCentredOnThePage({ page, url, viewport }) {
 
 async function retryIsATargetThatWorks({ page, url }) {
   await open(page, url, 'outage-notice');
-  const retry = page.getByTestId('service-unavailable-retry');
+  const retry = page.getByTestId('recovery-control-retry');
   const box = await retry.boundingBox();
   assert.ok(box.height >= 44 && box.width >= 44, `Retry is a ${box.width}x${box.height} target (needs 44)`);
   assert.equal(await page.evaluate(() => document.body.getAttribute('data-retried')), null);
@@ -88,4 +92,31 @@ async function theNoticeIsTheWholePage({ page, url, viewport }) {
   }
 }
 
-export const OUTAGE_CHECKS = { theNoticeIsCentredOnThePage, retryIsATargetThatWorks, theNoticeIsTheWholePage };
+/** Offline and reconnecting: their own sentence, inside the gutter, a wait instead of a button, no serious axe finding. */
+async function eachCauseSaysItsOwnSentence({ page, url, viewport }) {
+  const said = {
+    reconnecting: 'Reconnecting to your workspace…',
+    offline: 'You’re offline. Citadel will reconnect automatically when your connection is back.',
+  };
+  for (const cause of ['reconnecting', 'offline']) {
+    await open(page, url, 'outage-over-workspace');
+    if (cause === 'offline') await page.context().setOffline(true);
+    try {
+      await page.locator(`[data-cause="${cause}"]`).waitFor({ state: 'visible' });
+      assert.equal(await page.getByTestId('service-unavailable-title').textContent(), said[cause]);
+      const title = await page.getByTestId('service-unavailable-title').boundingBox();
+      assert.ok(title.x >= GUTTER - 0.5 && title.x + title.width <= viewport.width - GUTTER + 0.5, `the ${cause} sentence ${JSON.stringify(title)} leaves the gutter`);
+      assert.equal(await page.getByTestId('recovery-status').isVisible(), true, `the ${cause} notice does not say it is waiting`);
+      assert.equal(await page.getByRole('button', { name: /Try again|Reload/ }).count(), 0, `the ${cause} notice offers a button before its wait ends`);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      assert.ok(overflow <= 0, `the ${cause} page scrolls sideways by ${overflow}px`);
+      const { violations } = await new AxeBuilder({ page }).include('[data-testid="service-unavailable"]').withTags(WCAG).analyze();
+      const serious = violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => `${v.id}: ${v.nodes[0]?.html}`);
+      assert.deepEqual(serious, [], `axe found serious problems in the ${cause} notice`);
+    } finally {
+      await page.context().setOffline(false);
+    }
+  }
+}
+
+export const OUTAGE_CHECKS = { theNoticeIsCentredOnThePage, retryIsATargetThatWorks, theNoticeIsTheWholePage, eachCauseSaysItsOwnSentence };

@@ -9,14 +9,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import type { AppsModalRequest, TabTarget } from '@/lib/citadel-apps/apps-modal-store';
 import type { ListedApp } from '@/lib/citadel-apps/listing-model';
+import type { AppsFailure } from '@/lib/workspace-service/apps-operations';
 import { NOT_AVAILABLE_COPY, refusalCopy } from '@/lib/citadel-apps/refusal-copy';
-import { linkedAppNextSteps } from '@/lib/citadel-apps/refusal-next-step';
+import { adminAskAbout, managersLine } from '@/lib/citadel-apps/refused-install';
 import { appLinkUrl, type AppLink } from '@/lib/citadel-apps/app-link';
 import { useMarketplaceData, type MarketplaceData } from './use-marketplace-data';
 import { useLinkedApp, type LinkedApp } from './use-linked-app';
 import { AppsBrowse, type TabBrowse } from './AppsBrowse';
 import { AppFlow } from './AppFlow';
-import { RefusalView } from './RefusalView';
+import { AppsRefusalNotice } from './AppsRefusalNotice';
 import { InstalledApps } from './InstalledApps';
 import type { MarketplaceDeps, MarketplaceViewer, MarketTab } from './marketplace-types';
 
@@ -35,6 +36,13 @@ export function AppsModal({ open, onOpenChange, request, deps, viewer }: AppsMod
   const [tab, setTab] = useState<MarketTab>('global');
   const [opened, setOpened] = useState<ListedApp | null>(null);
   const [linkDismissed, setLinkDismissed] = useState<boolean>(false);
+  // Asked to open on something else while open (a refusal's "See all apps"): start from the list.
+  const [openedFor, setOpenedFor] = useState<AppsModalRequest>(request);
+  if (openedFor !== request) {
+    setOpenedFor(request);
+    setOpened(null);
+    setLinkDismissed(false);
+  }
   const linkedId: string | null = request.kind === 'link' && !linkDismissed ? request.link.appId : null;
   const linked: LinkedApp = useLinkedApp(linkedId, data, deps);
   const manages: boolean = viewer.authority.holds('AppManage', viewer.rootId) === 'yes';
@@ -74,15 +82,19 @@ export function AppsModal({ open, onOpenChange, request, deps, viewer }: AppsMod
   } else if ((linked.kind === 'unavailable' || linked.kind === 'unreachable') && request.kind === 'link') {
     const link: AppLink = request.link;
     const copy: string = linked.kind === 'unreachable' ? refusalCopy(linked.failure) : NOT_AVAILABLE_COPY;
+    const refusal: AppsFailure = linked.kind === 'unreachable' ? linked.failure : 'Unavailable';
     body = (
-      <RefusalView
-        testId={`apps-link-${linked.kind}`} message={copy} guidance={linkedAppNextSteps(linked.kind, manages)}
-        refused={{
-          appName: link.appId, appId: link.appId, version: link.version ?? 'its latest version',
-          where: (link.nodeId === null ? null : viewer.nodeName(link.nodeId)) ?? 'this workspace',
-          link: appLinkUrl(viewer.origin, link), refusal: linked.kind === 'unreachable' ? linked.failure : 'Unavailable', copy,
+      <AppsRefusalNotice
+        testId={`apps-link-${linked.kind}`} message={copy} forManagers={managersLine(refusal, manages)}
+        surface={linked.kind === 'unreachable' ? 'apps.listing-unreachable' : 'apps.Unavailable'}
+        binding={{
+          retry: linked.kind === 'unreachable' ? linked.retry : async (): Promise<void> => back(),
+          focus: back, dismiss: back,
+          askAbout: adminAskAbout({
+            appName: link.appId, version: link.version ?? 'its latest version',
+            where: (link.nodeId === null ? null : viewer.nodeName(link.nodeId)) ?? 'this workspace', link: appLinkUrl(viewer.origin, link), copy,
+          }),
         }}
-        actions={{ retry: linked.kind === 'unreachable' ? linked.retry : back, changeChoice: back, showInstalled: back, browse: back, copyText: deps.copyText }}
       />
     );
   } else {

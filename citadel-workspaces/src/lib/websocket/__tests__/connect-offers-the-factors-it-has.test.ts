@@ -15,7 +15,7 @@ const sendRequest: Mock = vi.fn().mockResolvedValue(undefined);
 const { AuthOperations } = await import('../auth-operations');
 
 interface ConnectFields { password: number[] | null; security_key: boolean; admission_token: string | null }
-const bytes = (text: string): number[] => Array.from(new TextEncoder().encode(text));
+const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 
 async function connectWith(factors: SignInFactors): Promise<ConnectFields> {
   await new AuthOperations({

@@ -6,13 +6,16 @@
 //! telemetry-read fetch  --control <https://host> --private-key <file> --tenant <slug> --limit <n>
 //!                       [--offset <n>] [--user <id>] [--peer-cid <cid>] [--min-level warn|error]
 //!                       [--since-ms <unix ms>] [--until-ms <unix ms>]
+//! telemetry-read bugs   --control <https://host> --private-key <file> --since-ms <unix ms>
+//! telemetry-read bug    --control <https://host> --private-key <file> --id <br_...>
 //! ```
 //!
 //! `keygen` writes a new ML-DSA-65 seed to the private key file (mode 0600, never over an existing
 //! file; tools/release-sign's key-file handling) and prints only the public key, which is what
 //! the control plane's `CITADEL_SUPPORT_MLDSA_PUBLIC_KEY` secret holds. `list` prints the tenants
 //! whose admin has granted support access; `fetch` prints one tenant's telemetry as its kernel
-//! answers `ListTelemetry`. Each request is signed with the private key (citadel-support-signature:
+//! answers `ListTelemetry`; `bugs` lists the problem reports received after `--since-ms` (0 for
+//! all kept), and `bug` prints one with its body, by the id the person quoted. Each request is signed with the private key (citadel-support-signature:
 //! the control plane's host as its audience, a random nonce, valid for `REQUEST_LIFETIME_MS`). The
 //! private key is read from the file, used to sign, and wiped; it is never printed or logged.
 //!
@@ -37,7 +40,9 @@ pub const USAGE: &str = "usage:
   telemetry-read list   --control <https://host> --private-key <file>
   telemetry-read fetch  --control <https://host> --private-key <file> --tenant <slug> --limit <n>
                         [--offset <n>] [--user <id>] [--peer-cid <cid>] [--min-level warn|error]
-                        [--since-ms <unix ms>] [--until-ms <unix ms>]";
+                        [--since-ms <unix ms>] [--until-ms <unix ms>]
+  telemetry-read bugs   --control <https://host> --private-key <file> --since-ms <unix ms>
+  telemetry-read bug    --control <https://host> --private-key <file> --id <br_...>";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
@@ -57,6 +62,8 @@ impl Command {
         match action {
             SupportAction::ListGrants => "/api/support/grants",
             SupportAction::FetchTelemetry { .. } => "/api/support/telemetry",
+            SupportAction::ListBugReports { .. } => "/api/support/bugs",
+            SupportAction::FetchBugReport { .. } => "/api/support/bug",
         }
     }
 }
@@ -87,13 +94,21 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
         .ok_or_else(|| format!("{command} needs --private-key"))?;
     let parsed = match command.as_str() {
         "keygen" => Command::Keygen { private_key },
-        "list" | "fetch" => {
+        "list" | "fetch" | "bugs" | "bug" => {
             let control =
                 control(&take("--control").ok_or_else(|| format!("{command} needs --control"))?)?;
-            let action = if command == "list" {
-                SupportAction::ListGrants
-            } else {
-                fetch(&mut take)?
+            let action = match command.as_str() {
+                "list" => SupportAction::ListGrants,
+                "fetch" => fetch(&mut take)?,
+                "bugs" => SupportAction::ListBugReports {
+                    since_ms: number(
+                        "--since-ms",
+                        &take("--since-ms").ok_or("bugs needs --since-ms")?,
+                    )?,
+                },
+                _ => SupportAction::FetchBugReport {
+                    id: take("--id").ok_or("bug needs --id")?,
+                },
             };
             Command::Read {
                 control,

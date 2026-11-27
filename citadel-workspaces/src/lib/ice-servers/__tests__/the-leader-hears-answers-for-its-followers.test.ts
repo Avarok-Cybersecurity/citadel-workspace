@@ -21,7 +21,7 @@ const FOLLOWER_CID: bigint = 14741090851496596846n;
 
 function answerFor(cid: bigint): Record<string, unknown> {
   const body: string = JSON.stringify({ Response: { IceServers: { ice_servers: [{ urls: ['turns:turn.example:443?transport=tcp'], username: 'u', credential: 'c' }], expires_at: 1790223725 } } });
-  return { MessageNotification: { cid, peer_cid: 0n, request_id: 'server-side-id', message: Array.from(new TextEncoder().encode(body)) } };
+  return { MessageNotification: { cid, peer_cid: 0n, request_id: 'server-side-id', message: new TextEncoder().encode(body) } };
 }
 
 describe('the relay lookup, asked by the leader for a follower tab session', () => {

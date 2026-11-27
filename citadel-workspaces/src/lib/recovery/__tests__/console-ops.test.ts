@@ -16,7 +16,7 @@ const ops = (): unknown[] => agent.sent.filter(([v]) => v === 'SignInManagement'
 beforeEach(() => {
   agent = new FakeAgent();
   alice = agent.account('alice');
-  alice.keys.push({ id: 11, credentialId: [1, 2], label: 'Lost key', prf: 'x' }, { id: 12, credentialId: [3, 4], label: 'Spare', prf: 'y' });
+  alice.keys.push({ id: 11, credentialId: new Uint8Array([1, 2]), label: 'Lost key', prf: 'x' }, { id: 12, credentialId: new Uint8Array([3, 4]), label: 'Spare', prf: 'y' });
   agent.recoverySessions.add(alice.cid);
 });
 
@@ -24,7 +24,7 @@ describe('the recovery console', () => {
   it('sets a new password with no old one, and it works at once', async () => {
     await setNewPassword(agent.send, alice.cid, 'new pass 12');
     expect(alice.password).toBe('new pass 12');
-    expect(ops()).toEqual([{ SetPassword: { new_password: Array.from(new TextEncoder().encode('new pass 12')) } }]);
+    expect(ops()).toEqual([{ SetPassword: { new_password: new TextEncoder().encode('new pass 12') } }]);
     expect(agent.sent[0][1].step_up).toEqual(RECOVERY_STEP_UP);
     expect(RECOVERY_STEP_UP.password).toBeNull();
   });

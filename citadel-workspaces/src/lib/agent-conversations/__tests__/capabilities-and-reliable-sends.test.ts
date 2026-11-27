@@ -95,8 +95,8 @@ describe('a reliable send', () => {
     await ops.sendP2PMessageReliable(5n, 6n, new Uint8Array([4]));
 
     expect(asked).toEqual([
-      { SendReliable: expect.objectContaining({ cid: 5n, peer_cid: 6n, message: [1, 2, 3], security_level: 'High', compression_hint: 'text' }) },
-      { SendReliable: expect.objectContaining({ cid: 5n, peer_cid: 6n, message: [4], security_level: 'Standard', compression_hint: null }) },
+      { SendReliable: expect.objectContaining({ cid: 5n, peer_cid: 6n, message: new Uint8Array([1, 2, 3]), security_level: 'High', compression_hint: 'text' }) },
+      { SendReliable: expect.objectContaining({ cid: 5n, peer_cid: 6n, message: new Uint8Array([4]), security_level: 'Standard', compression_hint: null }) },
     ]);
   });
 });

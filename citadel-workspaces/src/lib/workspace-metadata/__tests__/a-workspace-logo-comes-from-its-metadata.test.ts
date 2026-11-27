@@ -19,12 +19,11 @@ const bytes = (doc: unknown): Uint8Array => new TextEncoder().encode(JSON.string
 describe('the metadata document', () => {
   it('reads every shape the wire and the tabs deliver', () => {
     expect(metadataDocument(bytes({ logo: PNG }))).toEqual({ logo: PNG });
-    expect(metadataDocument(Array.from(bytes({ initialized: true })))).toEqual({ initialized: true });
     expect(metadataDocument({ theme: 1 })).toEqual({ theme: 1 });
   });
 
   it('is empty, not an error, for absent or foreign bytes', () => {
-    for (const blank of [undefined, null, new Uint8Array(0), [], new TextEncoder().encode('not json'), bytes([1, 2])]) {
+    for (const blank of [undefined, null, new Uint8Array(0), new TextEncoder().encode('not json'), bytes([1, 2])]) {
       expect(metadataDocument(blank)).toBeNull();
     }
   });

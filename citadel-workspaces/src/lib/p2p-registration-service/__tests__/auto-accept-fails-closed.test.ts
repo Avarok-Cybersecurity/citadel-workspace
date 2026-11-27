@@ -23,10 +23,10 @@ let getBehaviour: 'absent' | 'timeout' | 'on' = 'absent';
 
 vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
-    sendLocalDBGet: async (): Promise<{ value: number[] } | null> => {
+    sendLocalDBGet: async (): Promise<{ value: Uint8Array } | null> => {
       if (getBehaviour === 'timeout') throw new Error('LocalDB request timed out after 5000ms');
       if (getBehaviour === 'absent') throw new Error('Key not found: auto_accept');
-      return { value: Array.from(new TextEncoder().encode('true')) };
+      return { value: new TextEncoder().encode('true') };
     },
     sendLocalDBSet: async (): Promise<void> => undefined,
   },

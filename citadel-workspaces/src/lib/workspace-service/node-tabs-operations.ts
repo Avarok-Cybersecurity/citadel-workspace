@@ -30,7 +30,7 @@ export async function writeNodeTabs(sender: ProtocolSender, nodeId: string, appI
   const requestPart: WorkspaceProtocolRequest = {
     UpdateNode: {
       node_id: nodeId, name: null, description: null, mdx_content: null, rules: null, chat_enabled: null, is_default: null,
-      metadata: Array.from(new TextEncoder().encode(patch)),
+      metadata: new TextEncoder().encode(patch),
     },
   };
   return awaitWriteResponse(

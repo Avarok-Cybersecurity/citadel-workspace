@@ -198,6 +198,14 @@ export function handleGeneratedVariants(
     return true;
   }
 
+  if (isVariant(response, 'AdminRequests')) {
+    // An admin's "there is an ask to take" nudge (admin-requests/boot.ts), or an answer that
+    // admin-requests-operations.ts waits on through the raw event.
+    eventEmitter.emit('workspace:admin-requests', { answer: response.AdminRequests });
+    eventEmitter.emit('workspace:raw-response', response);
+    return true;
+  }
+
   if (isVariant(response, 'MessagingTrust')) {
     // The settings screens follow it (messaging-trust/settings-feed.ts); the requests in
     // messaging-trust-operations.ts wait on the raw event for their own answer.

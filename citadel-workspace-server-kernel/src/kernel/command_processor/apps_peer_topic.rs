@@ -2,6 +2,11 @@
 //! creates the group records its key; everyone else reads it and asks to join. The record is the
 //! scope KV's reserved key `sys/topic/<name>` (`storage::topic_key`), which no app write may
 //! name, so an app can neither forge nor erase it.
+//!
+//! A group ends when its last member leaves, and the record does not: a member whose agent is
+//! told the recorded group no longer exists creates another and records it with `replaces`
+//! naming the ended one. The swap is made only while the ended group is still the recorded one,
+//! so two members replacing it at once end up in the same group, the first one's.
 
 use super::apps::{finish, Answer, Caller, Halt};
 use super::apps_call_storage::{quota_for, root_of};
@@ -28,6 +33,7 @@ pub(super) async fn topic_group<R: Ratchet + Send + Sync + 'static>(
     install_id: &str,
     topic: &str,
     claim: Option<&str>,
+    replaces: Option<&str>,
 ) -> Answer {
     let step = async {
         let backend = &kernel.domain_operations.backend_tx_manager;
@@ -43,8 +49,12 @@ pub(super) async fn topic_group<R: Ratchet + Send + Sync + 'static>(
         if !usable {
             return Err(AppsRefusal::Unavailable.into());
         }
-        if claim.is_some_and(|k| k.is_empty() || k.len() > MAX_GROUP_KEY_BYTES) {
+        let malformed = |k: &str| k.is_empty() || k.len() > MAX_GROUP_KEY_BYTES;
+        if claim.is_some_and(malformed) || replaces.is_some_and(malformed) {
             return Err(AppsRefusal::Limit("group_key".to_string()).into());
+        }
+        if replaces.is_some() && claim.is_none() {
+            return Err(AppsRefusal::Limit("replaces_without_claim".to_string()).into());
         }
         let root = root_of(&install)?;
         let id = root.namespace_id(&Namespace::Scope);
@@ -58,10 +68,15 @@ pub(super) async fn topic_group<R: Ratchet + Send + Sync + 'static>(
         } else {
             None
         };
-        let group_key = match (recorded, claim) {
-            (Some(recorded), _) => Some(recorded),
-            (None, None) => None,
-            (None, Some(claimed)) => {
+        // Nothing recorded, or the recorded group is the ended one the caller replaces.
+        let write = match (recorded.as_deref(), claim) {
+            (None, Some(claimed)) => Some(claimed),
+            (Some(ended), Some(claimed)) if replaces == Some(ended) => Some(claimed),
+            _ => None,
+        };
+        let group_key = match write {
+            None => recorded,
+            Some(claimed) => {
                 let quota = quota_for(kernel, &install, &Namespace::Scope).await?;
                 let next = index
                     .apply(&[(key.as_str(), Some(claimed.len()))], quota)

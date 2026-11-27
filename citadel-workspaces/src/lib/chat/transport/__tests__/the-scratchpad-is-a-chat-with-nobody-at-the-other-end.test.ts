@@ -30,10 +30,10 @@ function world(): { transport: ChatTransport; sent: Sent[] } {
   const messenger: P2PMessengerManager = {
     sendMessage: async (to: bigint, content: string, options?: SendMessageOptions) => { sent.push({ to, content, options }); options?.onOptimisticAppend?.(); },
   } as unknown as P2PMessengerManager;
-  const rows: Map<string, number[]> = new Map();
+  const rows: Map<string, Uint8Array> = new Map();
   const db: LocalDbPort = {
-    get: async (_c: bigint, k: string) => { const v: number[] | undefined = rows.get(k); if (v === undefined) throw new Error(`Key not found: ${k}`); return { value: v }; },
-    set: async (_c: bigint, k: string, v: number[]) => { rows.set(k, v); },
+    get: async (_c: bigint, k: string) => { const v: Uint8Array | undefined = rows.get(k); if (v === undefined) throw new Error(`Key not found: ${k}`); return { value: v }; },
+    set: async (_c: bigint, k: string, v: Uint8Array) => { rows.set(k, v); },
   };
   const transport: ChatTransport = createScratchpadTransport({
     messenger,

@@ -33,7 +33,6 @@ async function fetchSameOrigin(url: string): Promise<string> {
 const DEPS: MarketplaceDeps = {
   transport: sessionAppsTransport,
   fetchText: fetchSameOrigin,
-  copyText: (text: string): Promise<void> => navigator.clipboard.writeText(text),
   clock: browserClock,
 };
 

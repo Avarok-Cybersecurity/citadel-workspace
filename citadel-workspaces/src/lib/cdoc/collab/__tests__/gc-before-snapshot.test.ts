@@ -10,7 +10,7 @@ import { ALICE, BOB, newDocument, openTab, type Tab } from './doubles/harness';
 import { realReplicas, typeInto } from './doubles/real-replicas';
 
 type RealTab = Tab<EditorSession>;
-type Stored = { readonly request: { StoreSnapshot: { snapshot: number[] } } };
+type Stored = { readonly request: { StoreSnapshot: { snapshot: Uint8Array } } };
 
 const CHURN: number = 50;
 

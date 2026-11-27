@@ -10,7 +10,7 @@ import { listingOf } from '../listing';
 
 function neverUsedKey(): SignInCredential {
   const wire: Omit<SignInCredential, 'last_used_ms'> = {
-    id: 7, kind: 'SecurityKey', label: 'YubiKey', credential_id: [1, 2], created_ms: 5n, consumed: false,
+    id: 7, kind: 'SecurityKey', label: 'YubiKey', credential_id: new Uint8Array([1, 2]), created_ms: 5n, consumed: false,
   };
   return wire as SignInCredential;
 }

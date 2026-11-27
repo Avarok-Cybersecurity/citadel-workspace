@@ -1,6 +1,7 @@
 //! The signed request Avarok support sends the control plane to read a workspace's telemetry
-//! (plan section 3): one definition of what is signed, shared by the signing tool
-//! (`tools/telemetry-read`) and the verifier the control-plane Worker runs (`server-wasm`).
+//! (plan section 3) or the problem reports people sent (REL-1127): one definition of what is
+//! signed, shared by the signing tool (`tools/telemetry-read`) and the verifier the control-plane
+//! Worker runs (`server-wasm`).
 //!
 //! # The wire format
 //!
@@ -77,6 +78,10 @@ pub enum SupportAction {
         filter: TelemetryFilter,
         page: TelemetryPage,
     },
+    /// The problem reports received after `since_ms` (Unix ms), newest first, without bodies.
+    ListBugReports { since_ms: u64 },
+    /// One problem report with its body, by the id the person was given (`br_` + 24 hex).
+    FetchBugReport { id: String },
 }
 
 /// The signed payload.

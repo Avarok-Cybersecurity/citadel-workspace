@@ -23,20 +23,20 @@ const BOB: bigint = 14741090851496596846n;
 const CAROL: bigint = 300n;
 
 class AgentLocalDB implements PauseStorage {
-  readonly rows: Map<string, number[]> = new Map();
+  readonly rows: Map<string, Uint8Array> = new Map();
   failReads: boolean = false;
   failWrites: boolean = false;
 
   private row(cid: bigint, key: string): string { return `${cid.toString()}/${key}`; }
 
-  async get(cid: bigint, key: string): Promise<{ value: number[] } | null> {
+  async get(cid: bigint, key: string): Promise<{ value: Uint8Array } | null> {
     if (this.failReads) throw new Error('LocalDB request timed out after 5000ms');
-    const value: number[] | undefined = this.rows.get(this.row(cid, key));
+    const value: Uint8Array | undefined = this.rows.get(this.row(cid, key));
     if (value === undefined) throw new Error(`Key not found: ${key}`);
     return { value };
   }
 
-  async set(cid: bigint, key: string, value: number[]): Promise<void> {
+  async set(cid: bigint, key: string, value: Uint8Array): Promise<void> {
     if (this.failWrites) throw new Error('LocalDB request timed out after 5000ms');
     this.rows.set(this.row(cid, key), value);
   }

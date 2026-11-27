@@ -58,7 +58,7 @@ export function release(wasm: Uint8Array, granted: AppInstall['granted'], change
   const signature: string = Buffer.from(fakeSign(key, APP_ID, '1.4.0', sha256Hex(manifestBytes), sha256Hex(wasm))).toString('hex');
   return {
     wasm,
-    listing: { source: { Global: { catalogue_version: 1n } }, manifest_bytes: Array.from(manifestBytes), signature },
+    listing: { source: { Global: { catalogue_version: 1n } }, manifest_bytes: manifestBytes, signature },
     install: installOf(APP_ID, 'Workspace', { id: 'inst-1', granted, manifest_sha256: sha256Hex(manifestBytes), artifact_sha256: sha256Hex(wasm), pinned_publisher_key: key }),
   };
 }
@@ -94,12 +94,12 @@ export class FakeRuntimeKernel implements AppsTransport {
     if ('FetchArtifact' in request) {
       const total: number = Math.ceil(this.served.byteLength / CHUNK);
       const { sha256, index } = request.FetchArtifact;
-      return { ArtifactChunk: { sha256, index, total_chunks: total, bytes: Array.from(this.served.slice(index * CHUNK, (index + 1) * CHUNK)) } };
+      return { ArtifactChunk: { sha256, index, total_chunks: total, bytes: this.served.slice(index * CHUNK, (index + 1) * CHUNK) } };
     }
     if ('Call' in request) {
       const call: ReturnType<typeof decodeCbor> = decodeCbor(Uint8Array.from(request.Call.call));
       this.calls.push({ install_id: request.Call.install_id, call: call.ok ? call.value : 'undecodable' });
-      return { CallReply: { reply: Array.from(encodeCbor({ ok: { value: Uint8Array.from([7]) } })) } };
+      return { CallReply: { reply: encodeCbor({ ok: { value: Uint8Array.from([7]) } }) } };
     }
     return { Refused: 'ServerFeatureUnavailable' };
   }
@@ -132,7 +132,7 @@ export function rigWorld(kernel: AppsTransport, listeners: Set<(answer: unknown)
     pushes: (l: (answer: unknown) => void) => { listeners.add(l); return (): void => { listeners.delete(l); }; }, sha256Hex: async (b: Uint8Array): Promise<string> => sha256Hex(b),
     nowMs: (): number => Date.now(), every: () => (): void => undefined,
     // agentSession is null, so the peer plane is absent; these are never asked.
-    peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string): void => { reports.push(what); },
+    peerCid: () => null, presence: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string): void => { reports.push(what); },
     notices: (n: AppNoticeEntry): void => { notices.push(n); },
     // No member is signed in to announce own-store writes for (own-store-writes.ts is tested on its own).
     ownWrites: null,

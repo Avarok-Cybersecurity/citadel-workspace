@@ -62,8 +62,8 @@ export class ConnectionIO {
   async forgetAccountDocuments(cid: bigint): Promise<void> { return (await import('@/lib/document-replica-cache')).forgetAccountDocuments(cid); }
   async forgetAtRestRoot(cid: bigint): Promise<void> { return (await import('@/lib/document-replica-cache')).forgetAtRestRoot(cid); }
   async claimSession(cid: bigint, onlyIfOrphaned: boolean): Promise<unknown> { return this.ws.claimSession(cid, onlyIfOrphaned); }
-  async localDBSet(cid: bigint, key: string, value: number[]): Promise<void> { return this.ws.localDBSet(cid, key, value); }
-  async localDBGet(cid: bigint, key: string): Promise<{ value: number[] } | null> { return this.ws.localDBGet(cid, key); }
+  async localDBSet(cid: bigint, key: string, value: Uint8Array): Promise<void> { return this.ws.localDBSet(cid, key, value); }
+  async localDBGet(cid: bigint, key: string): Promise<{ value: Uint8Array } | null> { return this.ws.localDBGet(cid, key); }
   async storeSessionsToLocalDB(sessions: StoredSessions): Promise<void> { return this.ws.storeSessionsToLocalDB(sessions); }
   async loadSessionsFromLocalDB(): Promise<StoredSessions | null> { return this.ws.loadSessionsFromLocalDB(); }
   async sendGetSessionsRequest(requestId: string, pendingRequests: Map<string, PendingRequest>, timeoutMs: number): Promise<GetSessionsResponse> { return this.ws.sendGetSessionsRequest(requestId, pendingRequests, timeoutMs); }

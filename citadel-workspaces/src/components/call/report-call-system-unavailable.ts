@@ -11,29 +11,30 @@
  *
  * Three sentences rather than one, because the three moments are different and
  * "something went wrong" would leave the callee wondering whether the caller
- * saw anything.
+ * saw anything. Each carries Reload as its action (the route the words used to ask for by hand).
  */
 
-import { toast } from 'sonner';
+import { recoveryToast } from '@/components/recovery-route/recovery-toast';
+import { recovery } from '@/lib/recovery-route/recovery';
 
 export type CallMoment = 'start' | 'accept' | 'inbound';
 
-const MESSAGES: Record<CallMoment, { title: string; description: string }> = {
+const MESSAGES: { readonly [K in CallMoment]: { title: string; description: string } } = {
   start: {
     title: 'Calling is not available right now',
-    description: 'The call system could not start. Reload the page and try again.',
+    description: 'The call system could not start. Reload, then call again.',
   },
   accept: {
     title: 'Could not answer the call',
-    description: 'The call system is not ready. Reload the page and ask them to call again.',
+    description: 'The call system is not ready. Reload, then ask them to call again.',
   },
   inbound: {
     title: 'Missed an incoming call',
-    description: 'The call system could not start. Reload the page to receive calls.',
+    description: 'The call system could not start. Reload to receive calls.',
   },
 };
 
 export function reportCallSystemUnavailable(moment: CallMoment): void {
   const { title, description } = MESSAGES[moment];
-  toast.error(title, { description });
+  recoveryToast(recovery('call.system-unavailable', {}), { title, description });
 }

@@ -5,16 +5,17 @@ export type { WebSocketServiceConfig } from './types';
 export { WebSocketServiceCore } from './core';
 import { WebSocketServiceCore } from './core';
 import { eventEmitter } from '../event-emitter';
-import { errorLog } from '../debug-config';
+import { debugLog, errorLog } from '../debug-config';
 import { instanceManager } from '../multi-instance/instance-manager';
 import { installFollowerSessionClaims } from '../multi-instance/follower-session-claims';
-import { isOwnedByALiveConnection } from '../sessions/claim-session';
+import { isGoneFromTheAgent, isOwnedByALiveConnection } from '../sessions/claim-session';
 import { instanceChannel } from '../multi-instance/instance-channel';
 import { TIMEOUT } from '../timeout-constants';
 import { installClaimRelay } from '../multi-instance/claim-relay';
 import { installNoticesHeardRelay } from '../multi-instance/notices-heard-relay';
 import { noticesHeard } from '../agent-conversations/capabilities';
 import { installMediaFrameRelay } from '../multi-instance/media-frame-relay';
+import { installEndedSessionRelease } from '../sessions/release-ended-session';
 
 // Singleton instance - preserves original API
 export const websocketService: WebSocketServiceCore = new WebSocketServiceCore();
@@ -27,11 +28,20 @@ installFollowerSessionClaims({
   instances: () => instanceManager.getAllInstances(),
   claim: (cid: bigint): Promise<unknown> => websocketService.claimSession(cid, true),
   isOwnedByALiveConnection,
+  isGoneFromTheAgent,
   reportFailure: (cid: bigint, error: unknown): void => { errorLog('FollowerSessionClaims', `claiming ${cid} for another tab failed`, error); },
+  noteGone: (cid: bigint): void => { debugLog('FollowerSessionClaims', `the agent holds no session ${cid}; nothing to claim`); },
   requestReports: (): void => instanceChannel.requestCidReport(),
   unregister: (instanceId: string): void => instanceManager.unregisterInstance(instanceId),
   reportWindowMs: TIMEOUT.CID_REPORT_WINDOW_MS,
   schedule: (fn: () => void, ms: number): void => { setTimeout(fn, ms); },
+});
+
+// A tab whose session ended stops announcing it, so no leader claims it again; see release-ended-session.ts.
+installEndedSessionRelease({
+  on: (event: string, handler: (payload: unknown) => void): void => { eventEmitter.on(event, handler); },
+  heldCid: (): bigint | null => instanceManager.cid,
+  release: (): void => instanceManager.setCid(null),
 });
 
 // A claim made here is heard in every tab; see claim-relay.ts.

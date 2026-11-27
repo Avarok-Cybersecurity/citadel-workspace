@@ -43,7 +43,7 @@ describe('creating a document', () => {
     expect(create.entity_type).toEqual({ Child: 'Floor' });
     expect(create.name).toBe('Plan');
     expect(create.metadata).toBeDefined();
-    expect(decodeNodeApp(create.metadata ?? [])).toEqual({ kind: 'document', app: 'docs' });
+    expect(decodeNodeApp(create.metadata ?? null)).toEqual({ kind: 'document', app: 'docs' });
   });
 
   it('refuses an app that is not available yet, sending nothing', async () => {

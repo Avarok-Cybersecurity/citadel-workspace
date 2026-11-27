@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h: { attaches: unknown[]; honoursToken: boolean } = vi.hoisted(() => ({ attaches: [], honoursToken: true }));
-const TOKEN: number[] = [9, 8, 7, 6, 5, 4, 3, 2];
+const TOKEN: Uint8Array = new Uint8Array([9, 8, 7, 6, 5, 4, 3, 2]);
 
 vi.mock('@/lib/storage-utils', () => {
   const raw: Map<string, unknown> = new Map();

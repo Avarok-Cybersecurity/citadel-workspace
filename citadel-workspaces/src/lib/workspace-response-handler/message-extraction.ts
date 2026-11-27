@@ -11,6 +11,7 @@ import type { WebSocketMessage } from '@/types/ws-message-types';
 import { decodeWorkspacePayload, isVariant, type WorkspaceProtocolPayload, type WorkspaceProtocolResponse } from 'citadel-workspace-client-ts';
 import { formatForDebug } from '@/lib/debug-formatter';
 import { answerPairing } from '@/lib/workspace-service/answers/answer-pairing';
+import { isByteArray } from '@/lib/utils/encoding-utils';
 
 // The envelope logs below go through formatForDebug, which prints a payload's
 // ends rather than its bytes and redacts secret-named fields: the payload is an
@@ -99,7 +100,7 @@ function decodeByteArrayPayload(
   field: unknown,
   sourceLabel: string,
 ): WorkspaceProtocolResponse | null {
-  if (!field || !Array.isArray(field)) {
+  if (!isByteArray(field)) {
     debugLog('WorkspaceResponseHandler', `${sourceLabel} missing payload field`);
     return null;
   }
@@ -107,12 +108,11 @@ function decodeByteArrayPayload(
   try {
     // The u64-exact codec, not JSON.parse: a bare parse turned every u64 into a lossy number where
     // the types promise bigint, and the admin Telemetry section crashed dividing one by a bigint.
-    const bytes: Uint8Array = new Uint8Array(field as number[]);
-    const workspacePayload: WorkspaceProtocolPayload = decodeWorkspacePayload(bytes);
+    const workspacePayload: WorkspaceProtocolPayload = decodeWorkspacePayload(field);
 
     if (isVariant(workspacePayload, 'Response')) {
       // Held for the pairing frame that may name it; a pairing frame itself goes no further.
-      if (answerPairing.readFrame(bytes, workspacePayload.Response)) return null;
+      if (answerPairing.readFrame(field, workspacePayload.Response)) return null;
       return workspacePayload.Response;
     }
 

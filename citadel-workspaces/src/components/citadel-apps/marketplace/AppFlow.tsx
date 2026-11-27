@@ -13,11 +13,12 @@ import { installScopeOf, scopeDomain, scopeOptions, type ScopeChoice, type Scope
 import { consentRows, grantOf, grantProblem, keyTrust, type ConsentRow } from '@/lib/citadel-apps/consent-model';
 import { scopeSentence } from '@/lib/citadel-apps/scope-sentence';
 import { refusalCopy } from '@/lib/citadel-apps/refusal-copy';
-import { refusalNextSteps } from '@/lib/citadel-apps/refusal-next-step';
+import { adminAskAbout, managersLine } from '@/lib/citadel-apps/refused-install';
+import { appsSurface } from '@/lib/recovery-route/surfaces/apps';
 import { installApp, type AppsResult } from '@/lib/workspace-service/apps-operations';
 import { listingOffer } from '@/lib/citadel-apps/listing-offer';
 import { appLinkUrl } from '@/lib/citadel-apps/app-link';
-import { RefusalView } from './RefusalView';
+import { AppsRefusalNotice } from './AppsRefusalNotice';
 import { ListingDetail } from './ListingDetail';
 import { ScopePicker } from './ScopePicker';
 import { ConsentPanel } from './ConsentPanel';
@@ -52,7 +53,8 @@ export function AppFlow({ app, installs, deps, viewer, onInstalled, onDone, onSh
   const mine: AppInstall[] = installs.filter((i: AppInstall) => i.app_id === m.id);
   const sentence = (scope: InstallScope): string => scopeSentence(scope, viewer.reach(scope), viewer.nodeName);
 
-  const install = async (scope: InstallScope, granted: Capability[]): Promise<void> => {
+  /** Sends the install and dispatches its answer, which the step it moves to then shows. */
+  const install = async (scope: InstallScope, granted: Capability[]): Promise<AppsResult<AppInstall>> => {
     const result: AppsResult<AppInstall> = await installApp(deps.transport, {
       appId: m.id, version: m.version, listing: listingOffer(app.listing), scope, granted, pinnedPublisherKey: m.publisher.mldsa65_public_key, injectRequirement: false,
     });
@@ -63,6 +65,7 @@ export function AppFlow({ app, installs, deps, viewer, onInstalled, onDone, onSh
     } else {
       dispatch({ kind: 'refused', refusal: result.refusal });
     }
+    return result;
   };
 
   const s: FlowState = state;
@@ -134,16 +137,25 @@ export function AppFlow({ app, installs, deps, viewer, onInstalled, onDone, onSh
     );
   }
 
-  const retry = (): void => { dispatch({ kind: 'retry' }); void install(s.scope, s.granted); };
+  const failed: FlowState & { step: 'failed' } = s;
+  // Sent from the refusal, which stays up while it runs: an automatic retry waits for each answer.
+  const retry = async (): Promise<void> => {
+    if (!(await install(failed.scope, failed.granted)).ok) throw new Error('It was not installed this time either.');
+  };
   const link: string = appLinkUrl(viewer.origin, { appId: m.id, nodeId: scopeNode(s.scope), version: m.version, server: viewer.serverAddress });
   const copy: string = refusalCopy(s.refusal);
   return (
-    <RefusalView
+    <AppsRefusalNotice
       testId="apps-install-failed"
+      surface={appsSurface(s.refusal)}
       message={`${m.name} was not installed. ${copy}`}
-      guidance={refusalNextSteps(s.refusal, viewer.authority.holds('AppManage', viewer.rootId) === 'yes')}
-      refused={{ appName: m.name, appId: m.id, version: m.version, where: sentence(s.scope), link, refusal: s.refusal, copy }}
-      actions={{ retry, changeChoice: () => dispatch({ kind: 'back' }), showInstalled: onShowInstalled, browse: onDone, copyText: deps.copyText }}
+      forManagers={managersLine(s.refusal, viewer.authority.holds('AppManage', viewer.rootId) === 'yes')}
+      binding={{
+        retry,
+        focus: (): void => dispatch({ kind: 'back' }),
+        askAbout: adminAskAbout({ appName: m.name, version: m.version, where: sentence(s.scope), link, copy }),
+        dismiss: onShowInstalled,
+      }}
     />
   );
 }

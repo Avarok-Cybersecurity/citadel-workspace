@@ -13,7 +13,6 @@ import type { Reach } from '@/lib/citadel-apps/scope-sentence';
 export interface MarketplaceDeps {
   transport: AppsTransport;
   fetchText: FetchText;
-  copyText: (text: string) => Promise<void>;
   /** What the consent panel's 600 ms guard runs on. */
   clock: Clock;
 }

@@ -34,7 +34,7 @@ function serverSays(requestIds: boolean | undefined): void {
 /** One server frame as the page receives it; an unhandled response reaches the raw stream. */
 function deliver(response: WorkspaceProtocolResponse): Uint8Array {
   const bytes: Uint8Array = encodeWorkspacePayload({ Response: response });
-  const read: WorkspaceProtocolResponse | null = extractWorkspaceResponse({ MessageNotification: { message: Array.from(bytes), cid: 1n, peer_cid: 0n } });
+  const read: WorkspaceProtocolResponse | null = extractWorkspaceResponse({ MessageNotification: { message: bytes, cid: 1n, peer_cid: 0n } });
   if (read !== null) eventEmitter.emit('workspace:raw-response', read);
   return bytes;
 }

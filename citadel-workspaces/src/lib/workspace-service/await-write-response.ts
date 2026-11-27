@@ -45,6 +45,8 @@ export const SUCCESS_RESPONSES: Record<string, readonly string[]> = {
   Telemetry: ['Telemetry'],
   // Likewise MessagingTrust; messaging-trust-operations picks the kind and the peer.
   MessagingTrust: ['MessagingTrust'],
+  // Likewise AdminRequests; admin-requests-operations picks the kind (and skips the Waiting push).
+  AdminRequests: ['AdminRequests'],
   // And Roles: a List is answered with the table, an edit with RoleChanged; roles-operations matches which.
   Roles: ['Roles'],
   // And SecureLinks: secure-links-operations matches the kind, and the link, to the request.

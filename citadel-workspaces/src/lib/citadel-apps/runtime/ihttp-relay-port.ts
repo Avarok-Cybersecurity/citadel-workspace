@@ -95,7 +95,7 @@ export function relayIhttpPort(d: RelayDeps): RelayIhttpPort {
     onFrame: (listener: (inbound: InboundIhttpFrame) => void): (() => void) => d.pushes((payload: unknown): void => {
       const answer: AppsAnswer = readAppsAnswer(payload);
       if (answer.kind !== 'ihttp-frame' || answer.toInstallId !== d.installId) return;
-      const decoded: Decoded = decodeCbor(Uint8Array.from(answer.frame));
+      const decoded: Decoded = decodeCbor(answer.frame);
       const frame: IhttpFrame | null = decoded.ok ? fromWireFrame(decoded.value) : null;
       if (frame === null) return;
       const from: Caller = { username: answer.from.username, cid: answer.from.cid, app_id: answer.from.app_id, install_id: answer.from.install_id, via: 'relay' };

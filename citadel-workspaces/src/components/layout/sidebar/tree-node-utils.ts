@@ -109,7 +109,7 @@ function workspaceNode(rootName: string, children: string[], allowedChildTypes: 
     chat_enabled: false,
     chat_channel_id: null,
     default_permissions: SYNTHETIC_ROOT_PERMISSIONS,
-    metadata: [],
+    metadata: new Uint8Array(),
     allowed_child_types: allowedChildTypes,
     is_default: false,
     created_at: 0n,

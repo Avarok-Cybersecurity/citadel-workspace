@@ -47,14 +47,23 @@ export function cidsToClaim(
  *
  * "Owned by a live connection" (claim-session.ts reads the agent's refusal) — in the normal
  * case that is this very connection (the follower registered through it), so there is
- * nothing to do and it is recorded as settled. Anything else is a real failure: it is
- * reported, and left unsettled so the next trigger tries again.
+ * nothing to do and it is recorded as settled. "Gone" — the agent holds no session for the
+ * CID ("Session <cid> not found", or ended as it was claimed) — is as final: a session is
+ * removed only by a sign-out, a deletion, its server dropping it or an agent restart, and
+ * the tab that showed it hears of those on its own (SessionEndedWatcher,
+ * sessions-lost-with-agent.ts). There is nothing to claim and nothing to retry on this
+ * connection. Anything else is a real failure: it is reported, and left unsettled so the
+ * next trigger tries again.
  */
-export type ClaimResult = 'settled' | 'failed';
+export type ClaimResult = 'settled' | 'gone' | 'failed';
 
-export function readClaimOutcome(error: unknown | null, isOwnedByALiveConnection: (error: unknown) => boolean): ClaimResult {
-  if (error === null) return 'settled';
-  return isOwnedByALiveConnection(error) ? 'settled' : 'failed';
+export function readClaimOutcome(
+  error: unknown | null,
+  isOwnedByALiveConnection: (error: unknown) => boolean,
+  isGoneFromTheAgent: (error: unknown) => boolean,
+): ClaimResult {
+  if (error === null || isOwnedByALiveConnection(error)) return 'settled';
+  return isGoneFromTheAgent(error) ? 'gone' : 'failed';
 }
 
 type Handler = (payload: unknown) => void;
@@ -66,7 +75,10 @@ export interface FollowerClaimDeps {
   instances: () => InstanceInfo[];
   claim: (cid: bigint) => Promise<unknown>;
   isOwnedByALiveConnection: (error: unknown) => boolean;
+  isGoneFromTheAgent: (error: unknown) => boolean;
   reportFailure: (cid: bigint, error: unknown) => void;
+  /** The agent holds no session for `cid`: not a failure (see readClaimOutcome). */
+  noteGone: (cid: bigint) => void;
   /** Ask every tab to say which session it holds (cid-report-request). */
   requestReports: () => void;
   unregister: (instanceId: string) => void;
@@ -112,7 +124,9 @@ export function installFollowerSessionClaims(deps: FollowerClaimDeps): { settle:
       (): null => null,
       (error: unknown): unknown => error,
     ).then((error: unknown | null): void => {
-      if (readClaimOutcome(error, deps.isOwnedByALiveConnection) === 'failed') {
+      const outcome: ClaimResult = readClaimOutcome(error, deps.isOwnedByALiveConnection, deps.isGoneFromTheAgent);
+      if (outcome === 'gone') deps.noteGone(cid);
+      if (outcome === 'failed') {
         generation.delete(cid);
         deps.reportFailure(cid, error);
       }

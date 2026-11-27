@@ -93,6 +93,7 @@ async fn topic(kernel: &Kernel, who: &str, id: &str) -> AppsResponse {
         install_id: id.into(),
         topic: "cal".into(),
         claim: None,
+        replaces: None,
     };
     ask_on(kernel, who, None, request).await
 }

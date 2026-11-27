@@ -9,6 +9,7 @@
  * labelled with its time so it never passes for live.
  */
 import type { DomainNode } from '@/components/layout/sidebar/tree-node-types';
+import { keptBytes } from '@/lib/utils/encoding-utils';
 
 export interface CachedWorkspaceTree {
   /** When the server's answer this copies arrived, ms since the epoch. */
@@ -24,12 +25,16 @@ export function readCachedTree(value: unknown): CachedWorkspaceTree | null {
   if (!isRecord(value) || typeof value.savedAt !== 'number' || !Number.isFinite(value.savedAt) || !isRecord(value.nodes)) {
     throw new Error('the kept workspace tree is not in the shape this client writes');
   }
+  const nodes: Record<string, DomainNode> = {};
   for (const [id, node] of Object.entries(value.nodes)) {
-    if (!isRecord(node) || node.id !== id || typeof node.name !== 'string' || !Array.isArray(node.metadata)) {
+    const metadata: Uint8Array | null = isRecord(node) ? keptBytes(node.metadata) : null;
+    if (!isRecord(node) || node.id !== id || typeof node.name !== 'string' || metadata === null) {
       throw new Error(`the kept workspace tree holds a node ${id} that is not one`);
     }
+    // A tree kept before byte fields arrived as Uint8Array holds its metadata as a list of numbers.
+    nodes[id] = { ...(node as unknown as DomainNode), metadata };
   }
-  return { savedAt: value.savedAt, nodes: value.nodes as Record<string, DomainNode> };
+  return { savedAt: value.savedAt, nodes };
 }
 
 /** What a server's node list is kept as; null for an empty list, which is never kept over a fuller one. */

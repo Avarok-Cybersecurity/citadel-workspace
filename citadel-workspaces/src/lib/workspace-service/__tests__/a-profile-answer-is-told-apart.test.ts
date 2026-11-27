@@ -16,7 +16,7 @@ const record = (name: string, logo: string | null): Record<string, unknown> => (
   id: 'w1',
   name,
   description: '',
-  metadata: Array.from(new TextEncoder().encode(JSON.stringify({ initialized: true, logo }))),
+  metadata: new TextEncoder().encode(JSON.stringify({ initialized: true, logo })),
 });
 
 describe('the answer to a workspace-settings save', () => {

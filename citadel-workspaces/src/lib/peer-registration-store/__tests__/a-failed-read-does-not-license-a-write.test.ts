@@ -131,7 +131,7 @@ describe('a whole-list write', () => {
     const load: Promise<LoadOutcome> = loadPendingFromLocalDB(kv, async (requests) => {
       seen.push(requests);
     });
-    resolveKVResponse(kv, lastGetRequestId(), Array.from(new TextEncoder().encode('[]')));
+    resolveKVResponse(kv, lastGetRequestId(), new TextEncoder().encode('[]'));
     expect(await load).toBe('loaded');
 
     await expect(persistAnswering([], kv)).resolves.toBeUndefined();

@@ -5,7 +5,7 @@
  * and WASM debug bridge setup.
  */
 
-import type { WorkspaceClient } from 'citadel-workspace-client-ts';
+import { loadWorkspaceCodec, type WorkspaceClient } from 'citadel-workspace-client-ts';
 import { debugLog } from '../debug-config';
 import { instanceManager } from '../multi-instance';
 import { GLOBAL_INIT_KEY } from '../websocket';
@@ -71,6 +71,10 @@ async function doInit(service: WebSocketServiceCore): Promise<void> {
 
   const { setupWasmDebugBridge } = await import('../wasm-debug-bridge');
   setupWasmDebugBridge();
+
+  // Every tab decodes workspace messages, a follower's by broadcast from the leader: the codec
+  // is loaded before either path can receive one.
+  await loadWorkspaceCodec();
 
   debugLog('WebSocketService', 'Waiting for leader election to settle...');
   await service.initOps.waitForLeaderElection();

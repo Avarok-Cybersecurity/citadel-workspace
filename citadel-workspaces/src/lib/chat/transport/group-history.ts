@@ -11,6 +11,7 @@ import type { GroupMessage } from '@/types/workspace-entities';
 import { notifyEach } from '@/lib/notify-listeners';
 import type { GroupMessageEvent } from '@/lib/group-messaging-manager';
 import { groupChatMessage, STORED } from './group-chat-message';
+import { fromServerReaction } from '@/lib/reactions/reaction-state';
 import type { PendingSends } from './pending-group-sends';
 import type { ReceiptStamp } from './read-receipts';
 import type { ChatMessage, ChatSelf, HistoryCursor, HistoryEvent, HistoryPage, HistoryPort } from './chat-transport';
@@ -106,7 +107,7 @@ export function groupHistory({ self, log, pages, pending, receipts, markRead, fo
         return;
       case 'message_reacted':
         if (event.messageId === undefined || event.message === undefined) return;
-        emit({ kind: 'updated', message: { id: event.messageId, reactions: event.message.reactions ?? [] } });
+        emit({ kind: 'updated', message: { id: event.messageId, reactions: (event.message.reactions ?? []).map(fromServerReaction) } });
         return;
       case 'message_deleted':
         if (event.messageId !== undefined) emit({ kind: 'removed', messageId: event.messageId });

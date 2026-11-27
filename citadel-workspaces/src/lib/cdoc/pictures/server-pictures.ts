@@ -110,7 +110,7 @@ async function put(wire: PictureWire, deadlineMs: number, doc: WireDocument, con
   for (let index: number = 0; index < total; index++) {
     const part: Uint8Array = bytes.subarray(index * CHAT_ATTACHMENT_CHUNK_BYTES, (index + 1) * CHAT_ATTACHMENT_CHUNK_BYTES);
     const request: DocumentPicturesRequest = {
-      UploadChunk: { doc, content_id: contentId, size_bytes: BigInt(bytes.length), index, total_chunks: total, bytes: Array.from(part) },
+      UploadChunk: { doc, content_id: contentId, size_bytes: BigInt(bytes.length), index, total_chunks: total, bytes: part.slice() },
     };
     const result: Exchanged = await exchange(wire, deadlineMs, request);
     if (!result.ok) return failed(result.failure);
@@ -123,19 +123,19 @@ async function put(wire: PictureWire, deadlineMs: number, doc: WireDocument, con
 }
 
 async function get(wire: PictureWire, deadlineMs: number, doc: WireDocument, contentId: string): Promise<PictureResult<Uint8Array>> {
-  const parts: number[][] = [];
+  const parts: Uint8Array[] = [];
   let total: number = 1;
   for (let index: number = 0; index < total; index++) {
     const result: Exchanged = await exchange(wire, deadlineMs, { ReadChunk: { doc, content_id: contentId, index } });
     if (!result.ok) return failed(result.failure);
     if (!('Chunk' in result.answer)) return failed(UNEXPECTED);
-    const chunk: { total_chunks: number; bytes: number[] } = result.answer.Chunk;
+    const chunk: { total_chunks: number; bytes: Uint8Array } = result.answer.Chunk;
     if (index > 0 && chunk.total_chunks !== total) return failed({ kind: 'damaged' });
     total = chunk.total_chunks;
     parts.push(chunk.bytes);
   }
-  const whole: Uint8Array = new Uint8Array(parts.reduce((n: number, p: number[]): number => n + p.length, 0));
-  parts.reduce((at: number, p: number[]): number => { whole.set(p, at); return at + p.length; }, 0);
+  const whole: Uint8Array = new Uint8Array(parts.reduce((n: number, p: Uint8Array): number => n + p.length, 0));
+  parts.reduce((at: number, p: Uint8Array): number => { whole.set(p, at); return at + p.length; }, 0);
   return ok(whole);
 }
 

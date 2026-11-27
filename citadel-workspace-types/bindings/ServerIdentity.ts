@@ -4,4 +4,4 @@
  * `WorkspaceProtocolResponse::ServerIdentity`: the server's canonical domain, its public key
  * (1952 bytes) and the signature (3309 bytes) over the challenge.
  */
-export type ServerIdentity = { domain: string, pk: Array<number>, sig: Array<number>, };
+export type ServerIdentity = { domain: string, pk: Uint8Array, sig: Uint8Array, };

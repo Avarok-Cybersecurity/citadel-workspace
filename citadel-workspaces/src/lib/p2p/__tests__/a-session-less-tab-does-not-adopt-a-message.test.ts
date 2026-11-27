@@ -75,7 +75,7 @@ function handler(): InstanceType<typeof MessageHandler> {
 
 function notificationFor(recipient: bigint): InternalServiceResponse {
   return {
-    MessageNotification: { cid: recipient, peer_cid: PEER, message: [1, 2, 3] },
+    MessageNotification: { cid: recipient, peer_cid: PEER, message: new Uint8Array([1, 2, 3]) },
   } as unknown as InternalServiceResponse;
 }
 

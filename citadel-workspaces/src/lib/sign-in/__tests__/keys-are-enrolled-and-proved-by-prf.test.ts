@@ -22,8 +22,8 @@ import { variants, world, type World } from './helpers';
 let w: World;
 afterEach(() => w.stop());
 
-const PASSWORD_STEP_UP: { password: number[]; security_key: boolean } =
-  { password: Array.from(new TextEncoder().encode('correct horse battery')), security_key: true };
+const PASSWORD_STEP_UP: { password: Uint8Array; security_key: boolean } =
+  { password: new TextEncoder().encode('correct horse battery'), security_key: true };
 
 async function enrolled(account: FakeAccount): Promise<number> {
   return (await addSecurityKey(w.deps, {
@@ -42,7 +42,7 @@ describe('adding a security key', () => {
     // The answer carries the PRF output and the credential id, and nothing a signature check would need.
     const answer: Record<string, unknown> = w.agent.sent[1][1];
     expect(Object.keys(answer).sort()).toEqual(['challenge_id', 'credential_id', 'prf_output', 'request_id']);
-    expect((answer.prf_output as number[]).length).toBe(32);
+    expect((answer.prf_output as Uint8Array).length).toBe(32);
   });
 
   it('makes the key the server asked for: its relying party, the account, and none of its keys', async () => {

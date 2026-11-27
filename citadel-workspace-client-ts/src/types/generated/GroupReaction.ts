@@ -12,9 +12,10 @@ export type GroupReaction = { emoji: string,
  */
 reactorCid: bigint, 
 /**
- * Server clock, milliseconds, when the reactor last changed this entry.
+ * Server clock, milliseconds, when the reactor last changed this entry. A u64 like every
+ * other, so a bigint on the page (the workspace codec makes every u64 one).
  */
-at: number, 
+at: bigint, 
 /**
  * False is a retraction, kept so the entry's history orders later changes.
  */

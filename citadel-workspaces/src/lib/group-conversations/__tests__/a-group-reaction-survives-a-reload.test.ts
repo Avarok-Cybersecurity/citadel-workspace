@@ -78,7 +78,7 @@ describe('a peer-group reaction', () => {
     const s: Awaited<ReturnType<typeof boot>> = await boot();
     s.deliver();
     await s.receive(thumbs(5));
-    expect(s.thread()[0].reactions).toEqual([{ emoji: '👍', reactorCid: ALICE, at: 5, active: true }]);
+    expect(s.thread()[0].reactions).toEqual([{ emoji: '👍', reactorCid: ALICE, at: 5n, active: true }]);
     s.stop();
   });
 
@@ -91,7 +91,7 @@ describe('a peer-group reaction', () => {
 
     const after: Awaited<ReturnType<typeof boot>> = await boot();
     await after.restore();
-    expect(after.thread()[0].reactions).toEqual([{ emoji: '👍', reactorCid: ALICE, at: 5, active: true }]);
+    expect(after.thread()[0].reactions).toEqual([{ emoji: '👍', reactorCid: ALICE, at: 5n, active: true }]);
     after.stop();
   });
 
@@ -117,7 +117,7 @@ describe('a peer-group reaction', () => {
     await s.receive(thumbs(5));
     await s.receive(thumbs(6, false));
     await s.receive(thumbs(5));
-    expect(s.thread()[0].reactions).toEqual([{ emoji: '👍', reactorCid: ALICE, at: 6, active: false }]);
+    expect(s.thread()[0].reactions).toEqual([{ emoji: '👍', reactorCid: ALICE, at: 6n, active: false }]);
     s.stop();
 
     const reloaded: Awaited<ReturnType<typeof boot>> = await boot();

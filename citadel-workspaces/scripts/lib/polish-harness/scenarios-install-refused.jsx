@@ -1,24 +1,29 @@
-/** A refused install's next steps at their widest: a long app name, a long link, a member's and a manager's steps, and a clipboard that cannot be reached. */
-import { RefusalView } from '@/components/citadel-apps/marketplace/RefusalView';
-import { refusalNextSteps } from '@/lib/citadel-apps/refusal-next-step';
+/** A refused install's ways out at their widest: a long app name, a long link and place, a member's and a manager's view. */
+import { useEffect } from 'react';
+import { AppsRefusalNotice } from '@/components/citadel-apps/marketplace/AppsRefusalNotice';
+import { adminAskAbout, managersLine } from '@/lib/citadel-apps/refused-install';
+import { recoveryPortsStore } from '@/lib/recovery-route/ports-store';
 
 const NOOP = () => {};
 const REFUSED = {
   appName: 'synchronized.work — the live task tree of the whole engineering floor',
-  appId: 'work.synchronized.app',
   version: '0.1.0',
   where: 'Everyone on “Quarterly planning for the platform and infrastructure teams” and the pages below it',
   link: 'https://work.example/workspace?app=work.synchronized.app&scope=node:0b5f9a1e-6c3d-4d8e-9a77-2f4c1b8e5d60&v=0.1.0',
-  refusal: 'Unavailable',
   copy: 'This app is not available to you.',
 };
-const unreachable = () => Promise.reject(new Error('The clipboard is not allowed here'));
+// The ports a signed-in window registers; here asking answers as the server refuses a sole admin, its longest sentence.
+const PORTS = {
+  reload: NOOP, applyUpdate: NOOP, openSettings: NOOP, navigate: NOOP, signIn: NOOP, installAgent: NOOP, requestPermission: NOOP, openChat: NOOP, reportBug: NOOP,
+  askAdmins: async () => ({ kind: 'refused', sentence: 'You are the only admin here, so there is nobody to ask. You can change this yourself in Settings.' }),
+};
 
 function Refused({ manages }) {
+  useEffect(() => { recoveryPortsStore.set(PORTS); return () => recoveryPortsStore.set(null); }, []);
   return (
     <div style={{ padding: 16, maxWidth: 640 }}>
-      <RefusalView testId="apps-install-failed" message={`${REFUSED.appName} was not installed. ${REFUSED.copy}`} guidance={refusalNextSteps(REFUSED.refusal, manages)}
-        refused={REFUSED} actions={{ retry: NOOP, changeChoice: NOOP, showInstalled: NOOP, browse: NOOP, copyText: unreachable }} />
+      <AppsRefusalNotice testId="apps-install-failed" surface="apps.Unavailable" message={`${REFUSED.appName} was not installed. ${REFUSED.copy}`}
+        forManagers={managersLine('Unavailable', manages)} binding={{ retry: async () => {}, focus: NOOP, dismiss: NOOP, askAbout: adminAskAbout(REFUSED) }} />
     </div>
   );
 }

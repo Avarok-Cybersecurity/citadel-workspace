@@ -1,18 +1,23 @@
 /**
  * A link that opened the marketplace on one app, when its listing could not be had: no answer, or
- * an unreadable one, is `unreachable` and asked again with one press; a refusal is `unavailable`
- * and goes to an admin. The two used to read the same ("not available to you"), with no step.
+ * an unreadable one, is `unreachable` and asked again by itself, then by a press; a refusal is
+ * `unavailable` and goes to an admin. The two used to read the same ("not available to you"), with
+ * no step. The recovery ports are the only stand-in beyond the kernel fake (fake-ports.ts says why).
  */
-import { describe, expect, it } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, screen } from '@testing-library/react';
 import type { AppListing, AppsRequest } from 'citadel-workspace-client-ts';
 import { catalogueText, harness, openModal, viewerHolding, type Harness } from './marketplace-harness';
 import { listingOf } from '@/test/app-manifests';
 import { readAppsAnswer, type AppsAnswer } from '@/lib/citadel-apps/wire/apps-answer';
 import type { AppsModalRequest } from '@/lib/citadel-apps/apps-modal-store';
+import { recoveryPortsStore } from '@/lib/recovery-route/ports-store';
+import { recordingPorts, type PortCall } from '@/lib/recovery-route/__tests__/fake-ports';
+import { AppsModal } from '../AppsModal';
 
 const NOTES: AppListing = listingOf({ id: 'com.acme.notes', name: 'Notes' }, 'workspace');
 const LINK: AppsModalRequest = { kind: 'link', link: { appId: 'com.acme.notes', nodeId: null, version: null, server: null } };
+let calls: PortCall[] = [];
 const isGetListing = (r: AppsRequest): boolean => typeof r === 'object' && 'GetListing' in r;
 
 /**
@@ -35,18 +40,41 @@ function withFailingListing(h: Harness, failing: number, first: 'throw' | 'unrea
   return (): number => asked;
 }
 
+beforeEach(() => {
+  const recorded: ReturnType<typeof recordingPorts> = recordingPorts({ kind: 'sent', admins: 1 });
+  calls = recorded.calls;
+  recoveryPortsStore.set(recorded.ports);
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+});
+afterEach(() => { recoveryPortsStore.set(null); vi.useRealTimers(); });
+const advance = async (ms: number): Promise<void> => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+
 describe('a link whose listing could not be had', () => {
-  it('with no answer is unreachable, says so, and Try again finds the app', async () => {
+  it('with no answer is unreachable, says so, and asking again by itself finds the app', async () => {
     const h: Harness = harness({ visible: [NOTES] }, catalogueText([]));
     const asked: () => number = withFailingListing(h, 1, 'throw');
     openModal(h, viewerHolding(new Set()), LINK);
     const view: HTMLElement = await screen.findByTestId('apps-link-unreachable');
-    expect(screen.getByRole('alert').textContent).toBe('The server did not answer. Check your connection and try again.');
+    expect(screen.getByTestId('recovery-apps.listing-unreachable').textContent).toContain('The server did not answer. Check your connection and try again.');
     expect(view.textContent).not.toContain('not available');
-    expect(screen.queryByTestId('apps-next-ask-admin')).toBeNull();
-    fireEvent.click(screen.getByTestId('apps-next-retry'));
+    expect(screen.queryByTestId('recovery-control-ask-admin')).toBeNull();
+    await advance(2_000);
     expect((await screen.findByTestId('apps-listing-detail')).textContent).toContain('Notes');
     expect(asked()).toBe(2);
+  });
+
+  it('that stays unreachable stops asking when the policy runs out; Try again asks once more', async () => {
+    const h: Harness = harness({ visible: [NOTES] }, catalogueText([]));
+    const asked: () => number = withFailingListing(h, 5, 'throw');
+    openModal(h, viewerHolding(new Set()), LINK);
+    await screen.findByTestId('apps-link-unreachable');
+    for (const ms of [2_000, 5_000, 10_000]) await advance(ms);
+    fireEvent.click(await screen.findByTestId('recovery-control-retry'));
+    expect((await screen.findByTestId('recovery-said')).textContent).toContain('did not answer this time either');
+    expect(asked()).toBe(5);
+    await advance(120_000);
+    expect(asked()).toBe(5);
+    expect(screen.getByTestId('apps-link-unreachable')).toBeTruthy();
   });
 
   it('with an answer that does not read is unreachable too', async () => {
@@ -54,18 +82,23 @@ describe('a link whose listing could not be had', () => {
     withFailingListing(h, 1, 'unreadable');
     openModal(h, viewerHolding(new Set()), LINK);
     await screen.findByTestId('apps-link-unreachable');
-    expect(screen.getByRole('alert').textContent).toBe('The server’s answer could not be read. Try again.');
+    expect(screen.getByTestId('recovery-apps.listing-unreachable').textContent).toContain('The server’s answer could not be read. Try again.');
   });
 
-  it('refused is unavailable: an admin request with the link, and every app one press away; control: no retry', async () => {
+  it('refused is unavailable: the admins are asked with the link, and every app is one press away; control: no retry', async () => {
     const h: Harness = harness({ hidden: [NOTES] }, catalogueText([]));
-    openModal(h, viewerHolding(new Set()), LINK);
+    const shown: ReturnType<typeof openModal> = openModal(h, viewerHolding(new Set()), LINK);
     await screen.findByTestId('apps-link-unavailable');
-    expect(screen.queryByTestId('apps-next-retry')).toBeNull();
-    fireEvent.click(screen.getByTestId('apps-next-ask-admin'));
-    await screen.findByTestId('apps-next-copied');
-    expect(h.copied[0]).toContain('https://work.example/workspace?app=com.acme.notes');
-    fireEvent.click(screen.getByTestId('apps-next-apps-browse'));
+    expect(screen.queryByTestId('recovery-control-retry')).toBeNull();
+    fireEvent.click(screen.getByTestId('recovery-control-ask-admin'));
+    await screen.findByTestId('recovery-said');
+    const [ask] = calls.filter((c: PortCall) => c.port === 'askAdmins');
+    expect(ask.args[1]).toContain('https://work.example/workspace?app=com.acme.notes');
+    fireEvent.click(screen.getByTestId('recovery-control-navigate'));
+    expect(calls.filter((c: PortCall) => c.port === 'navigate').map((c: PortCall) => c.args)).toEqual([['apps-browse']]);
+    // What the port does (apps-modal-store): the open modal is asked to show every app.
+    shown.rerender(<AppsModal open onOpenChange={() => {}} request={{ kind: 'browse' }} deps={h.deps} viewer={viewerHolding(new Set())} />);
     await screen.findByTestId('apps-tab-global');
+    expect(screen.queryByTestId('apps-link-unavailable')).toBeNull();
   });
 });

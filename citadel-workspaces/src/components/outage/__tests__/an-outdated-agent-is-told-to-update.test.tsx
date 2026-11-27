@@ -15,7 +15,7 @@ import { OutageNotice } from '../OutageNotice';
 import { releasedAgent } from '@/lib/agent-update/released-agent';
 import { agentUpdate, updaterSettings, type UpdaterSettings } from '@/lib/agent-update/update-state';
 import { outageView, PROTOCOL_STEPS_WITH_AN_UPDATE_NOTICE, UPDATE_AGENT_COPY, type OutageView } from '@/lib/reconnect/outdated-agent';
-import { OUTAGE_COPY } from '@/lib/reconnect/outage';
+import { OUTAGE_TITLE } from '@/lib/reconnect/outage';
 import type { AgentBanner } from '@/lib/agent-update/banner-model';
 
 vi.mock('@/lib/agent-update/requests', () => ({ askUpdater: vi.fn(async (): Promise<never> => { throw new Error('no agent socket in this test'); }) }));
@@ -51,7 +51,7 @@ describe('the page in place of a workspace that cannot be reached', () => {
       const said: string = screen.getByRole('alert').textContent ?? '';
       expect(said).toContain(UPDATE_AGENT_COPY.title);
       expect(said).toContain(UPDATE_AGENT_COPY.detail('0.15.1', RELEASED));
-      expect(said).not.toContain(OUTAGE_COPY.title);
+      for (const title of Object.values(OUTAGE_TITLE)) expect(said).not.toContain(title);
       expect(screen.queryByTestId('service-unavailable')).toBeNull();
       const download: HTMLElement = screen.getByTestId('update-agent-download');
       expect(download.textContent).toBe(`Download ${RELEASED}`);
@@ -74,7 +74,7 @@ describe('the page in place of a workspace that cannot be reached', () => {
     updaterSettings.set(running(RELEASED));
     render(<OutageNotice kind="server-unreachable" onRetry={(): void => undefined} />);
     await waitFor(() => expect(releasedAgent.get()).toBe(RELEASED));
-    expect(screen.getByRole('alert').textContent).toContain(OUTAGE_COPY.title);
+    expect(screen.getByTestId('service-unavailable-title').textContent).toBe(OUTAGE_TITLE['server-down']);
     expect(screen.queryByTestId('update-agent-notice')).toBeNull();
   });
 

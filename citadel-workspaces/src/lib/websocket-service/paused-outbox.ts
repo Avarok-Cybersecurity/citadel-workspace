@@ -8,8 +8,8 @@
 import { HeldOutbox } from '@/lib/p2p-pause/outbox';
 
 interface LocalDBSurface {
-  sendLocalDBGet(cid: bigint, key: string): Promise<{ value: number[] } | null>;
-  sendLocalDBSet(cid: bigint, key: string, value: number[]): Promise<void>;
+  sendLocalDBGet(cid: bigint, key: string): Promise<{ value: Uint8Array } | null>;
+  sendLocalDBSet(cid: bigint, key: string, value: Uint8Array): Promise<void>;
   sendLocalDBDelete(cid: bigint, key: string): Promise<void>;
   sendLocalDBListKeys(cid: bigint, prefix?: string): Promise<string[]>;
 }
@@ -17,8 +17,8 @@ interface LocalDBSurface {
 export function heldOutboxOver(db: LocalDBSurface): HeldOutbox {
   return new HeldOutbox({
     storage: {
-      get: (cid: bigint, key: string): Promise<{ value: number[] } | null> => db.sendLocalDBGet(cid, key),
-      set: (cid: bigint, key: string, value: number[]): Promise<void> => db.sendLocalDBSet(cid, key, value),
+      get: (cid: bigint, key: string): Promise<{ value: Uint8Array } | null> => db.sendLocalDBGet(cid, key),
+      set: (cid: bigint, key: string, value: Uint8Array): Promise<void> => db.sendLocalDBSet(cid, key, value),
       remove: (cid: bigint, key: string): Promise<void> => db.sendLocalDBDelete(cid, key),
       listKeys: (cid: bigint, prefix: string): Promise<string[]> => db.sendLocalDBListKeys(cid, prefix),
     },

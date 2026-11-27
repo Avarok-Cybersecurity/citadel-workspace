@@ -14,7 +14,7 @@ import { awaitWriteResponse } from './await-write-response';
  */
 export async function sendMessage(sender: ProtocolSender, contents: Uint8Array): Promise<void> {
   const requestPart: WorkspaceProtocolRequest = {
-    Message: { contents: Array.from(contents) }
+    Message: { contents }
   };
   return sender.sendProtocolRequest(requestPart, null);
 }

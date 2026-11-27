@@ -6,11 +6,12 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { readPrefs } from '@/lib/calendar/notice-gate';
 import { decodePrefs, encodePrefs, NOTIFY_PREFS_KEY, type NotifyPrefs } from '@/lib/calendar/notify-prefs';
-import { PortRefused, refusalCopy, type CalendarPorts } from '@/lib/calendar/ports';
+import { reasonOf, type CalendarPorts } from '@/lib/calendar/ports';
 
 export type PrefsState =
   | { readonly kind: 'loading' }
-  | { readonly kind: 'failed'; readonly reason: string }
+  /** `retry` reads them again. */
+  | { readonly kind: 'failed'; readonly reason: string; readonly retry: () => Promise<void> }
   | {
     readonly kind: 'ready';
     readonly prefs: NotifyPrefs;
@@ -23,12 +24,12 @@ export type PrefsState =
 
 type Read = { kind: 'loading' } | { kind: 'failed'; reason: string } | { kind: 'ready'; prefs: NotifyPrefs; chosen: boolean };
 
-const reasonOf = (error: unknown): string => (error instanceof PortRefused ? refusalCopy(error.refused) : 'something went wrong');
-
 export function useNotifyPrefs(ports: CalendarPorts): PrefsState {
   const [read, setRead] = useState<Read>({ kind: 'loading' });
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  /** Bumped by Try again on a read that failed. */
+  const [attempt, setAttempt] = useState<number>(0);
   const turn: MutableRefObject<Promise<void>> = useRef<Promise<void>>(Promise.resolve());
   /** What is kept, read again: on mount, and after a save that failed, so the form never shows what was not saved. */
   const reread: () => Promise<Read> = useCallback(async (): Promise<Read> => {
@@ -40,7 +41,7 @@ export function useNotifyPrefs(ports: CalendarPorts): PrefsState {
     setRead({ kind: 'loading' });
     reread().then((r: Read): void => { if (live) setRead(r); }, (e: unknown): void => { if (live) setRead({ kind: 'failed', reason: reasonOf(e) }); });
     return (): void => { live = false; };
-  }, [reread]);
+  }, [reread, attempt]);
   const save: (next: NotifyPrefs) => void = useCallback((next: NotifyPrefs): void => {
     setRead({ kind: 'ready', prefs: next, chosen: true });
     setSaving(true);
@@ -51,6 +52,7 @@ export function useNotifyPrefs(ports: CalendarPorts): PrefsState {
       setSaving(false);
     });
   }, [ports, reread]);
+  if (read.kind === 'failed') return { kind: 'failed', reason: read.reason, retry: async (): Promise<void> => setAttempt((n: number): number => n + 1) };
   if (read.kind !== 'ready') return read;
   return { kind: 'ready', prefs: read.prefs, chosen: read.chosen, saving, error, save };
 }

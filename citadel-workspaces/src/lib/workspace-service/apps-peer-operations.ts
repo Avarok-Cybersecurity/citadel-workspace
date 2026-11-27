@@ -28,9 +28,12 @@ export async function authorizePeer(t: AppsTransport, installId: string, peerCid
   return r.ok ? r.value : { ok: false, why: typeof r.refusal === 'string' ? r.refusal : JSON.stringify(r.refusal) };
 }
 
-/** The group id the kernel holds for `topic` (null: none), after claiming `claim` when it held none; `refused` when it would not say. */
-export async function topicGroup(t: AppsTransport, installId: string, topic: string, claim: string | null): Promise<string | null | 'refused'> {
-  const r: AppsResult<string | null> = await ask(t, { TopicGroup: { install_id: installId, topic, claim } }, 'topic-group',
+/**
+ * The group id the kernel holds for `topic` (null: none), after claiming `claim` when it held none,
+ * or when it held `replaces`, a group the agent said no longer exists; `refused` when it would not say.
+ */
+export async function topicGroup(t: AppsTransport, installId: string, topic: string, claim: string | null, replaces: string | null): Promise<string | null | 'refused'> {
+  const r: AppsResult<string | null> = await ask(t, { TopicGroup: { install_id: installId, topic, claim, replaces } }, 'topic-group',
     (a: Of<'topic-group'>) => a.installId === installId && a.topic === topic, (a: Of<'topic-group'>) => a.groupKey);
   return r.ok ? r.value : 'refused';
 }

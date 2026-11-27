@@ -109,7 +109,7 @@ async function answerTo(t: AppsTransport, request: AppsRequest, ours: (a: AppsAn
 
 const always = (): boolean => true;
 const listingIsFor = (listing: AppListing, appId: string): boolean => {
-  const reading: ManifestReading = readManifestBytes(Uint8Array.from(listing.manifest_bytes));
+  const reading: ManifestReading = readManifestBytes(listing.manifest_bytes);
   return reading.ok && reading.manifest.id === appId;
 };
 

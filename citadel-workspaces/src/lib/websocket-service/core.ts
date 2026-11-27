@@ -227,11 +227,11 @@ export class WebSocketServiceCore {
 
   // ============== LocalDB ==============
 
-  async sendLocalDBGet(cid: bigint, key: string): Promise<{ value: number[] } | null> {
+  async sendLocalDBGet(cid: bigint, key: string): Promise<{ value: Uint8Array } | null> {
     return this.modules.localDB.get(cid, key);
   }
 
-  async sendLocalDBSet(cid: bigint, key: string, value: number[]): Promise<void> { return this.modules.localDB.set(cid, key, value) }
+  async sendLocalDBSet(cid: bigint, key: string, value: Uint8Array): Promise<void> { return this.modules.localDB.set(cid, key, value) }
 
   async sendLocalDBDelete(cid: bigint, key: string): Promise<void> { return this.modules.localDB.delete(cid, key) }
 

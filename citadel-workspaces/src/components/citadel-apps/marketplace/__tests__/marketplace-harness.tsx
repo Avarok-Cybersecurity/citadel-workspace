@@ -17,7 +17,6 @@ export const ROOT: string = 'workspace-root';
 export interface Harness {
   kernel: FakeAppsKernel;
   deps: MarketplaceDeps;
-  copied: string[];
   clock: ManualClock;
 }
 
@@ -34,15 +33,13 @@ export function catalogueText(listings: readonly AppListing[]): string {
 
 export function harness(world: Partial<FakeKernelWorld>, globalCatalogue: string | Error): Harness {
   const kernel: FakeAppsKernel = new FakeAppsKernel({ me: 'alice', visible: [], hidden: [], installs: [], permissions: new Set(['AppInstall']), disabled: new Set(), ...world });
-  const copied: string[] = [];
   const clock: ManualClock = new ManualClock();
   const deps: MarketplaceDeps = {
     transport: kernel,
     fetchText: async (): Promise<string> => { if (globalCatalogue instanceof Error) throw globalCatalogue; return globalCatalogue; },
-    copyText: async (t: string): Promise<void> => { copied.push(t); },
     clock,
   };
-  return { kernel, deps, copied, clock };
+  return { kernel, deps, clock };
 }
 
 export function viewerHolding(held: ReadonlySet<string>, over: Partial<MarketplaceViewer> = {}): MarketplaceViewer {

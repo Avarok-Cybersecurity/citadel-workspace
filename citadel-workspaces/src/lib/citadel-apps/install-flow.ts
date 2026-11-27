@@ -20,8 +20,6 @@ export type FlowEvent =
   | { kind: 'consent'; scope: InstallScope }
   | { kind: 'toggle'; cap: Capability; on: boolean }
   | { kind: 'install'; granted: Capability[] }
-  /** The same request again, from a refusal. */
-  | { kind: 'retry' }
   | { kind: 'installed'; install: AppInstall }
   | { kind: 'refused'; refusal: AppsFailure }
   | { kind: 'back' };
@@ -39,9 +37,9 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
       return { ...state, turnedOff: event.on ? rest : [...rest, event.cap] };
     }
     case 'install': return state.step === 'consent' ? { step: 'installing', scope: state.scope, granted: event.granted } : state;
-    case 'retry': return state.step === 'failed' ? { step: 'installing', scope: state.scope, granted: state.granted } : state;
-    case 'installed': return state.step === 'installing' ? { step: 'done', install: event.install } : state;
-    case 'refused': return state.step === 'installing' ? { step: 'failed', scope: state.scope, granted: state.granted, refusal: event.refusal } : state;
+    // A retry is sent from the refusal itself (AppFlow.tsx), so its answer arrives at 'failed' too.
+    case 'installed': return state.step === 'installing' || state.step === 'failed' ? { step: 'done', install: event.install } : state;
+    case 'refused': return state.step === 'installing' || state.step === 'failed' ? { step: 'failed', scope: state.scope, granted: state.granted, refusal: event.refusal } : state;
     case 'back':
       if (state.step === 'scope') return START;
       if (state.step === 'consent' || state.step === 'failed') return { step: 'scope', choice: null, people: [] };
