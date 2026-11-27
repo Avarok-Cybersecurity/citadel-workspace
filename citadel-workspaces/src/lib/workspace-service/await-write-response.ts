@@ -32,6 +32,9 @@ import { debugLog } from '@/lib/debug-config';
 /** How long to wait before treating silence as a failure. */
 export const WRITE_RESPONSE_TIMEOUT_MS: number = 15_000;
 
+/** A write the server did not answer in time: its answer may still come, late. */
+export class WriteResponseTimeout extends Error {}
+
 /** The response variants that mean a given request succeeded. */
 export const SUCCESS_RESPONSES: Record<string, readonly string[]> = {
   CreateNode: ['Node'],
@@ -153,7 +156,7 @@ export async function awaitWriteResponse(
     const timeoutId: NodeJS.Timeout = setTimeout((): void => {
       eventEmitter.off('workspace:raw-response', handler);
       reject(
-        new Error(
+        new WriteResponseTimeout(
           `The server did not answer within ${WRITE_RESPONSE_TIMEOUT_MS / 1000}s. ` +
             'The change may not have been saved.'
         )

@@ -11,7 +11,7 @@ import type { AppInstall, AppListing, AppsRefusal, AppsRequest, Capability, Inst
 import { readAppsAnswer, type AppsAnswer } from '@/lib/citadel-apps/wire/apps-answer';
 import { readManifestBytes, type ManifestReading } from '@/lib/citadel-apps/manifest/manifest-rules';
 import { debugLog } from '@/lib/debug-config';
-import { awaitWriteResponse } from './await-write-response';
+import { awaitWriteResponse, WriteResponseTimeout } from './await-write-response';
 import type { ProtocolSender } from './workspace-operations';
 
 export interface AppsTransport {
@@ -26,17 +26,35 @@ export interface AppsTransport {
 export type AppsFailure = AppsRefusal | 'Malformed' | 'NoAnswer';
 export type AppsResult<T> = { ok: true; value: T } | { ok: false; refusal: AppsFailure };
 
+/**
+ * A request that gave up waiting while its answer may still come. `settled` resolves once that
+ * late answer has arrived, or once a further write timeout has passed without it.
+ */
+export class AppsAnswerOwed extends Error {
+  constructor(readonly settled: Promise<void>) {
+    super('Apps: the server did not answer in time');
+  }
+}
+
 /** The production transport: the tab's workspace session. */
 export function protocolAppsTransport(sender: ProtocolSender): AppsTransport {
   return {
     request: async (request: AppsRequest, isOurs: (answer: AppsAnswer) => boolean): Promise<AppsAnswer> => {
       let answered: AppsAnswer | null = null;
-      await awaitWriteResponse('Apps', () => sender.sendProtocolRequest({ Apps: request }), (payload: unknown): boolean => {
+      const take = (payload: unknown): boolean => {
         const answer: AppsAnswer = readAppsAnswer(payload);
         if (!isOurs(answer)) return false;
         answered = answer;
         return true;
-      });
+      };
+      try {
+        await awaitWriteResponse('Apps', () => sender.sendProtocolRequest({ Apps: request }), take);
+      } catch (error: unknown) {
+        if (!(error instanceof WriteResponseTimeout)) throw error;
+        // Nothing is sent again: this only waits for the answer still owed, or for silence.
+        const lateAnswer: Promise<void> = awaitWriteResponse('Apps', async (): Promise<void> => undefined, take);
+        throw new AppsAnswerOwed(lateAnswer.catch((): void => undefined));
+      }
       if (answered === null) throw new Error('Apps: the server\'s answer did not fit the request');
       return answered;
     },
@@ -47,6 +65,10 @@ export function protocolAppsTransport(sender: ProtocolSender): AppsTransport {
  * One request at a time over `inner`: the protocol has no request id and a refusal answers
  * whichever request is waiting, so two in flight together could swap refusals. Every user of a
  * tab's session (the marketplace, a page's zones, its running apps) shares the one wrapper.
+ *
+ * A request that timed out still holds the line until its late answer has come (`AppsAnswerOwed`):
+ * the kernel answers in order, so that answer would otherwise arrive while the next request waits
+ * and be taken for that one's. Residual: an answer later than a second write timeout.
  */
 export function serialAppsTransport(inner: AppsTransport): AppsTransport {
   let queue: Promise<unknown> = Promise.resolve();
@@ -54,7 +76,7 @@ export function serialAppsTransport(inner: AppsTransport): AppsTransport {
     request: (request: AppsRequest, isOurs: (answer: AppsAnswer) => boolean): Promise<AppsAnswer> => {
       const run = (): Promise<AppsAnswer> => inner.request(request, isOurs);
       const next: Promise<AppsAnswer> = queue.then(run, run);
-      queue = next.catch((): void => undefined);
+      queue = next.catch((error: unknown): Promise<void> | undefined => (error instanceof AppsAnswerOwed ? error.settled : undefined));
       return next;
     },
   };
