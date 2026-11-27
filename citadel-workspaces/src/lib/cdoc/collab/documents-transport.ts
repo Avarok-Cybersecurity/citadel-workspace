@@ -29,7 +29,7 @@ export function workspaceDocumentsTransport(sender: ProtocolSender, chatDoc: str
   return {
     selfCid,
     send: (request: DocumentsRequest): Promise<void> =>
-      sender.sendProtocolRequest(chatDoc === null ? { Documents: request } : { ChatDocuments: { chat_doc: chatDoc, request } }),
+      sender.sendProtocolRequest(chatDoc === null ? { Documents: request } : { ChatDocuments: { chat_doc: chatDoc, request } }, null),
     onResponse: (listener: (response: DocumentsEvent['answer']) => void): (() => void) =>
       eventEmitter.on(DOCUMENTS_EVENT, (event: DocumentsEvent | undefined): void => { if (event && event.chatDoc === chatDoc) listener(event.answer); }),
     onError: (listener: (message: string) => void): (() => void) => chatDoc !== null ? (): void => undefined :

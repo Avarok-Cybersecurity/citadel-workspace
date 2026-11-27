@@ -89,7 +89,12 @@ max_file_transfer_size_mb: bigint,
 /**
  * RE-VFS storage quota per user (in megabytes)
  */
-revfs_storage_quota_mb: bigint, } } | { "IceServers": { ice_servers: Array<IceServer>, expires_at: bigint, } } | { "IceServersUnavailable": { reason: string, } } | { "SignInSettings": SignInSettings } | { "BillingPortal": BillingPortalAnswer } | { "Node": DomainNode } | { "Nodes": Array<DomainNode> } | { "TreeStructure": { root: TreeNode, } } | { "TreeSchema": TreeSchema } | { "NodeTypes": Array<CustomNodeType> } | { "NodeDeleted": { node_id: string, 
+revfs_storage_quota_mb: bigint, 
+/**
+ * `Some(true)` from a kernel that reads a request frame's `request_id` and pairs each
+ * such answer with `Answered`; absent from one built before (request_frame.rs).
+ */
+request_ids?: boolean, } } | { "IceServers": { ice_servers: Array<IceServer>, expires_at: bigint, } } | { "IceServersUnavailable": { reason: string, } } | { "Answered": { request_id: bigint, digest: string, } } | { "SignInSettings": SignInSettings } | { "BillingPortal": BillingPortalAnswer } | { "Node": DomainNode } | { "Nodes": Array<DomainNode> } | { "TreeStructure": { root: TreeNode, } } | { "TreeSchema": TreeSchema } | { "NodeTypes": Array<CustomNodeType> } | { "NodeDeleted": { node_id: string, 
 /**
  * IDs of child nodes that were also deleted (if cascade was true)
  */

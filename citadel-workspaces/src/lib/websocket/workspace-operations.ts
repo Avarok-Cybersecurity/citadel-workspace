@@ -22,7 +22,8 @@ export class WorkspaceOperations {
     this.config = config;
   }
 
-  async sendWorkspaceRequest(cid: bigint, request: unknown): Promise<void> {
+  /** `requestId`: see ProtocolSender.sendProtocolRequest; carried through the leader for a follower. */
+  async sendWorkspaceRequest(cid: bigint, request: unknown, wireRequestId: bigint | null): Promise<void> {
     await this.config.init();
 
     if (cid === undefined || cid === null) {
@@ -35,14 +36,15 @@ export class WorkspaceOperations {
         throw new Error('WebSocket client not available (leader without client)');
       }
       debugLog('WorkspaceOperations', '[Leader] Sending workspace request directly');
-      await client.sendWorkspaceRequest(cid, request as WorkspaceProtocolRequest);
+      await client.sendWorkspaceRequest(cid, request as WorkspaceProtocolRequest, 'Standard', wireRequestId);
     } else {
       debugLog('WorkspaceOperations', '[Follower] Proxying workspace request through leader');
 
-      const proxyRequest: { __workspaceRequestProxy: boolean; cid: string; request: unknown; } = {
+      const proxyRequest: { __workspaceRequestProxy: boolean; cid: string; request: unknown; wireRequestId: bigint | null } = {
         __workspaceRequestProxy: true,
         cid: cid.toString(),
-        request: request
+        request: request,
+        wireRequestId,
       };
 
       const requestId: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();

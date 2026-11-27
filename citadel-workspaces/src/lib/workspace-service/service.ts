@@ -12,6 +12,7 @@ import { eventEmitter } from '@/lib/event-emitter';
 import { debugLog, debugEnabled } from '@/lib/debug-config';
 
 import type { ProtocolSender } from './workspace-operations';
+import { answerPairing } from './answers/answer-pairing';
 import * as ws from './workspace-operations';
 import * as members from './member-operations';
 import * as messaging from './messaging-operations';
@@ -44,13 +45,15 @@ export class WorkspaceService implements ProtocolSender {
       oldCid: this._currentCid?.toString() ?? 'null',
     });
     this._currentCid = cid;
+    // A new connection may reach a different server build: nothing is paired until it says it pairs.
+    answerPairing.setServerPairs(false);
   }
 
-  public sendProtocolRequest(request: WorkspaceProtocolRequest): Promise<void> {
-    return this.sendWorkspaceRequest({ Request: request });
+  public sendProtocolRequest(request: WorkspaceProtocolRequest, requestId: bigint | null): Promise<void> {
+    return this.sendWorkspaceRequest({ Request: request }, requestId);
   }
 
-  public async sendWorkspaceRequest(payload: WorkspaceProtocolPayload): Promise<void> {
+  public async sendWorkspaceRequest(payload: WorkspaceProtocolPayload, requestId: bigint | null = null): Promise<void> {
     if (!this._currentCid) {
       throw new Error('No active connection available. Please connect first.');
     }
@@ -58,7 +61,7 @@ export class WorkspaceService implements ProtocolSender {
       debugLog('WorkspaceService', '[WorkspaceService] Sending payload:', payload);
       if (!('Request' in payload)) throw new Error('Invalid workspace protocol payload');
       const request: WorkspaceProtocolRequest = payload.Request;
-      await websocketService.sendWorkspaceRequest(this._currentCid, request);
+      await websocketService.sendWorkspaceRequest(this._currentCid, request, requestId);
       debugLog('WorkspaceService', '[WorkspaceService] Request sent successfully');
     } catch (error) {
       if (error instanceof Error) {
@@ -156,7 +159,7 @@ export class WorkspaceService implements ProtocolSender {
       eventEmitter.on('workspace:raw-response', handler);
     });
 
-    await websocketService.sendWorkspaceRequest(this._currentCid, request);
+    await websocketService.sendWorkspaceRequest(this._currentCid, request, null);
     return failOnSocketLoss(requestType, responsePromise);
   }
 

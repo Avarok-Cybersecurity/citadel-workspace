@@ -53,6 +53,10 @@ pub mod ice;
 pub mod messaging_trust;
 /// The metadata keys behind a node's tabs and time zone, and what each may hold.
 pub mod node_tabs;
+/// A request frame's optional id, and the digest its answer is named by.
+pub mod request_frame;
+#[cfg(test)]
+mod request_frame_tests;
 /// A workspace's role table and its built-ins.
 pub mod roles;
 /// Reading and editing the role table.
@@ -729,6 +733,11 @@ pub enum WorkspaceProtocolResponse {
         /// RE-VFS storage quota per user (in megabytes)
         #[ts(type = "bigint")]
         revfs_storage_quota_mb: u64,
+        /// `Some(true)` from a kernel that reads a request frame's `request_id` and pairs each
+        /// such answer with `Answered`; absent from one built before (request_frame.rs).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        request_ids: Option<bool>,
     },
 
     /// Relay servers for this member, valid until `expires_at` (unix seconds). Ask again
@@ -742,6 +751,14 @@ pub enum WorkspaceProtocolResponse {
     /// No relay servers are available to this member now, and why.
     IceServersUnavailable {
         reason: String,
+    },
+
+    /// Sent right after the answer to a request that named `request_id`: that answer frame's
+    /// `request_frame::answer_digest`. Never sent for a request without one, nor for a broadcast.
+    Answered {
+        #[ts(type = "bigint")]
+        request_id: u64,
+        digest: String,
     },
 
     /// This workspace's sign-in settings, as stored now.

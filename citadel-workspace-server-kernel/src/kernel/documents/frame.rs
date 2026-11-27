@@ -1,9 +1,12 @@
 //! The first thing done with a request frame: refuse one longer than `max_request_frame_bytes`
-//! before parsing it, so an oversize payload is never decoded into memory, then parse it.
+//! before parsing it, so an oversize payload is never decoded into memory, then parse it, with
+//! the `request_id` a page may name it by (citadel_workspace_types::request_frame).
 //!
 //! The per-field caps (`max_update_bytes` and the rest) are checked after decoding, where the
 //! field is known; this bounds what decoding can be asked to allocate at all.
 
+use citadel_workspace_types::request_frame::RequestFrame;
+#[cfg(test)]
 use citadel_workspace_types::WorkspaceProtocolPayload;
 
 #[derive(Debug)]
@@ -31,10 +34,7 @@ impl std::fmt::Display for FrameRefusal {
 
 /// `max_bytes` is the documents relay's `max_request_frame_bytes`; `None` only for a kernel
 /// built without a relay, which a server never is (`resolve_documents_relay`).
-pub fn decode_request(
-    frame: &[u8],
-    max_bytes: Option<u64>,
-) -> Result<WorkspaceProtocolPayload, FrameRefusal> {
+pub fn decode_request(frame: &[u8], max_bytes: Option<u64>) -> Result<RequestFrame, FrameRefusal> {
     if let Some(max_bytes) = max_bytes {
         if frame.len() as u64 > max_bytes {
             return Err(FrameRefusal::TooLarge {

@@ -35,7 +35,7 @@ export async function writeNodeTabs(sender: ProtocolSender, nodeId: string, appI
   };
   return awaitWriteResponse(
     nodeId === WORKSPACE_ROOT_ID ? 'UpdateHomeTabs' : 'UpdateNode',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     (payload: unknown): boolean =>
       (payload as { id?: unknown } | null)?.id === nodeId && sameList(storedTabs(metadataOf(payload), APP_TABS_KEY), appIds),
   );
@@ -46,7 +46,7 @@ export async function setDefaultAppTabs(sender: ProtocolSender, appIds: readonly
   const requestPart: WorkspaceProtocolRequest = { SetDefaultAppTabs: { app_tabs: [...appIds] } };
   return awaitWriteResponse(
     'SetDefaultAppTabs',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     (payload: unknown): boolean => sameList(storedTabs(metadataOf(payload), DEFAULT_APP_TABS_KEY), appIds),
   );
 }

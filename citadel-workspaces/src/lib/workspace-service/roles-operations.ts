@@ -35,7 +35,7 @@ async function exchange(
   read: (payload: unknown) => WorkspaceRoles | null,
 ): Promise<WorkspaceRoles> {
   let answered: WorkspaceRoles | null = null;
-  await awaitWriteResponse('Roles', () => sender.sendProtocolRequest({ Roles: request }), (payload: unknown): boolean => {
+  await awaitWriteResponse('Roles', sender, { Roles: request }, (payload: unknown): boolean => {
     answered = read(payload);
     return answered !== null;
   });

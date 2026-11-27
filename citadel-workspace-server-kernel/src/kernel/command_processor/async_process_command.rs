@@ -1203,6 +1203,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 revfs_storage_refusal,
                 max_file_transfer_size_mb: config.max_file_transfer_size_mb,
                 revfs_storage_quota_mb: config.revfs_storage_quota_mb,
+                request_ids: Some(true),
             })
         }
 

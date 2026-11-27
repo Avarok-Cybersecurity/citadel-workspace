@@ -32,7 +32,7 @@ export function parseBillingPortalAnswer(payload: unknown): BillingPortalAnswer 
 /** Sends `OpenBillingPortal` and resolves with the server's answer; rejects with its refusal. */
 export async function openBillingPortal(sender: ProtocolSender): Promise<BillingPortalAnswer> {
   let answered: BillingPortalAnswer | null = null;
-  await awaitWriteResponse('OpenBillingPortal', () => sender.sendProtocolRequest('OpenBillingPortal'), (payload: unknown): boolean => {
+  await awaitWriteResponse('OpenBillingPortal', sender, 'OpenBillingPortal', (payload: unknown): boolean => {
     answered = parseBillingPortalAnswer(payload);
     return answered !== null;
   });

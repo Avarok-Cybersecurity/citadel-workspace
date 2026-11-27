@@ -163,7 +163,7 @@ export function serverPictures(wire: PictureWire, deadlineMs: number): PicturePo
 export function workspaceServerPictures(sender: ProtocolSender): PicturePort {
   const { link, onLink } = workspaceDocumentsTransport(sender, null);
   return serverPictures({
-    send: (request: DocumentPicturesRequest): Promise<void> => sender.sendProtocolRequest({ DocumentPictures: request }),
+    send: (request: DocumentPicturesRequest): Promise<void> => sender.sendProtocolRequest({ DocumentPictures: request }, null),
     onAnswer: (listener: (answer: Answer) => void): (() => void) =>
       eventEmitter.on(DOCUMENT_PICTURES_EVENT, (answer: Answer | undefined): void => { if (answer !== undefined) listener(answer); }),
     link,

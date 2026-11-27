@@ -1,4 +1,4 @@
-import type { WorkspaceProtocolPayload } from './types/workspace-types.js';
+import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest } from './types/workspace-types.js';
 import { parseWithU64, stringifyWithU64 } from './json-u64.js';
 
 /**
@@ -66,6 +66,7 @@ export const WORKSPACE_BIGINT_FIELDS: ReadonlySet<string> = new Set([
   'per_user_bytes',
   'reactorCid',
   'received_at_ms',
+  'request_id',
   'revfs_storage_quota_mb',
   'rx_bytes',
   'seq',
@@ -92,6 +93,16 @@ export const WORKSPACE_BIGINT_FIELDS: ReadonlySet<string> = new Set([
  */
 export function encodeWorkspacePayload(payload: WorkspaceProtocolPayload): Uint8Array {
   return new TextEncoder().encode(stringifyWithU64(payload));
+}
+
+/**
+ * A request frame, named by `requestId` when one is given, so its answer can be paired with it
+ * (citadel-workspace-types/src/request_frame.rs). Only a server whose `ServerCapabilities`
+ * says `request_ids` reads the key; an older one refuses the frame.
+ */
+export function encodeWorkspaceRequest(request: WorkspaceProtocolRequest, requestId: bigint | null): Uint8Array {
+  if (requestId === null) return encodeWorkspacePayload({ Request: request });
+  return new TextEncoder().encode(stringifyWithU64({ request_id: requestId, Request: request }));
 }
 
 /**

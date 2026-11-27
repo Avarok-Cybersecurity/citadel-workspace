@@ -80,7 +80,7 @@ export function createServiceModules(
     sendMessage: (msg: unknown) => callbacks.sendMessage(msg as Record<string, unknown>),
     isLeader: () => instanceManager.isLeader,
     turnFor: lazyTurnSource(async () => (await import('../ice-servers/workspace-turn-source')).createWorkspaceTurnSource({
-      send: (cid: bigint, request: 'GetIceServers'): Promise<void> => workspaceOps.sendWorkspaceRequest(cid, request),
+      send: (cid: bigint, request: 'GetIceServers'): Promise<void> => workspaceOps.sendWorkspaceRequest(cid, request, null),
       timeoutMs: TIMEOUT.SERVER_REQUEST_MS,
     })),
     // Loaded on the first PeerConnect, like the relay lookup: this module is on

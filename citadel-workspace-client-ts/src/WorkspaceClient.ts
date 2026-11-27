@@ -3,7 +3,7 @@ import type { WasmClientConfig, InternalServiceRequest, InternalServiceResponse,
 import { isResponseType } from 'citadel-internal-service-wasm-client';
 import { isVariant } from 'citadel-internal-service-wasm-client';
 import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse } from './types/workspace-types.js';
-import { decodeWorkspacePayload, encodeWorkspacePayload } from './workspace-json.js';
+import { decodeWorkspacePayload, encodeWorkspaceRequest } from './workspace-json.js';
 import { WorkspaceAuth } from './auth.js';
 import { WorkspaceSessionManager, type SessionConfig } from './session.js';
 
@@ -267,14 +267,12 @@ export class WorkspaceClient extends InternalServiceWasmClient {
    *
    * RESOLVE-ON-SEND: the returned promise resolves when the request has been
    * handed to the transport — NOT when the server has processed it or
-   * responded. The workspace protocol carries no request id (see the generated
-   * WorkspaceProtocolRequest — no variant has one), so this layer cannot
-   * correlate a response to this call; matching by response variant would
-   * mis-resolve on server-pushed broadcasts of the same variant. Responses
+   * responded. A request named by `requestId` is answered and then paired with
+   * `Answered`, which the UI's write gate waits for (await-write-response.ts);
+   * this layer resolves on the send either way. Responses
    * arrive asynchronously through the configured messageHandler as enriched
    * WorkspaceNotification messages, and workspace/session state changes are
-   * reflected via session.onWorkspaceSessionChange(). Real correlation needs a
-   * request id added to the Rust protocol.
+   * reflected via session.onWorkspaceSessionChange().
    *
    * Fields the generated types declare as `bigint` (e.g. `before_timestamp`)
    * are accepted as bigint and encoded as JSON numbers; a value that cannot
@@ -283,21 +281,19 @@ export class WorkspaceClient extends InternalServiceWasmClient {
    * @param cid The client ID
    * @param request The workspace protocol request
    * @param securityLevel The security level (default: 'Standard')
+   * @param requestId Names the request so the server pairs its answer with it (`Answered`); only
+   *   for a server whose ServerCapabilities say `request_ids` (workspace-json.ts encodeWorkspaceRequest)
    */
   async sendWorkspaceRequest(
     cid: string | bigint,
     request: WorkspaceProtocolRequest,
-    securityLevel: SecurityLevel = 'Standard'
+    securityLevel: SecurityLevel = 'Standard',
+    requestId: bigint | null = null
   ): Promise<void> {
-    // Create the workspace protocol payload
-    const payload: WorkspaceProtocolPayload = {
-      Request: request
-    };
-
     // Serialize via the shared codec: a bare JSON.stringify threw
     // "Do not know how to serialize a BigInt" for exactly the values the
     // generated signatures ask for (e.g. GetGroupMessages.before_timestamp).
-    const messageBytes = encodeWorkspacePayload(payload);
+    const messageBytes = encodeWorkspaceRequest(request, requestId);
 
     // Convert cid to BigInt if it's a string
     const cidBigInt = typeof cid === 'string' ? BigInt(cid) : cid;

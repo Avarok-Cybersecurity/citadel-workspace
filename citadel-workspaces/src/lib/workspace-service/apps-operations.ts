@@ -2,16 +2,16 @@
  * Citadel Apps on the workspace protocol (`WorkspaceProtocolRequest::Apps`), over an injected
  * transport so the marketplace is tested against a contract fake of the kernel.
  *
- * Every request is answered with `WorkspaceProtocolResponse::Apps`; the protocol has no request
- * id, so an answer is taken for ours only when its kind fits the request and, where it names an
- * app or an install, names ours (the secure-links-operations pattern). Answers are read strictly
+ * Every request is answered with `WorkspaceProtocolResponse::Apps`, paired with its request where the
+ * server pairs (await-write-response.ts); an answer is taken for ours only when its kind fits the
+ * request and, where it names an app or an install, names ours (the secure-links-operations pattern). Answers are read strictly
  * (citadel-apps/wire/apps-answer.ts): one that is not exactly a known shape is a refusal.
  */
 import type { AppInstall, AppListing, AppsRefusal, AppsRequest, Capability, InstallScope, ListingOffer, PeerForMe } from 'citadel-workspace-client-ts';
 import { readAppsAnswer, type AppsAnswer } from '@/lib/citadel-apps/wire/apps-answer';
 import { readManifestBytes, type ManifestReading } from '@/lib/citadel-apps/manifest/manifest-rules';
 import { debugLog } from '@/lib/debug-config';
-import { awaitWriteResponse, WriteResponseTimeout } from './await-write-response';
+import { awaitLateAnswer, awaitWriteResponse, WriteAnswerUnfit, WriteResponseTimeout } from './await-write-response';
 import type { ProtocolSender } from './workspace-operations';
 
 export interface AppsTransport {
@@ -48,12 +48,14 @@ export function protocolAppsTransport(sender: ProtocolSender): AppsTransport {
         return true;
       };
       try {
-        await awaitWriteResponse('Apps', () => sender.sendProtocolRequest({ Apps: request }), take);
+        await awaitWriteResponse('Apps', sender, { Apps: request }, take);
       } catch (error: unknown) {
-        if (!(error instanceof WriteResponseTimeout)) throw error;
+        // A paired answer that is not an apps answer for this request is unreadable as one.
+        if (error instanceof WriteAnswerUnfit) return { kind: 'malformed' };
+        // Paired, a late answer can be taken by nothing else; unpaired, the line is held for it.
+        if (!(error instanceof WriteResponseTimeout) || error.paired) throw error;
         // Nothing is sent again: this only waits for the answer still owed, or for silence.
-        const lateAnswer: Promise<void> = awaitWriteResponse('Apps', async (): Promise<void> => undefined, take);
-        throw new AppsAnswerOwed(lateAnswer.catch((): void => undefined));
+        throw new AppsAnswerOwed(awaitLateAnswer('Apps', take).catch((): void => undefined));
       }
       if (answered === null) throw new Error('Apps: the server\'s answer did not fit the request');
       return answered;
@@ -66,9 +68,10 @@ export function protocolAppsTransport(sender: ProtocolSender): AppsTransport {
  * whichever request is waiting, so two in flight together could swap refusals. Every user of a
  * tab's session (the marketplace, a page's zones, its running apps) shares the one wrapper.
  *
- * A request that timed out still holds the line until its late answer has come (`AppsAnswerOwed`):
- * the kernel answers in order, so that answer would otherwise arrive while the next request waits
- * and be taken for that one's. Residual: an answer later than a second write timeout.
+ * Against a server that does not pair answers with request ids, a request that timed out still
+ * holds the line until its late answer has come (`AppsAnswerOwed`): the kernel answers in order,
+ * so that answer would otherwise arrive while the next request waits and be taken for that one's.
+ * Residual there: an answer later than a second write timeout. A server that pairs needs no hold.
  */
 export function serialAppsTransport(inner: AppsTransport): AppsTransport {
   let queue: Promise<unknown> = Promise.resolve();

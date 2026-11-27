@@ -119,6 +119,7 @@ const UNSCOPED = new Map([
   ['GroupMessage', 'a response to a single-message query, already authorized'],
   ['Nodes', 'a response to a list query, filtered by the handler'],
   ['IceServers', 'only ever the answer to the requesting member (never fanned out); it carries a TURN credential'],
+  ['Answered', 'only ever sent to the connection whose request it pairs, right after that answer (never fanned out); it carries an id and a digest, no data'],
   ['IceServersUnavailable', 'the answer to the requesting member that it gets no relay, and why'],
   ['SignInSettings', 'only ever the answer to the requesting member (never fanned out); whether sign-in needs a human check is public anyway'],
   ['BillingPortal', 'only ever the answer to the requesting member, after the kernel admits them (never fanned out); its URL is a bearer link to the subscription'],

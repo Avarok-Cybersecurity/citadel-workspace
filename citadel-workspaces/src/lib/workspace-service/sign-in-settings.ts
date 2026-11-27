@@ -18,7 +18,7 @@ export function parseSignInSettings(payload: unknown): SignInSettings | null {
 /** Sends `request` and resolves with the settings the server answers it with. */
 async function exchange(sender: ProtocolSender, requestType: 'GetSignInSettings' | 'UpdateSignInSettings', request: WorkspaceProtocolRequest): Promise<SignInSettings> {
   let answered: SignInSettings | null = null;
-  await awaitWriteResponse(requestType, () => sender.sendProtocolRequest(request), (payload: unknown): boolean => {
+  await awaitWriteResponse(requestType, sender, request, (payload: unknown): boolean => {
     answered = parseSignInSettings(payload);
     return answered !== null;
   });

@@ -8,6 +8,7 @@
  *
  * Doubled: the send, which throws as WorkspaceService does with no session.
  */
+import { senderOf, SOME_REQUEST } from '@/test-utils/protocol-sender';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
 import { awaitWriteResponse, WRITE_RESPONSE_TIMEOUT_MS } from '../await-write-response';
@@ -22,7 +23,7 @@ describe('a write that cannot be sent', () => {
     const record = (reason: unknown): void => { unhandled.push(reason); };
     process.on('unhandledRejection', record);
     try {
-      await expect(awaitWriteResponse('Roles', async (): Promise<void> => { throw new Error('No active connection available.'); }))
+      await expect(awaitWriteResponse('Roles', senderOf(async (): Promise<void> => { throw new Error('No active connection available.'); }), SOME_REQUEST))
         .rejects.toThrow('No active connection available.');
       expect(eventEmitter.listenerCount('workspace:raw-response')).toBe(before);
       expect(vi.getTimerCount()).toBe(0);

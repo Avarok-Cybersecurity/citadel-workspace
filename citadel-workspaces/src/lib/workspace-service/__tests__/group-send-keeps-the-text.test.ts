@@ -8,6 +8,7 @@
  * every message, so type-only matching would let someone else's message resolve
  * this write. These pin both halves.
  */
+import { senderOf, SOME_REQUEST } from '@/test-utils/protocol-sender';
 import { describe, it, expect, vi, type Mock } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
 import { awaitWriteResponse } from '../await-write-response';
@@ -26,7 +27,7 @@ const matcher = (payload: unknown): boolean => {
 
 describe('a gated group send', () => {
   it('resolves on its own answer', async () => {
-    const pending: Promise<void> = awaitWriteResponse('SendGroupMessage', async () => {}, matcher);
+    const pending: Promise<void> = awaitWriteResponse('SendGroupMessage', senderOf(async () => {}), SOME_REQUEST, matcher);
     await Promise.resolve();
     eventEmitter.emit('workspace:raw-response', ownAnswer);
     await expect(pending).resolves.toBeUndefined();
@@ -35,7 +36,7 @@ describe('a gated group send', () => {
   it('is NOT resolved by another member\'s message', async () => {
     vi.useFakeTimers();
     try {
-      const pending: Promise<void> = awaitWriteResponse('SendGroupMessage', async () => {}, matcher);
+      const pending: Promise<void> = awaitWriteResponse('SendGroupMessage', senderOf(async () => {}), SOME_REQUEST, matcher);
       const settled: Mock = vi.fn();
       void pending.then(settled, settled);
 
@@ -58,7 +59,7 @@ describe('a gated group send', () => {
   });
 
   it('rejects on a server refusal, so the composer can keep the text', async () => {
-    const pending: Promise<void> = awaitWriteResponse('SendGroupMessage', async () => {}, matcher);
+    const pending: Promise<void> = awaitWriteResponse('SendGroupMessage', senderOf(async () => {}), SOME_REQUEST, matcher);
     await Promise.resolve();
     eventEmitter.emit('workspace:raw-response', { Error: 'Rate limit exceeded. Please slow down.' });
     await expect(pending).rejects.toThrow(/slow down/i);

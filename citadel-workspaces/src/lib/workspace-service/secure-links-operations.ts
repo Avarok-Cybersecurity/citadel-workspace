@@ -51,7 +51,7 @@ function variant<K extends Kind>(answer: SecureLinksResponse, kind: K): Of<K> | 
 
 async function exchange<T>(sender: ProtocolSender, request: SecureLinksRequest, read: (answer: SecureLinksResponse) => T | null): Promise<T> {
   let answered: T | null = null;
-  await awaitWriteResponse('SecureLinks', () => sender.sendProtocolRequest({ SecureLinks: request }), (payload: unknown): boolean => {
+  await awaitWriteResponse('SecureLinks', sender, { SecureLinks: request }, (payload: unknown): boolean => {
     const answer: SecureLinksResponse | null = secureLinksAnswer(payload);
     answered = answer === null ? null : read(answer);
     return answered !== null;

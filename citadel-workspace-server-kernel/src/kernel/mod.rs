@@ -9,6 +9,10 @@
 // - `user_management`: User injection utilities for testing
 // - `member_operations`: Domain member add/remove operations
 
+/// The frames sent back for one frame a connection sent, paired with its request id.
+pub(crate) mod answer_frames;
+#[cfg(test)]
+mod answer_frames_tests;
 /// Citadel Apps: the pure install, grant and audience rules.
 pub mod apps;
 /// "Plan & billing": who may open the billing portal, and the host that opens it.

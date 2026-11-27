@@ -34,7 +34,7 @@ async function exchange<K extends keyof Answers>(
   sender: ProtocolSender, request: TelemetryRequest, key: K, reflects: (answer: Answers[K]) => boolean = (): boolean => true,
 ): Promise<Answers[K]> {
   let answered: Answers[K] | null = null;
-  await awaitWriteResponse('Telemetry', () => sender.sendProtocolRequest({ Telemetry: request }), (payload: unknown): boolean => {
+  await awaitWriteResponse('Telemetry', sender, { Telemetry: request }, (payload: unknown): boolean => {
     const candidate: Answers[K] | null = answerOf(payload, key);
     if (candidate === null || !reflects(candidate)) return false;
     answered = candidate;

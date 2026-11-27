@@ -6,6 +6,7 @@
  * plain forwarding.
  */
 
+import { answerPairing } from '@/lib/workspace-service/answers/answer-pairing';
 import { eventEmitter } from '@/lib/event-emitter';
 import { debugLog } from '@/lib/debug-config';
 import { isVariant , type SignInSettings, type WorkspaceProtocolResponse } from 'citadel-workspace-client-ts';
@@ -159,6 +160,8 @@ export function handleGeneratedVariants(
   if (isVariant(response, 'ServerCapabilities')) {
     const caps: Extract<WorkspaceProtocolResponse, { ServerCapabilities: unknown }>['ServerCapabilities'] = response.ServerCapabilities;
     debugLog('WorkspaceResponseHandler', 'ServerCapabilities received', caps);
+    // Absent from a server built before request ids: it does not pair, and is sent none.
+    answerPairing.setServerPairs(caps.request_ids === true);
     eventEmitter.emit('server:capabilities:loaded', {
       allowServerFileTransfer: caps.allow_server_file_transfer,
       allowServerRevfsStorage: caps.allow_server_revfs_storage,

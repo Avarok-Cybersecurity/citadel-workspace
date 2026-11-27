@@ -101,7 +101,7 @@ export function nodeChatIO(groupId: string, nodeId: string): NodeChatIO {
     share: (documentId: string, title: string): Promise<void> =>
       WorkspaceService.sendGroupMessage(groupId, title, { LiveDocument: { document_id: documentId } }),
     attachments: {
-      send: (request: ChatAttachmentsRequest): Promise<void> => WorkspaceService.sendProtocolRequest({ ChatAttachments: request }),
+      send: (request: ChatAttachmentsRequest): Promise<void> => WorkspaceService.sendProtocolRequest({ ChatAttachments: request }, null),
       onAnswer: (listener: (answer: ChatAttachmentsResponse) => void): (() => void) =>
         eventEmitter.on(CHAT_ATTACHMENTS_EVENT, (answer: ChatAttachmentsResponse | undefined): void => { if (answer !== undefined) listener(answer); }),
       answerDeadlineMs: ATTACHMENT_ANSWER_DEADLINE_MS,

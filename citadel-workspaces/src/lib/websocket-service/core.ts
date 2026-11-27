@@ -101,7 +101,7 @@ export class WebSocketServiceCore {
 
   // ============== Workspace ==============
 
-  async sendWorkspaceRequest(cid: bigint, request: unknown): Promise<void> { return this.modules.workspaceOps.sendWorkspaceRequest(cid, request) }
+  async sendWorkspaceRequest(cid: bigint, request: unknown, requestId: bigint | null = null): Promise<void> { return this.modules.workspaceOps.sendWorkspaceRequest(cid, request, requestId) }
 
   // ============== P2P ==============
 

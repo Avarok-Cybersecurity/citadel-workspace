@@ -15,7 +15,7 @@ interface ChannelPayload { group_id?: string; message_id?: string; cursor?: { me
 
 export function reactGroupMessage(sender: ProtocolSender, groupId: string, messageId: string, emoji: string, on: boolean): Promise<void> {
   const request: WorkspaceProtocolRequest = { ReactGroupMessage: { group_id: groupId, message_id: messageId, emoji, on } };
-  return awaitWriteResponse('ReactGroupMessage', () => sender.sendProtocolRequest(request), (payload: unknown): boolean => {
+  return awaitWriteResponse('ReactGroupMessage', sender, request, (payload: unknown): boolean => {
     const p: ChannelPayload | undefined = payload as ChannelPayload | undefined;
     return p?.group_id === groupId && p?.message_id === messageId;
   });
@@ -24,12 +24,12 @@ export function reactGroupMessage(sender: ProtocolSender, groupId: string, messa
 /** Resolves once the server has recorded `member`'s cursor at `uptoMessageId`. */
 export function markGroupRead(sender: ProtocolSender, groupId: string, uptoMessageId: string, member: string): Promise<void> {
   const request: WorkspaceProtocolRequest = { MarkGroupRead: { group_id: groupId, upto_message_id: uptoMessageId } };
-  return awaitWriteResponse('MarkGroupRead', () => sender.sendProtocolRequest(request), (payload: unknown): boolean => {
+  return awaitWriteResponse('MarkGroupRead', sender, request, (payload: unknown): boolean => {
     const p: ChannelPayload | undefined = payload as ChannelPayload | undefined;
     return p?.group_id === groupId && p?.cursor?.member === member && p?.cursor?.upto_message_id === uptoMessageId;
   });
 }
 
 export function groupTyping(sender: ProtocolSender, groupId: string): Promise<void> {
-  return sender.sendProtocolRequest({ GroupTyping: { group_id: groupId } });
+  return sender.sendProtocolRequest({ GroupTyping: { group_id: groupId } }, null);
 }
