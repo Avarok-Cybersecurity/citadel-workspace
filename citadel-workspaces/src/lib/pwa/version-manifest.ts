@@ -13,7 +13,7 @@ type BuildOutput = Record<string, OutputAsset | OutputChunk>;
  * is the module, and main.tsx is bundled into it. main.tsx's `import.meta.url` is
  * therefore this chunk's URL, which is what the running page compares.
  */
-export function manifestForBuild(bundle: BuildOutput, base: string, seqs: { seq: number; minSeq: number | null }, agent: string): string {
+export function manifestForBuild(bundle: BuildOutput, base: string, seqs: { seq: number; minSeq: number | null }, agent: string, ux: number): string {
   const entries: OutputChunk[] = Object.values(bundle).filter(
     (output: OutputAsset | OutputChunk): output is OutputChunk =>
       output.type === 'chunk' && output.isEntry && (output.facadeModuleId ?? '').endsWith('/index.html'),
@@ -22,7 +22,17 @@ export function manifestForBuild(bundle: BuildOutput, base: string, seqs: { seq:
     throw new Error(`version.json: expected one index.html entry chunk, found ${entries.length}`);
   }
   const entry: string = `${base}${entries[0].fileName}`;
-  return versionManifest(seqs.minSeq === null ? { entry, seq: seqs.seq, agent } : { entry, seq: seqs.seq, minSeq: seqs.minSeq, agent });
+  return versionManifest(seqs.minSeq === null ? { entry, seq: seqs.seq, agent, ux } : { entry, seq: seqs.seq, minSeq: seqs.minSeq, agent, ux });
+}
+
+/** The score in ux-score.baseline.json's text. Throws rather than ship a build with no score. */
+export function recordedUxScore(baselineText: string): number {
+  const parsed: unknown = JSON.parse(baselineText);
+  const score: unknown = typeof parsed === 'object' && parsed !== null ? (parsed as { score?: unknown }).score : undefined;
+  if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 100) {
+    throw new Error('version.json: scripts/ux-score.baseline.json has no score between 0 and 100');
+  }
+  return score;
 }
 
 /**
