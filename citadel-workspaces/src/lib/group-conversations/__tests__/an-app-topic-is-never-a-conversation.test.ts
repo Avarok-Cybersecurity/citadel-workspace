@@ -18,7 +18,7 @@ const names = (events: readonly GroupEvent[]): string[] => events.map((e: GroupE
 
 function message(groupId: string, mgid: bigint): Record<string, unknown> {
   const body: Uint8Array = encodeGroupMessage({ group_id: groupId, message_id: 'm-1', sender_cid: 7n, content: '{"heartbeat":1}', timestamp: 1 });
-  return { GroupMessageNotification: { cid: 111n, peer_cid: 7n, message: Array.from(body), group_key: { cid: 7n, mgid }, request_id: 'r1' } };
+  return { GroupMessageNotification: { cid: 111n, peer_cid: 7n, message: body, group_key: { cid: 7n, mgid }, request_id: 'r1' } };
 }
 
 const run = (m: Record<string, unknown>): GroupEvent[] => withoutAppTopics(toGroupEvents(m, 111n, 'bob', peerName), view);

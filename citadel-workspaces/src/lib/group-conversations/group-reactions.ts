@@ -17,7 +17,7 @@ import { eventEmitter } from '@/lib/event-emitter';
 import { groupMessagingManager } from '@/lib/group-messaging-manager';
 import { instanceManager } from '@/lib/multi-instance/instance-manager';
 import { debugLog } from '@/lib/debug-config';
-import { toggleReaction, type ReactionChange } from '@/lib/reactions/reaction-state';
+import { fromServerReaction, toggleReaction, type ReactionChange } from '@/lib/reactions/reaction-state';
 import type { GroupMessage } from '@/types/workspace-entities';
 import { encodeGroupReaction } from './group-reaction-codec';
 import { groupSendTransport } from './group-send-transport';
@@ -52,7 +52,7 @@ export async function reactInGroup(groupId: string, messageId: string, emoji: st
   const target: GroupMessage | undefined = groupMessagingManager.getMessages(groupId).messages.find((m) => m.id === messageId);
   if (!target) throw new Error(`Cannot react to message ${messageId}: it is not loaded`);
 
-  const change: ReactionChange = toggleReaction(target.reactions, emoji, self, Date.now());
+  const change: ReactionChange = toggleReaction(target.reactions?.map(fromServerReaction), emoji, self, Date.now());
   await applyGroupReaction({ groupId, messageId, change });
 
   // Lazily, as announce-group-state does: group-requests reaches the socket stack.

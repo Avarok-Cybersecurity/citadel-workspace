@@ -20,7 +20,7 @@ export class LocalDBOperations {
     this.config = config;
   }
 
-  async get(cid: bigint, key: string): Promise<{ value: number[] } | null> {
+  async get(cid: bigint, key: string): Promise<{ value: Uint8Array } | null> {
     await this.config.init();
 
     const requestId: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();
@@ -28,13 +28,13 @@ export class LocalDBOperations {
       LocalDBGetKV: { request_id: requestId, cid, peer_cid: null, key }
     };
 
-    return requestResponse<{ value: number[] }>({
+    return requestResponse<{ value: Uint8Array }>({
       request, requestId, timeoutMs: TIMEOUT.LOCALDB_REQUEST_MS,
       sendRequest: this.config.sendRequest,
       operationName: 'LocalDBGetKV',
       matcher: {
         matchSuccess: (msg) => {
-          const r: { LocalDBGetKVSuccess?: { request_id: string; value: number[]; }; } = msg as { LocalDBGetKVSuccess?: { request_id: string; value: number[] } };
+          const r: { LocalDBGetKVSuccess?: { request_id: string; value: Uint8Array; }; } = msg as { LocalDBGetKVSuccess?: { request_id: string; value: Uint8Array } };
           return r.LocalDBGetKVSuccess?.request_id === requestId
             ? { value: r.LocalDBGetKVSuccess.value }
             : undefined;
@@ -49,11 +49,11 @@ export class LocalDBOperations {
     });
   }
 
-  async set(cid: bigint, key: string, value: number[]): Promise<void> {
+  async set(cid: bigint, key: string, value: Uint8Array): Promise<void> {
     await this.config.init();
 
     const requestId: `${string}-${string}-${string}-${string}-${string}` = crypto.randomUUID();
-    const request: { LocalDBSetKV: { request_id: `${string}-${string}-${string}-${string}-${string}`; cid: bigint; peer_cid: null; key: string; value: number[]; }; } = {
+    const request: { LocalDBSetKV: { request_id: `${string}-${string}-${string}-${string}-${string}`; cid: bigint; peer_cid: null; key: string; value: Uint8Array; }; } = {
       LocalDBSetKV: { request_id: requestId, cid, peer_cid: null, key, value }
     };
 

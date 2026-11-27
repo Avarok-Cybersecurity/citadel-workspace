@@ -1,7 +1,7 @@
 import type { WorkspaceTheme, ThemePalette, HslColor, WorkspaceIcon } from './theme-types';
 import { defaultTheme } from './presets';
 import { controlBorderFor } from './palette-contrast';
-import { metadataDocument } from '@/lib/workspace-metadata/metadata-document';
+import { metadataDocument, type MetadataSource } from '@/lib/workspace-metadata/metadata-document';
 
 /**
  * Carrying a theme in the workspace's `metadata` bytes.
@@ -60,7 +60,7 @@ export function serializeTheme(theme: WorkspaceTheme): Uint8Array {
  * a far worse outcome than one that renders in the default theme.
  */
 export function deserializeTheme(
-  metadata: Uint8Array | number[] | Record<string, unknown> | null | undefined,
+  metadata: MetadataSource,
 ): WorkspaceTheme | null {
   const document: Record<string, unknown> | null = metadataDocument(metadata);
   if (!document) return null;

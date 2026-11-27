@@ -127,7 +127,7 @@ describe('(c) an internal-HTTP frame between the app’s shapes and the wire’s
     const r: ReturnType<typeof relay> = relay();
     const got: InboundIhttpFrame[] = [];
     relayIhttpPort(r.deps).onFrame((f: InboundIhttpFrame) => got.push(f));
-    r.push({ IhttpFrame: { from: FROM, to_install_id: 'inst-b', frame: Array.from(bytes(c.wire_hex)) } });
+    r.push({ IhttpFrame: { from: FROM, to_install_id: 'inst-b', frame: bytes(c.wire_hex) } });
     expect(got.length).toBe(1);
     expect(hexOf(encodeCbor(got[0].frame))).toBe(c.sdk_hex);
   });
@@ -149,7 +149,7 @@ describe('(d, e) the relay’s rules', () => {
     const port: Relay = relayIhttpPort(r.deps);
     port.onFrame((f: InboundIhttpFrame) => got.push(f));
     const end: string = (fixture.frames_from_wire.find((c) => c.name === 'end') as { wire_hex: string }).wire_hex;
-    r.push({ IhttpFrame: { from: { ...a.from, cid: BigInt(a.from.cid) }, to_install_id: 'inst-b', frame: Array.from(bytes(end)) } });
+    r.push({ IhttpFrame: { from: { ...a.from, cid: BigInt(a.from.cid) }, to_install_id: 'inst-b', frame: bytes(end) } });
     await port.respond(got[0].from, got[0].frame);
     expect(r.sent.map(([to]) => to)).toEqual([a.reply_to]);
   });

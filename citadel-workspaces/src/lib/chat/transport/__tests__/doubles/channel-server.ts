@@ -59,7 +59,7 @@ function react({ group_id, message_id, emoji, on }: RequestBody<'ReactGroupMessa
   if (message === undefined || !REACTION_EMOJIS.includes(emoji)) { refuse('Message not found'); return; }
   state.clock += 1;
   const others: GroupReaction[] = (message.reactions ?? []).filter((r) => !(r.reactorCid === state.sessionCid && r.emoji === emoji));
-  message.reactions = [...others, { emoji, reactorCid: state.sessionCid, at: state.clock, active: on }];
+  message.reactions = [...others, { emoji, reactorCid: state.sessionCid, at: BigInt(state.clock), active: on }];
   answer({ GroupMessageReacted: { group_id, message_id, reactions: message.reactions } });
 }
 

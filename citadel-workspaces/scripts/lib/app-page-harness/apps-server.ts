@@ -62,19 +62,19 @@ export function harnessServer(release: Release): HarnessServer {
   const answer = (r: AppsRequest): unknown => {
     if (typeof r === 'object' && 'GetRelease' in r) {
       record.requests.push('GetRelease');
-      const current: AppListing = { source: { Global: { catalogue_version: 1n } }, manifest_bytes: Array.from(release.manifestBytes), signature: release.signatureHex };
+      const current: AppListing = { source: { Global: { catalogue_version: 1n } }, manifest_bytes: release.manifestBytes, signature: release.signatureHex };
       return { Release: { install_id: release.installId, current, waiting_on: null } };
     }
     if (typeof r === 'object' && 'FetchArtifact' in r) {
       record.requests.push('FetchArtifact');
       const { index } = r.FetchArtifact;
-      return { ArtifactChunk: { ...r.FetchArtifact, total_chunks: Math.ceil(release.wasm.byteLength / CHUNK), bytes: Array.from(release.wasm.slice(index * CHUNK, (index + 1) * CHUNK)) } };
+      return { ArtifactChunk: { ...r.FetchArtifact, total_chunks: Math.ceil(release.wasm.byteLength / CHUNK), bytes: (release.wasm.slice(index * CHUNK, (index + 1) * CHUNK)) } };
     }
     if (typeof r === 'object' && 'Call' in r) {
       const call: { group: string; op: string; args: CborMap } | null = callOf(Uint8Array.from(r.Call.call));
       record.requests.push(call === null ? 'Call (unreadable)' : `Call ${call.group}/${call.op}`);
       const reply: unknown = call?.group === 'Storage' ? storage(call.op, call.args) : { refused: { unavailable: 'harness' } };
-      return { CallReply: { reply: Array.from(encodeCbor(reply)) } };
+      return { CallReply: { reply: encodeCbor(reply) } };
     }
     record.requests.push(typeof r === 'string' ? r : Object.keys(r)[0] ?? '(empty)');
     return { Refused: 'ServerFeatureUnavailable' };

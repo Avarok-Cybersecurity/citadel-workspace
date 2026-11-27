@@ -34,6 +34,8 @@ pub enum DocumentsRequest {
         node_id: String,
         doc_version: u32,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         update: Vec<u8>,
         /// The client's own number for this update, echoed on `Appended` so the client can tell
         /// which of its pending updates the server has stored: the protocol has no request id.
@@ -54,6 +56,8 @@ pub enum DocumentsRequest {
         node_id: String,
         doc_version: u32,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         snapshot: Vec<u8>,
         #[ts(type = "bigint")]
         upto_seq: u64,
@@ -63,6 +67,8 @@ pub enum DocumentsRequest {
     Awareness {
         node_id: String,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         payload: Vec<u8>,
     },
 }
@@ -75,6 +81,8 @@ pub struct DocumentUpdate {
     pub seq: u64,
     pub doc_version: u32,
     #[debug(with = plaintext_debug_fmt)]
+    #[ts(type = "Uint8Array")]
+    #[serde(with = "citadel_internal_service_types::wire_bytes")]
     pub update: Vec<u8>,
     #[ts(type = "bigint")]
     pub author_cid: u64,
@@ -86,6 +94,8 @@ pub struct DocumentUpdate {
 pub struct DocumentSnapshot {
     pub doc_version: u32,
     #[debug(with = plaintext_debug_fmt)]
+    #[ts(type = "Uint8Array")]
+    #[serde(with = "citadel_internal_service_types::wire_bytes")]
     pub bytes: Vec<u8>,
     #[ts(type = "bigint")]
     pub upto_seq: u64,
@@ -140,6 +150,8 @@ pub enum DocumentsResponse {
         seq: u64,
         doc_version: u32,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         update: Vec<u8>,
         #[ts(type = "bigint")]
         author_cid: u64,
@@ -150,6 +162,8 @@ pub enum DocumentsResponse {
         #[ts(type = "bigint")]
         from_cid: u64,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         payload: Vec<u8>,
     },
     /// The server compacted the log itself: it stored a snapshot it built from the log, covering

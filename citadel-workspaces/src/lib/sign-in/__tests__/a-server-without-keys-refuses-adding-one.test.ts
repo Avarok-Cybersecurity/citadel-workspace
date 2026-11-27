@@ -16,8 +16,8 @@ import { world, type World } from './helpers';
 let w: World;
 afterEach(() => w.stop());
 
-const STEP_UP: { password: number[]; security_key: boolean } =
-  { password: Array.from(new TextEncoder().encode('correct horse battery')), security_key: true };
+const STEP_UP: { password: Uint8Array; security_key: boolean } =
+  { password: new TextEncoder().encode('correct horse battery'), security_key: true };
 
 describe('a server without security keys', () => {
   it('refuses adding a key, before any is made, as a server that has not enabled them', async () => {

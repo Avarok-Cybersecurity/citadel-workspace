@@ -60,11 +60,11 @@ export async function backendSendFile(
   // stream can precede it.
   fileTransferService.markForeignOutgoingStream(requestId);
 
-  // ByteContents.data is a Rust Vec<u8>, which serialises as a number array —
-  // the same shape the working file-transfer upload sends.
-  const data: number[] = Array.from(content);
+  // ByteContents.data is a Rust Vec<u8>: a Uint8Array here, written as the agent's
+  // number array by the WASM client — the same shape the file-transfer upload sends.
+  const data: Uint8Array = content;
 
-  const request: { SendFile: { request_id: string; source: { ByteContents: { file_name: string; data: number[]; }; }; cid: bigint; peer_cid: bigint | null; chunk_size: null; transfer_type: { RemoteEncryptedVirtualFilesystem: { virtual_path: string; security_level: string; }; }; }; } = {
+  const request: { SendFile: { request_id: string; source: { ByteContents: { file_name: string; data: Uint8Array; }; }; cid: bigint; peer_cid: bigint | null; chunk_size: null; transfer_type: { RemoteEncryptedVirtualFilesystem: { virtual_path: string; security_level: string; }; }; }; } = {
     SendFile: {
       request_id: requestId,
       // The externally-tagged FileSource enum. This used to be a bare string

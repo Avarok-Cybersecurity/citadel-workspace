@@ -24,7 +24,7 @@ const ALICE: bigint = 1_281_805_798_482_117_626n;
 
 function serverPush(to: bigint, response: DocumentsResponse): Record<string, unknown> {
   const payload: WorkspaceProtocolPayload = { Response: { Documents: response } };
-  return { MessageNotification: { message: Array.from(encodeWorkspacePayload(payload)), cid: to, peer_cid: 0n, request_id: 'the-authors-request' } };
+  return { MessageNotification: { message: encodeWorkspacePayload(payload), cid: to, peer_cid: 0n, request_id: 'the-authors-request' } };
 }
 
 function recordingSender(): { sender: ProtocolSender; sent: WorkspaceProtocolRequest[] } {
@@ -32,7 +32,7 @@ function recordingSender(): { sender: ProtocolSender; sent: WorkspaceProtocolReq
   return { sent, sender: { currentCid: BOB, sendProtocolRequest: (request: WorkspaceProtocolRequest): Promise<void> => { sent.push(request); return Promise.resolve(); } } };
 }
 
-const PUSH: DocumentsResponse = { DocumentUpdated: { node_id: 'n1', seq: 9_007_199_254_740_993n, doc_version: 2, update: [0, 255, 7], author_cid: ALICE } };
+const PUSH: DocumentsResponse = { DocumentUpdated: { node_id: 'n1', seq: 9_007_199_254_740_993n, doc_version: 2, update: new Uint8Array([0, 255, 7]), author_cid: ALICE } };
 
 describe('a Documents message on the production path', () => {
   it('is routed by the recipient cid, never by the author\'s request id', () => {

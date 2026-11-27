@@ -32,7 +32,7 @@ function node(id: string, parent: string | null, type: string, name: string): Do
   return {
     id, parent_id: parent, entity_type: { Child: type }, depth: 0, name, description: '', owner_id: '',
     members: [], children: [], mdx_content: '', mdx_content_hash: EMPTY_DOCUMENT_HASH, rules: null, chat_enabled: false,
-    chat_channel_id: null, default_permissions: {} as DomainNode['default_permissions'], metadata: [],
+    chat_channel_id: null, default_permissions: {} as DomainNode['default_permissions'], metadata: new Uint8Array(),
     allowed_child_types: [], is_default: false, created_at: 0n, updated_at: 0n,
   };
 }

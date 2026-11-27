@@ -24,8 +24,9 @@ pub struct GroupReaction {
     #[serde(rename = "reactorCid")]
     #[ts(type = "bigint")]
     pub reactor_cid: u64,
-    /// Server clock, milliseconds, when the reactor last changed this entry.
-    #[ts(type = "number")]
+    /// Server clock, milliseconds, when the reactor last changed this entry. A u64 like every
+    /// other, so a bigint on the page (the workspace codec makes every u64 one).
+    #[ts(type = "bigint")]
     pub at: u64,
     /// False is a retraction, kept so the entry's history orders later changes.
     pub active: bool,

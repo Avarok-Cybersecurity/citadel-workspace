@@ -9,7 +9,7 @@
  *   `cdoc-chat:<account>:<docId>#pending`  the updates applied since that snapshot, in order
  *   `cdoc-chat:<account>:#index`           each docId with the peer's cid and the title (LWW stamp)
  *
- * Values are CBOR (bytes stay bytes, cids bigints) carried as the agent's number arrays. A key
+ * Values are CBOR (bytes stay bytes, cids bigints), carried as the agent's byte values. A key
  * that is not there reads as nothing; a failed read is an error, never "nothing kept".
  *
  * The base and the index carry `store_version`, and one written in another layout is refused
@@ -19,6 +19,7 @@
  */
 import { decode as cborDecode, encode as cborEncode } from 'cbor-x';
 import { isGenuinelyAbsent } from '@/lib/storage/absence';
+import { ownedBytes } from '@/lib/utils/encoding-utils';
 import type { CdocChatTitleStamp } from '@/types/cdoc-chat-sync';
 import type { ChatIndexEntry, ChatStoreBackend, ChatTabs, StoredBase } from './chat-ports';
 import { chatCopyLock, chatIndexLock } from './chat-tabs';
@@ -26,8 +27,8 @@ import { isChatDocId, readTitleStamp } from './chat-wire';
 
 /** The agent's key-value requests for a session (websocketService.sendLocalDB*). */
 export interface LocalDbPort {
-  get(cid: bigint, key: string): Promise<{ readonly value: readonly number[] } | null>;
-  set(cid: bigint, key: string, value: number[]): Promise<void>;
+  get(cid: bigint, key: string): Promise<{ readonly value: Uint8Array } | null>;
+  set(cid: bigint, key: string, value: Uint8Array): Promise<void>;
 }
 
 type Fields = Record<string, unknown>;
@@ -97,16 +98,16 @@ function readIndex(value: unknown): Map<string, ChatIndexEntry> {
 export function localDbChatStore(account: bigint, db: LocalDbPort, tabs: ChatTabs): ChatStoreBackend {
   if (account <= 0n) throw new Error(`chat documents are kept under the local account, not cid ${account.toString()}`);
   const get = async (key: string): Promise<unknown> => {
-    let found: { readonly value: readonly number[] } | null;
+    let found: { readonly value: Uint8Array } | null;
     try {
       found = await db.get(account, key);
     } catch (error: unknown) {
       if (isGenuinelyAbsent(error)) return undefined;
       throw error;
     }
-    return found === null ? undefined : cborDecode(Uint8Array.from(found.value));
+    return found === null ? undefined : cborDecode(found.value);
   };
-  const put = (key: string, value: unknown): Promise<void> => db.set(account, key, Array.from(cborEncode(value)));
+  const put = (key: string, value: unknown): Promise<void> => db.set(account, key, ownedBytes(cborEncode(value)));
   const index = async (): Promise<Map<string, ChatIndexEntry>> => {
     const stored: unknown = await get(indexKey(account));
     return stored === undefined ? new Map<string, ChatIndexEntry>() : readIndex(stored);

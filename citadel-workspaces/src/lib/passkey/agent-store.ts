@@ -17,15 +17,15 @@ const GLOBAL_CID: 0n = 0n;
 export const agentPasskeyStore: PasskeyStore = {
   async get(key: string): Promise<Bytes | null> {
     try {
-      const result: { value: number[] } | null = await wsModule.websocketService.sendLocalDBGet(GLOBAL_CID, key);
-      return result?.value ? copyBytes(Uint8Array.from(result.value)) : null;
+      const result: { value: Uint8Array } | null = await wsModule.websocketService.sendLocalDBGet(GLOBAL_CID, key);
+      return result?.value ? copyBytes(result.value) : null;
     } catch (error) {
       if (isGenuinelyAbsent(error)) return null;
       throw error;
     }
   },
   async set(key: string, value: Bytes): Promise<void> {
-    await wsModule.websocketService.sendLocalDBSet(GLOBAL_CID, key, Array.from(value));
+    await wsModule.websocketService.sendLocalDBSet(GLOBAL_CID, key, value);
   },
   async delete(key: string): Promise<void> {
     await wsModule.websocketService.sendLocalDBDelete(GLOBAL_CID, key);

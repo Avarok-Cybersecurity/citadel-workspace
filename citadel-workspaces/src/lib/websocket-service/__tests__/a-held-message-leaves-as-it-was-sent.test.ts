@@ -21,18 +21,18 @@ import type { ChatSecurityLevel } from '@/lib/p2p/chat-advanced-settings';
 const LOCAL: bigint = 71n;
 const PEER: bigint = 72n;
 
-interface ReliableSend { bytes: number[]; level: ChatSecurityLevel | undefined; hint: CompressionHint | undefined }
+interface ReliableSend { bytes: Uint8Array; level: ChatSecurityLevel | undefined; hint: CompressionHint | undefined }
 
-function coreOverRecorders(): { core: WebSocketServiceCore; rows: Map<string, number[]>; sends: ReliableSend[] } {
-  const rows: Map<string, number[]> = new Map();
+function coreOverRecorders(): { core: WebSocketServiceCore; rows: Map<string, Uint8Array>; sends: ReliableSend[] } {
+  const rows: Map<string, Uint8Array> = new Map();
   const sends: ReliableSend[] = [];
   const core: WebSocketServiceCore = new WebSocketServiceCore();
-  core.sendLocalDBGet = async (_cid: bigint, key: string): Promise<{ value: number[] }> => {
-    const value: number[] | undefined = rows.get(key);
+  core.sendLocalDBGet = async (_cid: bigint, key: string): Promise<{ value: Uint8Array }> => {
+    const value: Uint8Array | undefined = rows.get(key);
     if (value === undefined) throw new Error(`Key not found: ${key}`);
     return { value };
   };
-  core.sendLocalDBSet = async (_cid: bigint, key: string, value: number[]): Promise<void> => { rows.set(key, value); };
+  core.sendLocalDBSet = async (_cid: bigint, key: string, value: Uint8Array): Promise<void> => { rows.set(key, value); };
   core.sendLocalDBDelete = async (_cid: bigint, key: string): Promise<void> => { rows.delete(key); };
   core.sendLocalDBListKeys = async (_cid: bigint, prefix?: string): Promise<string[]> => {
     const keys: string[] = [...rows.keys()].filter((k: string): boolean => k.startsWith(prefix ?? ''));
@@ -43,13 +43,13 @@ function coreOverRecorders(): { core: WebSocketServiceCore; rows: Map<string, nu
     core as unknown as { modules: { messengerOps: { sendP2PMessageReliable: unknown } } };
   internals.modules.messengerOps.sendP2PMessageReliable = async (
     _local: bigint, _peer: bigint, bytes: Uint8Array, level?: ChatSecurityLevel, hint?: CompressionHint
-  ): Promise<void> => { sends.push({ bytes: Array.from(bytes), level, hint }); };
+  ): Promise<void> => { sends.push({ bytes: bytes.slice(), level, hint }); };
   return { core, rows, sends };
 }
 
 describe('a reliable send', () => {
   let core: WebSocketServiceCore;
-  let rows: Map<string, number[]>;
+  let rows: Map<string, Uint8Array>;
   let sends: ReliableSend[];
 
   beforeEach((): void => { ({ core, rows, sends } = coreOverRecorders()); });
@@ -59,7 +59,7 @@ describe('a reliable send', () => {
 
   it('to a contact not paused goes out with its level and hint', async (): Promise<void> => {
     await core.sendP2PMessageReliable(LOCAL, PEER, new Uint8Array([1]), 'High', 'json');
-    expect(sends).toEqual([{ bytes: [1], level: 'High', hint: 'json' }]);
+    expect(sends).toEqual([{ bytes: new Uint8Array([1]), level: 'High', hint: 'json' }]);
   });
 
   it('held for a paused contact leaves on Resume with the same level and hint', async (): Promise<void> => {
@@ -70,8 +70,8 @@ describe('a reliable send', () => {
     resume();
     expect(await core.flushPausedOutbox(LOCAL, PEER)).toBe(2);
     expect(sends).toEqual([
-      { bytes: [1], level: 'Extreme', hint: 'cbor-command' },
-      { bytes: [2], level: 'Reinforced', hint: 'yjs-update' },
+      { bytes: new Uint8Array([1]), level: 'Extreme', hint: 'cbor-command' },
+      { bytes: new Uint8Array([2]), level: 'Reinforced', hint: 'yjs-update' },
     ]);
   });
 
@@ -80,17 +80,17 @@ describe('a reliable send', () => {
     await core.sendP2PMessageReliable(LOCAL, PEER, new Uint8Array([3]));
     resume();
     await core.flushPausedOutbox(LOCAL, PEER);
-    expect(sends).toEqual([{ bytes: [3], level: undefined, hint: undefined }]);
+    expect(sends).toEqual([{ bytes: new Uint8Array([3]), level: undefined, hint: undefined }]);
   });
 
   it('refuses a key held by an earlier build, before keys carried a level or a reason', async (): Promise<void> => {
-    rows.set(`p2p_paused_outbox_${PEER.toString()}_0000000000001000_7d3c0a52-6f0e-4c1e-9d2a-2b8f5f0c1e11`, [4]);
+    rows.set(`p2p_paused_outbox_${PEER.toString()}_0000000000001000_7d3c0a52-6f0e-4c1e-9d2a-2b8f5f0c1e11`, new Uint8Array([4]));
     await expect(core.flushPausedOutbox(LOCAL, PEER)).rejects.toThrow(/unreadable held-message key/i);
     expect(sends).toEqual([]);
   });
 
   it('refuses to flush a held key it cannot read, rather than send it at a guessed level', async (): Promise<void> => {
-    rows.set(`p2p_paused_outbox_${PEER.toString()}_0000000000001000_7d3c0a52-6f0e-4c1e-9d2a-2b8f5f0c1e11_Bogus_json`, [5]);
+    rows.set(`p2p_paused_outbox_${PEER.toString()}_0000000000001000_7d3c0a52-6f0e-4c1e-9d2a-2b8f5f0c1e11_Bogus_json`, new Uint8Array([5]));
     await expect(core.flushPausedOutbox(LOCAL, PEER)).rejects.toThrow(/unreadable held-message key/i);
     expect(sends).toEqual([]);
   });

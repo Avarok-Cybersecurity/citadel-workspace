@@ -145,7 +145,7 @@ describe('the recovery console', () => {
     fireEvent.click(screen.getByTestId('recovery-task-policy'));
     fireEvent.click(await screen.findByTestId('console-policy-PasswordAndKey'));
     expect(screen.getByTestId('console-policy-save')).toBeEnabled();
-    alice.keys.push({ id: 11, credentialId: [1], label: 'Spare', prf: 'x' });
+    alice.keys.push({ id: 11, credentialId: new Uint8Array([1]), label: 'Spare', prf: 'x' });
     fireEvent.click(screen.getByTestId('console-policy-save'));
     expect(await screen.findByTestId('recovery-task-policy')).toHaveAttribute('data-done', 'true');
     expect(screen.getByTestId('recovery-task-password')).not.toHaveAttribute('data-done');
@@ -157,7 +157,7 @@ describe('the recovery console', () => {
   });
 
   it('gives every element in each task a test id of its own', async () => {
-    alice.keys.push({ id: 11, credentialId: [1], label: 'Spare', prf: 'x' });
+    alice.keys.push({ id: 11, credentialId: new Uint8Array([1]), label: 'Spare', prf: 'x' });
     await recoverToConsole();
     fireEvent.click(screen.getByTestId('recovery-console-begin'));
     for (const task of ['password', 'credentials', 'policy', 'phrase'] as const) {
@@ -171,7 +171,7 @@ describe('the recovery console', () => {
   });
 
   it('removes a lost key from the list', async () => {
-    alice.keys.push({ id: 11, credentialId: [1], label: 'Lost key', prf: 'x' });
+    alice.keys.push({ id: 11, credentialId: new Uint8Array([1]), label: 'Lost key', prf: 'x' });
     await recoverToConsole();
     fireEvent.click(screen.getByTestId('recovery-console-begin'));
     fireEvent.click(screen.getByTestId('recovery-task-credentials'));

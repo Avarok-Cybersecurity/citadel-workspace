@@ -120,7 +120,7 @@ describe('what the session reports', () => {
     const bob: RealTab = openTab(kernel, clock, BOB, {}, realReplicas(), null);
     await bob.session.open();
     await kernel.settle([bob.session]);
-    kernel.inject(BOB, { DocumentUpdated: { node_id: NODE, seq: 2n, doc_version: CDOC_CRDT_DOC_VERSION + 1, update: [1, 2, 3], author_cid: ALICE } });
+    kernel.inject(BOB, { DocumentUpdated: { node_id: NODE, seq: 2n, doc_version: CDOC_CRDT_DOC_VERSION + 1, update: new Uint8Array([1, 2, 3]), author_cid: ALICE } });
     await kernel.settle([bob.session]);
 
     expect(bob.problems).toHaveLength(1);

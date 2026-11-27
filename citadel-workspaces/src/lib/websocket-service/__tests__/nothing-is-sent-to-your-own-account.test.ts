@@ -19,7 +19,7 @@ interface Ops { p2pOps: Record<string, Recorder>; messengerOps: Record<string, R
 function coreOverRecorders(): { core: WebSocketServiceCore; left: string[] } {
   const left: string[] = [];
   const core: WebSocketServiceCore = new WebSocketServiceCore();
-  core.sendLocalDBGet = async (_cid: bigint, key: string): Promise<{ value: number[] }> => { throw new Error(`Key not found: ${key}`); };
+  core.sendLocalDBGet = async (_cid: bigint, key: string): Promise<{ value: Uint8Array }> => { throw new Error(`Key not found: ${key}`); };
   const ops: Ops = (core as unknown as { modules: Ops }).modules;
   const record = (name: string): Recorder => async (): Promise<void> => { left.push(name); };
   for (const name of ['sendP2PMessage', 'sendP2PMessageBytes', 'openP2PConnection']) ops.p2pOps[name] = record(name);

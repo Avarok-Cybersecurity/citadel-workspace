@@ -82,7 +82,7 @@ export async function uploadAttachment(wire: AttachmentWire, nodeId: string, byt
   for (let index: number = 0; index < total; index++) {
     const part: Uint8Array = bytes.subarray(index * CHAT_ATTACHMENT_CHUNK_BYTES, (index + 1) * CHAT_ATTACHMENT_CHUNK_BYTES);
     const request: ChatAttachmentsRequest = {
-      UploadChunk: { node_id: nodeId, sha256: id, size_bytes: BigInt(bytes.length), index, total_chunks: total, bytes: Array.from(part) },
+      UploadChunk: { node_id: nodeId, sha256: id, size_bytes: BigInt(bytes.length), index, total_chunks: total, bytes: part.slice() },
     };
     const answer: Answer = await exchange(wire, nodeId, id, request, (a: Answer): boolean => 'ChunkStored' in a && a.ChunkStored.index === index);
     if (index + 1 === total && !('ChunkStored' in answer && answer.ChunkStored.stored)) {
@@ -101,7 +101,7 @@ export async function readAttachment(wire: AttachmentWire, nodeId: string, id: s
     const answer: Answer = await exchange(wire, nodeId, id, request, (a: Answer): boolean => 'Chunk' in a && a.Chunk.index === index);
     if (!('Chunk' in answer)) throw new Error('The workspace server answered with something else.');
     total = answer.Chunk.total_chunks;
-    parts.push(Uint8Array.from(answer.Chunk.bytes));
+    parts.push(answer.Chunk.bytes);
   }
   const whole: Uint8Array = new Uint8Array(parts.reduce((n: number, p: Uint8Array): number => n + p.length, 0));
   parts.reduce((at: number, p: Uint8Array): number => { whole.set(p, at); return at + p.length; }, 0);

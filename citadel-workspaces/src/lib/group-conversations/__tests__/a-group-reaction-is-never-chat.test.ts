@@ -33,7 +33,7 @@ function envelope(overrides: Partial<PeerGroupReaction> = {}): PeerGroupReaction
 function notification(from: bigint, bytes: Uint8Array): Record<string, unknown> {
   return {
     GroupMessageNotification: {
-      cid: SELF, peer_cid: from, message: Array.from(bytes), group_key: { cid: OWNER, mgid: 5n }, request_id: null,
+      cid: SELF, peer_cid: from, message: bytes, group_key: { cid: OWNER, mgid: 5n }, request_id: null,
     },
   };
 }

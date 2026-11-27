@@ -82,7 +82,7 @@ describe('a node bound to an installed app’s page', () => {
   it('opens as the app filling the pane under its breadcrumbs, with no MDX chrome', async () => {
     kernel.listing = listingOf({ id: APP, name: 'Synchronized', version: '1.0.0', surfaces: ['node_page'], scopes: ['workspace'] });
     kernel.installs = [installOf(APP, 'Workspace', { id: 'inst-a' })];
-    const metadata: number[] = Array.from(encodeNodeAppPage(null, { app: APP, installId: 'inst-a' }));
+    const metadata: Uint8Array = encodeNodeAppPage(null, { app: APP, installId: 'inst-a' });
     show({ ...domainNode('board', 'berlin', 'Building', [], 'Sync board'), metadata });
 
     await waitFor(() => expect(mounted.pages).toHaveLength(1));

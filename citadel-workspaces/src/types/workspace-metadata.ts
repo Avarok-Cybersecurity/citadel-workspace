@@ -1,8 +1,8 @@
 /**
  * Exact types for the workspace `metadata` field.
  *
- * The wire type is `Workspace.metadata: Vec<u8>`, which ts-rs surfaces as
- * `number[]`. The context declared it `Record<string, any>` instead, and that
+ * The wire type is `Workspace.metadata: Vec<u8>`, which reaches the page as a
+ * `Uint8Array`. The context declared it `Record<string, any>` instead, and that
  * was not merely loose — it was wrong, and it broke something:
  * `getWorkspaceLogo` tested `metadata.logo` on what is actually a byte array, so
  * the property was always undefined and the image branch was unreachable. Every
@@ -13,8 +13,8 @@
  * dotted into by mistake, and a decoder has to say what it is decoding.
  */
 
-/** Raw workspace metadata as it arrives over the wire: `Vec<u8>` as `number[]`. */
-export type WorkspaceMetadataBytes = number[];
+/** Raw workspace metadata as it arrives over the wire: `Vec<u8>` as a `Uint8Array`. */
+export type WorkspaceMetadataBytes = Uint8Array;
 
 /**
  * Anything stored in workspace metadata must be a tagged envelope.
@@ -31,10 +31,9 @@ export interface MetadataEnvelope<TKind extends string, TPayload> {
 }
 
 /** Narrow unknown bytes to a decodable string without assuming they are text. */
-export function decodeMetadataBytes(bytes: WorkspaceMetadataBytes | Uint8Array | null | undefined): string | null {
-  if (!bytes) return null;
-  const array: Uint8Array<ArrayBufferLike> = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  if (array.length === 0) return null;
+export function decodeMetadataBytes(bytes: WorkspaceMetadataBytes | null | undefined): string | null {
+  if (!bytes || bytes.length === 0) return null;
+  const array: Uint8Array = bytes;
 
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(array);

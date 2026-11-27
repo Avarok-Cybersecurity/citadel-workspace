@@ -63,11 +63,11 @@ export class ChatDocumentWorld {
       isLeader: (): boolean => false,
       askLeader: async () => ({ supervisesP2p: false, stagesUploads: false, nativePicker: false, takesConsole: false, noticesHeard: false, appNotices: false, servesApps: false, notesToSelf: false }),
     });
-    vi.spyOn(websocketService, 'sendLocalDBGet').mockImplementation(async (cid: bigint, key: string): Promise<{ value: number[] } | null> => {
-      const found: { readonly value: readonly number[] } | null = await this.connection.get(cid, key);
-      return found === null ? null : { value: [...found.value] };
+    vi.spyOn(websocketService, 'sendLocalDBGet').mockImplementation(async (cid: bigint, key: string): Promise<{ value: Uint8Array } | null> => {
+      const found: { readonly value: Uint8Array } | null = await this.connection.get(cid, key);
+      return found === null ? null : { value: found.value.slice() };
     });
-    vi.spyOn(websocketService, 'sendLocalDBSet').mockImplementation((cid: bigint, key: string, value: number[]): Promise<void> => this.connection.set(cid, key, value));
+    vi.spyOn(websocketService, 'sendLocalDBSet').mockImplementation((cid: bigint, key: string, value: Uint8Array): Promise<void> => this.connection.set(cid, key, value));
     vi.spyOn(websocketService, 'sendP2PMessageBytes').mockImplementation(async (from: bigint, to: bigint, bytes: Uint8Array): Promise<void> => {
       const command: P2PCommand = deserializeP2PCommand(bytes.slice());
       if (command.type !== P2PCommandType.CdocChatSync || !isCdocChatSyncPayload(command.payload)) return;

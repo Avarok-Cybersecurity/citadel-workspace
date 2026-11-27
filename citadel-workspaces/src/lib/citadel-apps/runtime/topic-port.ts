@@ -31,6 +31,7 @@ import type { PeerAuthority } from './peer-authority';
 import { askToJoin, joinAdmitted, type Joined, type JoinOut } from './topic-admission';
 import { LIMIT_TOPIC_BYTES, LIMIT_TOPIC_RATE } from '../sdk/generated/AbiConstants';
 import { mayOpen, readTopicMessage, topicEnvelope, type TopicLimits } from './topic-model';
+import { ownedBytes } from '@/lib/utils/encoding-utils';
 
 export interface TopicDeps {
   readonly cid: bigint;
@@ -219,7 +220,7 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
       const message: Uint8Array | null = topicEnvelope(name, body, d.limits);
       if (message === null) return { refused: { limit: LIMIT_TOPIC_BYTES } };
       const sent: AgentOutcome<Json | null> = await ask((request_id: string): Json =>
-        ({ GroupMessage: { cid: d.cid, message: Array.from(message), group_key: groupIdToKey(o.groupId), request_id } }), 'GroupMessageSuccess', 'GroupMessageFailure');
+        ({ GroupMessage: { cid: d.cid, message: ownedBytes(message), group_key: groupIdToKey(o.groupId), request_id } }), 'GroupMessageSuccess', 'GroupMessageFailure');
       return sent.ok && sent.value !== null ? { ok: null } : UNAVAILABLE;
     },
     TopicClose: ({ name }: { name: string }): PortAnswer<null> => {

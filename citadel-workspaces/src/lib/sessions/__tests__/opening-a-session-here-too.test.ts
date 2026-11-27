@@ -24,7 +24,7 @@ function memory(): JoinTokenStorage & { raw: Map<string, unknown> } {
   };
 }
 
-type Proof = { Password?: number[]; Token?: number[] };
+type Proof = { Password?: Uint8Array; Token?: Uint8Array };
 let proofs: Proof[] = [];
 let agent: (proof: Proof) => Record<string, unknown> = () => ({});
 
@@ -48,10 +48,10 @@ function withId(answer: Record<string, unknown>, id: string): Record<string, unk
 
 const accepts = (password: string) => (proof: Proof): Record<string, unknown> => {
   const ok: boolean = proof.Password
-    ? new TextDecoder().decode(Uint8Array.from(proof.Password)) === password
-    : JSON.stringify(proof.Token) === JSON.stringify(TOKEN);
+    ? new TextDecoder().decode(proof.Password) === password
+    : proof.Token !== undefined && Array.from(proof.Token).join(',') === TOKEN.join(',');
   return ok
-    ? { SessionAttached: { cid: CID, role: 'Secondary', token: TOKEN } }
+    ? { SessionAttached: { cid: CID, role: 'Secondary', token: Uint8Array.from(TOKEN) } }
     : { ConnectionManagementFailure: { cid: CID, error: proof.Password ? 'The password does not match this session' : "This browser's session token is not valid any more" } };
 };
 
@@ -63,7 +63,7 @@ describe('opening a session here too', () => {
     agent = accepts('correct horse');
     expect(await joinWithPassword(deps(store), CID, 'correct horse')).toBe('Secondary');
     expect(await joinWithRememberedToken(deps(store), CID)).toBe(true);
-    expect(proofs[1]).toEqual({ Token: TOKEN });
+    expect(proofs[1]).toEqual({ Token: Uint8Array.from(TOKEN) });
   });
 
   it('reports a wrong password and remembers nothing', async () => {

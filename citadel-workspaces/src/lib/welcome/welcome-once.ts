@@ -22,8 +22,8 @@ export const WELCOME_BODY: string = 'Your secure workspace is ready. Explore the
 export const WELCOMED_KEY: string = 'welcome_shown';
 
 export interface WelcomeLedger {
-  sendLocalDBGet(cid: bigint, key: string): Promise<{ value: number[] } | null>;
-  sendLocalDBSet(cid: bigint, key: string, value: number[]): Promise<void>;
+  sendLocalDBGet(cid: bigint, key: string): Promise<{ value: Uint8Array } | null>;
+  sendLocalDBSet(cid: bigint, key: string, value: Uint8Array): Promise<void>;
 }
 
 async function hasBeenWelcomed(ledger: WelcomeLedger, cid: bigint): Promise<boolean> {
@@ -42,7 +42,7 @@ async function hasBeenWelcomed(ledger: WelcomeLedger, cid: bigint): Promise<bool
  */
 export async function welcomeOnce(ledger: WelcomeLedger, cid: bigint, greet: () => void): Promise<boolean> {
   if (await hasBeenWelcomed(ledger, cid)) return false;
-  await ledger.sendLocalDBSet(cid, WELCOMED_KEY, [1]);
+  await ledger.sendLocalDBSet(cid, WELCOMED_KEY, new Uint8Array([1]));
   greet();
   return true;
 }

@@ -39,7 +39,7 @@ export async function loadGlobalCatalogue(fetchText: FetchText): Promise<GlobalC
     ok: true,
     listings: reading.entries.map((e: ReadEntry): AppListing => ({
       source: { Global: { catalogue_version: catalogueVersion } },
-      manifest_bytes: Array.from(e.manifestBytes),
+      manifest_bytes: e.manifestBytes,
       signature: e.entry.signature,
     })),
   };
@@ -63,7 +63,7 @@ const newer = (a: AppManifest, b: AppManifest): boolean => {
 export function listedApps(listings: readonly AppListing[]): ListedApp[] {
   const byKey: Map<string, ListedApp> = new Map();
   for (const listing of listings) {
-    const reading: ManifestReading = readManifestBytes(Uint8Array.from(listing.manifest_bytes));
+    const reading: ManifestReading = readManifestBytes(listing.manifest_bytes);
     if (!reading.ok) continue;
     const app: ListedApp = { listing, manifest: reading.manifest, origin: originOf(listing) };
     const key: string = `${app.origin}\n${app.manifest.id}`;

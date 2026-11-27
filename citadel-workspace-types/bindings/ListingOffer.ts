@@ -3,7 +3,7 @@
 /**
  * Where the manifest an install or update takes comes from.
  */
-export type ListingOffer = { "Registry": { entry_id: string, } } | { "Signed": { manifest_bytes: Array<number>, 
+export type ListingOffer = { "Registry": { entry_id: string, } } | { "Signed": { manifest_bytes: Uint8Array, 
 /**
  * The `app.mldsa.sig` text.
  */

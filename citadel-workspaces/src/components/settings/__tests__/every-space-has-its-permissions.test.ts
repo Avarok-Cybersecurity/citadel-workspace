@@ -17,7 +17,7 @@ function node(id: string, name: string, parent: string | null): DomainNode {
     id, parent_id: parent, entity_type: parent === null ? 'Workspace' : { Child: 'Office' }, depth: parent === null ? 0 : 1,
     name, description: '', owner_id: 'someone', members: [], children: [], mdx_content: '', mdx_content_hash: EMPTY_DOCUMENT_HASH,
     rules: null, chat_enabled: false, chat_channel_id: null, default_permissions: {} as DomainNode['default_permissions'],
-    metadata: [], allowed_child_types: null, is_default: false, created_at: 0n, updated_at: 0n,
+    metadata: new Uint8Array(), allowed_child_types: null, is_default: false, created_at: 0n, updated_at: 0n,
   };
 }
 

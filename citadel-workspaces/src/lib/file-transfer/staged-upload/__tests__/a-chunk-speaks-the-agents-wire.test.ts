@@ -24,7 +24,7 @@ describe('agentStagePort', () => {
 
     expect(held).toBe(3);
     expect(sent[0].StageUploadChunk).toMatchObject({
-      cid: 7n, upload_id: 'u', file_name: 'a.bin', total_size: 5n, offset: 0n, data: [1, 2, 3],
+      cid: 7n, upload_id: 'u', file_name: 'a.bin', total_size: 5n, offset: 0n, data: new Uint8Array([1, 2, 3]),
     });
   });
 

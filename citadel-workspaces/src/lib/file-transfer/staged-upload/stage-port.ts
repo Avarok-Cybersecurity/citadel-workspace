@@ -6,6 +6,7 @@
 import { requestResponse } from '../../websocket/request-response';
 import { TIMEOUT } from '../../timeout-constants';
 import type { StageChunk, StagePort } from './stage-file';
+import { ownedBytes } from '@/lib/utils/encoding-utils';
 
 export type SendToAgent = (request: Record<string, unknown>) => Promise<void>;
 
@@ -29,8 +30,8 @@ export function agentStagePort(cid: bigint, send: SendToAgent): StagePort {
             file_name: chunk.fileName,
             total_size: BigInt(chunk.totalSize),
             offset: BigInt(chunk.offset),
-            // Vec<u8> on the wire: a number array, as ByteContents.data.
-            data: Array.from(chunk.data),
+            // Vec<u8> on the wire: written as a number array by the WASM client, as ByteContents.data.
+            data: ownedBytes(chunk.data),
           },
         },
         requestId,

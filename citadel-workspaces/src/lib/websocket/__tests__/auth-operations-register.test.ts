@@ -78,8 +78,8 @@ describe('AuthOperations.register — server_password wire format', () => {
     await makeAuth().register('req-3', 'carol', 'pw', 'Carol', '127.0.0.1:12349', null);
     const [request] = sendSpy.mock.calls[0] as [Record<string, unknown>, string];
     const opts: Record<string, unknown> = (request.Register as Record<string, unknown>);
-    const pw: number[] = opts.proposed_password as number[];
-    expect(Array.isArray(pw)).toBe(true);
-    expect(new TextDecoder().decode(new Uint8Array(pw))).toBe('pw');
+    const pw: Uint8Array = opts.proposed_password as Uint8Array;
+    expect(ArrayBuffer.isView(pw)).toBe(true);
+    expect(new TextDecoder().decode(pw)).toBe('pw');
   });
 });

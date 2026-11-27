@@ -33,7 +33,7 @@ function notification(from: bigint, body: PeerGroupMessage): Record<string, unkn
   return {
     cid: SELF,
     peer_cid: from,
-    message: Array.from(encodeGroupMessage(body)),
+    message: encodeGroupMessage(body),
     group_key: { cid: OWNER, mgid: 5n },
     request_id: null,
   };

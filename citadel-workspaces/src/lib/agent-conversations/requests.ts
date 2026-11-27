@@ -18,6 +18,7 @@ import { requestResponse } from '../websocket/request-response';
 import { TIMEOUT } from '../timeout-constants';
 
 import { answerTo as answer, conversationSender, type RequestSender } from './sender';
+import { ownedBytes } from '@/lib/utils/encoding-utils';
 
 export { registerConversationSender, sendToAgent, type RequestSender } from './sender';
 
@@ -111,7 +112,7 @@ export const agentConversations: {
   sendReliable: (cid, peer, message, securityLevel, compressionHint) =>
     ask(
       'SendReliable',
-      { cid, peer_cid: peer, message: Array.from(message), security_level: securityLevel, compression_hint: compressionHint },
+      { cid, peer_cid: peer, message: ownedBytes(message), security_level: securityLevel, compression_hint: compressionHint },
       'SendReliableAccepted',
       matched,
     ).then(done),

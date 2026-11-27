@@ -84,7 +84,7 @@ describe('connect', () => {
     await operations().connect('req-1', 'alice', SERVER, passwordOnly('hunter2'));
 
     const [request] = sendRequest.mock.calls[0] as [{ Connect: { password: number[] } }];
-    expect(request.Connect.password).toEqual(Array.from(new TextEncoder().encode('hunter2')));
+    expect(request.Connect.password).toEqual(new TextEncoder().encode('hunter2'));
   });
 
   it('does not send an empty password for a non-empty one', async () => {
