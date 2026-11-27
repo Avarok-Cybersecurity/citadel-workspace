@@ -14,6 +14,9 @@
 #             answers, which keeps the PID and so the lock. `--download-only` writes each
 #             package into Dir::Cache::Archives; `--no-download` installs from there or from
 #             the .deb paths given, or fails if one is not on disk.
+#             Every call reads the sources Dir::Etc::sourcelist/sourceparts name (the runner's,
+#             $FAKE_APT_ETC, unless overridden) and logs those naming a URI; `update` fails with
+#             exit 100, as on the runner, when one of them names $FAKE_BROKEN_SOURCE.
 #   dpkg-query  answers from $STATE/installed.
 #   fuser, pgrep  report the foreign lock and any live apt-get holding lock.pid.
 #   npx       prints `install-deps --dry-run` for $FAKE_PKGS; `install chromium` follows
@@ -42,7 +45,7 @@ make_fakes() { # <dir> <with-fuser:yes|no> <with-pgrep:yes|no>
   local bin=$1 tool
   mkdir -p "$bin"
   ln -s "$FAKES_REAL_TIMEOUT" "$bin/timeout"
-  for tool in mkdir rm chown id tee sed cat grep tail; do ln -s "$(command -v "$tool")" "$bin/$tool"; done
+  for tool in mkdir mktemp rm chown id tee sed cat grep tail; do ln -s "$(command -v "$tool")" "$bin/$tool"; done
   printf '#!/bin/bash\ntrap : TERM INT HUP\nset -m\n"$@" &\npid=$!\n%s\n' \
     'while :; do wait "$pid"; s=$?; kill -0 "$pid" 2>/dev/null || exit "$s"; done' >"$bin/sudo"
   cat >"$bin/sleep" <<'EOF'
@@ -71,13 +74,23 @@ if foreign || h=$(holder); then
   exit 100
 fi
 echo $$ >"$STATE/lock.pid"
+list=$FAKE_APT_ETC/sources.list; parts=$FAKE_APT_ETC/sources.list.d; srcs=()
+for o in "${opts[@]}"; do case "$o" in
+  Dir::Etc::sourcelist=*) list=${o#*=} ;; Dir::Etc::sourceparts=*) parts=${o#*=} ;; esac; done
+for f in "$list" "$parts"/*.list "$parts"/*.sources; do
+  [ -f "$f" ] && grep -qE '^(deb|URIs:)' "$f" && srcs+=("$f"); done
+echo "  read sources: ${srcs[*]##*/}" >>"$STATE/log"
 dir=$STATE/system-archives  # where apt would download without the redirect
 [ -f "$FAKE_APT_CONF" ] && dir=$(sed -n 's/^Dir::Cache::Archives "\(.*\)\/";$/\1/p' "$FAKE_APT_CONF")
 case " ${args[*]} " in
   " update ")
     read -r n <"$STATE/updates"; n=$((n + 1)); echo "$n" >"$STATE/updates"
     modes=($FAKE_UPDATE)
-    if [ "${modes[$((n - 1))]:-ok}" = hang ]; then hang; fi ;;
+    if [ "${modes[$((n - 1))]:-ok}" = hang ]; then hang; fi
+    if [ -n "$FAKE_BROKEN_SOURCE" ] && [ "${#srcs[@]}" -gt 0 ] && grep -qF "$FAKE_BROKEN_SOURCE" "${srcs[@]}"; then
+      echo "E: The repository '$FAKE_BROKEN_SOURCE noble InRelease' is no longer signed." >&2
+      rm -f "$STATE/lock.pid"; exit 100
+    fi ;;
   *" --download-only "*)
     mkdir -p "$dir"
     for a in "${args[@]}"; do
@@ -131,6 +144,7 @@ run_script() {
   CODE=0
   OUT=$("$FAKES_REAL_TIMEOUT" -k 1 "$RUN_BOUND_SECONDS" env -i PATH="$bin" STATE="$STATE" \
     REAL_SLEEP="$FAKES_REAL_SLEEP" FAKE_HANG_SECONDS="$FAKE_HANG_SECONDS" FAKE_APT_CONF="$FAKE_APT_CONF" \
+    FAKE_APT_ETC="$FAKE_APT_ETC" FAKE_BROKEN_SOURCE="${FAKE_BROKEN_SOURCE:-}" \
     FAKE_UPDATE="${FAKE_UPDATE:-}" FAKE_BROWSER="${FAKE_BROWSER:-}" FAKE_PKGS="$FAKE_PKGS" \
     "$BASH_BIN" "$script" "$@" 2>&1) || CODE=$?
 }
@@ -138,6 +152,17 @@ run_script() {
 FAKE_PKGS="fonts-unifont xfonts-utils"
 FAKE_APT_CONF="$WORK/apt.conf.d/99citadel-chromium-archives"
 mkdir -p "$WORK/apt.conf.d"
+# The ubuntu-24.04 runner's sources, as in run 45915480397: the archive through the mirror list,
+# and third-party sources in both formats that CI never installs from.
+FAKE_APT_ETC="$WORK/etc/apt"
+mkdir -p "$FAKE_APT_ETC/sources.list.d"
+echo "# Ubuntu sources have moved to /etc/apt/sources.list.d/ubuntu.sources" >"$FAKE_APT_ETC/sources.list"
+printf 'Types: deb\nURIs: %s\nSuites: noble noble-updates noble-backports noble-security\nComponents: main universe\n' \
+  mirror+file:/etc/apt/apt-mirrors.txt >"$FAKE_APT_ETC/sources.list.d/ubuntu.sources"
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main" \
+  >"$FAKE_APT_ETC/sources.list.d/microsoft-prod.list"
+printf 'Types: deb\nURIs: https://ppa.launchpadcontent.net/git-core/ppa/ubuntu/\nSuites: noble\nComponents: main\n' \
+  >"$FAKE_APT_ETC/sources.list.d/git-core-ubuntu-ppa-noble.sources"
 FAILS=()
 CHECKS=0
 expect() { # <description> <test command...> : must pass
@@ -156,14 +181,16 @@ never_locked() { ! logged "LOCKED"; }
 count_in() { local n; read -r n <"$STATE/$1"; [ "$n" -eq "$2" ]; }
 installed() { local p; for p in $FAKE_PKGS; do grep -q "^$p " "$STATE/installed" || return 1; done; }
 
-# The scripts as they ship, but for three constants: the apt.conf path moves into the scratch
-# dir, and an attempt's deadline and kill grace shrink from minutes to seconds.
+# The scripts as they ship, but for five constants: the apt.conf and apt sources paths move into
+# the scratch dir, and an attempt's deadline and kill grace shrink from minutes to seconds.
 subject_copy() { # <dir>
   mkdir -p "$1"; cp "$CI_DIR"/*.sh "$1/"
   mutate "$1/apt-archive-cache.sh" \
     "s|^readonly APT_ARCHIVE_CONF=/etc/apt/apt.conf.d/|readonly APT_ARCHIVE_CONF=$WORK/apt.conf.d/|"
   mutate "$1/install-chromium.sh" "s/^readonly ATTEMPT_TIMEOUT_SECONDS=600$/readonly ATTEMPT_TIMEOUT_SECONDS=$TEST_DEADLINE_SECONDS/"
   mutate "$1/apt-bounded.sh" 's/^readonly KILL_GRACE_SECONDS=30$/readonly KILL_GRACE_SECONDS=1/'
+  mutate "$1/apt-bounded.sh" "s|^readonly APT_SOURCE_LIST=/etc/apt/|readonly APT_SOURCE_LIST=$FAKE_APT_ETC/|"
+  mutate "$1/apt-bounded.sh" "s|^readonly APT_SOURCE_PARTS=/etc/apt/|readonly APT_SOURCE_PARTS=$FAKE_APT_ETC/|"
 }
 # Ample for the fakes, which finish in milliseconds; a hung one is killed this long into it.
 readonly TEST_DEADLINE_SECONDS=5

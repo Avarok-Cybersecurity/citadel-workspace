@@ -27,6 +27,15 @@
 # anywhere. The step that runs dpkg is `install --no-download`: local files only, so it cannot
 # stall on a mirror, and it is never killed mid-configure.
 #
+# Every apt-get here reads only the Ubuntu archive. Release PR #303's run 45915480397 (musl
+# leg, 2026-11-27) fetched the whole archive from the mirror, then exited 100 on a source CI
+# never installs from: packages.microsoft.com answered 403, "is no longer signed". The runner's
+# Ubuntu sources are the files whose every URI is its mirror list, UBUNTU_MIRROR_URI; they are
+# copied into a directory of their own and apt-get is pointed at it, so a broken third-party
+# source is never read. The --no-download step reads the same copy, so it resolves what the
+# download fetched. No such file is an error naming the files read, not a fall back to all of
+# them. List-Cleanup=false keeps the other sources' lists, which `update` would otherwise delete.
+#
 # Usage, run directly: apt-bounded.sh <seconds> <package>...
 #   Waits for apt's locks, then fetches and installs <package>... within <seconds>.
 set -euo pipefail
@@ -38,6 +47,9 @@ readonly APT_NETWORK_OPTIONS=(
   -o "Acquire::http::Timeout=$APT_CONNECTION_TIMEOUT_SECONDS"
   -o "Acquire::https::Timeout=$APT_CONNECTION_TIMEOUT_SECONDS"
 )
+readonly APT_SOURCE_LIST=/etc/apt/sources.list
+readonly APT_SOURCE_PARTS=/etc/apt/sources.list.d
+readonly UBUNTU_MIRROR_URI=mirror+file:/etc/apt/apt-mirrors.txt
 
 apt_bounded_here=${BASH_SOURCE[0]%/*}
 [ "$apt_bounded_here" = "${BASH_SOURCE[0]}" ] && apt_bounded_here=.
@@ -74,12 +86,52 @@ apt_until() { # <deadline> <apt-get arguments...> : one network apt-get, as root
   return "$status"
 }
 
+source_uris() { # <source file> -> prints the URIs it names, one-line (.list) or deb822 (.sources)
+  case "$1" in
+    *.sources) sed -n 's/^[Uu][Rr][Ii][Ss]:[[:space:]]*//p' "$1" ;;
+    *) sed -n -E 's/^[[:space:]]*deb(-src)?[[:space:]]+(\[[^]]*\][[:space:]]+)?([^[:space:]]+).*/\3/p' "$1" ;;
+  esac
+}
+
+is_ubuntu_source() { # <source file> : at least one URI, and every one is the mirror list
+  local uri uris
+  uris=$(source_uris "$1")
+  [ -n "$uris" ] || return 1
+  for uri in $uris; do [ "$uri" = "$UBUNTU_MIRROR_URI" ] || return 1; done
+}
+
+ubuntu_sources_dir() { # -> prints a new directory holding only the Ubuntu source files
+  local f dir seen=() kept=()
+  shopt -s nullglob
+  for f in "$APT_SOURCE_LIST" "$APT_SOURCE_PARTS"/*.list "$APT_SOURCE_PARTS"/*.sources; do
+    [ -f "$f" ] || continue
+    seen+=("$f")
+    if is_ubuntu_source "$f"; then kept+=("$f"); fi
+  done
+  shopt -u nullglob
+  if [ "${#kept[@]}" -eq 0 ]; then
+    echo "::error::no apt source names only $UBUNTU_MIRROR_URI, so the Ubuntu archive cannot be" \
+      "told from third-party sources. Read: ${seen[*]:-nothing}" >&2
+    return 1
+  fi
+  dir=$(mktemp -d)
+  mkdir "$dir/parts"
+  : >"$dir/sources.list"
+  for f in "${kept[@]}"; do cat "$f" >"$dir/parts/${f##*/}"; done
+  echo "apt sources: ${kept[*]} (of ${#seen[@]} read)" >&2
+  echo "$dir"
+}
+
 apt_fetch_and_install() { # <deadline> <package>...
-  local deadline=$1
+  local deadline=$1 dir status=0
   shift
-  apt_until "$deadline" update || return
-  apt_until "$deadline" install -y --download-only --no-install-recommends "$@" || return
-  sudo apt-get install -y --no-download --no-install-recommends "$@"
+  dir=$(ubuntu_sources_dir) || return
+  local only=(-o "Dir::Etc::sourcelist=$dir/sources.list" -o "Dir::Etc::sourceparts=$dir/parts" -o APT::Get::List-Cleanup=false)
+  { apt_until "$deadline" update "${only[@]}" &&
+    apt_until "$deadline" install -y --download-only --no-install-recommends "${only[@]}" "$@" &&
+    sudo apt-get install -y --no-download --no-install-recommends "${only[@]}" "$@"; } || status=$?
+  rm -rf "$dir"
+  return "$status"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

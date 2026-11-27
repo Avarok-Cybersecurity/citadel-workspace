@@ -30,9 +30,9 @@ case_dead_mirror() { # <scripts> : update hangs on attempt 1; the kill frees the
 }
 case_bounded_connections() { # <scripts> : every network apt-get carries the per-connection timeout
   run "$1" "$BIN" 0 "$(mktemp -d "$WORK/archives.XXXX")"
-  local t='[Acquire::http::Timeout=30 Acquire::https::Timeout=30]'
+  local t='[Acquire::http::Timeout=30 Acquire::https::Timeout=30'
   [ "$CODE" -eq 0 ] && logged "apt-get update $t" && logged "apt-get install -y --download-only" \
-    && grep -q -- "--download-only .* $t" "$STATE/log"
+    && grep -- "--download-only" "$STATE/log" | grep -qF -- "$t"
 }
 case_hung_browser() { # <scripts> : the browser download is bounded too, and attempt 2 installs it
   FAKE_BROWSER="hang 0" run "$1" "$BIN" 0 "$(mktemp -d "$WORK/archives.XXXX")"
@@ -54,6 +54,53 @@ case_direct_installs() { # <scripts>
   FAKE_PKGS=musl-tools run_script "$1/apt-bounded.sh" "$BIN" 0 "$TEST_DEADLINE_SECONDS" musl-tools
   [ "$CODE" -eq 0 ] && grep -q "^musl-tools " "$STATE/installed" && logged "apt-get update [Acquire"
 }
+# A source CI never installs from, broken as packages.microsoft.com was in run 45915480397.
+readonly BROKEN=https://packages.microsoft.com/ubuntu/24.04/prod
+only_ubuntu_read() { # <apt-get calls> : that many, and each read the Ubuntu source and no other
+  [ "$(grep -c '^  read sources: ' "$STATE/log")" -eq "$1" ] \
+    && ! grep '^  read sources: ' "$STATE/log" | grep -qvx '  read sources: ubuntu.sources'
+}
+case_direct_third_party_broken() { # <scripts>
+  FAKE_BROKEN_SOURCE=$BROKEN FAKE_PKGS=musl-tools run_script "$1/apt-bounded.sh" "$BIN" 0 \
+    "$TEST_DEADLINE_SECONDS" musl-tools
+  [ "$CODE" -eq 0 ] && grep -q "^musl-tools " "$STATE/installed" && only_ubuntu_read 3
+}
+case_third_party_broken() { # <scripts> : the browser install's mirror fetch, likewise
+  FAKE_BROKEN_SOURCE=$BROKEN run "$1" "$BIN" 0 "$(mktemp -d "$WORK/archives.XXXX")"
+  [ "$CODE" -eq 0 ] && installed && only_ubuntu_read 3 && has "Chromium installed (attempt 1/3)"
+}
+# A runner with no source naming only the mirror list: the run fails naming what it read.
+NO_UBUNTU_ETC="$WORK/etc-no-ubuntu"; mkdir -p "$NO_UBUNTU_ETC/sources.list.d"
+echo "deb http://archive.ubuntu.com/ubuntu noble main" >"$NO_UBUNTU_ETC/sources.list"
+cp "$FAKE_APT_ETC/sources.list.d/microsoft-prod.list" "$NO_UBUNTU_ETC/sources.list.d/"
+NO_UBUNTU="$WORK/no-ubuntu"; subject_copy "$NO_UBUNTU"
+mutate "$NO_UBUNTU/apt-bounded.sh" "s|^readonly APT_SOURCE_LIST=.*|readonly APT_SOURCE_LIST=$NO_UBUNTU_ETC/sources.list|"
+mutate "$NO_UBUNTU/apt-bounded.sh" "s|^readonly APT_SOURCE_PARTS=.*|readonly APT_SOURCE_PARTS=$NO_UBUNTU_ETC/sources.list.d|"
+case_no_ubuntu_source() { # <scripts>
+  run_script "$1/apt-bounded.sh" "$BIN" 0 "$TEST_DEADLINE_SECONDS" musl-tools
+  [ "$CODE" -ne 0 ] && has "::error::no apt source names only mirror+file:/etc/apt/apt-mirrors.txt" \
+    && has "Read: $NO_UBUNTU_ETC/sources.list $NO_UBUNTU_ETC/sources.list.d/microsoft-prod.list" \
+    && ! logged "apt-get"
+}
+expect "case_direct_third_party_broken" case_direct_third_party_broken "$SUBJECT"
+expect "case_third_party_broken" case_third_party_broken "$SUBJECT"
+expect "case_no_ubuntu_source" case_no_ubuntu_source "$NO_UBUNTU"
+
+# Every apt-get reading every source again, as in the failed run.
+ALL_SOURCES="$WORK/all-sources"; subject_copy "$ALL_SOURCES"
+mutate "$ALL_SOURCES/apt-bounded.sh" 's/^  local only=(.*)$/  local only=(-o APT::Get::List-Cleanup=false)/'
+control "case_direct_third_party_broken passed reading every source" case_direct_third_party_broken "$ALL_SOURCES"
+control "case_third_party_broken passed reading every source" case_third_party_broken "$ALL_SOURCES"
+# Only the dpkg step reading every source: it would resolve against lists the download did not.
+DPKG_ALL_SOURCES="$WORK/dpkg-all-sources"; subject_copy "$DPKG_ALL_SOURCES"
+mutate "$DPKG_ALL_SOURCES/apt-bounded.sh" \
+  's/^    sudo apt-get install -y --no-download --no-install-recommends "\${only\[@\]}" "\$@"; }/    sudo apt-get install -y --no-download --no-install-recommends "$@"; }/'
+control "case_direct_third_party_broken passed with the dpkg step reading every source" \
+  case_direct_third_party_broken "$DPKG_ALL_SOURCES"
+NO_FAIL_FAST="$WORK/no-fail-fast"; mkdir -p "$NO_FAIL_FAST"; cp "$NO_UBUNTU"/*.sh "$NO_FAIL_FAST/"
+mutate "$NO_FAIL_FAST/apt-bounded.sh" 's/^  if \[ "\${#kept\[@\]}" -eq 0 \]; then$/  if false; then/'
+control "case_no_ubuntu_source passed with no check for an Ubuntu source" case_no_ubuntu_source "$NO_FAIL_FAST"
+
 expect "case_direct_dead_mirror" case_direct_dead_mirror "$SUBJECT"
 expect "case_direct_installs" case_direct_installs "$SUBJECT"
 run_script "$SUBJECT/apt-bounded.sh" "$BIN" 0 musl-tools
@@ -94,5 +141,6 @@ mutate "$NO_BROWSER_DEADLINE/install-chromium.sh" \
   's/^  timeout --kill-after="\$KILL_GRACE_SECONDS" "\$left" npx playwright install chromium$/  npx playwright install chromium/'
 control "case_hung_browser passed with the browser deadline removed" case_hung_browser "$NO_BROWSER_DEADLINE"
 
-report install-chromium-deadline.test.sh \
-  "including controls on the order under sudo, the post-kill check, the connection timeout and the browser deadline"
+summary="including controls on the order under sudo, the post-kill check, the connection timeout,"
+summary+=" the browser deadline, the Ubuntu-only sources, the dpkg step's sources and the no-source check"
+report install-chromium-deadline.test.sh "$summary"
