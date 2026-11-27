@@ -23,18 +23,22 @@ function inner(message: unknown, variant: string): Record<string, unknown> | und
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
 }
 
-/** The session `message` says ended in another window, or null. */
-export function endedElsewhere(message: unknown): SessionEnded | null {
+/** The session `message` says ended, in this window or another, or null. */
+export function sessionEnded(message: unknown): SessionEnded | null {
   const out: Record<string, unknown> | undefined = inner(message, 'DisconnectNotification');
   // A peer's disconnect names the peer; the session's own does not.
   if (out && typeof out.cid === 'bigint' && (out.peer_cid === null || out.peer_cid === undefined)) {
-    return isEndingHere(out.cid) ? null : { cid: out.cid, reason: 'signed-out' };
+    return { cid: out.cid, reason: 'signed-out' };
   }
   const gone: Record<string, unknown> | undefined = inner(message, 'DeregisterSuccess');
-  if (gone && typeof gone.cid === 'bigint') {
-    return isEndingHere(gone.cid) ? null : { cid: gone.cid, reason: 'deleted' };
-  }
+  if (gone && typeof gone.cid === 'bigint') return { cid: gone.cid, reason: 'deleted' };
   return null;
+}
+
+/** The session `message` says ended in another window, or null. */
+export function endedElsewhere(message: unknown): SessionEnded | null {
+  const ended: SessionEnded | null = sessionEnded(message);
+  return ended && !isEndingHere(ended.cid) ? ended : null;
 }
 
 export function endedMessage(username: string, reason: EndedReason): string {
