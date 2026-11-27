@@ -3,6 +3,7 @@
  * the route's, so "Try again" reads the same everywhere and no surface invents its own.
  */
 import type { BrowserPermission, Destination, ManualRoute, WaitCondition } from './route';
+import { RELOAD_LABEL } from './reload-label';
 
 const DESTINATION_LABEL: { readonly [K in Destination]: string } = {
   connect: 'Go to Connect',
@@ -40,7 +41,7 @@ export const WAIT_LABEL: { readonly [K in WaitCondition]: string } = {
 export function routeLabel(route: ManualRoute, name: string | null): string {
   switch (route.kind) {
     case 'retry': return 'Try again';
-    case 'reload': return 'Reload';
+    case 'reload': return RELOAD_LABEL;
     case 'apply-update': return 'Update now';
     case 'claim-session': return 'Use it here';
     case 'sign-in-again': return 'Sign in again';

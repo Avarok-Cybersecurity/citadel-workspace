@@ -20,7 +20,6 @@ import { PeerRefusalNotice } from "./components/PeerRefusalNotice";
 import { SecurityKeyPromptHost } from "./components/sign-in/SecurityKeyPromptHost";
 import { CallLayer } from "./components/call/CallLayer";
 import { OngoingCallBar } from "./components/call/OngoingCallBar";
-import { RecoveryPortsProvider } from '@/components/recovery-route/RecoveryPortsProvider';
 
 // Off the landing critical path (check-bundle-budget): both leave a workspace whose session ended,
 // asking about unsaved editor text first, which only an open workspace can have.
@@ -28,6 +27,8 @@ const SessionEndedWatcher: LazyExoticComponent<() => null> = lazy(() => import("
 const ServerReconnectWatcher: LazyExoticComponent<() => null> = lazy(() => import("./components/ServerReconnectWatcher").then((m) => ({ default: m.ServerReconnectWatcher })));
 const SignInNeededWatcher: LazyExoticComponent<() => JSX.Element | null> = lazy(() => import("./components/SignInNeededWatcher").then((m) => ({ default: m.SignInNeededWatcher })));
 const AgentUpdateWatcher: LazyExoticComponent<() => JSX.Element | null> = lazy(() => import("./components/agent-update/AgentUpdateWatcher").then((m) => ({ default: m.AgentUpdateWatcher })));
+// The ways out's ports and the bug reporter: needed once a notice offers a control, never for first paint.
+const RecoveryPortsProvider: LazyExoticComponent<() => JSX.Element> = lazy(() => import("./components/recovery-route/RecoveryPortsProvider").then((m) => ({ default: m.RecoveryPortsProvider })));
 
 const queryClient: QueryClient = new QueryClient();
 
@@ -93,7 +94,7 @@ const App: () => JSX.Element = (): JSX.Element => {
                   so its useNavigate() threw on every render and took the whole
                   app down to the error boundary. */}
               <OngoingCallBar />
-              <RecoveryPortsProvider />
+              <Suspense fallback={null}><RecoveryPortsProvider /></Suspense>
               <FileOpenersProvider><AppRoutes /></FileOpenersProvider>
             </BrowserRouter>
             </CallLayer>

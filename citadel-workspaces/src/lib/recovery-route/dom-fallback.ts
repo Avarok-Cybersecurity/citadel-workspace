@@ -3,9 +3,10 @@
  * Its controls are the plan's, labelled by the same table (labels.ts); a report is copied rather
  * than sent, since the reporter is a React dialog and React is what failed.
  */
-import { SURFACES, type SurfaceId } from './surfaces';
+// Only the plans drawn before React: the registry and everything it names stay off the landing path.
+import { GENERAL_SURFACES } from './surfaces/general';
 import { alternativesOf, manualPrimary } from './derive';
-import { routeLabel } from './labels';
+import { RELOAD_LABEL } from './reload-label';
 import type { ManualRoute, RecoveryPlan } from './route';
 
 export interface DomFallbackPorts {
@@ -25,8 +26,8 @@ function button(label: string, testId: string, onClick: () => void): HTMLButtonE
   return element;
 }
 
-export function domFallback(root: HTMLElement, surface: SurfaceId, message: string, ports: DomFallbackPorts): void {
-  const plan: RecoveryPlan = SURFACES[surface];
+export function domFallback(root: HTMLElement, surface: keyof typeof GENERAL_SURFACES, message: string, ports: DomFallbackPorts): void {
+  const plan: RecoveryPlan = GENERAL_SURFACES[surface];
   const container: HTMLDivElement = document.createElement('div');
   container.setAttribute('role', 'alert');
   container.dataset.testid = `recovery-${surface}`;
@@ -41,7 +42,7 @@ export function domFallback(root: HTMLElement, surface: SurfaceId, message: stri
   container.append(heading, said);
   const routes: readonly ManualRoute[] = [manualPrimary(plan), ...alternativesOf(plan)];
   for (const route of routes) {
-    if (route.kind === 'reload') container.append(button(routeLabel(route, null), `recovery-control-${route.kind}`, ports.reload));
+    if (route.kind === 'reload') container.append(button(RELOAD_LABEL, `recovery-control-${route.kind}`, ports.reload));
     else if (route.kind === 'report-bug') {
       container.append(button('Copy a problem report', `recovery-control-${route.kind}`, (): void => {
         ports.copy(ports.reportText()).then(

@@ -5,7 +5,7 @@ import { otherMember } from '../other-member';
 import type { OtherMember } from '../binding';
 import type { RecoveryPlan } from '../route';
 import { stepsOf } from '../steps';
-import { planOf } from '../recovery';
+import { planOf } from '../plan-of';
 import { recordingPorts } from './fake-ports';
 
 const ours: RecoveryPlan = { cause: 'ours', presentation: 'toast', primary: { kind: 'retry' }, alternatives: [] };

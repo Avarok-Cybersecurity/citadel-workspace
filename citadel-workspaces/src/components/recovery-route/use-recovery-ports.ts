@@ -14,11 +14,9 @@ import { openAppsModal } from '@/lib/citadel-apps/apps-modal-store';
 import { loadDraft, saveDraft } from '@/lib/chat/draft-store';
 import { browserSessionStorage, reloadKeepingDrafts } from '@/lib/chat/draft-handoff';
 import { requestBugReport } from '@/lib/bug-report/request';
-import WorkspaceService from '@/lib/workspace-service';
-import { askAdmins as sendAsk, type AskAnswer } from '@/lib/workspace-service/admin-requests-operations';
-import { askSentence, REFUSAL_SENTENCE } from '@/lib/admin-requests/words';
-import { PERMISSION_ASK, type PermissionAsk } from '@/lib/recovery-route/permission-how';
 import type { AskOutcome, RecoveryPorts } from '@/lib/recovery-route/ports';
+import type { PermissionAsk } from '@/lib/recovery-route/permission-how';
+import { describeFailure } from '@/lib/failure-message';
 import type { OtherMember } from '@/lib/recovery-route/binding';
 import type { AdminRequestKind, BrowserPermission, Destination } from '@/lib/recovery-route/route';
 
@@ -35,9 +33,9 @@ async function prompt(media: 'notifications' | 'camera' | 'microphone'): Promise
   for (const track of stream.getTracks()) track.stop();
 }
 
+/** Loads with the first ask, off the landing path (recovery-ports-ask.ts). */
 async function ask(kind: AdminRequestKind, about: string): Promise<AskOutcome> {
-  const answer: AskAnswer = await sendAsk(WorkspaceService, askSentence(kind, about));
-  return answer.kind === 'asked' ? { kind: 'sent', admins: answer.admins } : { kind: 'refused', sentence: REFUSAL_SENTENCE[answer.refusal] };
+  return (await import('./recovery-ports-ask')).askAdmins(kind, about);
 }
 
 export function useRecoveryPorts(): RecoveryPorts {
@@ -56,10 +54,12 @@ export function useRecoveryPorts(): RecoveryPorts {
       signIn: (account: string): void => signInNeededFor.set(account),
       installAgent: (): void => go('agent'),
       requestPermission: (permission: BrowserPermission): void => {
-        const how: PermissionAsk = PERMISSION_ASK[permission];
-        if (how.kind === 'agent-setup') go('agent');
-        else if (how.kind === 'explain') toast({ title: 'Your browser decides this one', description: how.how });
-        else prompt(how.media).catch((): void => { toast({ title: 'The browser did not allow it', description: 'Allow it in the site settings (the icon left of the address bar), then try again.', variant: 'destructive' }); });
+        import('@/lib/recovery-route/permission-how').then(({ PERMISSION_ASK }): void => {
+          const how: PermissionAsk = PERMISSION_ASK[permission];
+          if (how.kind === 'agent-setup') go('agent');
+          else if (how.kind === 'explain') toast({ title: 'Your browser decides this one', description: how.how });
+          else prompt(how.media).catch((): void => { toast({ title: 'The browser did not allow it', description: 'Allow it in the site settings (the icon left of the address bar), then try again.', variant: 'destructive' }); });
+        }, (error: unknown): void => { toast({ title: 'That did not open', description: describeFailure(error, 'Reload the page and try again.'), variant: 'destructive' }); });
       },
       askAdmins: ask,
       openChat: (member: OtherMember, draft: string): void => {
