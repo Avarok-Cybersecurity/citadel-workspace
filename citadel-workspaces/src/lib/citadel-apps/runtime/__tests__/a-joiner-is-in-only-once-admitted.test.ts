@@ -102,16 +102,17 @@ describe('a joiner is in the topic only once admitted', () => {
     expect([r.sent, open.now()]).toEqual([['GroupListJoined'], OPENED]);
   });
 
-  it('a decline is Unavailable', async () => {
+  it('a decline is Unavailable, and the port says the owner refused', async () => {
     vi.useFakeTimers();
     const r: Rig = rig('5:9');
     const open: Watched = watch(r.port.TopicOpen({ name: 'pool' }));
     await vi.advanceTimersByTimeAsync(0);
     await r.push({ GroupRequestJoinDeclineResponse: { cid: ME, group_key: THEIRS, request_id: null } });
     expect(open.now()).toEqual(UNAVAILABLE);
+    expect(r.port.outReason('pool')).toBe('refused');
   });
 
-  it('an admission that never comes is Unavailable once the bound passes (paused clock)', async () => {
+  it('an admission that never comes is Unavailable once the bound passes, said as a timeout (paused clock)', async () => {
     vi.useFakeTimers();
     const r: Rig = rig('5:9');
     const open: Watched = watch(r.port.TopicOpen({ name: 'pool' }));
@@ -119,6 +120,7 @@ describe('a joiner is in the topic only once admitted', () => {
     expect(open.now()).toBe('pending');
     await vi.advanceTimersByTimeAsync(1);
     expect(open.now()).toEqual(UNAVAILABLE);
+    expect(r.port.outReason('pool')).toBe('timeout');
   });
 
   it('an owner whose open is in flight answers a join request for its group instead of dropping it', async () => {

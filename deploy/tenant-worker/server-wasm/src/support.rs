@@ -43,9 +43,11 @@ fn set(target: &Object, name: &str, value: JsValue) -> Result<(), JsError> {
 }
 
 /// `body` (the request's JSON text) verified against `public_key` for `audience` at `now_ms`.
-/// Resolves to `{ ok: true, nonce, expires_at_ms, action: "list_grants" }` or
+/// Resolves to `{ ok: true, nonce, expires_at_ms, action: "list_grants" }`,
 /// `{ ok: true, nonce, expires_at_ms, action: "fetch_telemetry", tenant, query }` (`query` is
-/// `TelemetryQuery` JSON), or `{ ok: false, refusal }` saying why it was not accepted. Throws only
+/// `TelemetryQuery` JSON), `{ ..., action: "list_bug_reports", since_ms }`,
+/// `{ ..., action: "fetch_bug_report", id }`, or `{ ok: false, refusal }` saying why it was not
+/// accepted. Throws only
 /// when the arguments themselves are wrong.
 #[wasm_bindgen]
 pub fn verify_support_request(
@@ -84,6 +86,14 @@ pub fn verify_support_request(
             set(&out, "action", "fetch_telemetry".into())?;
             set(&out, "tenant", tenant.into())?;
             set(&out, "query", query.into())?;
+        }
+        SupportAction::ListBugReports { since_ms } => {
+            set(&out, "action", "list_bug_reports".into())?;
+            set(&out, "since_ms", (since_ms as f64).into())?;
+        }
+        SupportAction::FetchBugReport { id } => {
+            set(&out, "action", "fetch_bug_report".into())?;
+            set(&out, "id", id.into())?;
         }
     }
     Ok(out)

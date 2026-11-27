@@ -38,6 +38,8 @@ interface AutoClaimOptions {
   onHeldElsewhere: (username: string) => void;
   /** The agent ended the session it listed: only signing in to that account brings it back. */
   onSessionEnded: (username: string, server: string, reason: string) => void;
+  /** No attempt reached the agent on this computer: the way on is its own page (start or install it). */
+  onAgentUnreachable: () => void;
 }
 
 export function useAutoClaimSession({
@@ -48,6 +50,7 @@ export function useAutoClaimSession({
   autoClaimAttempted,
   onHeldElsewhere,
   onSessionEnded,
+  onAgentUnreachable,
 }: AutoClaimOptions): void {
 // Auto-claim an available session on mount if no connection exists
 useEffect(() => {
@@ -168,6 +171,8 @@ useEffect(() => {
 
       if (result.kind === 'held-by-another-connection') onHeldElsewhere(result.username);
       if (result.kind === 'session-ended') onSessionEnded(result.username, result.server, result.reason);
+      // It used to end here silently: a spinner, then an unexplained move to /connect.
+      if (result.kind === 'agent-unreachable') onAgentUnreachable();
       if (result.kind !== 'claimed') return;
 
       await postAuthSetup(result.cid);
@@ -197,5 +202,5 @@ useEffect(() => {
   };
 
   runAsyncSetup(autoClaimSession);
-}, [isDevMode, toast, setHasConnection, setIsAutoClaimingSession, autoClaimAttempted, onHeldElsewhere, onSessionEnded]);
+}, [isDevMode, toast, setHasConnection, setIsAutoClaimingSession, autoClaimAttempted, onHeldElsewhere, onSessionEnded, onAgentUnreachable]);
 }

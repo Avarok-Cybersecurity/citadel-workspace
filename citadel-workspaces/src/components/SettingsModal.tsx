@@ -18,8 +18,8 @@ import {
 import { Settings, Wifi, Palette, Shield, Lock, KeyRound, Bell, Wrench } from 'lucide-react';
 import { connectionManager } from '@/lib/connection';
 import type { CurrentConnectionInfo } from '@/lib/connection/types';
+import type { SettingsTab } from '@/lib/settings-request';
 
-export type SettingsTab = 'general' | 'connections' | 'appearance' | 'privacy' | 'notifications' | 'permissions' | 'security' | 'advanced';
 
 export interface SettingsModalProps {
   open: boolean;

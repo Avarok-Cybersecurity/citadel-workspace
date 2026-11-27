@@ -133,7 +133,7 @@ describe('the minimum a build is deployed with', () => {
     expect(MIN_BUILD_SEQ).toBeGreaterThanOrEqual(1_794_768_948);
     const manifest: { minSeq?: number; seq: number } = JSON.parse(manifestForBuild(
       { 'index.js': { type: 'chunk', isEntry: true, facadeModuleId: '/src/index.html', fileName: 'assets/index-x.js' } } as never,
-      '/', { seq: now, minSeq: checkedMinSeq(MIN_BUILD_SEQ, now) }, '0.13.0',
+      '/', { seq: now, minSeq: checkedMinSeq(MIN_BUILD_SEQ, now) }, '0.13.0', 4.4,
     )) as { minSeq?: number; seq: number };
     expect(manifest.minSeq).toBe(MIN_BUILD_SEQ);
   });

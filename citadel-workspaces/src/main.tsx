@@ -48,6 +48,13 @@ import { captureBootLinks } from '@/lib/boot-links';
 import { applyAppearanceSettings, loadAppearanceSettings } from './lib/appearance-settings';
 import { initPrivacySettingsSync } from './lib/privacy-settings';
 import { provideAtRestRootStore, type AtRestRootStore } from './lib/at-rest/root-store-port';
+import { consoleRingSnapshot, installConsoleRing } from './lib/bug-report/ring';
+import { redactText } from './lib/bug-report/redact';
+import { domFallback } from './lib/recovery-route/dom-fallback';
+import { describeFailure } from './lib/failure-message';
+
+// First, so a report can hold what went wrong while the app was still starting.
+installConsoleRing(console, Date.now);
 
 // Before render, so the user's font size, sidebar width, avatar and motion
 // choices are in place for the first paint rather than snapping into effect
@@ -210,38 +217,13 @@ try {
 } catch (error) {
   console.error("main.tsx: Error during initialization:", error);
 
-  // Show error on page if React fails — use safe DOM APIs (no innerHTML)
+  // React never started, so the way out is drawn from DOM APIs (dom-fallback.ts, no innerHTML).
   const rootElement: HTMLElement | null = document.getElementById("root");
   if (rootElement) {
-    const errorMessage: string = error instanceof Error ? error.message : String(error);
-    const errorStack: string = error instanceof Error ? error.stack ?? '' : '';
-
-    const container: HTMLDivElement = document.createElement('div');
-    container.style.cssText = 'padding: 20px; color: red; font-family: monospace;';
-
-    const heading: ReturnType<typeof document.createElement> = document.createElement('h2');
-    heading.textContent = 'React Initialization Error';
-
-    const errorParagraph: ReturnType<typeof document.createElement> = document.createElement('p');
-    const errorLabel: HTMLElement = document.createElement('strong');
-    errorLabel.textContent = 'Error: ';
-    errorParagraph.appendChild(errorLabel);
-    errorParagraph.appendChild(document.createTextNode(errorMessage));
-
-    const stackLabel: ReturnType<typeof document.createElement> = document.createElement('p');
-    const stackStrong: HTMLElement = document.createElement('strong');
-    stackStrong.textContent = 'Stack:';
-    stackLabel.appendChild(stackStrong);
-
-    const stackPre: ReturnType<typeof document.createElement> = document.createElement('pre');
-    stackPre.textContent = errorStack;
-
-    container.appendChild(heading);
-    container.appendChild(errorParagraph);
-    container.appendChild(stackLabel);
-    container.appendChild(stackPre);
-
-    rootElement.textContent = '';
-    rootElement.appendChild(container);
+    domFallback(rootElement, 'app.boot-failed', describeFailure(error, 'Something went wrong while the app was starting.'), {
+      reload: (): void => reloadKeepingDrafts(browserSessionStorage(), (): void => window.location.reload()),
+      reportText: (): string => JSON.stringify({ surface: 'app.boot-failed', build: __BUILD_SEQ__, error: redactText(error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error)), console: consoleRingSnapshot() }, null, 2),
+      copy: (text: string): Promise<void> => navigator.clipboard.writeText(text),
+    });
   }
 }

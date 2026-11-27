@@ -12,12 +12,13 @@ import type { Availability } from '@/lib/calendar/generated/Availability';
 import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
 import type { EventType } from '@/lib/calendar/generated/EventType';
 import type { Interval } from '@/lib/calendar/generated/Interval';
-import { PortRefused, refusalCopy, type CalendarPorts } from '@/lib/calendar/ports';
+import { reasonOf, type CalendarPorts } from '@/lib/calendar/ports';
 import type { CalendarEntry } from '@/lib/calendar/store';
 import type { BookTarget } from '@/lib/calendar/team-booking';
 import { freeAt, rankedFor, teamSlots, type HostSource, type SlotAsk } from '@/lib/calendar/team-slots';
 import { teamHosts } from '@/lib/calendar/team-types';
 import { BookingPage } from './BookingPage';
+import { UnreadablePanel } from './UnreadablePanel';
 
 interface TeamBookingProps {
   ports: CalendarPorts;
@@ -36,7 +37,6 @@ type Hours = { kind: 'loading' } | { kind: 'failed'; reason: string } | { kind: 
 
 /** A team's type is a round robin or a collective: neither has seats (group-seats.ts). */
 const NO_SEATS: ReadonlySet<string> = new Set();
-const reasonOf = (e: unknown): string => (e instanceof PortRefused ? refusalCopy(e.refused) : 'something went wrong');
 
 function closedCopy(type: EventType, byHost: ReadonlyMap<string, Availability | null>): string | null {
   const without: string[] = [...byHost].filter(([, a]) => a === null).map(([h]) => h);
@@ -50,12 +50,14 @@ export function TeamBooking(p: TeamBookingProps): JSX.Element {
   const { ports, engine, node, type, entries } = p;
   const hosts: string[] = useMemo(() => teamHosts(type) ?? [], [type]);
   const [hours, setHours] = useState<Hours>({ kind: 'loading' });
+  /** Bumped by Try again, which reads the hosts' pages again. */
+  const [attempt, setAttempt] = useState<number>(0);
   useEffect(() => {
     Promise.all(hosts.map((h: string) => readBookingPage(ports, engine, node.id, h))).then(
       (pages: BookingPageData[]): void => setHours({ kind: 'ready', byHost: new Map(pages.map((pg: BookingPageData) => [pg.host, pg.availability])) }),
       (e: unknown): void => setHours({ kind: 'failed', reason: reasonOf(e) }),
     );
-  }, [ports, engine, node.id, hosts]);
+  }, [ports, engine, node.id, hosts, attempt]);
   const source: HostSource = useMemo(() => (host: string) => ({
     availability: hours.kind === 'ready' ? hours.byHost.get(host) ?? null : null,
     busyFor: (fromMs: bigint, toMs: bigint, zone: string): HostBusy => busyOf(entries.values(), host, zone, { fromMs, toMs }, NO_SEATS, engine),
@@ -63,7 +65,10 @@ export function TeamBooking(p: TeamBookingProps): JSX.Element {
   const slotsFor: (ask: SlotAsk) => Interval[] = useMemo(() => (ask: SlotAsk): Interval[] => teamSlots(engine, ask, source).slots, [engine, source]);
 
   if (hours.kind === 'loading') return <p role="status" className="text-sm text-muted-foreground">Loading the hours of {type.name}&apos;s hosts…</p>;
-  if (hours.kind === 'failed') return <p role="alert" className="text-sm text-destructive-emphasis">The hours of {type.name}&apos;s hosts could not be read: {hours.reason}.</p>;
+  if (hours.kind === 'failed') {
+    const retry = async (): Promise<void> => { setHours({ kind: 'loading' }); setAttempt((n: number): number => n + 1); };
+    return <UnreadablePanel what={<>The hours of {type.name}&apos;s hosts</>} reason={hours.reason} retry={retry} />;
+  }
   const book = (choice: BookingChoice): Promise<BookOutcome> => {
     if (typeof type.kind === 'object' && 'collective' in type.kind) return p.onBook({ kind: 'collective', hosts }, choice);
     const day: CivilDate = engine.civilOf(choice.zone, choice.slot.start_ms).date;

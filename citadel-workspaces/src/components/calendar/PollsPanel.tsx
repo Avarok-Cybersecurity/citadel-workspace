@@ -13,9 +13,10 @@ import type { EventType } from '@/lib/calendar/generated/EventType';
 import type { Poll } from '@/lib/calendar/generated/Poll';
 import type { PollVote } from '@/lib/calendar/generated/PollVote';
 import { castVote, listPolls, pickProposal, readVote, savePoll, tallyOf } from '@/lib/calendar/polls';
-import { PortRefused, refusalCopy, type CalendarPorts } from '@/lib/calendar/ports';
+import { reasonOf, type CalendarPorts } from '@/lib/calendar/ports';
 import { PollCard } from './PollCard';
 import { PollComposer } from './PollComposer';
+import { UnreadablePanel } from './UnreadablePanel';
 
 interface PollsPanelProps {
   ports: CalendarPorts;
@@ -31,8 +32,6 @@ interface PollsPanelProps {
 
 interface Shown { poll: Poll; tally: PollTally; mine: PollVote | null }
 type Loaded = { kind: 'loading' } | { kind: 'failed'; reason: string } | { kind: 'ready'; polls: Shown[]; types: EventType[]; unreadable: number };
-
-const reasonOf = (e: unknown): string => (e instanceof PortRefused ? refusalCopy(e.refused) : 'something went wrong');
 
 export function PollsPanel({ ports, engine, node, me, displayZone, firstDate, newId, nowMs }: PollsPanelProps): JSX.Element {
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
@@ -60,7 +59,7 @@ export function PollsPanel({ ports, engine, node, me, displayZone, firstDate, ne
   };
 
   if (loaded.kind === 'loading') return <p role="status" className="text-sm text-muted-foreground">Loading the polls on {node.name}…</p>;
-  if (loaded.kind === 'failed') return <p role="alert" className="text-sm text-destructive-emphasis">The polls on {node.name} could not be read: {loaded.reason}.</p>;
+  if (loaded.kind === 'failed') return <UnreadablePanel what={<>The polls on {node.name}</>} reason={loaded.reason} retry={reload} />;
   return (
     <section aria-label={`Polls on ${node.name}`} className="flex min-w-0 flex-col gap-3" data-testid="calendar-polls">
       <h2 className="text-base font-semibold text-foreground">Polls on {node.name}</h2>

@@ -21,7 +21,7 @@ import { changeableBy, draftOf } from '@/lib/calendar/event-edit';
 import { saveEvent as save, type SaveOutcome } from '@/lib/calendar/event-save';
 import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
 import type { Chip } from '@/lib/calendar/placement';
-import { PortRefused, refusalCopy, type CalendarPorts } from '@/lib/calendar/ports';
+import { reasonOf, type CalendarPorts } from '@/lib/calendar/ports';
 import { calendarReducer, initialCalendar, type CalendarEntry, type CalendarState, type EventEntry } from '@/lib/calendar/store';
 import { bookCollective, bookRoundRobin, type BookTarget } from '@/lib/calendar/team-booking';
 import { useCalendarSources } from '@/lib/calendar/use-calendar-sources';
@@ -72,7 +72,6 @@ type Panel = { kind: 'none' } | { kind: 'new'; date: CivilDate; reminders: reado
 
 const newId = (): string => crypto.randomUUID();
 const nowOf = (ports: CalendarPorts): bigint => BigInt(Math.floor(ports.clock.now()));
-const reasonOf = (e: unknown): string => (e instanceof PortRefused ? refusalCopy(e.refused) : 'something went wrong');
 
 export function CalendarPane({ ports, engine, nodeId, me, displayZone, deviceZone, held, mayEditNode }: CalendarPaneProps): JSX.Element {
   const { state: ws } = useWorkspace();

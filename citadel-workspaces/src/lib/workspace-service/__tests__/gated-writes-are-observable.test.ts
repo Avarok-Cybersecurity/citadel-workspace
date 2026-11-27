@@ -46,6 +46,7 @@ const PAYLOADS: Record<string, unknown> = {
   Roles: { RoleChanged: { role_id: 'guest', roles: { roles: [], default_role_id: 'member' } } },
   SecureLinks: { Deleted: { id: 'link-1' } },
   Apps: { Uninstalled: { install_id: 'i-1' } },
+  AdminRequests: { Asked: { admins: 1 } },
 };
 
 /**

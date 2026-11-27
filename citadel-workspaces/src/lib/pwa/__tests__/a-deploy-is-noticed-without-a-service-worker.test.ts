@@ -48,7 +48,7 @@ describe('telling a new build from the running one', () => {
   });
 
   it('treats anything that is not a manifest as no news', () => {
-    expect(readDeployedEntry(JSON.parse(versionManifest({ entry: '/assets/index-b.js', seq: 1, agent: '0.13.0' })))).toBe('/assets/index-b.js');
+    expect(readDeployedEntry(JSON.parse(versionManifest({ entry: '/assets/index-b.js', seq: 1, agent: '0.13.0', ux: 4.4 })))).toBe('/assets/index-b.js');
     for (const body of [null, 'index.html', {}, { entry: '' }, { entry: 7 }]) {
       expect(readDeployedEntry(body)).toBeNull();
     }
@@ -67,11 +67,11 @@ describe('the build names its entry', () => {
       a: chunk('assets/index-bbbb2222.js', '/app/index.html', true),
       b: chunk('assets/Landing-cccc.js', '/app/src/pages/Landing.tsx', false),
     };
-    expect(JSON.parse(manifestForBuild(bundle, '/', { seq: 1700000000, minSeq: null }, '0.13.0'))).toEqual({ entry: '/assets/index-bbbb2222.js', seq: 1700000000, agent: '0.13.0' });
+    expect(JSON.parse(manifestForBuild(bundle, '/', { seq: 1700000000, minSeq: null }, '0.13.0', 4.4))).toEqual({ entry: '/assets/index-bbbb2222.js', seq: 1700000000, agent: '0.13.0', ux: 4.4 });
   });
 
   it('refuses a build it cannot identify', () => {
-    expect(() => manifestForBuild({}, '/', { seq: 1, minSeq: null }, '0.13.0')).toThrow(/found 0/);
+    expect(() => manifestForBuild({}, '/', { seq: 1, minSeq: null }, '0.13.0', 4.4)).toThrow(/found 0/);
   });
 });
 

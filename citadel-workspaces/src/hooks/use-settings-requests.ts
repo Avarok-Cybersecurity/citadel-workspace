@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
-import type { SettingsTab } from '@/components/SettingsModal';
+import type { SettingsTab } from '@/lib/settings-request';
 import { takeLinkTarget } from '@/lib/onboarding/link-target';
 import { settingsRequest } from '@/lib/settings-request';
 

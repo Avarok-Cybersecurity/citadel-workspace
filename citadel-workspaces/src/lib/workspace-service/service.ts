@@ -22,6 +22,7 @@ import { createAppPage, createDocument, type NewAppPage, type NewDocument } from
 import * as signIn from './sign-in-settings';
 import { openBillingPortal } from './billing-portal';
 import { updateWorkspaceProfile, type WorkspaceProfileChange } from './workspace-profile';
+import { recordCrumb } from '@/lib/bug-report/breadcrumbs';
 
 export class WorkspaceService implements ProtocolSender {
   private static instance: WorkspaceService;
@@ -58,6 +59,7 @@ export class WorkspaceService implements ProtocolSender {
       debugLog('WorkspaceService', '[WorkspaceService] Sending payload:', payload);
       if (!('Request' in payload)) throw new Error('Invalid workspace protocol payload');
       const request: WorkspaceProtocolRequest = payload.Request;
+      recordCrumb('sent', request, Date.now());
       await websocketService.sendWorkspaceRequest(this._currentCid, request);
       debugLog('WorkspaceService', '[WorkspaceService] Request sent successfully');
     } catch (error) {

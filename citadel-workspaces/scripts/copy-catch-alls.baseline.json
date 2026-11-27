@@ -1,0 +1,18 @@
+{
+  "src/components/calendar/CalendarNotices.tsx:partial-record": 1,
+  "src/components/call/ParticipantTile.tsx:switch-default-copy": 1,
+  "src/components/file-manager/transfer-rows.ts:partial-record": 1,
+  "src/components/notification/NotificationItem.tsx:switch-default-copy": 1,
+  "src/lib/calendar/ics-import.ts:partial-record": 1,
+  "src/lib/call/call-deadline.ts:partial-record": 1,
+  "src/lib/cdoc/collab/denied-access.ts:partial-record": 1,
+  "src/lib/citadel-apps/capability-copy.ts:partial-record": 1,
+  "src/lib/citadel-apps/host/dispatch.ts:partial-record": 1,
+  "src/lib/citadel-apps/sdk/generated/AbiConstants.ts:partial-record": 1,
+  "src/lib/connection/version-refusal-copy.ts:partial-record": 1,
+  "src/lib/first-field-to-fix.ts:partial-record": 2,
+  "src/lib/onboarding/create-flow.ts:partial-record": 4,
+  "src/lib/peer-identity/wire.ts:partial-record": 2,
+  "src/lib/sign-in/management.ts:partial-record": 1,
+  "src/test/apps-kernel-fake.ts:partial-record": 1
+}

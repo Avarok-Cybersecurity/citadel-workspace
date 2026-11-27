@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { act, render } from '@testing-library/react';
-import type { SettingsTab } from '@/components/SettingsModal';
+import type { SettingsTab } from '@/lib/settings-request';
 import { requestSettings, settingsRequest } from '@/lib/settings-request';
 import { useSettingsRequests } from '../use-settings-requests';
 

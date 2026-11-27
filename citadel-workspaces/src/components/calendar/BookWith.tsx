@@ -16,7 +16,7 @@ import type { EventType } from '@/lib/calendar/generated/EventType';
 import type { RoutingForm } from '@/lib/calendar/generated/RoutingForm';
 import type { RoutingTarget } from '@/lib/calendar/generated/RoutingTarget';
 import { bookerSlots, readAcks } from '@/lib/calendar/group-seats';
-import { PortRefused, refusalCopy, type CalendarPorts } from '@/lib/calendar/ports';
+import { reasonOf, type CalendarPorts } from '@/lib/calendar/ports';
 import { readRoutingForms } from '@/lib/calendar/routing-forms';
 import { routedTo, type Routed } from '@/lib/calendar/routing-target';
 import type { CalendarEntry } from '@/lib/calendar/store';
@@ -27,6 +27,7 @@ import { BookingPage } from './BookingPage';
 import { RoutingAnswer } from './RoutingAnswer';
 import { TeamBooking } from './TeamBooking';
 import type { Interval } from '@/lib/calendar/generated/Interval';
+import { UnreadablePanel } from './UnreadablePanel';
 
 interface BookWithProps {
   ports: CalendarPorts;
@@ -47,7 +48,6 @@ interface BookWithProps {
 type Choices = { kind: 'loading' } | { kind: 'failed'; reason: string } | { kind: 'ready'; hosts: string[]; teams: EventType[]; forms: RoutingForm[] };
 type Page = { kind: 'none' } | { kind: 'loading'; host: string } | { kind: 'failed'; host: string; reason: string } | { kind: 'ready'; page: BookingPageData; acks: Booking[] } | { kind: 'team'; type: EventType };
 
-const reasonOf = (e: unknown): string => (e instanceof PortRefused ? refusalCopy(e.refused) : 'something went wrong');
 /** A poll is voted on, not booked as a slot. */
 const bookable = (types: EventType[]): EventType[] => types.filter((t: EventType) => t.kind !== 'poll');
 const CHOICE_LINK: string = 'flex min-h-[44px] items-center self-start rounded-md border border-control-border px-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -55,6 +55,8 @@ const CHOICE_LINK: string = 'flex min-h-[44px] items-center self-start rounded-m
 export function BookWith(p: BookWithProps): JSX.Element {
   const { ports, engine, node, me, entries } = p;
   const [choices, setChoices] = useState<Choices>({ kind: 'loading' });
+  /** Bumped by Try again, which reads who can be booked again. */
+  const [attempt, setAttempt] = useState<number>(0);
   const [page, setPage] = useState<Page>({ kind: 'none' });
   const [away, setAway] = useState<Extract<Routed, { kind: 'away' }> | null>(null);
   const open: (host: string) => void = useCallback((host: string): void => {
@@ -74,7 +76,7 @@ export function BookWith(p: BookWithProps): JSX.Element {
       ([hosts, team, routing]): void => setChoices({ kind: 'ready', hosts: hosts.filter((h: string) => h !== me), teams: team.types, forms: routing.forms }),
       (e: unknown): void => setChoices({ kind: 'failed', reason: reasonOf(e) }),
     );
-  }, [ports, engine, node.id, me]);
+  }, [ports, engine, node.id, me, attempt]);
   const initialHost: string | null = p.initial?.host ?? null;
   useEffect(() => { if (initialHost !== null) open(initialHost); }, [initialHost, open]);
   const shown: Extract<Page, { kind: 'ready' }> | null = page.kind === 'ready' ? page : null;
@@ -93,7 +95,7 @@ export function BookWith(p: BookWithProps): JSX.Element {
   return (
     <section aria-label="Book with someone" className="flex min-w-0 flex-col gap-4" data-testid="calendar-book-with">
       {choices.kind === 'loading' && <p role="status" className="text-sm text-muted-foreground">Finding who can be booked on {node.name}…</p>}
-      {choices.kind === 'failed' && <p role="alert" className="text-sm text-destructive-emphasis">Who can be booked could not be read: {choices.reason}.</p>}
+      {choices.kind === 'failed' && <UnreadablePanel what="Who can be booked" reason={choices.reason} retry={async (): Promise<void> => { setChoices({ kind: 'loading' }); setAttempt((n: number): number => n + 1); }} />}
       {choices.kind === 'ready' && choices.hosts.length === 0 && choices.teams.length === 0 && page.kind === 'none' && (
         <p role="status" className="text-sm text-muted-foreground">Nobody else offers bookings on {node.name} yet.</p>
       )}
@@ -116,7 +118,7 @@ export function BookWith(p: BookWithProps): JSX.Element {
         </div>
       )}
       {page.kind === 'loading' && <p role="status" className="text-sm text-muted-foreground">Loading {page.host}&apos;s booking page…</p>}
-      {page.kind === 'failed' && <p role="alert" className="text-sm text-destructive-emphasis">{page.host}&apos;s booking page could not be read: {page.reason}.</p>}
+      {page.kind === 'failed' && <UnreadablePanel what={<>{page.host}&apos;s booking page</>} reason={page.reason} retry={async (): Promise<void> => open(page.host)} />}
       {page.kind === 'ready' && (
         <BookingPage
           key={page.page.host} hostName={page.page.host} types={bookable(page.page.types)} closed={page.page.availability === null ? `${page.page.host} has not opened bookings on this page yet.` : null}
