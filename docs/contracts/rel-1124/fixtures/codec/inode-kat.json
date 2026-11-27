@@ -1,0 +1,107 @@
+{
+  "$contract": "docs/contracts/rel-1124/vfs-model.md §2",
+  "rule": "SHA3-256(\"citadel-vfs-inode-v1\" ‖ 0x00 ‖ lp(volume) ‖ lp(namespace) ‖ lp(key))[..16], lp = u16be length ‖ UTF-8",
+  "derived": [
+    {
+      "volume": "pair:1001:1002",
+      "namespace": "root",
+      "key": "",
+      "inode_hex": "1eb150d45dac09cacf9f8234c1ec4e90"
+    },
+    {
+      "volume": "personal:18170202856123884154",
+      "namespace": "root",
+      "key": "",
+      "inode_hex": "b0b660de89c9692eb9ac15e822d6c6a1"
+    },
+    {
+      "volume": "node:n1",
+      "namespace": "root",
+      "key": "",
+      "inode_hex": "d7d22241185eee99b4ddfc842f09001c"
+    },
+    {
+      "volume": "device:1001",
+      "namespace": "root",
+      "key": "",
+      "inode_hex": "5b26b9e0efe2356606209fb8ad1bc05e"
+    },
+    {
+      "volume": "group:1001:42",
+      "namespace": "root",
+      "key": "",
+      "inode_hex": "1fe985c9b9aec94ff2b689481d2f2431"
+    },
+    {
+      "volume": "pair:1001:1002",
+      "namespace": "seed",
+      "key": "Documents",
+      "inode_hex": "cfbd855a5a4f4faed36c5a0be41d7beb"
+    },
+    {
+      "volume": "pair:1001:1002",
+      "namespace": "seed",
+      "key": "Transfers",
+      "inode_hex": "90366c3aeef4d6bf1c85bc0ed90ef49d"
+    },
+    {
+      "volume": "node:n1",
+      "namespace": "seed",
+      "key": "Chat files",
+      "inode_hex": "1aee334f3309b04156eb27637e34ba3f"
+    },
+    {
+      "volume": "node:n1",
+      "namespace": "seed",
+      "key": ".apps",
+      "inode_hex": "a01c2e7519d5b6dbfb614eb53d31c0cc"
+    },
+    {
+      "volume": "node:n1",
+      "namespace": "app-home",
+      "key": "net.avarok.calendar",
+      "inode_hex": "af77a265bd6f56cce74852c6795c3f39"
+    },
+    {
+      "volume": "pair:1001:1002",
+      "namespace": "revfs-dir",
+      "key": "/Reports/2026",
+      "inode_hex": "237ae6da5a8946c52d7dc3c8ca629576"
+    },
+    {
+      "volume": "pair:1001:1002",
+      "namespace": "revfs-file",
+      "key": "file-7f3a",
+      "inode_hex": "1f6ac152e06e6121e69023b58c36ded1"
+    },
+    {
+      "volume": "pair:1001:1002",
+      "namespace": "transfer",
+      "key": "transfer-0001",
+      "inode_hex": "8f91c519a0dd8220a25cb9b682838864"
+    },
+    {
+      "volume": "pair:1001:1002",
+      "namespace": "chat-doc",
+      "key": "cdoc-3f2a9c1e-7b4d-4e8a-9f01-2c3d4e5f6a7b",
+      "inode_hex": "095e63e1b925d207a725ec0610922f81"
+    },
+    {
+      "volume": "node:n1",
+      "namespace": "chat-file",
+      "key": "1111111111111111111111111111111111111111111111111111111111111111",
+      "inode_hex": "ba2b6d9c67093a0c747d3a1b98ced5b0"
+    }
+  ],
+  "migrate_op_id": {
+    "rule": "SHA3-256(\"citadel-vfs-migrate-v1\" ‖ 0x00 ‖ lp(volume) ‖ canonical CBOR of the author ‖ lp(namespace) ‖ lp(key) ‖ u8(kind))[..16]",
+    "volume": "node:n1",
+    "author": [
+      0
+    ],
+    "namespace": "seed",
+    "key": "Documents",
+    "kind": 1,
+    "op_id_hex": "37c0c39f48f0ce6e29cab20216064748"
+  }
+}

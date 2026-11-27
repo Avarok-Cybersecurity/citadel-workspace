@@ -11,6 +11,7 @@
 - [THEMING.md](THEMING.md) — semantic colour tokens, and why hardcoded palette classes break workspace theming
 - [app-lifecycle.md](app-lifecycle.md) — a Citadel app's lifecycle: the one state machine, the required `app_close`, the manifest's close grace, and what the host and the server release on every exit path
 - [contracts/batch-1116/README.md](contracts/batch-1116/README.md) — the frozen batch-1116 contracts: schemas, fixtures and known-answer vectors the identity, tray, synchronized.work and host-item lanes build against
+- [contracts/rel-1124/README.md](contracts/rel-1124/README.md) — the frozen REL-1124 contracts: the virtual filesystem's model, ops, permissions, signing, wire, apps ABI group 19 and migration, with fixtures the VFS lanes build against
 
 ## Build & deploy
 - [INSTALL.md](INSTALL.md) — using, hosting, or developing: which compose file, and why it matters

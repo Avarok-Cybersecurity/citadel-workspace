@@ -388,10 +388,6 @@ export default defineConfig(({ mode }) => {
               if (id.includes('@tanstack')) {
                 return 'vendor-query';
               }
-              // Zod validation
-              if (id.includes('/zod/')) {
-                return 'vendor-zod';
-              }
             }
             return sharedServiceDependencyChunkFor(id, meta);
           },

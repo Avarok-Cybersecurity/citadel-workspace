@@ -11,7 +11,7 @@
  * The third test is the one that keeps the gate honest: a confirmed
  * participant must still render, or "drop everything" would pass the first two.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useInboundMedia } from '../use-inbound-media';
 import { eventEmitter } from '@/lib/event-emitter';
@@ -31,8 +31,8 @@ const MEMBER_PEER: bigint = 42n;
 const STRANGER_PEER: bigint = 99n;
 
 interface FakeSession {
-  acceptFrame: ReturnType<typeof vi.fn>;
-  acceptGap: ReturnType<typeof vi.fn>;
+  acceptFrame: Mock;
+  acceptGap: Mock;
 }
 
 function fakeSession(): FakeSession {

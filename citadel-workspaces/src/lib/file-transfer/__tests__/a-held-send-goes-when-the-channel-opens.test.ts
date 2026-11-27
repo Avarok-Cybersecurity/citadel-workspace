@@ -4,7 +4,7 @@
  * Real: the event bus, the port's in-memory store (IndexedDB is absent under
  * jsdom, so the port keeps the File in memory -- its documented fallback).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { eventEmitter } from '../../event-emitter';
 import { sendQueuePort, wireSendQueue } from '../send-queue-io';
 import { FileTransferState } from '../state';
@@ -22,7 +22,7 @@ function held(id: string): FileTransfer {
 describe('held sends, wired', () => {
   it('are released when the peer\'s channel comes up', async () => {
     const state: FileTransferState = new FileTransferState();
-    const executeIntent: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<void> => undefined);
+    const executeIntent: Mock = vi.fn(async (): Promise<void> => undefined);
     const deps: HoldDeps = {
       state, io: { executeIntent } as unknown as HoldDeps['io'], queue: sendQueuePort,
       emitStateChange: (): void => undefined, saveTransfer: async (): Promise<void> => undefined,

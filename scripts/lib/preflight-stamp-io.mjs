@@ -5,7 +5,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
-import { decide, drivesABrowser, localImports, parseStamp, stampKey, stampRecord, stampsOff } from './preflight-stamp.mjs';
+import { createHash } from 'node:crypto';
+import { decide, drivesABrowser, localImports, parseStamp, stampKey, stampRecord, stampScope, stampsOff } from './preflight-stamp.mjs';
 import { readWorld } from './preflight-world-io.mjs';
 
 /** Where this box keeps its stamps: outside every git tree, so no checkout or clean can carry one. */
@@ -90,42 +91,54 @@ export function distStaleness(root) {
 }
 
 
-/** A gate preflight marked as world-keyed, or a derived gate whose script drives a browser. */
-const stampable = (root) => (check) => check.stamp === 'world' || (typeof check.script === 'string' && scriptDrivesABrowser(root, check.script));
+/** Where the last tier run's world is kept for this checkout, so a stamp miss can say what moved. */
+const worldFile = (dir, root) => join(dir, 'worlds', `${createHash('sha256').update(resolve(root)).digest('hex')}.json`);
+
+/** The world the last recorded tier saw in this checkout, or null. Only ever used for a message. */
+export function lastWorld(dir, root) {
+  try {
+    return JSON.parse(readFileSync(worldFile(dir, root), 'utf8'));
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Decides every selected check: run it, or skip it on a pass stamped over the same key.
- * @returns {{ off: string|null, world: string|null, browser: boolean, plan: { check: object, key: string|null, decision: ReturnType<typeof decide> }[] }}
+ * @returns {{ off: string|null, world: object|null, browser: boolean, plan: { check: object, key: string|null, decision: ReturnType<typeof decide> }[] }}
  */
 export function planStamps({ root, checks, tier, env, dir, now }) {
-  const eligible = new Set(checks.filter(stampable(root)));
-  const browser = [...eligible].some((c) => c.stamp !== 'world');
-  const runAll = (off) => ({ off, world: null, browser, plan: checks.map((check) => ({ check, key: null, decision: decide({ stampable: false, record: null, unreadable: null, now }) })) });
+  const browser = checks.some((c) => typeof c.script === 'string' && scriptDrivesABrowser(root, c.script));
+  const unstamped = (check) => ({ check, key: null, decision: decide({ stampable: false, record: null, unreadable: null, now }) });
+  const runAll = (off) => ({ off, world: null, browser, plan: checks.map(unstamped) });
   const off = stampsOff(tier, env);
   if (off !== null) return runAll(off);
-  if (eligible.size === 0) return runAll(null);
   assertOutsideGit(dir);
   const world = readWorld(root, env);
   if ('unkeyable' in world) return runAll(`this tree cannot be keyed (${world.unkeyable})`);
   const plan = checks.map((check) => {
-    if (!eligible.has(check)) return { check, key: null, decision: decide({ stampable: false, record: null, unreadable: null, now }) };
-    const key = stampKey(world.digest, { cmd: check.cmd, args: check.args, cwd: relative(root, check.cwd), env: check.env });
+    const cwd = relative(root, check.cwd);
+    const scope = stampScope(check, cwd);
+    if (scope === null) return unstamped(check);
+    const key = stampKey(scope === 'agent' ? world.agentDigest : world.digest, { cmd: check.cmd, args: check.args, cwd, env: check.env });
     return { check, key, decision: decide({ stampable: true, ...storedStamp(dir, key), now }) };
   });
-  return { off: null, world: world.digest, browser, plan };
+  return { off: null, world, browser, plan };
 }
 
 /**
  * Records the passes, but only if the world is still the one their keys describe: a gate that
  * wrote into the tree while it ran passed over inputs that no longer exist.
- * @param {{ root: string, env: Record<string, string|undefined>, dir: string, world: string, hook: string,
+ * @param {{ root: string, env: Record<string, string|undefined>, dir: string, world: { digest: string, entries: [string, string][] }, hook: string,
  *   passes: { key: string, name: string, ms: number }[], now: number }} input
  * @returns {string} what was recorded, for the log
  */
 export function recordPasses({ root, env, dir, world, hook, passes, now }) {
   if (passes.length === 0) return 'no stampable gate passed; nothing recorded';
   const after = readWorld(root, env);
-  if ('unkeyable' in after || after.digest !== world) return `stamps NOT recorded: the tree changed while the gates ran`;
+  if ('unkeyable' in after || after.digest !== world.digest) return `stamps NOT recorded: the tree changed while the gates ran`;
   for (const { key, name, ms } of passes) writeStamp(dir, stampRecord(key, name, hook, now, ms));
+  mkdirSync(dirname(worldFile(dir, root)), { recursive: true });
+  writeFileSync(worldFile(dir, root), JSON.stringify(world.entries));
   return `${passes.length} pass(es) stamped in ${dir}`;
 }

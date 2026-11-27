@@ -29,6 +29,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 HERE="$(pwd)"
 ROOT="$(cd ../.. && pwd)"
+# Marks every build below as a deploy: the server kernel's build.rs refuses its test-only CI
+# first-party root under it.
+export CITADEL_DEPLOY=1
 
 MODE=deploy
 case "${1:-}" in
@@ -81,6 +84,8 @@ npm ci --no-audit --no-fund
 
 say "build: the server wasm (build.sh)"
 ./build.sh
+# The server that ships must not carry the CI first-party root's key, whatever built it.
+"$ROOT/scripts/ci-first-party-key.sh" absent server-wasm/pkg/*.wasm
 say "build: the UI (build-ui.sh)"
 ./build-ui.sh
 

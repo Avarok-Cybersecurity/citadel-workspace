@@ -6,7 +6,8 @@
  * Real cdoc wasm through the in-process runtime. The one double is the save port
  * (recording-document-files): jsdom has no Blob URLs or downloads to observe.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { docsCanvasLoaded } from '@/test-utils/docs-canvas-loaded';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { inProcessRuntime } from '@/lib/cdoc/__tests__/wasm-rig';
@@ -17,12 +18,13 @@ import { DocumentHost } from '../DocumentHost';
 import { keepBlankReplica } from '../blank-replica';
 import type { DocumentEditing } from '../use-docs-document';
 import { DownloadAsMenu } from '../page-view/DownloadAsMenu';
+import { memoryPicturePlan, memoryPictures } from '@/lib/cdoc/pictures/__tests__/doubles/memory-pictures';
 
 const FILE: DocumentSource = { kind: 'file', format: 'md', bytes: new TextEncoder().encode('# Quarterly plan\n\nShip **open** and *export*.\n') };
 
 /** A file opens as the file manager opens it, read only; a blank document is edited through a kept replica. */
 const READ_ONLY: DocumentEditing = { kind: 'readOnly', reason: 'Read only here.' };
-const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: null };
+const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }) };
 
 function host(files: RecordingDocumentFiles, documentSource: DocumentSource = FILE): void {
   const editing: DocumentEditing = documentSource.kind === 'blank' ? EDIT_BLANK : READ_ONLY;
@@ -50,6 +52,9 @@ async function choose(label: RegExp): Promise<void> {
 }
 
 const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
+
+// The lazily loaded Docs canvas is awaited, not timed (test-utils/docs-canvas-loaded.ts).
+beforeAll(docsCanvasLoaded);
 
 describe('Download as…', () => {
   it('lists the six formats', async () => {

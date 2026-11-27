@@ -1,11 +1,9 @@
-/**
- * Notification Service
- *
- * Centralized service to manage all types of notifications in the application.
- */
+/** Notification Service: every notification in the application, and the one path to the OS. */
 import { eventEmitter } from '../event-emitter';
 import { notifyEach } from '@/lib/notify-listeners';
-import { mayInterruptTheOs } from './in-front';
+import { thisWindowInFront } from './in-front';
+import { osDecision, type OsDecision } from './os-decision';
+import { heldForTheOs, readOsPermission } from './os-permission';
 import { v4 as uuidv4 } from 'uuid';
 import { debugLog, errorLog } from '@/lib/debug-config';
 import type { Notification, NotificationHandler, UnreadCountChange } from './types';
@@ -44,13 +42,13 @@ export class NotificationService {
     this.notifyHandlers(fullNotification);
     this.notifyUnreadChange();
 
-    // Whether the window is in front is read NOW, as the notification arrives; the
-    // delivery (who owns it, the OS surface, the chime) loads with the first one, off
-    // the landing page's critical path (check-bundle-budget.mjs).
-    if (fullNotification.inAppOnly !== true && mayInterruptTheOs()) {
+    // Front and permission are read NOW, as it arrives (os-decision.ts); the delivery loads with the
+    // first one, off the landing page's critical path. One held for permission lights the bell's control.
+    const decision: OsDecision = osDecision(fullNotification.osReach, thisWindowInFront(), readOsPermission());
+    if (decision === 'show') {
       void this.deliverToOs(fullNotification)
         .catch((error: unknown): void => { errorLog('NotificationService', 'could not reach the OS notification surface', error); });
-    }
+    } else if (decision !== 'skip') heldForTheOs.set(true);
 
     return fullNotification;
   }
@@ -61,7 +59,7 @@ export class NotificationService {
   ): Notification {
     return this.addNotification({
       type: NotificationType.MESSAGE, title, content, senderId,
-      sourceId: messageId, recipient_cid, priority: NotificationPriority.NORMAL, data
+      sourceId: messageId, recipient_cid, priority: NotificationPriority.NORMAL, data, osReach: 'when-away',
     });
   }
 
@@ -90,7 +88,7 @@ export class NotificationService {
     recipient_cid?: string
   ): Notification {
     return this.addNotification({
-      type: NotificationType.SYSTEM, title, content, priority, recipient_cid
+      type: NotificationType.SYSTEM, title, content, priority, recipient_cid, osReach: 'when-away',
     });
   }
 

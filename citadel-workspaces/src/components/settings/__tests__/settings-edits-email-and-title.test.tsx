@@ -6,12 +6,12 @@
  * asserted), and `user-service` reads IndexedDB for the display name. The form
  * logic between them is the real component.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { WorkspaceProvider, type WorkspaceState } from '@/contexts/WorkspaceContext';
 import { GeneralSettingsTab } from '../GeneralSettingsTab';
 
-const updateUserProfile: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<void> => undefined);
+const updateUserProfile: Mock = vi.fn(async (): Promise<void> => undefined);
 
 vi.mock('@/lib/workspace-service', () => ({
   default: { updateUserProfile: (...args: unknown[]): unknown => updateUserProfile(...args) },

@@ -343,7 +343,7 @@ dependencies = [
 [[package]]
 name = "async_ip"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -1056,6 +1056,7 @@ dependencies = [
 name = "citadel-internal-service-test-common"
 version = "0.1.0"
 dependencies = [
+ "citadel-app-net-policy",
  "citadel-identity",
  "citadel-internal-service",
  "citadel-internal-service-connector",
@@ -1120,7 +1121,7 @@ dependencies = [
 
 [[package]]
 name = "citadel-workspace-internal-service"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "citadel-internal-service",
  "citadel-internal-service-connector",
@@ -1253,7 +1254,7 @@ dependencies = [
 [[package]]
 name = "citadel_crypt"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "arrayvec",
  "async-trait",
@@ -1275,7 +1276,7 @@ dependencies = [
  "log",
  "num-integer",
  "num_cpus",
- "rand 0.8.5",
+ "rand 0.8.8",
  "rayon",
  "rust-argon2",
  "serde",
@@ -1289,7 +1290,7 @@ dependencies = [
 [[package]]
 name = "citadel_io"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "bincode 1.3.3",
  "bytes",
@@ -1297,7 +1298,7 @@ dependencies = [
  "futures",
  "getrandom 0.3.4",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.8.8",
  "serde",
  "tokio",
  "tokio-stream",
@@ -1309,7 +1310,7 @@ dependencies = [
 [[package]]
 name = "citadel_io_macros"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1319,7 +1320,7 @@ dependencies = [
 [[package]]
 name = "citadel_link"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "citadel_media",
  "citadel_negotiation",
@@ -1330,7 +1331,7 @@ dependencies = [
 [[package]]
 name = "citadel_logging"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "tracing",
  "tracing-subscriber",
@@ -1339,7 +1340,7 @@ dependencies = [
 [[package]]
 name = "citadel_media"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "bytes",
 ]
@@ -1347,7 +1348,7 @@ dependencies = [
 [[package]]
 name = "citadel_negotiation"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "bincode 1.3.3",
  "citadel_io",
@@ -1359,7 +1360,7 @@ dependencies = [
 [[package]]
 name = "citadel_phrase"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "sha3",
  "zeroize",
@@ -1368,7 +1369,7 @@ dependencies = [
 [[package]]
 name = "citadel_pqcrypto"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -1386,7 +1387,7 @@ dependencies = [
  "ml-dsa",
  "parking_lot",
  "polyval",
- "rand 0.8.5",
+ "rand 0.8.8",
  "serde",
  "serde-big-array",
  "sha3",
@@ -1396,7 +1397,7 @@ dependencies = [
 [[package]]
 name = "citadel_proto"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1442,7 +1443,7 @@ dependencies = [
 [[package]]
 name = "citadel_sdk"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1465,7 +1466,7 @@ dependencies = [
 [[package]]
 name = "citadel_treekem"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "arrayvec",
  "bincode 1.3.3",
@@ -1474,7 +1475,7 @@ dependencies = [
  "citadel_io",
  "citadel_pqcrypto",
  "citadel_types",
- "rand 0.8.5",
+ "rand 0.8.8",
  "serde",
  "serde-big-array",
  "sha3",
@@ -1484,7 +1485,7 @@ dependencies = [
 [[package]]
 name = "citadel_types"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "bincode 1.3.3",
  "bytes",
@@ -1505,7 +1506,7 @@ dependencies = [
 [[package]]
 name = "citadel_user"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "async-trait",
  "bincode 1.3.3",
@@ -1527,7 +1528,7 @@ dependencies = [
  "multimap",
  "openssl",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.8.8",
  "serde",
  "serde_json",
  "sha3",
@@ -1540,7 +1541,7 @@ dependencies = [
 [[package]]
 name = "citadel_wire"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "anyhow",
  "async-trait-with-sync",
@@ -4060,7 +4061,7 @@ dependencies = [
 [[package]]
 name = "netbeam"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=9ccfb045#9ccfb0452f57797b78862cdc180a4da5503379e9"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=191a683c#191a683c76fa6fad4bf364d43bd2c9f97fceef01"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -4071,7 +4072,7 @@ dependencies = [
  "futures",
  "getrandom 0.2.17",
  "log",
- "rand 0.8.5",
+ "rand 0.8.8",
  "serde",
  "sync_wrapper",
 ]
@@ -4212,7 +4213,7 @@ dependencies = [
  "num-integer",
  "num-iter",
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.8",
  "smallvec",
  "zeroize",
 ]
@@ -4914,9 +4915,9 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand"
-version = "0.8.5"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -5313,9 +5314,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.36"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c665f33d38cea657d9614f766881e4d510e0eda4239891eea56b4cadcf01801b"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "once_cell",
  "ring",
@@ -5385,9 +5386,9 @@ checksum = "f87165f0995f63a9fbeea62b64d10b4d9d8e78ec6d7d51fb2125fda7bb36788f"
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.13"
+version = "0.103.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
+checksum = "e3a0760a887c14823fca5a1c970b01d47c328c696c0c64829d1df50e8f853fd5"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -6018,7 +6019,7 @@ dependencies = [
  "memchr",
  "once_cell",
  "percent-encoding",
- "rand 0.8.5",
+ "rand 0.8.8",
  "rsa",
  "serde",
  "sha1",
@@ -6056,7 +6057,7 @@ dependencies = [
  "md-5",
  "memchr",
  "once_cell",
- "rand 0.8.5",
+ "rand 0.8.8",
  "serde",
  "serde_json",
  "sha2",
@@ -6176,7 +6177,7 @@ dependencies = [
  "crc",
  "lazy_static",
  "md-5",
- "rand 0.8.5",
+ "rand 0.8.8",
  "ring",
  "subtle",
  "thiserror 1.0.69",
@@ -6831,7 +6832,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "rand 0.8.5",
+ "rand 0.8.8",
  "sha1",
  "thiserror 1.0.69",
  "url",
@@ -7332,7 +7333,7 @@ dependencies = [
  "libc",
  "log",
  "nix 0.26.4",
- "rand 0.8.5",
+ "rand 0.8.8",
  "thiserror 1.0.69",
  "tokio",
  "winapi",

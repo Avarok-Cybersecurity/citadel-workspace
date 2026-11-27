@@ -1,0 +1,5 @@
+{
+  "name": "invalid-nonshortest-lamport",
+  "notes": "lamport 1 written with a one-byte argument (18 01) instead of 01",
+  "cbor_hex": "a1051801"
+}

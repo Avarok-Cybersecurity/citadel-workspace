@@ -21,21 +21,22 @@
  * that has been gutted into always passing, which is exactly the failure this
  * repository keeps finding.
  */
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { scratchGit } from './lib/scratch-git.mjs';
 
 const GUARD = join(dirname(fileURLToPath(import.meta.url)), 'check-submodule-pointers-pushed.mjs');
 const root = mkdtempSync(join(tmpdir(), 'subgate-'));
 
-const git = (cwd, ...args) =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+// Scratch repositories only: no outer -c, global config or credential helper reaches them (lib/scratch-git.mjs).
+const { git, env: scratchEnv } = scratchGit(root);
 
 /** A repo with an identity and no signing, so this runs on any machine. */
 function init(dir) {
-  execFileSync('git', ['init', '--quiet', '-b', 'main', dir]);
+  git(root, 'init', '--quiet', '-b', 'main', dir);
   git(dir, 'config', 'user.email', 'gate@example.invalid');
   git(dir, 'config', 'user.name', 'Gate Fixture');
   git(dir, 'config', 'commit.gpgsign', 'false');
@@ -56,8 +57,8 @@ try {
   // Bare "remotes", then working clones of each.
   const subRemote = join(root, 'sub.git');
   const parentRemote = join(root, 'parent.git');
-  execFileSync('git', ['init', '--quiet', '--bare', '-b', 'main', subRemote]);
-  execFileSync('git', ['init', '--quiet', '--bare', '-b', 'main', parentRemote]);
+  git(root, 'init', '--quiet', '--bare', '-b', 'main', subRemote);
+  git(root, 'init', '--quiet', '--bare', '-b', 'main', parentRemote);
 
   const sub = init(join(root, 'sub'));
   commit(sub, 'one.txt', 'first\n');
@@ -76,7 +77,7 @@ try {
   const wt = join(root, 'wt');
   git(parent, 'worktree', 'add', '--quiet', '-b', 'topic', wt, 'HEAD');
 
-  const run = (cwd) => spawnSync(process.execPath, [GUARD], { cwd, encoding: 'utf8' });
+  const run = (cwd) => spawnSync(process.execPath, [GUARD], { cwd, env: scratchEnv, encoding: 'utf8' });
 
   // (1) Everything is pushed. Judged from the worktree, this must pass.
   const clean = run(wt);

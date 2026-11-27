@@ -25,12 +25,12 @@
  * What is left here is the part jsdom CAN see: that the offset is expressed in
  * terms of the header's own variable rather than a repeated number.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, act, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import { Toaster, MOBILE_TOAST_OFFSET } from '../sonner';
 
-const isMobile: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
+const isMobile: Mock = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: isMobile }));
 vi.mock('next-themes', () => ({ useTheme: (): { theme: string } => ({ theme: 'dark' }) }));
 

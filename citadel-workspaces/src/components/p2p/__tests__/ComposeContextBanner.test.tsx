@@ -1,4 +1,4 @@
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ComposeContextBanner } from '../ComposeContextBanner';
@@ -39,7 +39,7 @@ describe('ComposeContextBanner', () => {
   });
 
   it('can be cancelled, and labels the control for screen readers', async () => {
-    const onCancel: ReturnType<typeof vi.fn> = vi.fn();
+    const onCancel: Mock = vi.fn();
     render(<ComposeContextBanner replyingTo={message('x')} editingMessage={null} onCancel={onCancel} />);
 
     const cancel: HTMLElement = screen.getByRole('button', { name: 'Cancel reply' });

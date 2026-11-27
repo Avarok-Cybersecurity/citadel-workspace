@@ -212,7 +212,7 @@ export function AccountManagementDialog({ isOpen, onClose, onRestoreFocus }: Acc
                     // signal survives navigation timing (Landing's useEffect
                     // listener wouldn't be mounted yet if the dialog is opened
                     // from a non-landing route).
-                    navigate('/?join=1');
+                    void navigate('/?join=1');
                   }}
                 >
                   Create Account

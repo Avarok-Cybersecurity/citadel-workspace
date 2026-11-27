@@ -4,7 +4,7 @@
  * Control (run by hand): make PeerKeyChangedDialog call `onAccept(presented)` when it opens →
  * "nothing is accepted until the person clicks Accept" fails.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PeerIdentityMark } from '../PeerIdentityMark';
 import type { PeerIdentityView } from '@/lib/peer-identity/wire';
@@ -47,7 +47,7 @@ describe('a changed key', () => {
   const changed: PeerIdentityView = { own: MINE, pinned: PINNED, pending: NEW_KEY };
 
   it('raises the screen with both keys, and nothing is accepted until the person clicks Accept', async () => {
-    const onAccept: ReturnType<typeof vi.fn> = vi.fn(async () => {});
+    const onAccept: Mock = vi.fn(async () => {});
     mark(changed, onAccept);
     const dialog: HTMLElement = await screen.findByTestId('peer-key-changed');
     expect(screen.getByTestId('peer-key-previous').textContent).toBe(PINNED);
@@ -60,7 +60,7 @@ describe('a changed key', () => {
   });
 
   it('Cancel accepts nothing, and the mark reopens the screen', async () => {
-    const onAccept: ReturnType<typeof vi.fn> = vi.fn(async () => {});
+    const onAccept: Mock = vi.fn(async () => {});
     mark(changed, onAccept);
     await screen.findByTestId('peer-key-changed');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));

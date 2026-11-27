@@ -12,6 +12,7 @@
  * A path that matches nothing is not dropped: it lands in `parent`, whose gates are the ones
  * that read the repository at large. Unknown means "check more", never "check nothing".
  */
+import { readsPath } from './ui-test-reads.mjs';
 
 export const UI = 'citadel-workspaces';
 export const AGENT = 'citadel-internal-service';
@@ -47,19 +48,36 @@ export function crateOf(path, crateDirs) {
  * the gate. A gate that reads everything through `git ls-files` names no directory; those are
  * matched by the `wholeRepo` flag the caller computes, and always run.
  */
-export function gateIsRelevant({ script, source, cwdArea, wholeRepo }, paths) {
+export function gateIsRelevant({ script, source, cwdArea, wholeRepo, browser }, paths) {
+  if (typeof browser !== 'boolean') throw new Error(`gate ${script}: relevance.browser must be true or false`);
   if (wholeRepo) return true;
   return paths.some((path) => {
     if (path === script) return true;
     const top = path.split('/')[0];
     if (cwdArea !== null && top === cwdArea) return true;
-    return source.includes(top);
+    // A static gate costs ~0.1 s in parallel, so a wide match is free and a narrow one was tried:
+    // it dropped `doc file refs` (it walks from '.') and `sync image has its scripts` (it follows
+    // the paths another script names) off directories they read. A browser gate costs minutes and
+    // reads citadel-workspaces/ through its harness or dist/, so it gets the whole-name match.
+    return browser ? namesTopLevel(source, top) : source.includes(top);
   });
+}
+
+/**
+ * Whether a source names `top` as a whole name, not as part of a longer one: "docs" inside
+ * `citadel-docs`, `docs-harness` or `cdocs` is a different name, and once put four browser gates
+ * on every docs-only commit. Anything else counts, prose included: an extra gate costs seconds,
+ * a missed one is a hole. Used for browser gates only (gateIsRelevant says why). Matching only
+ * quoted path starts was tried first and dropped 1.1 k of 12.6 k gate/directory pairs.
+ */
+export function namesTopLevel(source, top) {
+  const name = top.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![A-Za-z0-9_-])${name}(?![A-Za-z0-9_-])`).test(source);
 }
 
 /** Whether a gate's source reads the whole repository rather than a named part of it. */
 export function readsWholeRepo(source) {
-  return /git['"`,\s]+\[?\s*['"`]?ls-files|git ls-files|readdirSync\(\s*ROOT\s*[,)]/.test(source);
+  return /git['"`,\s]+\[?\s*['"`]?ls-files|git ls-files|readdirSync\(\s*ROOT\s*[,)]|\(\s*['"]\.['"]\s*[,)]/.test(source);
 }
 
 /**
@@ -82,6 +100,7 @@ export function selectChecks(checks, hook, paths, rootCrateDirs) {
       if (gateIsRelevant(c.relevance, paths)) return true;
       return hook === 'pre-push' && [...c.tiers].some((t) => touched.has(t));
     }
-    return hook === 'pre-push' && [...c.tiers].some((t) => touched.has(t));
+    // `reads`: paths outside its tier that a check also reads (the UI's unit tests read the contracts beside it).
+    return hook === 'pre-push' && ([...c.tiers].some((t) => touched.has(t)) || (c.reads !== undefined && paths.some((p) => readsPath(c.reads, p))));
   });
 }

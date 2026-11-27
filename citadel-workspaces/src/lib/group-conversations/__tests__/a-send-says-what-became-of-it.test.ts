@@ -89,6 +89,18 @@ describe('what the bubble says', () => {
     expect(sendOutcomeNote({ delivery: { NotRelayed: 'SessionEnded' } }, nameOf)).toEqual({ complete: false, failed: true, text: 'Not sent: the session ended' });
     expect(say({ delivery: { NotRelayed: 'UnknownGroup' } })).toBe('Not sent: this group no longer exists');
     expect(say({ delivery: { NotRelayed: 'NoGroupKey' } })).toBe("Not sent: this device does not hold the group's keys yet");
+    expect(say({ delivery: { NotRelayed: 'NotPositioned' } })).toBe("Not sent: the server could not place it in the group's order");
+  });
+
+  it('does not call a message sent again under its id a failure', () => {
+    expect(sendOutcomeNote({ delivery: { NotRelayed: 'AlreadyRelayed' } }, nameOf)).toEqual({ complete: false, failed: false, text: 'Sent already; not sent again' });
+  });
+
+  it('hears each reason the server can give', () => {
+    for (const why of ['SessionEnded', 'UnknownGroup', 'NoGroupKey', 'AlreadyRelayed', 'NotPositioned'] as const) {
+      const [event] = toGroupEvents({ GroupMessageResponse: { cid: 7n, group_key: KEY, delivery: { NotRelayed: why }, request_id: 'r' } }, 7n, 'me', nameOf);
+      expect(event?.name).toBe('group:send-outcome');
+    }
   });
 
   it('says why a refused message reached no one', () => {

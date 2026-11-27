@@ -4,7 +4,8 @@
  * engine lays out. The FakeEditor suites pin each control's exact command; this one proves the
  * commands land.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { docsCanvasLoaded } from '@/test-utils/docs-canvas-loaded';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { inProcessRuntime } from '@/lib/cdoc/__tests__/wasm-rig';
@@ -13,9 +14,10 @@ import { DocumentHost, type DocumentHostProps } from '../../DocumentHost';
 import { recordingDocumentFiles } from '@/test-utils/recording-document-files';
 import { keepBlankReplica } from '../../blank-replica';
 import type { DocumentEditing } from '../../use-docs-document';
+import { memoryPicturePlan, memoryPictures } from '@/lib/cdoc/pictures/__tests__/doubles/memory-pictures';
 
 // A document nobody shares: the commands, not the collaboration, are under test here.
-const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: null };
+const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }) };
 
 const BLANK: DocumentHostProps = {
   nodeId: 'plan-1',
@@ -31,6 +33,9 @@ const BLANK: DocumentHostProps = {
   original: null,
   editing: EDIT_BLANK,
 };
+
+// The lazily loaded Docs canvas is awaited, not timed (test-utils/docs-canvas-loaded.ts).
+beforeAll(docsCanvasLoaded);
 
 describe('the ribbon over the real editor', () => {
   it('appears once the editor opens, and a page break from Insert adds a page; Undo takes it back', async () => {

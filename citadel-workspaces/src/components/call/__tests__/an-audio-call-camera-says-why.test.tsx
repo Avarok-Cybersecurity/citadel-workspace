@@ -12,7 +12,7 @@
  * video track? -- and when there is not, it is disabled with the reason on it,
  * the treatment every other in-call control already has.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import type React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -45,7 +45,7 @@ function renderStage(localStream: MediaStream | null, onToggleCamera: () => void
 
 describe('the camera control in a call', () => {
   it('is disabled, with the reason, when the call captured no video', async () => {
-    const onToggleCamera: ReturnType<typeof vi.fn> = vi.fn();
+    const onToggleCamera: Mock = vi.fn();
     renderStage(streamWith([]), onToggleCamera);
 
     const camera: HTMLElement = screen.getByTestId('call-toggle-camera');
@@ -58,7 +58,7 @@ describe('the camera control in a call', () => {
   it('stays usable in a video call, camera off or on', async () => {
     // Positive control: a turned-off camera is a live, disabled-for-privacy
     // track, and turning it back on is exactly what the button is for.
-    const onToggleCamera: ReturnType<typeof vi.fn> = vi.fn();
+    const onToggleCamera: Mock = vi.fn();
     renderStage(streamWith(['live']), onToggleCamera);
 
     const camera: HTMLElement = screen.getByTestId('call-toggle-camera');

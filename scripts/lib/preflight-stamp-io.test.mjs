@@ -4,44 +4,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { appendFileSync, chmodSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertOutsideGit, planStamps, recordPasses, scriptDrivesABrowser } from './preflight-stamp-io.mjs';
 import { readWorld } from './preflight-world-io.mjs';
-
-const ENV = { PATH: '/usr/bin:/bin', SWEEP_PORT: '4199' };
-const sh = (cwd, ...args) => execFileSync('git', ['-c', 'protocol.file.allow=always', '-c', 'commit.gpgsign=false',
-  '-c', 'user.name=t', '-c', 'user.email=t@localhost', ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
-const put = (path, text) => { mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, text); };
-
-/** A parent with the UI as a real submodule, a built dist/, a harness and an installed playwright. */
-function fixture() {
-  const base = mkdtempSync(join(tmpdir(), 'stamp-'));
-  const ui = join(base, 'ui-origin');
-  put(join(ui, 'package.json'), '{"name":"ui","devDependencies":{"playwright":"*"}}');
-  put(join(ui, 'scripts', 'check-a11y.mjs'), "import { go } from './lib/harness.mjs';\ngo();\n");
-  put(join(ui, 'scripts', 'lib', 'harness.mjs'), "import { chromium } from 'playwright';\nexport const go = () => chromium;\n");
-  put(join(ui, 'scripts', 'check-static.mjs'), "import { readFileSync } from 'node:fs';\n");
-  put(join(ui, '.gitignore'), 'dist\nnode_modules\n');
-  sh(ui, 'init', '-q'); sh(ui, 'add', '.'); sh(ui, 'commit', '-qm', 'ui');
-  const root = join(base, 'parent');
-  put(join(root, 'package.json'), '{"name":"parent","devDependencies":{"playwright":"*"}}');
-  put(join(root, '.gitignore'), 'node_modules\n');
-  sh(root, 'init', '-q'); sh(root, 'submodule', 'add', '-q', ui, 'citadel-workspaces'); sh(root, 'add', '.'); sh(root, 'commit', '-qm', 'p');
-  put(join(root, 'citadel-workspaces', 'dist', 'index.html'), '<html>built</html>');
-  put(join(root, 'node_modules', 'playwright', 'package.json'), '{"version":"1.57.0"}');
-  put(join(root, 'node_modules', 'playwright-core', 'package.json'), '{"version":"1.57.0"}');
-  put(join(root, 'node_modules', 'playwright-core', 'browsers.json'), '{"browsers":[{"name":"chromium","revision":"1200"}]}');
-  return { base, root, done: () => rmSync(base, { recursive: true, force: true }) };
-}
-
-const digest = (root, env = ENV) => {
-  const w = readWorld(root, env);
-  assert.ok('digest' in w, JSON.stringify(w));
-  return w.digest;
-};
+import { ENV, digest, fixture, put, sh } from './preflight-stamp-fixture.mjs';
+import { STAMP_FORMAT } from './preflight-stamp.mjs';
 
 test('the same tree gives the same key, whether a file is clean, staged or dirty', () => {
   const f = fixture();
@@ -132,16 +100,16 @@ test('end to end: a pass is stamped, the next hook skips it, any input change ru
   const f = fixture();
   try {
     const dir = join(f.base, 'stamps');
-    const a11y = { name: 'run check:a11y', cmd: 'npm', args: ['run', 'check:a11y'], cwd: join(f.root, 'citadel-workspaces'), env: {}, script: 'citadel-workspaces/scripts/check-a11y.mjs' };
-    const lint = { name: 'static', cmd: 'node', args: ['scripts/check-static.mjs'], cwd: join(f.root, 'citadel-workspaces'), env: {}, script: 'citadel-workspaces/scripts/check-static.mjs' };
+    const a11y = { name: 'run check:a11y', cmd: 'npm', args: ['run', 'check:a11y'], cwd: join(f.root, 'citadel-workspaces'), env: {}, tiers: new Set(['ui']), script: 'citadel-workspaces/scripts/check-a11y.mjs' };
+    const lint = { name: 'static', cmd: 'node', args: ['scripts/check-static.mjs'], cwd: join(f.root, 'citadel-workspaces'), env: {}, tiers: new Set(['ui']), script: 'citadel-workspaces/scripts/check-static.mjs' };
     const plan = (tier, env = ENV) => planStamps({ root: f.root, checks: [a11y, lint], tier, env, dir, now: Date.now() });
     const first = plan('pre-commit');
     assert.deepEqual(first.plan.map((p) => p.decision.run), [true, true]);
-    assert.equal(first.plan[1].key, null, 'a static gate is never keyed');
+    assert.notEqual(first.plan[1].key, null, 'a static gate is keyed too');
     const note = recordPasses({ root: f.root, env: ENV, dir, world: first.world, hook: 'pre-commit (UI repo)', now: Date.now(),
       passes: [{ key: first.plan[0].key, name: a11y.name, ms: 110_500 }] });
     assert.match(note, /1 pass\(es\) stamped/);
-    assert.deepEqual(plan('pre-push').plan.map((p) => p.decision.run), [false, true]);
+    assert.deepEqual(plan('pre-push').plan.map((p) => p.decision.run), [false, true], 'only the pass is stamped');
     assert.equal(plan('full').plan[0].decision.run, true);
     assert.equal(plan('pre-push', { ...ENV, PREFLIGHT_NO_STAMP: '1' }).plan[0].decision.run, true);
     appendFileSync(join(f.root, 'citadel-workspaces', 'dist', 'index.html'), '!');
@@ -152,7 +120,7 @@ test('end to end: a pass is stamped, the next hook skips it, any input change ru
 /** A stamped a11y gate over the fixture, and a planner for the next hook. */
 function stamped(f) {
   const dir = join(f.base, 'stamps');
-  const a11y = { name: 'run check:a11y', cmd: 'npm', args: ['run', 'check:a11y'], cwd: join(f.root, 'citadel-workspaces'), env: {}, script: 'citadel-workspaces/scripts/check-a11y.mjs' };
+  const a11y = { name: 'run check:a11y', cmd: 'npm', args: ['run', 'check:a11y'], cwd: join(f.root, 'citadel-workspaces'), env: {}, tiers: new Set(['ui']), script: 'citadel-workspaces/scripts/check-a11y.mjs' };
   const plan = () => planStamps({ root: f.root, checks: [a11y], tier: 'pre-push', env: ENV, dir, now: Date.now() }).plan[0];
   const first = planStamps({ root: f.root, checks: [a11y], tier: 'pre-commit', env: ENV, dir, now: Date.now() });
   recordPasses({ root: f.root, env: ENV, dir, world: first.world, hook: 'pre-commit', now: Date.now(), passes: [{ key: first.plan[0].key, name: a11y.name, ms: 1 }] });
@@ -186,13 +154,13 @@ test('a corrupt stamp runs the gate (never a pass, never a crash) and a pass rep
   const f = fixture();
   try {
     const { dir, plan } = stamped(f);
-    for (const junk of ['{', 'null', JSON.stringify({ format: 1, key: 'someone-else', gate: 'g', hook: 'h', passedAt: Date.now(), ms: 1 })]) {
-      const [file] = readdirSync(dir);
+    for (const junk of ['{', 'null', JSON.stringify({ format: STAMP_FORMAT, key: 'someone-else', gate: 'g', hook: 'h', passedAt: Date.now(), ms: 1 })]) {
+      const [file] = readdirSync(dir).filter((n) => n.endsWith('.json'));
       writeFileSync(join(dir, file), junk);
       const p = plan();
       assert.equal(p.decision.run, true, `stamp '${junk}' must run the gate`);
       assert.match(p.decision.why, /unreadable/);
-      recordPasses({ root: f.root, env: ENV, dir, world: digest(f.root), hook: 'pre-push', now: Date.now(), passes: [{ key: p.key, name: 'g', ms: 1 }] });
+      recordPasses({ root: f.root, env: ENV, dir, world: readWorld(f.root, ENV), hook: 'pre-push', now: Date.now(), passes: [{ key: p.key, name: 'g', ms: 1 }] });
       assert.equal(plan().decision.run, false, 'the next pass overwrites the corrupt stamp');
     }
   } finally { f.done(); }
@@ -202,7 +170,7 @@ test('an unreadable stamp runs the gate and says why', { skip: process.getuid?.(
   const f = fixture();
   try {
     const { dir, plan } = stamped(f);
-    const [file] = readdirSync(dir);
+    const [file] = readdirSync(dir).filter((n) => n.endsWith('.json'));
     chmodSync(join(dir, file), 0o000);
     const p = plan();
     chmodSync(join(dir, file), 0o644);
@@ -215,7 +183,7 @@ test('passes are not recorded when the tree changed while the gates ran', () => 
   const f = fixture();
   try {
     const dir = join(f.base, 'stamps');
-    const world = digest(f.root);
+    const world = readWorld(f.root, ENV);
     put(join(f.root, 'citadel-workspaces', 'written-by-a-gate.txt'), 'x');
     const note = recordPasses({ root: f.root, env: ENV, dir, world, hook: 'pre-push', now: Date.now(), passes: [{ key: 'k', name: 'g', ms: 1 }] });
     assert.match(note, /NOT recorded/);

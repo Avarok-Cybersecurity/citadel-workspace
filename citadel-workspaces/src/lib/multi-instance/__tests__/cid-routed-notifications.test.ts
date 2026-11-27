@@ -87,6 +87,7 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
     // agent-held account's on the external server, which must never be read as the route.
     AppSessionState: { cid: targetCid, request_id: null, install_id: 'inst-1', session: 7, server_cid: sender_cid, state: 'connected' },
     AppSessionMessage: { cid: targetCid, request_id: null, install_id: 'inst-1', session: 7, body: [1, 2, 3] },
+    AppNoticeNotification: { cid: targetCid, request_id: null, late: false, shown_natively: false, notice: { id: 'reminder:e1:1', app_id: 'net.avarok.calendar', node_id: 'n1', title: 'Standup', body: 'Starts at 9:00' } },
   };
 
   it('has a test fixture for every CID-routed notification type', () => {
@@ -109,6 +110,7 @@ describe('CID_ROUTED_NOTIFICATIONS — every entry has extractable CID', () => {
     // adding one is a deliberate edit in two places.
     expect([...CID_ROUTED_NOTIFICATIONS].sort()).toEqual(
       [
+        'AppNoticeNotification',
         'AppSessionMessage',
         'AppSessionState',
         'ConversationEvent',

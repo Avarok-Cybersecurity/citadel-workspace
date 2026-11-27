@@ -13,6 +13,7 @@ import { engine, member } from './booking-rig';
 import { event, utc } from './event-fixture';
 import { IhttpRelay } from './ihttp-relay';
 import type { ReminderPlan } from '@/lib/calendar/generated/ReminderPlan';
+import { NO_AGENT } from './no-agent';
 
 const USER = { kind: 'user' } as const;
 const START: string = '2024-07-16T13:00:00Z';
@@ -26,7 +27,7 @@ describe('a reminder saved in another window', () => {
     await ports.storage.set(USER, HANDLED_KEY, encodeHandled(utc(START)));
     const clock: ManualClock = new ManualClock(Date.parse(START));
     const fired: Due[] = [];
-    const runner: ReminderRunner = new ReminderRunner({ ...reminderStore(ports, engine), engine, clock, isLeader: (): true => true, fire: async (d: Due): Promise<void> => { fired.push(d); }, missed: async (): Promise<void> => {}, rescanMs: 60_000 });
+    const runner: ReminderRunner = new ReminderRunner({ ...reminderStore(ports, engine), engine, clock, isLeader: (): true => true, fire: async (d: Due): Promise<void> => { fired.push(d); }, missed: async (): Promise<void> => {}, rescanMs: 60_000, ...NO_AGENT });
     await runner.tick();
     // Saved elsewhere: only the plan in the member's own storage, which nothing announces.
     const plan: ReminderPlan | null = planOf(meeting, utc(START), engine);

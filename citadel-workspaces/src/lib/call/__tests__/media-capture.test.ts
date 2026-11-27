@@ -6,7 +6,7 @@
  * navigator.mediaDevices is stubbed because it is a browser capability with no
  * jsdom implementation; everything under test is our own logic around it.
  */
-import { describe, it, expect, vi, afterEach   } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import type { CaptureFailure, CaptureResult } from '@/lib/call/media-capture';
 import {
   classifyCaptureError,
@@ -92,7 +92,7 @@ describe('captureLocalMedia', () => {
   it('falls back to audio when only the camera is blocked', async () => {
     // The important behaviour: a blocked camera must not cost the user the call.
     const audioStream: MediaStream = { getTracks: () => [] } as unknown as MediaStream;
-    const getUserMedia: ReturnType<typeof vi.fn> = vi
+    const getUserMedia: Mock = vi
       .fn()
       .mockRejectedValueOnce(domError('NotAllowedError'))
       .mockResolvedValueOnce(audioStream);
@@ -107,7 +107,7 @@ describe('captureLocalMedia', () => {
   });
 
   it('reports the original failure when audio fails too', async () => {
-    const getUserMedia: ReturnType<typeof vi.fn> = vi.fn().mockRejectedValue(domError('NotAllowedError'));
+    const getUserMedia: Mock = vi.fn().mockRejectedValue(domError('NotAllowedError'));
     stubMediaDevices(getUserMedia);
 
     const result: CaptureResult = await captureLocalMedia({ audio: true, video: true });
@@ -117,7 +117,7 @@ describe('captureLocalMedia', () => {
   });
 
   it('does not retry when only audio was asked for', async () => {
-    const getUserMedia: ReturnType<typeof vi.fn> = vi.fn().mockRejectedValue(domError('NotFoundError'));
+    const getUserMedia: Mock = vi.fn().mockRejectedValue(domError('NotFoundError'));
     stubMediaDevices(getUserMedia);
 
     const result: CaptureResult = await captureLocalMedia({ audio: true, video: false });
@@ -164,7 +164,7 @@ describe('canStartCall', () => {
 
 describe('stopStream', () => {
   it('stops every track, which is what turns the camera light off', () => {
-    const stop: ReturnType<typeof vi.fn> = vi.fn();
+    const stop: Mock = vi.fn();
     const stream: MediaStream = {
       getTracks: () => [{ stop }, { stop }],
     } as unknown as MediaStream;

@@ -1,0 +1,119 @@
+{
+  "name": "09-remove-and-restore-are-one-register",
+  "rule": "R3: Remove (lamport 5) beats a Restore (lamport 4) that arrives later",
+  "volume": "pair:1001:1002",
+  "root": "1eb150d45dac09cacf9f8234c1ec4e90",
+  "members": [
+    1001,
+    1002
+  ],
+  "note": "ops are listed in arrival order; every permutation must reduce to the same tree",
+  "ops": [
+    {
+      "op_id": "0f000000000000000000000000000001",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 1,
+      "at_ms": 1000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "kind": "file",
+        "parent": "root",
+        "name": "a.txt",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000002",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 2,
+      "at_ms": 2000,
+      "kind": "remove",
+      "target": "000000000000000000000000000000a1",
+      "body": {}
+    },
+    {
+      "op_id": "0f000000000000000000000000000004",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 5,
+      "at_ms": 5000,
+      "kind": "remove",
+      "target": "000000000000000000000000000000a1",
+      "body": {}
+    },
+    {
+      "op_id": "0f000000000000000000000000000003",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 4,
+      "at_ms": 4000,
+      "kind": "restore",
+      "target": "000000000000000000000000000000a1",
+      "body": {}
+    }
+  ],
+  "expect": {
+    "entries": [
+      {
+        "id": "000000000000000000000000000000a1",
+        "kind": "file",
+        "parent": "root",
+        "name": "a.txt",
+        "shown": "a.txt",
+        "pointee": [
+          1,
+          {
+            "$hex": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          12,
+          "text/plain"
+        ],
+        "owner": [
+          1,
+          1001
+        ],
+        "mode": 432,
+        "removal": {
+          "by": [
+            1,
+            1001
+          ],
+          "at_ms": 5000
+        },
+        "state": "removed",
+        "created": {
+          "by": [
+            1,
+            1001
+          ],
+          "at_ms": 1000
+        }
+      }
+    ],
+    "purged": [],
+    "skipped": []
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "name": "13-a-host-waits-before-it-purges",
+  "rule": "R10 + authorize §3: the host of an RE-VFS file may remove it, and purge it only once the owner removed it or retention has passed (PEER_RETENTION_MS)",
+  "volume": "pair:1001:1002",
+  "root": "1eb150d45dac09cacf9f8234c1ec4e90",
+  "members": [
+    1001,
+    1002
+  ],
+  "retention_ms": 2592000000,
+  "note": "ops are listed in arrival order; every permutation must reduce to the same tree",
+  "ops": [
+    {
+      "op_id": "0f000000000000000000000000000001",
+      "author": [
+        1,
+        1001
+      ],
+      "lamport": 1,
+      "at_ms": 1000,
+      "kind": "create",
+      "target": "000000000000000000000000000000a1",
+      "body": {
+        "kind": "file",
+        "parent": "root",
+        "name": "vault.bin",
+        "pointee": [
+          2,
+          1001,
+          [
+            1,
+            1002
+          ],
+          "r/00000000000000000000000000000001",
+          10,
+          ""
+        ],
+        "mode": 432,
+        "owner": [
+          1,
+          1001
+        ]
+      }
+    },
+    {
+      "op_id": "0f000000000000000000000000000002",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 2,
+      "at_ms": 1000,
+      "kind": "remove",
+      "target": "000000000000000000000000000000a1",
+      "body": {}
+    },
+    {
+      "op_id": "0f000000000000000000000000000003",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 3,
+      "at_ms": 2000,
+      "kind": "purge",
+      "target": "000000000000000000000000000000a1",
+      "body": {}
+    },
+    {
+      "op_id": "0f000000000000000000000000000004",
+      "author": [
+        1,
+        1002
+      ],
+      "lamport": 4,
+      "at_ms": 2592001000,
+      "kind": "purge",
+      "target": "000000000000000000000000000000a1",
+      "body": {}
+    }
+  ],
+  "expect": {
+    "entries": [],
+    "purged": [
+      "000000000000000000000000000000a1"
+    ],
+    "skipped": [
+      {
+        "op_id": "0f000000000000000000000000000003",
+        "reason": {
+          "Denied": "HostCannotPurge"
+        }
+      }
+    ]
+  }
+}

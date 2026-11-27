@@ -12,6 +12,7 @@
 mod support;
 
 use citadel_internal_service::updater::watchdog::{WatchPlan, WATCHDOG_ENV};
+use citadel_internal_service_test_common::get_free_port;
 use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -65,14 +66,6 @@ fn gone_pid() -> u32 {
     pid
 }
 
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
 fn answers_within(addr: SocketAddr, within: Duration) -> bool {
     let started = Instant::now();
     while started.elapsed() < within {
@@ -108,7 +101,7 @@ fn update_relaunch(name: &str, stun: bool) -> Run {
         &dir.join("backup.pid"),
         &format!(" --stun-servers {}", support::STUN_SERVERS),
     );
-    let health: SocketAddr = format!("127.0.0.1:{}", free_port()).parse().unwrap();
+    let health: SocketAddr = format!("127.0.0.1:{}", get_free_port()).parse().unwrap();
     let launcher = support::launcher(&health.to_string(), &dir.join("data"));
     let args = if stun {
         launcher

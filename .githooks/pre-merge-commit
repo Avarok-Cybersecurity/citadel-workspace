@@ -1,0 +1,7 @@
+#!/bin/sh
+#
+# A clean `git merge` makes its commit without running pre-commit, so a merge of two branches
+# that each passed alone was judged by nothing until the push (REL-1124's fold merges). This is
+# the pre-commit tier on what the merge brings in. A merge that stops on conflicts is committed
+# with `git commit`, which runs pre-commit instead. To skip it for one merge: git merge --no-verify
+exec node scripts/preflight.mjs --tier pre-commit

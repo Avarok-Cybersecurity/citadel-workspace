@@ -10,14 +10,14 @@
  * Written in the same change as the emit: an event with no listener is the
  * shape that left `revfs:persist-failed` unheard for months.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { render, act, cleanup } from '@testing-library/react';
 import { PeerRefusalNotice } from '../PeerRefusalNotice';
 import { eventEmitter } from '@/lib/event-emitter';
 
-const toast: ReturnType<typeof vi.fn> = vi.fn();
+const toast: Mock = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({
-  useToast: (): { toast: ReturnType<typeof vi.fn> } => ({ toast }),
+  useToast: (): { toast: Mock } => ({ toast }),
 }));
 
 afterEach((): void => { cleanup(); toast.mockClear(); });

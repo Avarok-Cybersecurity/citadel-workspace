@@ -5,7 +5,7 @@
  * `useJoinRegistration` is replaced (it needs a backend to do anything); the
  * form and the optional section rendered here are the real components.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { JoinRegistration } from '../join-registration-shape';
@@ -18,8 +18,8 @@ vi.mock('../useJoinRegistration', () => ({
   useJoinRegistration: (): JoinRegistration => registration,
 }));
 
-function renderJoin(formData: Partial<JoinRegistration['formData']>): { onOptional: ReturnType<typeof vi.fn> } {
-  const onOptional: ReturnType<typeof vi.fn> = vi.fn();
+function renderJoin(formData: Partial<JoinRegistration['formData']>): { onOptional: Mock } {
+  const onOptional: Mock = vi.fn();
   registration = {
     formData: { ...BLANK_JOIN_FORM, ...formData },
     isRegistering: false,

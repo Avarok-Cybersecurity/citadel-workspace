@@ -10,7 +10,7 @@
  * replica lacks asks for it with a hello. A payload in another CRDT format is refused and
  * reported, never applied. The title is last-writer-wins, carried by `rename` and every hello.
  */
-import type { CdocChatSync, CdocChatSyncPayload, CdocChatTitleStamp } from '@/types/cdoc-chat-sync';
+import { isPictureSync, type CdocChatSync, type CdocChatSyncPayload, type CdocChatTitleStamp } from '@/types/cdoc-chat-sync';
 import { validateDocTitle, type TitleCheck } from '@/lib/live-document-store/doc-title';
 import type { EditorController, RemoteApplied } from '../editor/controller';
 import type { PeerPresence } from '../editor/peer-overlay';
@@ -133,7 +133,8 @@ export class ChatDocumentSync {
   }
 
   private async received(payload: CdocChatSyncPayload): Promise<void> {
-    if (this.stopped) return;
+    // A picture's bytes travel beside the document, not through it (lib/cdoc/pictures/pair-pictures.ts).
+    if (this.stopped || isPictureSync(payload.sync)) return;
     if (payload.doc_version !== this.config.docVersion) {
       this.host.report({ kind: 'docVersionMismatch', expected: this.config.docVersion, received: payload.doc_version, where: 'the peer' });
       return;

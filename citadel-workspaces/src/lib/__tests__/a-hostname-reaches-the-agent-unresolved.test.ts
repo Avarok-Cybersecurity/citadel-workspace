@@ -18,7 +18,7 @@
  * `lookup_host`. So the page's job is to normalise the port and pass the name
  * through.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { resolveServerAddress, DEFAULT_PORT } from '../address-resolver';
 
 afterEach((): void => { vi.unstubAllGlobals(); });
@@ -38,7 +38,7 @@ describe('resolving a server address for Register', () => {
     // The point of the change. A `fetch` here is the CSP violation, and it is
     // also the disclosure — so this asserts the ABSENCE of the call, with the
     // stub proving the assertion could fail.
-    const fetchSpy: ReturnType<typeof vi.fn> = vi.fn((): never => { throw new Error('resolveServerAddress must not fetch'); });
+    const fetchSpy: Mock = vi.fn((): never => { throw new Error('resolveServerAddress must not fetch'); });
     vi.stubGlobal('fetch', fetchSpy);
 
     await expect(resolveServerAddress('citadel.avarok.net:12400')).resolves.toBeTruthy();

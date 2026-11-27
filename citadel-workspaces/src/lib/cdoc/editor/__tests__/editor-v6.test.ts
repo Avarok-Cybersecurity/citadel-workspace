@@ -13,11 +13,12 @@ import { encodeCommand } from '../wire/encode-command';
 import { RecordReader } from '../wire/decode-records';
 import { readRemote, readStory } from '../wire/decode-story';
 import { readList } from '../wire/decode-formatting';
+import { NO_PICTURES } from '../../__tests__/no-pictures';
 
 async function open(from: EditorOrigin = { kind: 'blank' }): Promise<EditorSession> {
   let next: number = 1;
   const runtime: TestRuntime = inProcessRuntime('worker');
-  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff))(from);
+  return createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => b.map((): number => next++ & 0xff))(from);
 }
 
 async function selected(editor: EditorSession): Promise<string> {

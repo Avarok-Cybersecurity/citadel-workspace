@@ -22,44 +22,13 @@
  * service auto-accepts REVFS pushes the way the server kernel always has.)
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { eventEmitter } from '@/lib/event-emitter';
-import { backendSendFile } from '../revfs-io-network';
 import type { RevfsIntentResult } from '@/types/revfs-intents';
+import { dispatchAck, emit, settled, startUpload as startPush, tick } from './push-harness';
 
 const CID: bigint = 7n;
-const CONTENT: Uint8Array<ArrayBuffer> = new Uint8Array([1, 2, 3]);
 
-/** Capture the request_id the upload used, so events can be addressed to it. */
 function startUpload(peerCid: bigint | null = 42n): { pending: Promise<RevfsIntentResult>; requestId: () => string; } {
-  let requestId: string = '';
-  const deps: { sendInternalServiceRequest: (request: unknown) => Promise<void>; } = {
-    sendInternalServiceRequest: async (request: unknown): Promise<void> => {
-      const payload: Record<string, string> = (request as Record<string, Record<string, string>>).SendFile;
-      requestId = payload.request_id;
-    },
-  };
-  const pending: Promise<RevfsIntentResult> = backendSendFile(deps, CID, peerCid, 'notes.txt', CONTENT, '/docs/notes.txt');
-  return { pending, requestId: (): string => requestId };
-}
-
-const emit = (message: Record<string, unknown>): void =>
-  eventEmitter.emit('websocket-message', message);
-
-const dispatchAck = (requestId: string): void =>
-  emit({ SendFileRequestSuccess: { request_id: requestId } });
-
-const tick = (requestId: string, status: unknown): void =>
-  emit({ FileTransferTickNotification: { request_id: requestId, status } });
-
-/** Has `pending` settled yet? Checked without awaiting the 30s timeout. */
-async function settled(pending: Promise<unknown>): Promise<boolean> {
-  let done: boolean = false;
-  void pending.then(() => {
-    done = true;
-  });
-  await Promise.resolve();
-  await Promise.resolve();
-  return done;
+  return startPush(CID, peerCid, 'push-1');
 }
 
 afterEach(() => {

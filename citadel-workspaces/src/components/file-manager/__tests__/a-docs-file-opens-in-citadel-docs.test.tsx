@@ -8,7 +8,8 @@
  * and its ReadPulledFileChunk answers come from a fixture file in memory, as the agent's come
  * from its disk. The product's reader (agentFileReader, readPulledFile) runs unchanged over it.
  */
-import { describe, expect, it, vi, type Mock } from 'vitest';
+import { beforeAll, describe, expect, it, vi, type Mock } from 'vitest';
+import { docsCanvasLoaded } from '@/test-utils/docs-canvas-loaded';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { inProcessRuntime } from '@/lib/cdoc/__tests__/wasm-rig';
 import { fixture } from '@/lib/cdoc/__tests__/files-rig';
@@ -52,6 +53,9 @@ function screenFor(node: RevfsNode, reader: WorkspaceFileReader): { onBack: () =
   );
   return { onBack, onDownload };
 }
+
+// The lazily loaded Docs canvas is awaited, not timed (test-utils/docs-canvas-loaded.ts).
+beforeAll(docsCanvasLoaded);
 
 describe('a .docx from the file manager', () => {
   it('opens in Citadel Docs with its import report and its page, read only', async () => {

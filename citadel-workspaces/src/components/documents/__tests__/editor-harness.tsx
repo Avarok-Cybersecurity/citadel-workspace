@@ -11,6 +11,7 @@ import { EditorPageView } from '../EditorPageView';
 import type { EditorOrigin } from '@/lib/cdoc/editor/controller';
 import { ManualFrames, ManualRepeat } from './manual-clock';
 import { PAINT_AHEAD_MOUNTS_PER_TICK, PAINT_AHEAD_PAGES } from '@/lib/cdoc/paint/paint-config';
+import { NO_PICTURES } from '@/lib/cdoc/__tests__/no-pictures';
 
 const VIEWPORT_PX: number = 800;
 
@@ -58,7 +59,7 @@ export async function mount(mode: 'worker' | 'main-thread', options: Partial<Mou
   const frames: ManualFrames = new ManualFrames();
   const idle: ManualFrames = new ManualFrames();
   const runtime: TestRuntime = inProcessRuntime(mode);
-  const editor: EditorSession = await EditorSession.open({ client: runtime.client, renderer: runtime.renderer }, 11n, from);
+  const editor: EditorSession = await EditorSession.open({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, 11n, from);
   const errors: unknown[] = [];
   const clipboard: string[] = [];
   render(

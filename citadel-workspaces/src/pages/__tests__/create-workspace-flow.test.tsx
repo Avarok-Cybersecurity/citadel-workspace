@@ -8,7 +8,7 @@
  *   - Cloudflare's Turnstile widget, as `window.turnstile` (the real one needs
  *     the network and a person). The page's own loader and widget component run.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen, waitFor, fireEvent, type RenderResult } from '@testing-library/react';
 import { loadDraft, saveDraft } from '@/lib/onboarding/create-flow';
 import { recordIssuedClaim, revealClaimCode } from '@/lib/onboarding/claim-handoff';
@@ -93,7 +93,7 @@ describe('a paid workspace', () => {
   it('prices seats and storage, then leaves for Checkout with the draft kept', async () => {
     const fake: ContractFake = contractFake();
     fake.createReplies.push({ status: 200, body: { checkout_url: 'https://checkout.stripe.com/c/pay/cs_test_9', reservation_token: 'rt_first' } });
-    const redirect: ReturnType<typeof vi.fn> = vi.fn();
+    const redirect: Mock = vi.fn();
     renderFlow(fake, '/create', redirect);
     await throughToReview(() => {
       fireEvent.click(screen.getByTestId('plan-team'));
@@ -117,7 +117,7 @@ describe('a paid workspace', () => {
     saveDraft({ displayName: 'Acme', slug: 'acme', plan: { tier: 'team', interval: 'month', seats: 2, storageBlocks: 0, linkPacks: 0, chatDocumentPacks: 0 }, reservationToken: 'rt_first' });
     const fake: ContractFake = contractFake();
     fake.createReplies.push({ status: 200, body: { checkout_url: 'https://checkout.stripe.com/c/pay/cs_test_10', reservation_token: 'rt_second' } });
-    const redirect: ReturnType<typeof vi.fn> = vi.fn();
+    const redirect: Mock = vi.fn();
     renderFlow(fake, '/create?tenant=acme&canceled=1', redirect);
     fireEvent.click(screen.getByTestId('cancelled-back-to-plans'));
     fireEvent.click(screen.getByTestId('create-plan-continue'));
@@ -170,7 +170,7 @@ describe('a paid workspace', () => {
 describe('the claim screen', () => {
   it('shows the real 64-hex code in readable groups, and copies it raw', async () => {
     const code: string = `${'0123abcd'.repeat(8)}`;
-    const writeText: ReturnType<typeof vi.fn> = vi.fn(async () => {});
+    const writeText: Mock = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     render(<MemoryRouter><ClaimStep workspaceHost="acme.work.avarok.net" claimCode={code} onOpenWorkspace={() => {}} /></MemoryRouter>);
     expect(screen.getByTestId('claim-code').textContent).toBe(Array(8).fill('0123abcd').join(' '));

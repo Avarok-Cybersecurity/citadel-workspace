@@ -9,7 +9,6 @@ use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use citadel_app_sdk_types::calls::{Transport, Via};
-use serde::{Deserialize, Serialize};
 
 /// The chunks a job is split into.
 pub const CHUNKS: u32 = 8;
@@ -42,16 +41,8 @@ pub struct Peer {
     pub last: Option<String>,
 }
 
-/// One finished job, as `storage.user` keeps it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Record {
-    pub job_id: u64,
-    pub job: Job,
-    pub result: JobResult,
-    /// The spot-checked chunk agreed with this member's own computation.
-    pub verified: bool,
-    pub ms: u32,
-}
+pub use crate::record::{Check, Outcome, Record};
+pub use topic::Membership;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -64,6 +55,8 @@ pub enum Action {
     Save(Record),
     /// A line for the app's log (`log.write`, info).
     Log(String),
+    /// Open the pool's topic again: the host said this member is in now (pool_topic.rs).
+    JoinTopic,
 }
 
 struct Running {
@@ -84,6 +77,8 @@ pub struct Pool {
     pub history: VecDeque<Record>,
     /// The most recent answer latencies, oldest first.
     pub latencies: VecDeque<u32>,
+    /// Whether this member is in the pool's topic: it says it is there only once it is.
+    pub membership: Membership,
     running: Option<Running>,
     seq: u32,
     since_heartbeat: u32,
@@ -99,9 +94,10 @@ impl Pool {
             peers: BTreeMap::new(),
             history: VecDeque::new(),
             latencies: VecDeque::new(),
+            membership: Membership::Joining,
             running: None,
             seq: 0,
-            // The first tick announces this member.
+            // The first tick in the topic announces this member (pool_topic.rs `joined`).
             since_heartbeat: HEARTBEAT_MS,
         }
     }
@@ -132,7 +128,7 @@ impl Pool {
             .retain(|_, p| now.saturating_sub(p.last_seen_ms) <= PEER_STALE_MS);
         let mut out = Vec::new();
         self.since_heartbeat = self.since_heartbeat.saturating_add(dt_ms);
-        if self.since_heartbeat >= HEARTBEAT_MS {
+        if self.since_heartbeat >= HEARTBEAT_MS && self.membership == Membership::In {
             let load = u32::from(self.running.is_some());
             out.push(self.publish(PoolMsg::Heartbeat {
                 cores: self.cores,
@@ -220,13 +216,14 @@ impl Pool {
             return Vec::new();
         }
         let now = self.now_ms;
+        let heard = alloc::format!("member {from} is here");
+        let mut out: Vec<Action> =
+            Vec::from_iter((!self.peers.contains_key(from)).then_some(Action::Log(heard)));
         let peer = self.peer(from);
         peer.last_seen_ms = now;
         match msg {
             PoolMsg::Heartbeat { cores, load } => (peer.cores, peer.load) = (cores, load),
-            PoolMsg::Announce { job_id, .. } => {
-                return alloc::vec![self.publish(PoolMsg::Claim { job_id })];
-            }
+            PoolMsg::Announce { job_id, .. } => out.push(self.publish(PoolMsg::Claim { job_id })),
             PoolMsg::Claim { job_id } => {
                 if let Some(r) = self.running.as_mut() {
                     if r.assignment.job_id == job_id && r.claim_left_ms.is_some() {
@@ -236,12 +233,15 @@ impl Pool {
             }
             PoolMsg::Done { job_id, .. } => peer.last = Some(alloc::format!("finished {job_id:x}")),
         }
-        Vec::new()
+        out
     }
 }
 
 #[path = "pool_answers.rs"]
 mod answers;
+
+#[path = "pool_topic.rs"]
+mod topic;
 
 #[cfg(test)]
 #[path = "pool_tests.rs"]

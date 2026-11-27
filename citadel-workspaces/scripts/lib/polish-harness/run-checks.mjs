@@ -8,7 +8,7 @@ import { assertParity, newParityContext } from '../ci-parity.mjs';
 
 const AVAILABLE = { chromium, webkit };
 // CI installs Chromium only; a machine with WebKit sets POLISH_ENGINES=chromium,webkit (the default).
-const ENGINES = Object.fromEntries(
+export const ENGINES = Object.fromEntries(
   (process.env.POLISH_ENGINES ?? 'chromium,webkit').split(',').map((name) => {
     if (!AVAILABLE[name]) throw new Error(`POLISH_ENGINES names an engine this gate cannot drive: ${name}`);
     return [name, AVAILABLE[name]];
@@ -70,6 +70,10 @@ export async function runMatrix(CHECKS, { viewports, motions }) {
     }
   } finally {
     await harness.close();
+  }
+  // A check may judge the whole run once it is over (a rate across every leg), as `afterAll` returning problems.
+  for (const [name, check] of Object.entries(CHECKS)) {
+    for (const problem of check.afterAll?.() ?? []) { failures += 1; console.error(`  FAIL  ${name} [whole run]\n        ${problem}`); }
   }
   return failures === 0 ? 0 : 1;
 }

@@ -12,12 +12,14 @@ import * as glue from '../../../vendor/calendar/calendar_glue.js';
 import wasmUrl from '../../../public/calendar/calendar_glue_bg.wasm?url';
 import { CalendarPane } from '@/components/calendar/CalendarPane';
 import { WorkspaceContext } from '@/contexts/WorkspaceContext';
+import { domainNode, workspaceState } from './workspace-state';
 import { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
 import { intlOffsetAt } from '@/lib/calendar/engine/intl-offsets';
 import { saveEvent } from '@/lib/calendar/event-save';
 import { calendarPorts } from '@/lib/calendar/ports';
 import { event } from '@/lib/calendar/__tests__/event-fixture';
 import { MemoryStore } from '@/lib/calendar/__tests__/memory-store';
+import { oneWindow } from '@/lib/citadel-apps/runtime/__tests__/one-window';
 import { VIEWER } from '@/lib/calendar/__tests__/placement-fixture';
 import { glueInstance } from '@/lib/citadel-apps/host/glue-instance';
 import { STANDARD_HOST_POLICY } from '@/lib/citadel-apps/host/limits';
@@ -25,9 +27,9 @@ import { treeNodesPort } from '@/lib/citadel-apps/runtime/nodes-port';
 
 const PAGE_CLOCK = pinnedClock();
 const TREE = {
-  company: { id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: [] },
-  n1: { id: 'n1', name: 'Platform', parent_id: 'company', children: ['n2'], metadata: [] },
-  n2: { id: 'n2', name: 'Team', parent_id: 'n1', children: [], metadata: [] },
+  company: domainNode({ id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: [] }),
+  n1: domainNode({ id: 'n1', name: 'Platform', parent_id: 'company', children: ['n2'], metadata: [] }),
+  n2: domainNode({ id: 'n2', name: 'Team', parent_id: 'n1', children: [], metadata: [] }),
 };
 const ZONE = 'America/New_York';
 
@@ -39,10 +41,12 @@ function hours() {
 
 async function seeded(engine) {
   const store = new MemoryStore(VIEWER);
+  // The member's own-store writes are heard as the page hears them (one-window.ts).
+  const page = oneWindow(store.port());
   const ports = calendarPorts(glueInstance({
-    appId: 'net.avarok.calendar', ports: { storage: store.port(), nodes: treeNodesPort('Workspace', () => TREE) },
+    appId: 'net.avarok.calendar', ports: { storage: page.storage, nodes: treeNodesPort('Workspace', () => TREE) },
     held: new Set(['storage.user', 'storage.node', 'storage.node.authored', 'nodes.read']),
-    policy: { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_000 }, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, wallNow: PAGE_CLOCK.now, pageUrl: window.location.href, storageChanges: () => () => {},
+    policy: { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_000 }, limits: { topics: null, p2p: null }, clock: PAGE_CLOCK, wallNow: PAGE_CLOCK.now, pageUrl: window.location.href, storageChanges: page.ownChanges,
   }));
   const [first, second] = hours();
   const review = event({ id: 'review', origin_node: 'n1', author: VIEWER, hosts: [VIEWER], title: 'Quarterly review', when: first, zone: ZONE, propagate: { down: true, up_to: null } });
@@ -62,7 +66,7 @@ async function seeded(engine) {
 }
 
 function Changes() {
-  const [ready, setReady] = useState(null);
+  const [ready, setReady] = useState(/** @type {{ engine: CalendarEngine, ports: import('@/lib/calendar/ports').CalendarPorts } | null} */ (null));
   useEffect(() => {
     glue.default({ module_or_path: wasmUrl }).then(async () => {
       const engine = new CalendarEngine(glue, intlOffsetAt());
@@ -70,7 +74,7 @@ function Changes() {
     });
   }, []);
   if (ready === null) return <p>Loading the calendar</p>;
-  const state = { nodes: TREE, members: {}, workspace: { metadata: [] } };
+  const state = workspaceState({ nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: [] } });
   return (
     <WorkspaceContext.Provider value={{ state }}>
       <main className="mx-auto max-w-6xl">

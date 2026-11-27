@@ -28,5 +28,14 @@
     "check:pointers": "node scripts/check-submodule-pointers-pushed.mjs",
     "prepush": "node scripts/check-submodule-pointers-pushed.mjs",
     "prepare": "if git rev-parse --git-dir >/dev/null 2>&1; then git config core.hooksPath .githooks; else echo 'prepare: not a git checkout, so there are no hooks to install'; fi"
-  }
+  },
+  "overrides": {
+    "@tailwindcss/typography": {
+      "postcss-selector-parser": "^6.1.5"
+    },
+    "get-uri": {
+      "basic-ftp": "^6.2.4"
+    }
+  },
+  "//": "overrides: @tailwindcss/typography 0.5.x pins postcss-selector-parser 6.0.10 exactly (drop when it takes ^6.1.5); get-uri 6 (under lighthouse 12 -> puppeteer proxy-agent) takes basic-ftp ^5 (drop when lighthouse reaches get-uri 8)."
 }

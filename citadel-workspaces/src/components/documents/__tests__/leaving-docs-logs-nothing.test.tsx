@@ -21,10 +21,11 @@ import DocsCanvas from '../DocsCanvas';
 import type { DocumentEditing } from '../use-docs-document';
 import { keepBlankReplica } from '../blank-replica';
 import { recordingDocumentFiles, type RecordingDocumentFiles } from '@/test-utils/recording-document-files';
+import { memoryPicturePlan, memoryPictures } from '@/lib/cdoc/pictures/__tests__/doubles/memory-pictures';
 
 // Any fixed instant: these tests download nothing.
 const FILES: RecordingDocumentFiles = recordingDocumentFiles('2026-10-18T00:00:00Z');
-const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: null };
+const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }) };
 const VIEWPORT_PX: number = 800;
 const DETACH_FAILURE: string = 'the worker refused to detach';
 

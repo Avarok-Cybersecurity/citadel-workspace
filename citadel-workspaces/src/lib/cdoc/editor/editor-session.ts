@@ -4,8 +4,6 @@
  * invalidated and repainted. Requests run one at a time in call order (a keystroke never
  * overtakes the one before it), and a failed command leaves the state as it was.
  */
-import type { CdocClient } from '../worker/cdoc-client';
-import type { PageRenderer } from '../paint/page-renderer';
 import {
   COMMAND_OPCODES,
   SET_VIEWPORT_OPCODE,
@@ -33,21 +31,12 @@ import type { ExportedFile, ExportTarget, ImportReport } from './file-formats';
 import type { EditorResults } from '../worker/editor-protocol';
 import { PeerSet } from './peer-set';
 import { sameValue } from './same-value';
+import { SessionPictures } from '../pictures/session-pictures';
+import { embedsPictures, picturesAbsent } from '../pictures/picture-export';
 
-export interface EditorSessionDeps {
-  readonly client: CdocClient;
-  readonly renderer: PageRenderer;
-}
+import type { EditorSessionDeps, EditorView } from './editor-view';
 
-/** What the page view reads beyond the controller: page geometry and the peers to draw. */
-export interface EditorView {
-  readonly pageSizes: Int32Array;
-  readonly peers: PeerSet;
-  /** The element that takes keystrokes (the IME bridge's textarea), or null to detach it. */
-  attachFocus(target: (() => void) | null): void;
-  /** The pages on screen: results then carry selection rectangles for those and the repainted ones. */
-  setViewport(pages: readonly number[]): Promise<EditorState>;
-}
+export type { EditorSessionDeps, EditorView };
 
 export class EditorSession implements EditorController, EditorView {
   private current: EditorState;
@@ -58,10 +47,15 @@ export class EditorSession implements EditorController, EditorView {
   private readonly events: Emitter<EditorEvents> = new Emitter<EditorEvents>();
   readonly peers: PeerSet = new PeerSet();
   readonly commands: EditorCommands;
+  private readonly pictures: SessionPictures;
 
   private constructor(private readonly deps: EditorSessionDeps, initial: EditorState, sizes: Int32Array, readonly importReport: ImportReport | null) {
     this.current = initial;
     this.sizes = sizes;
+    this.pictures = new SessionPictures({
+      access: deps.pictures, client: deps.client, renderer: deps.renderer, hold: (bytes: Uint8Array, maxBytes: number): Promise<AddedImage> => this.hold(bytes, maxBytes),
+      repaint: (dirtyPages: readonly number[]): void => this.events.emit('pages', { pageCount: this.current.pageCount, dirtyPages }),
+    });
     // One method per command name, each building that command; the type is EditorCommands by
     // construction (a name from COMMAND_OPCODES plus that command's own fields).
     const entries: Array<[EditorCommandName, (args?: object) => Promise<EditorState>]> = (Object.keys(COMMAND_OPCODES) as EditorCommandName[]).map((name: EditorCommandName): [EditorCommandName, (args?: object) => Promise<EditorState>] => [
@@ -77,11 +71,13 @@ export class EditorSession implements EditorController, EditorView {
     const own: Awareness = decodeAwareness(opened.awareness);
     const view: PeerView = decodePeerView(opened.view);
     const pageCount: number = opened.pageSizes.length / 2;
-    return new EditorSession(deps, {
+    const session: EditorSession = new EditorSession(deps, {
       anchor: own.anchor, head: own.head, caret: view.caret, selectionRects: view.selectionRects,
       caretPage: view.caret?.page ?? null, pageCount, composing: false, caretFormatting: { known: false },
       created: [], selectionText: { complete: true, text: '' }, story: { kind: 'body' },
     }, opened.pageSizes, from.kind === 'bytes' && opened.importReportJson !== null ? readImportReport(opened.importReportJson, from.format) : null);
+    await session.pictures.keepImported(from).catch((error: unknown): never => { session.dispose(); throw error; });
+    return session;
   }
 
   get state(): EditorState {
@@ -202,7 +198,9 @@ export class EditorSession implements EditorController, EditorView {
     return this.serial(async (): Promise<string> => (await this.deps.client.request({ kind: 'selectionText' })).text);
   }
 
-  exportAs(target: ExportTarget): Promise<ExportedFile> {
+  async exportAs(target: ExportTarget): Promise<ExportedFile> {
+    const absent: string[] = await this.pictures.bringAll();
+    if (absent.length > 0 && embedsPictures(target.format)) throw new Error(picturesAbsent(absent));
     return this.serial(async (): Promise<ExportedFile> => {
       const { bytes, reportJson } = await this.deps.client.request({ kind: 'exportAs', target });
       return { bytes, report: reportJson === null ? null : readExportReport(reportJson) };
@@ -217,7 +215,16 @@ export class EditorSession implements EditorController, EditorView {
     return this.serial(async (): Promise<DocumentStyle[]> => decodeStyles((await this.deps.client.request({ kind: 'styles' })).record));
   }
 
-  addImage(bytes: Uint8Array, maxBytes: number): Promise<AddedImage> {
+  /** Holds the picture, within its store's limit, then stores it (outside the command queue: typing goes on meanwhile). */
+  addImage(bytes: Uint8Array): Promise<AddedImage> {
+    return this.pictures.add(bytes);
+  }
+
+  pictureLimit(): Promise<number> {
+    return this.pictures.limit();
+  }
+
+  private hold(bytes: Uint8Array, maxBytes: number): Promise<AddedImage> {
     return this.serial(async (): Promise<AddedImage> => decodeAddedImage((await this.deps.client.request({ kind: 'addImage', bytes: bytes.slice(), maxBytes })).record));
   }
 
@@ -236,6 +243,7 @@ export class EditorSession implements EditorController, EditorView {
 
   dispose(): void {
     this.disposed = true;
+    this.pictures.dispose();
     this.events.clear();
     this.peers.clear();
   }

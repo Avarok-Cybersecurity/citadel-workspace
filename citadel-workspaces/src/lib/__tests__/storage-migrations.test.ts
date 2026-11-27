@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { DB_VERSION, STORE_NAMES, upgradeSchema, missingStores, type UpgradingDatabase } from '../storage-migrations';
 
 /**
@@ -6,7 +6,7 @@ import { DB_VERSION, STORE_NAMES, upgradeSchema, missingStores, type UpgradingDa
  * ran. An earlier one is cleared, never migrated: the user signs in fresh.
  */
 
-type FakeDb = UpgradingDatabase & { _stores: Set<string>; deleteObjectStore: ReturnType<typeof vi.fn> };
+type FakeDb = UpgradingDatabase & { _stores: Set<string>; deleteObjectStore: Mock };
 
 function fakeDb(existingStores: string[] = []): FakeDb {
   const stores: Set<string> = new Set(existingStores);

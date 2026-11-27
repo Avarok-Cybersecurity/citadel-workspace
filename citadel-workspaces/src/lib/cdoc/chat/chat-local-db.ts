@@ -20,7 +20,8 @@
 import { decode as cborDecode, encode as cborEncode } from 'cbor-x';
 import { isGenuinelyAbsent } from '@/lib/storage/absence';
 import type { CdocChatTitleStamp } from '@/types/cdoc-chat-sync';
-import type { ChatIndexEntry, ChatStoreBackend, StoredBase } from './chat-ports';
+import type { ChatIndexEntry, ChatStoreBackend, ChatTabs, StoredBase } from './chat-ports';
+import { chatCopyLock, chatIndexLock } from './chat-tabs';
 import { isChatDocId, readTitleStamp } from './chat-wire';
 
 /** The agent's key-value requests for a session (websocketService.sendLocalDB*). */
@@ -89,10 +90,11 @@ function readIndex(value: unknown): Map<string, ChatIndexEntry> {
   return index;
 }
 
-/** Index updates are read-modify-write, so one account's run one at a time in this tab. */
-const indexTails: Map<bigint, Promise<void>> = new Map<bigint, Promise<void>>();
-
-export function localDbChatStore(account: bigint, db: LocalDbPort): ChatStoreBackend {
+/**
+ * `tabs` is this browser's windows, which share the agent and so these keys: a read-modify-write
+ * (the index here, a document's copy in the keeper and the inbox) takes its turn across them.
+ */
+export function localDbChatStore(account: bigint, db: LocalDbPort, tabs: ChatTabs): ChatStoreBackend {
   if (account <= 0n) throw new Error(`chat documents are kept under the local account, not cid ${account.toString()}`);
   const get = async (key: string): Promise<unknown> => {
     let found: { readonly value: readonly number[] } | null;
@@ -110,6 +112,9 @@ export function localDbChatStore(account: bigint, db: LocalDbPort): ChatStoreBac
     return stored === undefined ? new Map<string, ChatIndexEntry>() : readIndex(stored);
   };
   return {
+    exclusive: <T>(docId: string, step: () => Promise<T>): Promise<T> => tabs.exclusive(chatCopyLock(account, docId), step),
+    wrote: (docId: string, writer: object): void => tabs.wrote(account, docId, writer),
+    onWrote: (listener: (docId: string, writer: object | null) => void): (() => void) => tabs.onWrote(account, listener),
     loadBase: async (docId: string): Promise<StoredBase | null> => {
       const stored: unknown = await get(docKey(account, docId, 'base'));
       return stored === undefined ? null : readBase(stored);
@@ -130,9 +135,8 @@ export function localDbChatStore(account: bigint, db: LocalDbPort): ChatStoreBac
         const entries: IndexRecord[] = [...all].map(([id, e]: [string, ChatIndexEntry]): IndexRecord => ({ doc_id: id, peer_cid: e.peerCid, title: e.title }));
         await put(indexKey(account), { store_version: CHAT_STORE_VERSION, entries });
       };
-      const next: Promise<void> = (indexTails.get(account) ?? Promise.resolve()).then(step, step);
-      indexTails.set(account, next.then((): void => undefined, (): void => undefined));
-      return next;
+      // Read-modify-write: one at a time across this browser's windows, or one window's entry erases another's.
+      return tabs.exclusive(chatIndexLock(account), step);
     },
   };
 }

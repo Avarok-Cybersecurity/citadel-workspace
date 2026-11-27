@@ -3,7 +3,7 @@
  * sign-in reload it survives, and the one take. And such a link in chat or a document is an
  * ordinary internal link: no new scheme.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 import { appLinkSearch, appLinkUrl, peekAppLink, readAppLinkParams, takeAppLink, type AppLink } from '../app-link';
 import { captureAppLink } from '../app-link-capture';
 import { classifyDocumentLink } from '@/lib/document-links';
@@ -60,7 +60,7 @@ describe('the shape of an app link', () => {
 describe('capture before sign-in, taken once', () => {
   it('keeps the link, takes its keys out of the address and leaves the rest', () => {
     const storage: ReturnType<typeof memoryStorage> = memoryStorage();
-    const replace: ReturnType<typeof vi.fn> = vi.fn();
+    const replace: Mock = vi.fn();
     captureAppLink('/workspace', '?app=com.acme.kanban&v=1.0.0&utm=x', storage, replace);
     expect(replace).toHaveBeenCalledWith('utm=x');
     // Kept whole, so the strict reading at the take refuses the unknown key and opens nothing.
@@ -75,7 +75,7 @@ describe('capture before sign-in, taken once', () => {
   });
 
   it('ignores other pages and addresses without an app', () => {
-    const replace: ReturnType<typeof vi.fn> = vi.fn();
+    const replace: Mock = vi.fn();
     const storage: ReturnType<typeof memoryStorage> = memoryStorage();
     captureAppLink('/', '?app=com.acme.kanban', storage, replace);
     captureAppLink('/workspace', '?nodeId=n-1', storage, replace);
@@ -94,7 +94,7 @@ describe('capture before sign-in, taken once', () => {
   });
 
   it('a malformed link is dropped from the address and opens nothing', () => {
-    const replace: ReturnType<typeof vi.fn> = vi.fn();
+    const replace: Mock = vi.fn();
     const storage: ReturnType<typeof memoryStorage> = memoryStorage();
     captureAppLink('/workspace', '?app=Not%20An%20Id', storage, replace);
     expect(replace).toHaveBeenCalledWith('');

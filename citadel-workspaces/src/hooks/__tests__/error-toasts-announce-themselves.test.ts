@@ -12,14 +12,14 @@
  * nothing" about an app that said exactly the right thing. Documenting it did
  * not stop it happening again; making the selector true does.
  */
-import { describe, it, expect, vi, beforeEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { isValidElement } from 'react';
 
 const sonner: {
-  error: ReturnType<typeof vi.fn>;
-  success: ReturnType<typeof vi.fn>;
-  plain: ReturnType<typeof vi.fn>;
-  dismiss: ReturnType<typeof vi.fn>;
+  error: Mock;
+  success: Mock;
+  plain: Mock;
+  dismiss: Mock;
 } = vi.hoisted(() => ({
   error: vi.fn((_message: unknown, _opts?: unknown) => 1),
   success: vi.fn((_message: unknown, _opts?: unknown) => 2),

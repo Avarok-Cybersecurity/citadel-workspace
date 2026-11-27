@@ -15,12 +15,12 @@
  * The two mocks are the I/O boundary this transport is translation over: the
  * service (leader socket or proxy) and the instance channel (a BroadcastChannel).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 const tab: { isLeader: boolean } = vi.hoisted(() => ({ isLeader: false }));
-const channelSend: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
-const sendMediaFrame: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
-const sendRequest: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
+const channelSend: Mock = vi.hoisted(() => vi.fn());
+const sendMediaFrame: Mock = vi.hoisted(() => vi.fn());
+const sendRequest: Mock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/multi-instance', () => ({
   instanceManager: { get isLeader(): boolean { return tab.isLeader; } },

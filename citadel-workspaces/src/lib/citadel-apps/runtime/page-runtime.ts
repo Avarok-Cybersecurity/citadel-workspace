@@ -32,6 +32,7 @@ import { p2pRegistrationService } from '@/lib/p2p-registration-service';
 import { pageZoneWatchers } from './zone-watchers';
 import { pageOpenedFiles } from './page-opened-files';
 import { pageAppNotices } from '../app-notices';
+import { ownWrites, type OwnWrites, type OwnWritesChannel } from './own-store-writes';
 
 const policy: HostPolicy = validateHostPolicy(STANDARD_HOST_POLICY);
 const verifier: ArtifactVerifierPort = pageArtifactVerifier(crypto.subtle, wasmAppSignatureCheck(loadWasmModule));
@@ -63,6 +64,30 @@ async function agentSession(): Promise<{ readonly cid: bigint } | null> {
   if (caps === null || !caps.servesApps) return null;
   const cid: bigint | null = await getCurrentCid();
   return cid === null ? null : { cid };
+}
+
+/** The browser's channel for the member's own-store writes (own-store-writes.ts), shared by every window and tab. */
+const OWN_WRITES_CHANNEL: string = 'citadel-own-store-writes';
+
+function openOwnWritesChannel(): OwnWritesChannel {
+  const channel: BroadcastChannel = new BroadcastChannel(OWN_WRITES_CHANNEL);
+  return {
+    postMessage: (message: unknown): void => channel.postMessage(message),
+    onMessage: (listener: (message: unknown) => void): void => channel.addEventListener('message', (e: MessageEvent<unknown>): void => listener(e.data)),
+  };
+}
+
+/** One announcer per member this tab acts as, for the page's life, so every instance for them shares it. */
+const ownWritesByMember: Map<bigint, OwnWrites> = new Map();
+
+async function ownWritesHere(): Promise<OwnWrites | null> {
+  const member: bigint | null = await getCurrentCid();
+  if (member === null) return null;
+  const known: OwnWrites | undefined = ownWritesByMember.get(member);
+  if (known !== undefined) return known;
+  const made: OwnWrites = ownWrites(member, openOwnWritesChannel);
+  ownWritesByMember.set(member, made);
+  return made;
 }
 
 const refusalName = (r: AppsFailure): string => (typeof r === 'string' ? r : Object.keys(r).join(','));
@@ -102,7 +127,7 @@ export const pageAppZoneRuntime: AppZoneRuntime = createAppZoneRuntime({
   report: (what: string, detail: unknown): void => console.error(what, detail),
   offscreen: (canvas: HTMLCanvasElement): OffscreenCanvas => canvas.transferControlToOffscreen(),
   portWorld: async (): Promise<Omit<PortWorld, 'policy'>> => ({
-    transport: sessionAppsTransport, agent, agentSession: await agentSession(), log, notices: pageAppNotices,
+    transport: sessionAppsTransport, agent, agentSession: await agentSession(), log, notices: pageAppNotices, ownWrites: await ownWritesHere(),
     pushes: (listener: (answer: unknown) => void): (() => void) => eventEmitter.on('workspace:apps', (event: { answer: unknown } | undefined): void => {
       if (event !== undefined) listener(event.answer);
     }),

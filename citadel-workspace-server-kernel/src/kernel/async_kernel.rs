@@ -947,7 +947,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         self.provision_default_app_tabs().await?;
         self.provision_first_party_apps(
             crate::kernel::apps::first_party_bundles::EMBEDDED,
-            crate::kernel::apps::install::FIRST_PARTY_PUBLISHER_KEYS,
+            crate::kernel::apps::install::trusted_first_party_keys(),
         )
         .await
     }

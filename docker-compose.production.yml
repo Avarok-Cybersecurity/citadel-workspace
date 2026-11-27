@@ -77,6 +77,9 @@ services:
       # this line a local `docker compose build` would produce the 5.6 GB
       # toolchain image instead of the 142 MB runtime one.
       target: production
+      args:
+        # A production build: the kernel's build.rs refuses the test-only CI first-party root.
+        CITADEL_DEPLOY: "1"
     volumes:
       - server_data:/data/server
     environment:

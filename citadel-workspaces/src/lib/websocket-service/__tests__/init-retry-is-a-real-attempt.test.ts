@@ -9,7 +9,7 @@
  * second call rejects would pass on the broken version too — the broken version
  * rejects precisely because it never tried.
  */
-import { describe, it, expect, vi, beforeEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { initService } from '../initialization';
 import { GLOBAL_INIT_KEY } from '../../websocket';
 import type { WebSocketServiceCore } from '../core';
@@ -46,7 +46,7 @@ describe('initService', () => {
   });
 
   it('re-attempts after a failure instead of replaying the stale rejection', async () => {
-    const create: ReturnType<typeof vi.fn> = vi
+    const create: Mock = vi
       .fn()
       .mockRejectedValueOnce(new Error('internal service unreachable'))
       .mockResolvedValueOnce({ ok: true });
@@ -65,7 +65,7 @@ describe('initService', () => {
   it('still shares one in-flight attempt between concurrent callers', async () => {
     let release!: (v: unknown) => void;
     const pending: Promise<unknown> = new Promise((r): void => { release = r; });
-    const create: ReturnType<typeof vi.fn> = vi.fn((): Promise<unknown> => pending);
+    const create: Mock = vi.fn((): Promise<unknown> => pending);
     const service: WebSocketServiceCore = coreWith(create);
 
     const a: Promise<void> = initService(service);

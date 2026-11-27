@@ -24,7 +24,7 @@ interface FormFieldProps {
   autoComplete?: string;
   /**
    * Set for the visible text fields only. Deliberately NOT set on the password
-   * fields: maxLength truncates silently, so pasting a 24-character password
+   * fields: maxLength truncates silently, so pasting an over-long password
    * from a manager would register a secret the user never saw and cannot
    * reproduce from their vault. Those fields get an explicit error instead.
    */
@@ -216,10 +216,8 @@ export function JoinFormFields({ formData, onChange, onBlur, fieldErrors }: Join
           autoComplete="new-password"
           error={fieldErrors?.password}
           placeholder="••••••••••••"
-          // The maximum is SHORTER than what every password manager generates
-          // by default, so the users with the best credential hygiene are the
-          // ones who get rejected. Stating the range up front is the whole fix;
-          // an inline error after the fact still wastes a generated password.
+          // Stating the range up front: an inline error after the fact still
+          // wastes a generated password.
           // Derived from CREDENTIAL_LIMITS so it cannot drift from the rule.
           hint={`${CREDENTIAL_LIMITS.password.min}–${CREDENTIAL_LIMITS.password.max} characters, no spaces`}
         />

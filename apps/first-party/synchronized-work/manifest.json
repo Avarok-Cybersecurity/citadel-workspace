@@ -85,8 +85,8 @@
     }
   },
   "artifact": {
-    "sha256": "ff8ff074dc284d1ff7c65b67c7bf11bba005bae98896c2a0841bac0acd3645df",
-    "bytes": 864266,
+    "sha256": "9057f87833c065bbd2e86f1041cf4a03328a86a6cffe05f4a8abc142e8c98bb7",
+    "bytes": 864267,
     "locations": [
       {
         "kind": "https",

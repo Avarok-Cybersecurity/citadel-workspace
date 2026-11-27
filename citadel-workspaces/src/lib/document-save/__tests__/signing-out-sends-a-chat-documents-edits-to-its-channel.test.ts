@@ -18,6 +18,7 @@ import type { EditorSession } from '@/lib/cdoc/editor/editor-session';
 import { createEditorOpener } from '@/lib/cdoc/editor/editor-opener';
 import { inProcessRuntime, type TestRuntime } from '@/lib/cdoc/__tests__/wasm-rig';
 import type { EditorOrigin } from '@/lib/cdoc/editor/controller';
+import { NO_PICTURES } from '@/lib/cdoc/__tests__/no-pictures';
 
 const store: Map<string, unknown> = vi.hoisted((): Map<string, unknown> => new Map<string, unknown>());
 const sent: WorkspaceProtocolRequest[] = vi.hoisted((): WorkspaceProtocolRequest[] => []);
@@ -83,7 +84,7 @@ describe('signing out with edits held of a chat document', () => {
   it('asks a chat document open in this tab to send them, not a second session', async () => {
     await holdChatEdits();
     const runtime: TestRuntime = inProcessRuntime('main-thread');
-    const open: (from: EditorOrigin) => Promise<EditorSession> = createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, (b: Uint8Array): Uint8Array => crypto.getRandomValues(b));
+    const open: (from: EditorOrigin) => Promise<EditorSession> = createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, (b: Uint8Array): Uint8Array => crypto.getRandomValues(b));
     const close: () => Promise<void> = chatDocumentReplicaKeeper<EditorSession>(NODE, DOC, (): void => undefined)(open, (): void => undefined, (): void => undefined);
     const syncing: Promise<void> = requestDocumentSync({ nodeId: NODE, chatDoc: DOC });
     await vi.advanceTimersByTimeAsync(120_000);

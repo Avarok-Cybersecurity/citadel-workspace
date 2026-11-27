@@ -149,7 +149,7 @@ export default function DocsCanvas({ documentSource, loadRuntime, editing, statu
     <>
       {/* The ribbon drives the open editor; with none (loading, or a read-only conversion) there is no ribbon. */}
       <EditorControllerContext.Provider value={controller}>
-        <DocsRibbon edit={edit} commentAuthor={commentAuthor} environment={ribbonEnvironment} pictures={editing.kind === 'replica' ? editing.pictures : null} />
+        <DocsRibbon edit={edit} commentAuthor={commentAuthor} environment={ribbonEnvironment} pictures={editing.kind === 'replica' && editing.pictures.kind === 'none' ? editing.pictures.reason : null} />
       </EditorControllerContext.Provider>
       {shown && <DocsDocumentBar title={title} files={files} importReport={importReport} refused={doc.kind === 'refused'} exporter={exporter} />}
       {doc.kind === 'replica' && doc.editable && input !== null && (

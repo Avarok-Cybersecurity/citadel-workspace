@@ -12,11 +12,11 @@ import { waitForWorkspaceLoaded } from './modals.js';
 import { p2pRegister, acceptP2PRequest, openConversation, waitForP2PChannelReady } from './p2p.js';
 import { sendAndVerifyMessage } from './messaging.js';
 import { consentPeer, readZoneLog, type ZoneLog } from './apps.js';
-import { answered, deliveredFrames, openPoolZone, pressAppAction, runJob, sessionCid, watchDeliveredFrames, type JobRun } from './apps-zone.js';
+import { answered, deliveredFrames, openPoolZone, pressAppAction, runJob, sessionCid, watchDeliveredFrames, watchGroupWire, type GroupWire, type JobRun } from './apps-zone.js';
 import type { UxIssueTracker } from './ux-tracker.js';
 
 export interface TwoTabResults {
-  peers: boolean; consented: boolean; mounted: boolean;
+  peers: boolean; consented: boolean; mounted: boolean; inThePool: boolean;
   xToY: boolean; yToX: boolean;
   xTabOnlyOwnFrames: boolean; yTabOnlyOwnFrames: boolean;
 }
@@ -30,9 +30,13 @@ const onlyOwn = (delivered: readonly string[], cid: string, label: string): bool
   return delivered.length > 0 && foreign.length === 0;
 };
 
-async function peersInOneBrowser(context: BrowserContext, x: string, y: string, uxTracker: UxIssueTracker): Promise<{ tx: Page; ty: Page } | null> {
+interface Pair { readonly tx: Page; readonly ty: Page; readonly groups: GroupWire }
+
+async function peersInOneBrowser(context: BrowserContext, x: string, y: string, uxTracker: UxIssueTracker): Promise<Pair | null> {
   const tx: Page = await context.newPage();
   const ty: Page = await context.newPage();
+  // Before the first navigation, so the leader's socket is watched whichever tab it is.
+  const groups: GroupWire = watchGroupWire(tx, ty);
   const accounts: boolean = (await createAccount(tx, x, { isFirstUser: false, uxTracker })) && (await waitForWorkspaceLoaded(tx, 60_000))
     && (await createAccount(ty, y, { isFirstUser: false, uxTracker })) && (await waitForWorkspaceLoaded(ty, 60_000));
   if (!accounts) return null;
@@ -41,16 +45,16 @@ async function peersInOneBrowser(context: BrowserContext, x: string, y: string, 
     && (await sendAndVerifyMessage(tx, x, ty, y, `two-tab warm-up from ${x}`, { maxRetries: 3, verifyTimeout: 20_000, retryDelay: 3_000, uxTracker }))
     && (await sendAndVerifyMessage(ty, y, tx, x, `two-tab warm-up from ${y}`, { maxRetries: 3, verifyTimeout: 20_000, retryDelay: 3_000, uxTracker }))
     && (await waitForP2PChannelReady(tx, x, y, 60_000)) && (await waitForP2PChannelReady(ty, y, x, 60_000));
-  return talking ? { tx, ty } : null;
+  return talking ? { tx, ty, groups } : null;
 }
 
 export async function runTwoTabVariant(browser: Browser, installId: string, office: string, x: string, y: string, uxTracker: UxIssueTracker): Promise<TwoTabResults> {
-  const r: TwoTabResults = { peers: false, consented: false, mounted: false, xToY: false, yToX: false, xTabOnlyOwnFrames: false, yTabOnlyOwnFrames: false };
+  const r: TwoTabResults = { peers: false, consented: false, mounted: false, inThePool: false, xToY: false, yToX: false, xTabOnlyOwnFrames: false, yTabOnlyOwnFrames: false };
   const [context] = await createIsolatedContexts(browser, 1);
-  const pair: { tx: Page; ty: Page } | null = await peersInOneBrowser(context, x, y, uxTracker);
+  const pair: Pair | null = await peersInOneBrowser(context, x, y, uxTracker);
   if (pair === null) return r;
   r.peers = true;
-  const { tx, ty } = pair;
+  const { tx, ty, groups } = pair;
   const [xCid, yCid] = [await sessionCid(tx), await sessionCid(ty)];
   if (xCid === yCid) throw new Error(`both tabs act for session ${xCid}: the variant needs two`);
   await consentPeer(tx, installId, ['serve', 'call', 'topics']);
@@ -60,9 +64,12 @@ export async function runTwoTabVariant(browser: Browser, installId: string, offi
   await watchDeliveredFrames(ty);
   const xLog: ZoneLog = readZoneLog(tx, 'X tab');
   const yLog: ZoneLog = readZoneLog(ty, 'Y tab');
+  const joins: number = groups.mark();
   await openPoolZone(tx, office);
   await openPoolZone(ty, office);
   r.mounted = true;
+  // A job announced before a member is in the pool's group is one it never hears (compute-pool spec, step 1).
+  r.inThePool = (await groups.channelFor(xCid, joins, JOB_MS)) && (await groups.channelFor(yCid, joins, JOB_MS));
   // P2P only, so a job that fell back to the relay cannot pass for one that crossed the shared socket.
   await pressAppAction(tx, 'mode-p2p');
   await pressAppAction(ty, 'mode-p2p');

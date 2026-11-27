@@ -3,7 +3,8 @@
  * mounts in, the status bar it reserves, and a read-only notice when editing is not permitted.
  * No mocks: the Docs editor region runs the real cdoc wasm through the in-process runtime.
  */
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
+import { docsCanvasLoaded } from '@/test-utils/docs-canvas-loaded';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { inProcessRuntime } from '@/lib/cdoc/__tests__/wasm-rig';
 import type { CdocRuntime } from '@/lib/cdoc/runtime';
@@ -12,8 +13,9 @@ import { DocumentHost, UnreadableDocument, type DocumentHostProps } from '../Doc
 import { keepBlankReplica } from '../blank-replica';
 import type { DocumentEditing } from '../use-docs-document';
 import { saveControl, type BindableSaveControl } from '../save/save-control';
+import { memoryPicturePlan, memoryPictures } from '@/lib/cdoc/pictures/__tests__/doubles/memory-pictures';
 
-const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: null };
+const EDIT_BLANK: DocumentEditing = { kind: 'replica', keep: keepBlankReplica, save: null, pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }) };
 
 const EDITABLE: DocumentHostProps = {
   nodeId: 'plan-1',
@@ -29,6 +31,9 @@ const EDITABLE: DocumentHostProps = {
   original: null,
   editing: EDIT_BLANK,
 };
+
+// The lazily loaded Docs canvas is awaited, not timed (test-utils/docs-canvas-loaded.ts).
+beforeAll(docsCanvasLoaded);
 
 describe('DocumentHost', () => {
   it('shows the document title and its app, and marks the editor region', () => {
@@ -57,7 +62,7 @@ describe('DocumentHost', () => {
   it('puts the save controls in the title bar of a document someone saves, and Ctrl/Cmd+S over its editor to them', () => {
     const save: BindableSaveControl = saveControl('plan-1');
     save.inputs.set({ autoSave: true, link: 'up', unacknowledged: 0, syncRequested: false, local: 'written', halted: false, locked: false });
-    render(<DocumentHost {...EDITABLE} editing={{ kind: 'replica', keep: keepBlankReplica, save, pictures: null }} />);
+    render(<DocumentHost {...EDITABLE} editing={{ kind: 'replica', keep: keepBlankReplica, save, pictures: memoryPicturePlan(memoryPictures(), { kind: 'page', nodeId: 'test-node' }) }} />);
     const header: HTMLElement = screen.getByRole('banner');
     expect(within(header).getByTestId('docs-save-status')).toHaveAttribute('data-status', 'saved');
     const region: HTMLElement = screen.getByRole('region', { name: 'Citadel Docs editor' });

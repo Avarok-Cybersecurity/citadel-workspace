@@ -11,7 +11,7 @@
  * (`P2PMessengerManager.onConnectionChange`, `use-domain-call-members`) whose
  * fix was never carried across.
  */
-import { describe, it, expect, vi, beforeEach  } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook , type RenderHookResult } from '@testing-library/react';
 import { ConnectionService } from '@/lib/connection-service/service';
 import { workspaceEvents } from '@/lib/workspace-events';
@@ -24,7 +24,7 @@ describe('ConnectionService.onConnectionChange', () => {
 
   it('returns an unsubscribe that actually stops the handler', () => {
     const service: ConnectionService = ConnectionService.getInstance();
-    const handler: ReturnType<typeof vi.fn> = vi.fn();
+    const handler: Mock = vi.fn();
 
     const unsubscribe: () => void = service.onConnectionChange(handler);
     // A void return is the defect: callers have nothing to return from their

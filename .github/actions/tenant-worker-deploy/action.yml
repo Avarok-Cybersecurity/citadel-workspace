@@ -82,6 +82,8 @@ runs:
     - name: deploy.sh (${{ inputs.mode }})
       shell: bash
       env:
+        # A deploy: the server kernel's build.rs refuses its test-only CI root (deploy.sh sets it too).
+        CITADEL_DEPLOY: '1'
         MODE: ${{ inputs.mode }}
         CF_TOKEN: ${{ inputs.cf-token }}
         STRIPE_KEY: ${{ inputs.stripe-key }}

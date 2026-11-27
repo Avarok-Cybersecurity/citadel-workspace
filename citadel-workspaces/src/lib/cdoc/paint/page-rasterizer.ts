@@ -26,9 +26,15 @@ export interface RasterizerOptions {
   readonly imageCacheBytes: number;
 }
 
-export interface PaintOutcome {
+/** What painting a page drew that the page needs: its links and the atlas's state. */
+export interface RasterOutcome {
   readonly links: readonly LinkArea[];
   readonly atlas: AtlasStats;
+}
+
+export interface PaintOutcome extends RasterOutcome {
+  /** Pictures the page drew as boxes that the editor session should fetch (ImageResolver.fill). */
+  readonly pendingImages: readonly string[];
 }
 
 /** A page's list and that list's faces, renumbered to this painter's stable face ids. */
@@ -50,6 +56,8 @@ export class PageRasterizer {
   private readonly outlines: OutlineStore;
   private readonly atlas: GlyphAtlas;
   private readonly images: ImageCache;
+  /** Boxes for pictures not resolved yet (loading, or why they could not be fetched): never cached. */
+  private readonly transient: Map<string, PaintableImage> = new Map<string, PaintableImage>();
 
   constructor(port: CanvasPort, private readonly options: RasterizerOptions) {
     this.outlines = new OutlineStore(port);
@@ -67,12 +75,18 @@ export class PageRasterizer {
   }
 
   addImage(contentId: string, image: PaintableImage): void {
+    this.transient.delete(contentId);
     this.images.set(contentId, image);
+  }
+
+  showFor(contentId: string, label: string): void {
+    this.transient.set(contentId, { kind: 'placeholder', label });
   }
 
   /** Frees every decoded image (the document closed). */
   dispose(): void {
     this.images.clear();
+    this.transient.clear();
   }
 
   private stableId(face: Face): number {
@@ -154,14 +168,14 @@ export class PageRasterizer {
   }
 
   /** Sizes `target` to the page in device px and paints it. Every outline must be present. */
-  paint(target: PaintTarget, pageNumber: number, scale: DeviceScale): PaintOutcome {
+  paint(target: PaintTarget, pageNumber: number, scale: DeviceScale): RasterOutcome {
     const page: PageOps = this.page(pageNumber);
     const size: { readonly w: number; readonly h: number } = pageSizePx(page.entry.width, page.entry.height, scale);
     target.resize(size.w, size.h);
     const links: LinkArea[] = paintPage({
       ctx: target.ctx, scale, faces: this.heldPage(pageNumber).faces, atlas: this.atlas, outlines: this.outlines,
       paper: this.options.paper, placeholder: this.options.placeholder,
-      images: (contentId: string): PaintableImage | undefined => this.images.get(contentId),
+      images: (contentId: string): PaintableImage | undefined => this.images.get(contentId) ?? this.transient.get(contentId),
     }, page);
     return { links, atlas: this.atlas.stats() };
   }

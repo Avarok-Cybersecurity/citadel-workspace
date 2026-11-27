@@ -7,7 +7,7 @@
  * OPFS or network access.
  */
 
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
 import { RevfsService } from '../revfs-service';
 import type { RevfsIntent, RevfsIntentResult } from '@/types/revfs-intents';
 import { RevfsOpType , type RevfsOperation } from '@/types/revfs-types';
@@ -94,7 +94,7 @@ export function defaultIntentHandler(overrides?: Partial<Record<RevfsIntent['typ
 }
 
 export function getExecuteCalls(service: RevfsService): RevfsIntent[] {
-  const io: { execute: ReturnType<typeof vi.fn> } =
-    (service as unknown as { io: { execute: ReturnType<typeof vi.fn> } }).io;
+  const io: { execute: Mock } =
+    (service as unknown as { io: { execute: Mock } }).io;
   return io.execute.mock.calls.map((c: unknown[]) => c[0] as RevfsIntent);
 }

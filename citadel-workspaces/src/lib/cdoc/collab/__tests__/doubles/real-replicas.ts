@@ -12,6 +12,7 @@ import { inProcessRuntime, type TestRuntime } from '../../../__tests__/wasm-rig'
 import type { EditorOrigin } from '../../../editor/controller';
 import { createEditorOpener } from '../../../editor/editor-opener';
 import type { EditorSession } from '../../../editor/editor-session';
+import { NO_PICTURES } from '../../../__tests__/no-pictures';
 
 export interface ReplicaSource<R> {
   readonly open: (from: EditorOrigin) => Promise<R>;
@@ -31,7 +32,7 @@ export function realReplicas(): ReplicaSource<EditorSession> {
   const sources: EditorOrigin[] = [];
   const open = async (from: EditorOrigin): Promise<EditorSession> => {
     const runtime: TestRuntime = inProcessRuntime('worker');
-    const editor: EditorSession = await createEditorOpener({ client: runtime.client, renderer: runtime.renderer }, counter())(from);
+    const editor: EditorSession = await createEditorOpener({ client: runtime.client, renderer: runtime.renderer, pictures: NO_PICTURES }, counter())(from);
     opened.push(editor);
     sources.push(from);
     return editor;

@@ -22,6 +22,7 @@ import { eventEmitter } from '@/lib/event-emitter';
 import { conversationHref } from '@/components/layout/sidebar/active-conversation';
 import { useLinkTargetOpener } from './use-link-target';
 import { useAppNoticeOpener } from './use-app-notice-opener';
+import { BellOsPrompt } from './BellOsPrompt';
 import { useLocation, type Location } from 'react-router-dom';
 import { useGuardedNavigate, type GuardedNavigate } from '@/hooks/use-guarded-navigate';
 
@@ -201,7 +202,7 @@ const NotificationCenter: () => JSX.Element = (): JSX.Element => {
             </Button>
           </div>
         </SheetHeader>
-        
+        <BellOsPrompt />
         <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as 'all' | NotificationType)}>
           <TabsList className="grid grid-cols-4 mt-4 mb-6 bg-card">
             <TabsTrigger value="all" className="data-[state=active]:bg-surface data-[state=active]:text-foreground">

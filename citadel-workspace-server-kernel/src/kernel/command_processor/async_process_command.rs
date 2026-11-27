@@ -1449,6 +1449,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             super::chat_attachments::process(kernel, actor_user_id, request).await
         }
 
+        WorkspaceProtocolRequest::DocumentPictures(request) => {
+            super::document_pictures::process(kernel, actor_user_id, request).await
+        }
+
         WorkspaceProtocolRequest::SecureLinks(request) => {
             super::secure_links::process(kernel, actor_user_id, request).await
         }

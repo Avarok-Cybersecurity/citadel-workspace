@@ -11,7 +11,7 @@ import type { MenuItem } from '../sdk/generated/MenuItem';
 import type { ServeOn } from '../sdk/generated/ServeOn';
 import type { ToolbarItem } from '../sdk/generated/ToolbarItem';
 import type { CborMap } from './cbor';
-import { array, bool, bytes, empty, float, literal, nullable, str, struct, u32, u64, type Parsed, type Schema } from './schema';
+import { array, bool, bytes, empty, float, literal, nullable, omittable, str, struct, u32, u64, type Parsed, type Schema } from './schema';
 import { address, caller, drawCommand, httpRequest, ihttpFrame, kvBackend, route } from './wire-schemas';
 
 export type OpName = keyof OpArgs;
@@ -77,7 +77,7 @@ export const OP_ARGS: { readonly [N in OpName]: Schema<OpArgs[N]> } = {
   IhttpConsumed: s<OpArgs['IhttpConsumed']>({ peer: caller, stream: u64 }),
   ClipboardReadText: empty,
   ClipboardWriteText: s<OpArgs['ClipboardWriteText']>({ text: str }),
-  Notify: s<OpArgs['Notify']>({ title: str, body: str }),
+  Notify: s<OpArgs['Notify']>({ title: str, body: str, kind: omittable(literal('invitation', 'booking', 'poll', 'other')), about: omittable(s({ node_id: str, author: str, key: str })) }),
   DocOpen: s<OpArgs['DocOpen']>(node),
   DocApply: s<OpArgs['DocApply']>({ node_id: str, update: bytes }),
   DocPull: s<OpArgs['DocPull']>({ node_id: str, since: bytes }),

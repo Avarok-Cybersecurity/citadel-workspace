@@ -41,22 +41,22 @@ test.describe('registration validates before submitting', () => {
   });
 
   test('a password longer than the SDK allows is reported, not truncated', async ({ page }) => {
-    // Typical password-manager output. The SDK maximum is 17.
-    const managerPassword = 'Xk4$mQ2!vB9#nR7&pL7x';
-    expect(managerPassword.length).toBeGreaterThan(17);
+    // Password-manager output one character past the SDK maximum of 64.
+    const managerPassword = `${'Aa1!'.repeat(16)}z`;
+    expect(managerPassword.length).toBe(65);
 
     const field = page.locator('#password');
     await field.fill(managerPassword);
     await field.blur();
 
     // The value must survive intact. A maxLength attribute here would silently
-    // clip it to 17, registering a secret the user never saw and cannot
+    // clip it to 64, registering a secret the user never saw and cannot
     // reproduce from their vault — worse than refusing it outright.
     await expect(field).toHaveValue(managerPassword);
 
     const error = page.locator('#password-error');
     await expect(error).toBeVisible();
-    await expect(error).toHaveText(/17 characters or fewer/);
+    await expect(error).toHaveText(/64 characters or fewer/);
     await expect(field).toHaveAttribute('aria-invalid', 'true');
     await expect(field).toHaveAttribute('aria-describedby', 'password-error');
   });

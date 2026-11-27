@@ -38,6 +38,10 @@ mod chat_documents_tests;
 /// files and shared git dependencies. Updating one and not the other compiles
 /// cleanly and fails at runtime.
 pub mod dependency_agreement;
+/// Pictures in a page's or a chat document's Citadel Docs document; see `document_pictures`.
+pub mod document_pictures;
+#[cfg(test)]
+mod document_pictures_tests;
 /// A document node's CRDT update log, its snapshot, and the awareness relay.
 pub mod document_refusal;
 pub mod documents;
@@ -550,6 +554,8 @@ pub enum WorkspaceProtocolRequest {
     ChatDocuments(chat_documents::ChatDocumentsRequest),
     /// A file shared in a node's chat; see `chat_attachments`.
     ChatAttachments(chat_attachments::ChatAttachmentsRequest),
+    /// A picture in a page's or a chat document's document; see `document_pictures`.
+    DocumentPictures(document_pictures::DocumentPicturesRequest),
     /// Secure links; see `secure_links`.
     SecureLinks(secure_links::SecureLinksRequest),
     /// Citadel Apps: listings, installs and their artifacts; see `apps_protocol`.
@@ -800,6 +806,7 @@ pub enum WorkspaceProtocolResponse {
     Documents(documents::DocumentsResponse),
     ChatDocuments(chat_documents::ChatDocumentsResponse),
     ChatAttachments(chat_attachments::ChatAttachmentsResponse),
+    DocumentPictures(document_pictures::DocumentPicturesResponse),
     SecureLinks(secure_links::SecureLinksResponse),
     Apps(apps_responses::AppsResponse),
     /// The answer to `ServerIdentityChallenge`.

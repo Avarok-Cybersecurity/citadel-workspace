@@ -11,7 +11,7 @@
  * Both halves are asserted here: the audio element is owned above the router,
  * and a control to leave appears exactly when the call's own surface is not.
  */
-import { describe, it, expect, vi, beforeEach   } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, act , type RenderResult } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -41,8 +41,8 @@ function callState(status: CallState['status'], peerStatus: string = 'active'): 
   } as unknown as CallState;
 }
 
-function harness(overrides: Partial<CallContextValue>): { value: CallContextValue; leave: ReturnType<typeof vi.fn>; } {
-  const leave: ReturnType<typeof vi.fn> = vi.fn((): Promise<void> => Promise.resolve());
+function harness(overrides: Partial<CallContextValue>): { value: CallContextValue; leave: Mock; } {
+  const leave: Mock = vi.fn((): Promise<void> => Promise.resolve());
   const value: CallContextValue = {
     call: callState('active'),
     localStream: null,

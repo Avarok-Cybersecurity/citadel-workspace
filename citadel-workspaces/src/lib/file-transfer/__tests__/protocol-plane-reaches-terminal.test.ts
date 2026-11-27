@@ -16,7 +16,7 @@
  * why the progress/complete path was dead. These tests feed the parser
  * exactly what the internal service sends.
  */
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { parseTickNotification, type TickCorrelation } from '../tick-events';
 import { applyTransferOutcome } from '../transfer-outcome';
 import type { FileTransferTickNotification, VirtualObjectMetadata } from '../protocol-types';
@@ -128,9 +128,9 @@ describe('parseTickNotification against the canonical wire shapes', () => {
 const transfer = (over: Partial<FileTransfer> = {}): FileTransfer =>
   ({ id: 't1', state: 'transferring', progress: 0, updatedAt: 0, ...over }) as FileTransfer;
 
-function depsFor(t: FileTransfer): { deps: P2PTransferDeps; saveTransfer: ReturnType<typeof vi.fn>; emitStateChange: ReturnType<typeof vi.fn>; } {
-  const saveTransfer: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<void> => {});
-  const emitStateChange: ReturnType<typeof vi.fn> = vi.fn();
+function depsFor(t: FileTransfer): { deps: P2PTransferDeps; saveTransfer: Mock; emitStateChange: Mock; } {
+  const saveTransfer: Mock = vi.fn(async (): Promise<void> => {});
+  const emitStateChange: Mock = vi.fn();
   return {
     deps: {
       state: { getTransfer: (id: string) => (id === t.id ? t : undefined) },

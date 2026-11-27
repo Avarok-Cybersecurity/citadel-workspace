@@ -113,10 +113,11 @@ export async function openTab(name: string, build: Build, seq: number, cid: bigi
     promotions: 0, demotedAt: [], promotedAt: [], leaderWithoutClient: [], sent: [], sendTakesMs: 0,
   };
   opening = tab;
-  const module: { instanceChannel: TabChannel & { relinquishLeadership(): void; requestCidReport(): void } } =
+  const module: { instanceChannel: TabChannel & { start(): void; relinquishLeadership(): void; requestCidReport(): void } } =
     await import('../instance-channel');
+  const channel: TabChannel & { start(): void; relinquishLeadership(): void; requestCidReport(): void } = module.instanceChannel;
+  channel.start();
   opening = null;
-  const channel: TabChannel & { relinquishLeadership(): void; requestCidReport(): void } = module.instanceChannel;
   (tab as { channel: TabChannel }).channel = channel;
 
   await wireSocket(tab, channel);

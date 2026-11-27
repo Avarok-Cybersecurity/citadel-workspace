@@ -11,6 +11,7 @@ import { EditorSession } from '../../editor/editor-session';
 import type { EditorState } from '../../editor/controller';
 import { realHost } from '../wasm-rig';
 import { nullPort, nullTarget } from './null-canvas';
+import { NO_PICTURES } from '../no-pictures';
 
 export interface SelectAllRun {
   readonly p50Ms: number;
@@ -33,7 +34,7 @@ const percentile = (xs: number[], p: number): number => [...xs].sort((a: number,
 async function document(pages: number): Promise<EditorSession> {
   const client: InProcessCdocClient = new InProcessCdocClient(realHost(nullPort, (): typeof nullTarget => nullTarget));
   const renderer: WorkerPageRenderer = new WorkerPageRenderer(client, (): OffscreenCanvas => ({}) as OffscreenCanvas);
-  const editor: EditorSession = await EditorSession.open({ client, renderer }, 1n, { kind: 'blank' });
+  const editor: EditorSession = await EditorSession.open({ client, renderer, pictures: NO_PICTURES }, 1n, { kind: 'blank' });
   while (editor.state.pageCount < pages) await editor.execute({ name: 'insertText', text: `${PARAGRAPH}\n`.repeat(200) });
   return editor;
 }

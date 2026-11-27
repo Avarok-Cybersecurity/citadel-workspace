@@ -4,9 +4,13 @@
  * (app-notice-delivery.ts), the page marks the notification in-app only, and the notification
  * service starts no system delivery for it. Another app's notices are untouched.
  *
+ * A member who sends them to this device gets them in the system's notification centre whenever
+ * they arrive, the window in front or not, as a calendar app shows its reminders: the owner's
+ * reminder reached the bell, in front, and never the system.
+ *
  * The real sink and notification service. Stand-ins: the session read (which CID this tab acts
- * as), the system delivery itself (recorded, never shown), and `document.hasFocus` (false: a
- * window not in front, the only case a system notification is ever for).
+ * as), the system delivery itself (recorded, never shown), `document.hasFocus` (whether the window
+ * is in front), and the browser's `Notification.permission` (granted; the OS cannot be driven).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Notification } from '@/lib/notification-service/types';
@@ -24,13 +28,16 @@ const { notificationService } = await import('@/lib/notification-service/service
 const settle = async (): Promise<void> => { for (let i: number = 0; i < 10; i += 1) await Promise.resolve(); };
 const raised = (title: string): Notification[] => notificationService.getNotifications().filter((n) => n.title === title);
 
-beforeEach(() => { vi.spyOn(document, 'hasFocus').mockReturnValue(false); });
-afterEach(() => { vi.restoreAllMocks(); delivered.splice(0); });
+beforeEach(() => {
+  vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+  vi.stubGlobal('Notification', { permission: 'granted' });
+});
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); delivered.splice(0); });
 
 describe("an app's notices", () => {
   it('reach the bell but never the system when the member keeps them to the page', async () => {
     recordAppNoticeDelivery('net.avarok.calendar', false);
-    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Quiet standup', body: 'Starts at 9:00' });
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Quiet standup', body: 'Starts at 9:00', senderLine: 'Calendar: new notice' });
     await settle();
     expect(raised('Quiet standup')).toHaveLength(1);
     expect(delivered.map((n) => n.title)).not.toContain('Quiet standup');
@@ -39,10 +46,26 @@ describe("an app's notices", () => {
   it('reach the system too when the member allows it, and another app is untouched by the choice', async () => {
     recordAppNoticeDelivery('net.avarok.calendar', false);
     recordAppNoticeDelivery('net.avarok.calendar', true);
-    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Loud standup', body: 'Starts at 9:00' });
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Loud standup', body: 'Starts at 9:00', senderLine: 'Calendar: new notice' });
     recordAppNoticeDelivery('com.acme.board', false);
-    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Still loud', body: 'Starts at 10:00' });
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Still loud', body: 'Starts at 10:00', senderLine: 'Calendar: new notice' });
     await settle();
     expect(delivered.map((n) => n.title)).toEqual(['Loud standup', 'Still loud']);
+  });
+
+  it('reach the system with the window in front too, when the member sends them to this device', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    recordAppNoticeDelivery('net.avarok.calendar', true);
+    pageAppNotices({ from: 'Calendar', appId: 'net.avarok.calendar', nodeId: 'n-1', title: 'Due now', body: 'Starts at 9:10', senderLine: 'Calendar: new notice' });
+    await settle();
+    expect(delivered.map((n) => n.title)).toEqual(['Due now']);
+  });
+
+  it("follow the page's rule while the app has recorded no choice: not with the window in front", async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    pageAppNotices({ from: 'Board', appId: 'com.acme.unrecorded', nodeId: 'n-1', title: 'Unrecorded', body: 'b', senderLine: 'Board: new notice' });
+    await settle();
+    expect(raised('Unrecorded')).toHaveLength(1);
+    expect(delivered).toEqual([]);
   });
 });

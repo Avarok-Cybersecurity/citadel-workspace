@@ -36,6 +36,7 @@ pub mod async_process_command;
 mod chat_attachment_keep;
 mod chat_attachment_shares;
 mod chat_attachments;
+mod document_pictures;
 pub mod group_message_shape;
 /// ReactGroupMessage: reactions stored on a node channel's messages.
 pub mod group_reactions;
@@ -43,6 +44,7 @@ pub mod group_reactions;
 pub mod group_read_cursors;
 /// GroupTyping: relayed to the channel, never stored.
 pub mod group_typing;
+mod upload_reservation;
 
 /// What a failed workspace lookup means, decided from facts rather than prose.
 pub mod workspace_lookup;

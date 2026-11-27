@@ -98,6 +98,8 @@ async function start(): Promise<void> {
       // Nobody else is on this page's peer plane, and the install grants no P2P or topics.
       peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined },
       report: (what: string, detail: unknown): void => console.warn(what, detail), notices: pageAppNotices,
+      // A worker app hears no storage changes, so there is nobody to announce its own-store writes to.
+      ownWrites: null,
     }),
     pageUrl: () => window.location.href, locale: () => 'en', dpr: () => window.devicePixelRatio, theme: () => ({}),
     opened: new OpenedFiles(),

@@ -18,6 +18,10 @@ import { transportRouter } from './ihttp-transport-router';
 import type { PlaneSeat } from './install-plane-registry';
 import { PeerAuthority } from './peer-authority';
 import { topicPort, type OwnedTopicPort } from './topic-port';
+import { rejoining, type RejoiningTopicPort, type TopicJoin } from './topic-rejoin';
+import { offerTopicRetry, showTopicJoin } from '../topic-join-store';
+import { groupIdToKey, isValidGroupId } from '@/lib/group-conversations/group-key';
+import type { PeerAuthorization } from '../member-consent-types';
 
 /** What the page tells the peer planes; page-runtime.ts gives the tab's own. */
 export interface PeerWorld {
@@ -55,6 +59,16 @@ const CHANGES: ReadonlySet<AppsAnswer['kind']> = new Set<AppsAnswer['kind']>([
   'installed', 'updated', 'uninstalled', 'consented', 'disabled-for-me', 'peer-consent', 'peer-blocked', 'installs-changed', 'peer-answers-changed',
 ]);
 
+/** A member's answer changed: a joiner refused before may be admitted now (topic-rejoin.ts). */
+const CONSENT_CHANGES: ReadonlySet<AppsAnswer['kind']> = new Set<AppsAnswer['kind']>(['consented', 'peer-consent', 'peer-answers-changed']);
+
+/** The topic's owner by name: the group's creator (its key's cid), as the kernel names that member to this install. */
+async function ownerOf(groupId: string | null | 'refused', name: string, authority: PeerAuthority): Promise<string | null> {
+  if (groupId === null || groupId === 'refused' || !isValidGroupId(groupId)) return null;
+  const said: PeerAuthorization | 'limited' = await authority.authorize(groupIdToKey(groupId).cid, { Topic: { topic: name } });
+  return said !== 'limited' && said.ok ? said.peer.username : null;
+}
+
 /** `scopeKey`: the scope key the install is addressed by, which every call's head names; `seat`: the instance's place on the page. */
 export function peerPorts(install: AppInstall, scopeKey: string, limits: AppLimits, relay: IhttpPort, seat: PlaneSeat, w: PeerWorld): PeerPorts {
   const held: ReadonlySet<Capability> = new Set(effectiveForMember(install.granted, w.peerForMe(install.id)?.consent ?? null, false));
@@ -68,15 +82,25 @@ export function peerPorts(install: AppInstall, scopeKey: string, limits: AppLimi
     noteRefusal: (peerCid: bigint, side: 'serve' | 'call', why: string): void =>
       w.report(`[apps] ${install.app_id} (install ${install.id}): refused to ${side === 'serve' ? 'serve peer' : 'call peer'} ${peerCid.toString()}`, why),
   });
-  const topic: OwnedTopicPort | null = install.details.topics.length === 0 || limits.topics === undefined ? null : topicPort({
+  const inner: OwnedTopicPort | null = install.details.topics.length === 0 || limits.topics === undefined ? null : topicPort({
     cid: session.cid, seat, agent: w.agent, topics: install.details.topics, limits: limits.topics, authority, record: w.topicRecord,
     topicGroup: (name: string, claim: string | null) => topicGroup(w.transport, install.id, name, claim), timeoutMs: w.policy.portTimeoutMs,
     refused: (name: string, limit: string): void => w.report(`[apps] ${install.app_id} (install ${install.id}): the server refused a message to topic ${name}`, limit),
+    notAMember: (name: string): void => w.report(`[apps] ${install.app_id} (install ${install.id}): the server refused a message to topic ${name}: this session is not in its group`, 'NotAMember'),
   });
+  const topic: RejoiningTopicPort | null = inner === null ? null : rejoining(inner, {
+    intervalMs: w.policy.portTimeoutMs,
+    after: (ms: number, fire: () => void): (() => void) => { const timer: ReturnType<typeof setTimeout> = setTimeout(fire, ms); return (): void => clearTimeout(timer); },
+    owner: async (name: string): Promise<string | null> => ownerOf(await topicGroup(w.transport, install.id, name, null), name, authority),
+    consentChanges: (listener: () => void): (() => void) => w.pushes((answer: unknown): void => { if (CONSENT_CHANGES.has(readAppsAnswer(answer).kind)) listener(); }),
+    shown: (name: string, join: TopicJoin): void => showTopicJoin(install.id, name, join),
+  });
+  const stopOffering: () => void = topic === null ? (): void => undefined : offerTopicRetry(install.id, topic.tryAgain);
   return {
     held, ihttp: transportRouter({ relay, p2p, held, scopeKey }), topic,
     stop: async (): Promise<void> => {
       stopEvicting();
+      stopOffering();
       await topic?.closeAll();
     },
   };

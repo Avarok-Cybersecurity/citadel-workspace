@@ -1,13 +1,13 @@
-import { describe, it, expect, vi  } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { saveChatSettings, MAX_CHAT_RULES_LENGTH , type ChatSettingsNotice } from '../save-chat-settings';
 
 function deps(overrides: Partial<Parameters<typeof saveChatSettings>[0]> = {}): {
   notices: ChatSettingsNotice[];
-  write: ReturnType<typeof vi.fn>;
+  write: Mock;
   args: Parameters<typeof saveChatSettings>[0];
 } {
   const notices: ChatSettingsNotice[] = [];
-  const write: ReturnType<typeof vi.fn> = vi.fn((): Promise<void> => Promise.resolve());
+  const write: Mock = vi.fn((): Promise<void> => Promise.resolve());
   return {
     notices,
     write,
@@ -37,7 +37,7 @@ describe('saveChatSettings', () => {
   });
 
   it('reports failure and does not claim success when the write rejects', async () => {
-    const write: ReturnType<typeof vi.fn> = vi.fn((): Promise<never> => Promise.reject(new Error('offline')));
+    const write: Mock = vi.fn((): Promise<never> => Promise.reject(new Error('offline')));
     const d: ReturnType<typeof deps> = deps({ write });
 
     const result: boolean = await saveChatSettings(d.args);

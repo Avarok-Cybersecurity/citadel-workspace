@@ -8,10 +8,10 @@
  *
  * Doubled: the request sender, which is the socket.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import type { SignInFactors } from '@/lib/sign-in/types';
 
-const sendRequest: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined);
+const sendRequest: Mock = vi.fn().mockResolvedValue(undefined);
 const { AuthOperations } = await import('../auth-operations');
 
 interface ConnectFields { password: number[] | null; security_key: boolean; admission_token: string | null }

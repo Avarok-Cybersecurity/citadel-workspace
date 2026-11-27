@@ -6,16 +6,19 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import type { RosterMember } from '@/lib/citadel-apps/runtime/first-party-ports';
-import type { PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
+import { withWorkspaceRoot, type PageNode } from '@/lib/citadel-apps/runtime/nodes-port';
+import { useLevelName } from '@/hooks/use-level-name';
+import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 import type { AppTabMount, AppZoneRuntime, GlueBound, GlueHandle } from './app-zone-environment';
 
 export type GlueBinding = { kind: 'binding' } | GlueBound;
 
 export function useGlueBinding(runtime: AppZoneRuntime, tab: AppTabMount): GlueBinding {
   const { state } = useWorkspace();
-  const tree: MutableRefObject<Readonly<Record<string, PageNode>>> = useRef<Readonly<Record<string, PageNode>>>(state.nodes);
+  const workspaceName: string = useLevelName()(WORKSPACE_ROOT_ID);
+  const tree: MutableRefObject<Readonly<Record<string, PageNode>>> = useRef<Readonly<Record<string, PageNode>>>(withWorkspaceRoot(state.nodes, workspaceName));
   const roster: MutableRefObject<readonly RosterMember[]> = useRef<readonly RosterMember[]>(Object.values(state.members));
-  tree.current = state.nodes;
+  tree.current = withWorkspaceRoot(state.nodes, workspaceName);
   roster.current = Object.values(state.members);
   const [binding, setBinding] = useState<GlueBinding>({ kind: 'binding' });
   const { install, manifest, tabId, nodeId, me } = tab;

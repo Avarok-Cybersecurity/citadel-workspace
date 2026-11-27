@@ -8,7 +8,7 @@
  * Stubbed: the prompt (the user's answer), sonner (the output observed) and
  * mkdir (the service boundary). The handler is the real one.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
 let answer: string | null = null;
@@ -20,7 +20,7 @@ const errors: string[] = [];
 vi.mock('sonner', () => ({ toast: { success: (): void => {}, error: (m: string): void => { errors.push(m); }, info: (): void => {} } }));
 
 const { useFileManagerHandlers } = await import('../useFileManagerHandlers');
-const mkdir: ReturnType<typeof vi.fn> = vi.fn(async (): Promise<boolean> => true);
+const mkdir: Mock = vi.fn(async (): Promise<boolean> => true);
 
 function newFolder(): (parent: string) => Promise<void> {
   const noop = (): void => {};

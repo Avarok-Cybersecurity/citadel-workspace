@@ -96,12 +96,13 @@ async fn the_production_server_refuses_a_transient_account() {
     let Outcome::Refused(err) = transient else {
         panic!("the production server did not refuse a transient (password-less) account: {transient:?}");
     };
-    // The server's reason, or the SDK's backstop when the teardown wins the race
-    // to the wire -- the same two answers citadel_sdk's own test accepts. Anything
-    // else is a refusal for some other reason, which proves nothing about this one.
+    // The server's reason (`PasswordlessUnsupported`, worded this way since
+    // Citadel-Protocol b3d440db), or the SDK's backstop when the teardown wins the
+    // race to the wire. Anything else is a refusal for some other reason, which
+    // proves nothing about this one.
     let message = err.into_string();
     assert!(
-        message.contains("Transient connections are not allowed")
+        message.contains("This server does not allow transient accounts")
             || message.contains("The connection ended before the handshake completed"),
         "refused, but not for being transient: {message}"
     );

@@ -1,0 +1,5 @@
+{
+  "name": "invalid-null-prev",
+  "notes": "null (f6) is not part of this encoding: an absent prev is the empty byte string",
+  "cbor_hex": "a106f6"
+}

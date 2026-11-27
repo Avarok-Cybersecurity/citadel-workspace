@@ -15,14 +15,14 @@
  * top on a phone, where there is no margin and the primary action is at the
  * bottom of the form.
  */
-import { describe, it, expect, vi, afterEach  } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { render, cleanup, act, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import { Toaster } from '../sonner';
 
 vi.mock('next-themes', (): { useTheme: () => { theme: string; }; } => ({ useTheme: (): { theme: string; } => ({ theme: 'light' }) }));
 
-const isMobile: ReturnType<typeof vi.fn> = vi.fn();
+const isMobile: Mock = vi.fn();
 vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: (): unknown => isMobile() }));
 
 afterEach(cleanup);

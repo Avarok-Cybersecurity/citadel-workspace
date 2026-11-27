@@ -12,12 +12,11 @@ import { availableParallelism } from 'node:os';
 // tracked artifacts under it (citadel-workspace-internal-service's build script runs wasm-pack).
 const BASE_ENV = { SKIP_WASM_BUILD: '1' };
 
-/**
- * Git hands a hook the variables that locate ITS repository. Inherited by a gate that runs git
- * in another repo -- the UI hook's gates run in the parent -- they silently point that gate at
- * the UI's index and object store. The hook's own git reads happen before this, in-process.
- */
-export const REPO_LOCATORS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES'];
+// The repo locators git hands a hook (lib/preflight-stamp.mjs says why): never inherited by a gate.
+// The hook's own git reads happen before this, in-process.
+import { REPO_LOCATORS } from './preflight-stamp.mjs';
+
+export { REPO_LOCATORS };
 const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !REPO_LOCATORS.includes(key)));
 
 function runOne({ cmd, args, cwd, env }) {

@@ -6,7 +6,7 @@
 import { createContext, useCallback, useContext, useSyncExternalStore, type Context } from 'react';
 import type { EditorController, EditorState } from '@/lib/cdoc/editor/controller';
 
-export type RibbonEditor = Pick<EditorController, 'state' | 'execute' | 'addImage' | 'selectionText' | 'styles' | 'focus' | 'on'>;
+export type RibbonEditor = Pick<EditorController, 'state' | 'execute' | 'addImage' | 'pictureLimit' | 'selectionText' | 'styles' | 'focus' | 'on'>;
 
 export const EditorControllerContext: Context<RibbonEditor | null> = createContext<RibbonEditor | null>(null);
 

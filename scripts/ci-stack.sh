@@ -41,6 +41,10 @@ cd "$ROOT"
 
 SERVICES=(sync-wasm-client server internal-service ui)
 BUILD_OVERRIDE="docker/ci/compose.stack-build.yml"
+# The server's kernel with the first-party apps the job signed with the published CI seed
+# (`build-first-party-apps.mjs --sign <dir> --ci-key`), so the stack provisions them as production
+# does. The server's build only: compose would interpolate it for every service.
+CI_FIRST_PARTY_OVERRIDE="docker/ci/compose.ci-first-party.yml"
 RUNTIME_OVERRIDE="docker/ci/compose.prebuilt.yml"
 # Everything the sync container bind-mounts from the checkout (docker-compose.yml). It can
 # write nowhere else on the host, so these three directories bound what it produced.
@@ -124,9 +128,15 @@ build() {
   need_env GITHUB_RUN_ID
   printf '%s\n' "${SERVICES[@]}" | grep -qx "$svc" || die "unknown service '$svc'"
   require_clean
+  local files=(-f docker-compose.yml -f "$BUILD_OVERRIDE")
+  if [ "$svc" = server ]; then
+    need_env CI_FIRST_PARTY_SIGNED_DIR
+    [ -s "$CI_FIRST_PARTY_SIGNED_DIR/calendar/app.mldsa.sig" ] || die "$CI_FIRST_PARTY_SIGNED_DIR holds no signed calendar"
+    files+=(-f "$CI_FIRST_PARTY_OVERRIDE")
+  fi
   CI_STACK_SOURCE="$(identity_hash)" CI_STACK_REVISION="$(git rev-parse HEAD)" \
     CI_STACK_RUN="$GITHUB_RUN_ID" CI_STACK_BACKEND="$(backend_hash)" \
-    docker compose -f docker-compose.yml -f "$BUILD_OVERRIDE" build "$svc"
+    docker compose "${files[@]}" build "$svc"
   mkdir -p "$out"
   docker save "$(image_of "$svc")" | zstd -T0 -3 -q -o "$out/$svc.tar.zst"
   seal_artifact "$out/$svc.tar.zst" "ci-stack-$svc"

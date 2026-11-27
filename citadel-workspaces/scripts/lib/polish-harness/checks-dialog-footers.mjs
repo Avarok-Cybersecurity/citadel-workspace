@@ -13,7 +13,7 @@ import { settled } from './checks-controls.mjs';
 
 const DIALOGS = '[role="dialog"], [role="alertdialog"]';
 
-async function scenarioNames(page, url) {
+export async function scenarioNames(page, url) {
   await page.goto(url('').replace('s=&', ''));
   return page.evaluate(() => window.harnessScenarios);
 }

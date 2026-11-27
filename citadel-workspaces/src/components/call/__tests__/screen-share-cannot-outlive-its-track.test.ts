@@ -17,13 +17,13 @@
  * The button read "Sharing", peers opened a stage, and no frame ever arrived,
  * with no way back except pressing stop and start again.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { MutableRefObject } from 'react';
 import type { CallMediaKinds } from '@/types/p2p-commands';
 import { useCallMediaToggles } from '../use-call-media-toggles';
 
-const captureScreen: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn());
+const captureScreen: Mock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/call/screen-capture', () => ({ captureScreen }));
 // Screen capture is fetched after first paint rather than bundled, so the
 // browser has to say it is possible before the fetch happens at all.
@@ -40,8 +40,8 @@ interface Harness {
   releaseAnnouncement: () => void;
   /** Resolves once the start has been announced but not yet acknowledged. */
   announcementInFlight: () => Promise<void>;
-  stopScreen: ReturnType<typeof vi.fn>;
-  onScreenEnded: ReturnType<typeof vi.fn>;
+  stopScreen: Mock;
+  onScreenEnded: Mock;
 }
 
 async function setup(): Promise<Harness> {
@@ -51,7 +51,7 @@ async function setup(): Promise<Harness> {
   let release: () => void = (): void => {};
   const gate: Promise<void> = new Promise<void>((resolve) => { release = resolve; });
 
-  const setSelfMedia: ReturnType<typeof vi.fn> = vi.fn(async (next: CallMediaKinds): Promise<void> => {
+  const setSelfMedia: Mock = vi.fn(async (next: CallMediaKinds): Promise<void> => {
     await gate;
     selfMedia = next;
   });
@@ -60,7 +60,7 @@ async function setup(): Promise<Harness> {
   } as unknown as MutableRefObject<Manager>;
 
   let onEnded: () => void = (): void => {};
-  const stopScreen: ReturnType<typeof vi.fn> = vi.fn();
+  const stopScreen: Mock = vi.fn();
   const sessionRef: Parameters<typeof useCallMediaToggles>[1] = {
     current: {
       getLocalStream: () => null,
@@ -78,7 +78,7 @@ async function setup(): Promise<Harness> {
     stream: { getTracks: () => [], getVideoTracks: () => [] } as unknown as MediaStream,
   });
 
-  const onScreenEnded: ReturnType<typeof vi.fn> = vi.fn();
+  const onScreenEnded: Mock = vi.fn();
   const hook: Harness['hook'] = renderHook(() =>
     useCallMediaToggles(managerRef, sessionRef, undefined, undefined, undefined, onScreenEnded),
   );
@@ -158,7 +158,7 @@ function deviceSetup(kind: 'audio' | 'video'): {
   let selfMedia: CallMediaKinds = { audio: false, video: false, screen: false };
   let release: () => void = (): void => {};
   const gate: Promise<void> = new Promise<void>((resolve) => { release = resolve; });
-  const setSelfMedia: ReturnType<typeof vi.fn> = vi.fn(async (next: CallMediaKinds): Promise<void> => {
+  const setSelfMedia: Mock = vi.fn(async (next: CallMediaKinds): Promise<void> => {
     await gate;
     selfMedia = next;
   });

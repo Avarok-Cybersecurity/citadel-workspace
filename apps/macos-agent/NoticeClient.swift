@@ -11,6 +11,12 @@ struct Notice {
     let account: String
     let serverHost: String?
     let open: String
+    /// An app notice's stable id (a Calendar reminder's): shown again, it replaces the one shown.
+    let id: String?
+
+    /// The macOS request identifier: per account and id, so a repeat replaces instead of stacking;
+    /// a notice with no id is never repeated and gets its own.
+    var osIdentifier: String { id.map { "\(cid):\($0)" } ?? UUID().uuidString }
 }
 
 /// What the agent says about one signed-in account, for its row in the panel.
@@ -160,7 +166,7 @@ final class NoticeClient {
         return (variant, value as? [String: Any] ?? [:])
     }
 
-    private static func notice(_ body: [String: Any]) -> Notice? {
+    static func notice(_ body: [String: Any]) -> Notice? {
         guard let cid = (body["cid"] as? NSNumber)?.uint64Value,
               let kind = body["kind"] as? String,
               let title = body["title"] as? String,
@@ -169,7 +175,8 @@ final class NoticeClient {
               let account = target["account"] as? String,
               let open = target["open"] as? String else { return nil }
         let host = (target["server_host"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-        return Notice(cid: cid, kind: kind, title: title, body: text, account: account, serverHost: host, open: open)
+        let id = (body["id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        return Notice(cid: cid, kind: kind, title: title, body: text, account: account, serverHost: host, open: open, id: id)
     }
 
     private static func rows(_ body: [String: Any]) -> [UInt64: NoticeRow] {

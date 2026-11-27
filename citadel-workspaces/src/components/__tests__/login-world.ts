@@ -7,7 +7,7 @@
  * vi.mock factories are hoisted and cannot close over imports, so each test
  * file's factory awaits this module and calls the matching function.
  */
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
 import { doubleOf } from '@/test/singleton-double';
 import type { World } from '@/lib/sign-in/__tests__/helpers';
 import type { FakeAccount } from '@/lib/sign-in/__tests__/fake-agent';
@@ -16,7 +16,7 @@ import type { Admission } from '@/lib/admission';
 import type { SignedOutSession } from 'citadel-workspace-client-ts';
 
 export const loginWorld: {
-  w: World; postAuth: ReturnType<typeof vi.fn>; messaging: ReturnType<typeof vi.fn>;
+  w: World; postAuth: Mock; messaging: Mock;
   /** What the control plane answers about the human check: null is "unknown" (no answer). */
   discovered: Admission | null;
   /** Its answer for a known workspace (`/admission/<slug>`), by server address; others get `discovered`. */

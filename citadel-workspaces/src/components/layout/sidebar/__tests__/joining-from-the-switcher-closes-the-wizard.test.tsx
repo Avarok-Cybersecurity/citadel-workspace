@@ -13,14 +13,14 @@
  * IndexedDB, which is storage I/O and not the question), and the stored-session
  * reads the switcher's menu makes on mount.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { eventEmitter } from '@/lib/event-emitter';
 import { ConnectionManager } from '@/lib/connection';
 import { renderSwitcher, joinFromTheSwitcher } from './switcher-join-flow';
 
 // Hoisted: the static imports below load the websocket service before this line would run.
-const { register } = vi.hoisted((): { register: ReturnType<typeof vi.fn> } => ({
+const { register } = vi.hoisted((): { register: Mock } => ({
   register: vi.fn(async (requestId: string): Promise<void> => {
     // As the agent answers: RegisterSuccess with the phrase, then the connect.
     queueMicrotask((): void => {

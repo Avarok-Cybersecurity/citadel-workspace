@@ -5,6 +5,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 import { REPO_LOCATORS } from './preflight-run.mjs';
 import { blobId, envInKey, worldDigest } from './preflight-stamp.mjs';
@@ -93,21 +94,40 @@ function readOr(path, absent) {
   return existsSync(path) ? readFileSync(path, 'utf8') : absent;
 }
 
-/** `rustc -vV` as the gates' PATH resolves it; 'absent' when there is none. Any other failure throws. */
-function rustcVersion(env) {
+/** `<tool> -vV` as the gates' PATH resolves it; 'absent' when there is none. Any other failure throws. */
+function toolVersion(tool, env) {
   const runEnv = Object.fromEntries(Object.entries(env).filter(([k, v]) => v !== undefined && !REPO_LOCATORS.includes(k)));
   try {
-    return execFileSync('rustc', ['-vV'], { env: runEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim().replace(/\n/g, '; ');
+    return execFileSync(tool, ['-vV'], { cwd: homedir(), env: runEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim().replace(/\n/g, '; ');
   } catch (error) {
     if (error.code === 'ENOENT') return 'absent';
     throw error;
   }
 }
 
+/** The cargo configuration outside every checkout: it can set rustflags, profiles, a linker. */
+function cargoHomeConfigs(env) {
+  const home = env.CARGO_HOME ?? join(homedir(), '.cargo');
+  return ['config.toml', 'config'].map((name) => join(home, name));
+}
+
+/** Playwright's browser builds by directory name (`chromium-1248`); other tools' caches there are not inputs. */
+const BROWSER_BUILD = /^(chromium|chromium_headless_shell|chromium-headless-shell|firefox|webkit|ffmpeg)-\d+$/;
+
+/** Where Playwright keeps the browser builds the browser gates drive (its documented defaults). */
+function playwrightBrowsersDir(env) {
+  if (env.PLAYWRIGHT_BROWSERS_PATH) return env.PLAYWRIGHT_BROWSERS_PATH;
+  if (process.platform === 'darwin') return join(homedir(), 'Library', 'Caches', 'ms-playwright');
+  if (process.platform === 'win32') return join(env.LOCALAPPDATA ?? homedir(), 'ms-playwright');
+  return join(env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), 'ms-playwright');
+}
+
 /** The installs and the runtimes, as entries. */
 function toolchain(root, env, entries) {
   entries.set('tool:node', `${process.version} ${process.platform} ${process.arch}`);
-  entries.set('tool:rustc', rustcVersion(env));
+  entries.set('tool:rustc', toolVersion('rustc', env));
+  entries.set('tool:cargo', toolVersion('cargo', env));
+  for (const path of cargoHomeConfigs(env)) entries.set(`tool:cargo-home:${path}`, existsSync(path) ? contentId(path) : 'absent');
   for (const nm of NODE_MODULES) entries.set(`tool:${nm}/.package-lock.json`, blobId(readOr(join(root, nm, '.package-lock.json'), 'absent')));
   const names = new Set();
   for (const pkg of ['package.json', 'citadel-workspaces/package.json']) {
@@ -121,13 +141,30 @@ function toolchain(root, env, entries) {
   }
   const browsers = NODE_MODULES.map((nm) => join(root, nm, 'playwright-core', 'browsers.json')).find(existsSync);
   entries.set('tool:playwright-browsers', browsers ? blobId(readFileSync(browsers)) : 'absent');
+  const installed = playwrightBrowsersDir(env);
+  entries.set('tool:playwright-installed', existsSync(installed) ? readdirSync(installed).filter((n) => BROWSER_BUILD.test(n)).sort().join(',') : 'absent');
+}
+
+/**
+ * Whether a world entry is an input of the AGENT workspace's checks (cwd citadel-internal-service):
+ * its own files and build outputs, the toolchain and the environment. The agent repository's CI
+ * builds and tests that workspace from its own checkout alone, so no agent check can read a
+ * parent file; a parent-only change therefore leaves the agent checks' key where it was.
+ */
+export const AGENT_DIR = 'citadel-internal-service';
+export function isAgentInput(label) {
+  const colon = label.indexOf(':');
+  const kind = label.slice(0, colon);
+  if (kind === 'tool' || kind === 'env') return true;
+  const path = label.slice(colon + 1);
+  return (kind === 'file' || kind === 'ignored') && (path === AGENT_DIR || path.startsWith(`${AGENT_DIR}/`));
 }
 
 /**
  * The world's digest, or why it cannot be keyed (stamps off; not an error).
  * Throws on any read that fails: an error is never a match.
  * @param {string} root the parent checkout  @param {Record<string, string|undefined>} env
- * @returns {{ digest: string, files: number } | { unkeyable: string }}
+ * @returns {{ digest: string, agentDigest: string, files: number, entries: [string, string][] } | { unkeyable: string }}
  */
 export function readWorld(root, env) {
   const entries = new Map();
@@ -148,5 +185,6 @@ export function readWorld(root, env) {
   }
   toolchain(root, env, entries);
   for (const [name, value] of envInKey(env)) entries.set(`env:${name}`, value);
-  return { digest: worldDigest([...entries]), files };
+  const all = [...entries];
+  return { digest: worldDigest(all), agentDigest: worldDigest(all.filter(([label]) => isAgentInput(label))), files, entries: all };
 }

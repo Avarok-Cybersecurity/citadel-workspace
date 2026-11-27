@@ -8,7 +8,7 @@
  * so this exercises the real orchestration logic with no browser, no peer and no
  * internal service.
  */
-import { describe, it, expect, vi, beforeEach     } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { MAX_OPEN_ATTEMPTS } from '../open-session-retry';
 import { CallManager, MEDIA_WIRE_VERSION } from '../call-manager';
 import type { CallTransport } from '../call-transport';
@@ -28,10 +28,10 @@ const CAROL: bigint = 3n;
 interface Harness {
   manager: CallManager;
   transport: {
-    openSession: ReturnType<typeof vi.fn>;
-    closeSession: ReturnType<typeof vi.fn>;
-    sendFrame: ReturnType<typeof vi.fn>;
-    sendSignal: ReturnType<typeof vi.fn>;
+    openSession: Mock;
+    closeSession: Mock;
+    sendFrame: Mock;
+    sendSignal: Mock;
   };
   states: Array<CallState | null>;
   signalsTo: (cid: bigint) => CallSignalPayload[];
@@ -50,7 +50,7 @@ interface Harness {
 interface Timer { fn: () => void; delayMs: number; cancelled: boolean; fired: boolean }
 
 function harness(): Harness {
-  const transport: { openSession: ReturnType<typeof vi.fn>; closeSession: ReturnType<typeof vi.fn>; sendFrame: ReturnType<typeof vi.fn>; sendSignal: ReturnType<typeof vi.fn> } = {
+  const transport: { openSession: Mock; closeSession: Mock; sendFrame: Mock; sendSignal: Mock } = {
     openSession: vi.fn().mockResolvedValue(undefined),
     closeSession: vi.fn().mockResolvedValue(undefined),
     sendFrame: vi.fn(),

@@ -1,0 +1,101 @@
+{
+  "name": "05-server-create",
+  "notes": "A seeded directory created by the server (author [0]) in a node volume, with a derived target and a derived op_id",
+  "header": {
+    "cbor_hex": "aa010102676e6f64653a6e31035037c0c39f48f0ce6e29cab202160647480481000501064007010850c9bfd0027a7f79859bf59cf32610f00409582061bd92fce6be68c78831f4a7ac3b4a756d6be78f9a52881f05e24329d42bc3b30a1b0000018bcfe577a0",
+    "model": {
+      "$map": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          "node:n1"
+        ],
+        [
+          3,
+          {
+            "$hex": "37c0c39f48f0ce6e29cab20216064748"
+          }
+        ],
+        [
+          4,
+          [
+            0
+          ]
+        ],
+        [
+          5,
+          1
+        ],
+        [
+          6,
+          {
+            "$hex": ""
+          }
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          8,
+          {
+            "$hex": "c9bfd0027a7f79859bf59cf32610f004"
+          }
+        ],
+        [
+          9,
+          {
+            "$hex": "61bd92fce6be68c78831f4a7ac3b4a756d6be78f9a52881f05e24329d42bc3b3"
+          }
+        ],
+        [
+          10,
+          1700000004000
+        ]
+      ]
+    }
+  },
+  "body": {
+    "cbor_hex": "a601010250d7d22241185eee99b4ddfc842f09001c0369446f63756d656e7473048100051901f8068100",
+    "model": {
+      "$map": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          {
+            "$hex": "d7d22241185eee99b4ddfc842f09001c"
+          }
+        ],
+        [
+          3,
+          "Documents"
+        ],
+        [
+          4,
+          [
+            0
+          ]
+        ],
+        [
+          5,
+          504
+        ],
+        [
+          6,
+          [
+            0
+          ]
+        ]
+      ]
+    }
+  },
+  "body_hash_hex": "61bd92fce6be68c78831f4a7ac3b4a756d6be78f9a52881f05e24329d42bc3b3",
+  "op_hash_hex": "b54905aef8990c7fa64031ab34624c191475497600fe9b0e4a4ea85c560497f8",
+  "sign_message_hex": "6369746164656c2d7666732d6f702d763100aa010102676e6f64653a6e31035037c0c39f48f0ce6e29cab202160647480481000501064007010850c9bfd0027a7f79859bf59cf32610f00409582061bd92fce6be68c78831f4a7ac3b4a756d6be78f9a52881f05e24329d42bc3b30a1b0000018bcfe577a0"
+}

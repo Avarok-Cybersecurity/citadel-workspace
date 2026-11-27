@@ -33,7 +33,7 @@ describe('the notification settings', () => {
 
   it('raise every kind, also to the system, before the member chooses', async () => {
     const m: NoticeMember = noticeMember('ana', new Map(), 0);
-    await m.ports.notify('bookings', 'New booking', 'Intro with bo');
+    await m.ports.notify('bookings', 'New booking', 'Intro with bo', null);
     expect(m.notes).toEqual(['New booking: Intro with bo']);
     expect(m.system).toEqual([true]);
   });
@@ -41,8 +41,8 @@ describe('the notification settings', () => {
   it('raise nothing of a kind turned off, and keep the rest to the page', async () => {
     const m: NoticeMember = noticeMember('ana', new Map(), 0);
     await choose(m, quiet);
-    await m.ports.notify('bookings', 'New booking', 'Intro with bo');
-    await m.ports.notify('reminders', 'Standup', 'Starts at 9:00');
+    await m.ports.notify('bookings', 'New booking', 'Intro with bo', null);
+    await m.ports.notify('reminders', 'Standup', 'Starts at 9:00', null);
     expect(m.notes).toEqual(['Standup: Starts at 9:00']);
     expect(m.system).toEqual([false]);
   });
@@ -50,10 +50,10 @@ describe('the notification settings', () => {
   it('raise nothing at all with the Calendar turned off, and hold a change at once', async () => {
     const m: NoticeMember = noticeMember('ana', new Map(), 0);
     await choose(m, { ...quiet, enabled: false });
-    await m.ports.notify('reminders', 'Standup', 'Starts at 9:00');
+    await m.ports.notify('reminders', 'Standup', 'Starts at 9:00', null);
     expect(m.notes).toEqual([]);
     await choose(m, { ...quiet, enabled: true });
-    await m.ports.notify('reminders', 'Standup', 'Starts at 9:00');
+    await m.ports.notify('reminders', 'Standup', 'Starts at 9:00', null);
     expect(m.notes).toEqual(['Standup: Starts at 9:00']);
   });
 
@@ -61,14 +61,14 @@ describe('the notification settings', () => {
     const said = vi.spyOn(console, 'error').mockImplementation(() => {});
     const m: NoticeMember = noticeMember('ana', new Map(), 0);
     await m.ports.storage.set(USER, NOTIFY_PREFS_KEY, new Uint8Array([0xff]));
-    await m.ports.notify('polls', 'New poll: Retro', 'bo asks');
+    await m.ports.notify('polls', 'New poll: Retro', 'bo asks', null);
     expect(m.notes).toEqual(['New poll: Retro: bo asks']);
     expect(said).toHaveBeenCalledWith(expect.stringContaining('could not be read'));
   });
 
   it('cannot widen the grant: without `notifications` nothing reaches the page', async () => {
     const m: NoticeMember = noticeMember('ana', new Map(), 0, ['storage.user']);
-    await expect(m.ports.notify('reminders', 'Standup', 'Starts at 9:00')).rejects.toMatchObject({ op: 'Notify', refused: 'ungranted' });
+    await expect(m.ports.notify('reminders', 'Standup', 'Starts at 9:00', null)).rejects.toMatchObject({ op: 'Notify', refused: 'ungranted' });
     expect(m.notes).toEqual([]);
   });
 });

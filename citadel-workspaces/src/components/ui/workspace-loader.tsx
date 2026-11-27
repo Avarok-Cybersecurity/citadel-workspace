@@ -68,7 +68,7 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({ children }) =>
   const onSessionEnded: (username: string, server: string, reason: string) => void = useCallback((username: string, server: string, reason: string): void => {
     const signIn: SignInAfterLoss = signInAfterLoss(username, server, reason, null);
     toast({ title: 'Signed out', description: signIn.message, variant: 'destructive' });
-    navigate(signIn.path);
+    void navigate(signIn.path);
   }, [navigate, toast]);
 
   // Check for dev mode
@@ -138,7 +138,7 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({ children }) =>
   useEffect(() => {
     if (isDevMode || !leaveForConnect) return;
     debugLog('WorkspaceLoader', ' No connection detected after timeout, redirecting to connect');
-    navigate('/connect');
+    void navigate('/connect');
   }, [leaveForConnect, navigate, isDevMode]);
 
   // Loaded: a secure link waiting since sign-in (a reload, an auto-claim) is opened now.

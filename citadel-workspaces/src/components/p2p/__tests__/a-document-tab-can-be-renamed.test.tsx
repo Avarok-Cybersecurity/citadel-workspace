@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { ChatTabBar, MESSAGES_TAB, createLiveDocumentTab, type ChatTab } from '../ChatTabBar';
 
@@ -15,7 +15,7 @@ afterEach(cleanup);
 
 describe('renaming from the tab', () => {
   it('right-click, Rename, type, confirm: sends the trimmed title for that document', async () => {
-    const rename: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
+    const rename: Mock = vi.fn(async () => undefined);
     setup(rename);
     fireEvent.contextMenu(docTab());
     fireEvent.click(await screen.findByTestId('tab-rename'));
@@ -42,7 +42,7 @@ describe('renaming from the tab', () => {
   });
 
   it('refuses a blank title with a reason and does not call rename', async () => {
-    const rename: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
+    const rename: Mock = vi.fn(async () => undefined);
     setup(rename);
     fireEvent.keyDown(docTab(), { key: 'F2' });
     fireEvent.change(await screen.findByTestId('rename-document-input'), { target: { value: '   ' } });
@@ -52,7 +52,7 @@ describe('renaming from the tab', () => {
   });
 
   it('refuses a title over the limit', async () => {
-    const rename: ReturnType<typeof vi.fn> = vi.fn(async () => undefined);
+    const rename: Mock = vi.fn(async () => undefined);
     setup(rename);
     fireEvent.keyDown(docTab(), { key: 'F2' });
     fireEvent.change(await screen.findByTestId('rename-document-input'), { target: { value: 'x'.repeat(81) } });

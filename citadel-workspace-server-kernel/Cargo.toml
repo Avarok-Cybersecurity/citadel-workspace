@@ -9,6 +9,9 @@ license.workspace = true
 [features]
 # localhost-testing = ["citadel_sdk/localhost-testing"]
 # vendored = ["citadel-internal-service/vendored"]
+# The integration image's kernel only: trusts the CI first-party root (`kernel::apps::ci_first_party_root`).
+# build.rs refuses it for a deploy and for wasm32.
+ci-first-party-root = []
 
 [[bin]]
 name = "citadel-workspace-server-kernel"
@@ -80,7 +83,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-
 tokio = { version = "1.44.1", default-features = false, features = ["macros", "sync"] }
 # `crypto.getRandomValues`, with the `getrandom_backend="wasm_js"` cfg the tenant worker sets.
 getrandom = { version = "0.3", features = ["wasm_js"] }
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "9ccfb045", default-features = false }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "191a683c", default-features = false }
 
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing", "multi-threaded"] }

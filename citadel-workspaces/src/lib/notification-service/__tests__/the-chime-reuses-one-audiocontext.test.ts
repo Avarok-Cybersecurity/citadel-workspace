@@ -7,9 +7,9 @@
  * silently for the rest of the session. jsdom has no real cap, so these tests
  * assert the construction count directly.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 
-const started: ReturnType<typeof vi.fn> = vi.fn();
+const started: Mock = vi.fn();
 const instances: MockAudioContext[] = [];
 
 class MockAudioContext {
