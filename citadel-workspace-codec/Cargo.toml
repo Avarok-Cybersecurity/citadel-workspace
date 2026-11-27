@@ -4,6 +4,13 @@
 # Its own workspace with a pinned compiler, as the Calendar's glue is, so the vendored binary
 # rebuilds byte for byte (scripts/build-workspace-codec.mjs --check). wasm32-unknown-unknown only.
 [workspace]
+# parent/ mirrors the repository root with symlinks so every path dependency lies inside this
+# workspace: Cargo hashes a path package's identity by its path relative to the workspace root
+# when it lies inside that root, and by its ABSOLUTE path otherwise, and that hash reaches the
+# codegen. Reached as "../citadel-workspace-types", the bytes depended on where the repository is
+# checked out (apps/sdk-fixtures/Cargo.toml). parent/Cargo.toml is the root manifest, which the
+# types crate inherits `workspace = true` keys from; `exclude` keeps the mirror from membership.
+exclude = ["parent"]
 
 [package]
 name = "citadel-workspace-codec"
@@ -16,7 +23,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-citadel-workspace-types = { path = "../citadel-workspace-types" }
+citadel-workspace-types = { path = "parent/citadel-workspace-types" }
 serde = "1.0.219"
 serde_json = "1.0.140"
 serde-wasm-bindgen = "0.6.5"
