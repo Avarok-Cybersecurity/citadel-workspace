@@ -16,11 +16,13 @@ function randomIndex(bound: number): number {
 /**
  * "Confirm 3 words": the person types back the words at three positions chosen at random. Continue
  * stays disabled until each box holds something; a mismatch says so without revealing which word.
+ * Skip finishes the step at once, with its consequence stated beside it rather than in a dialog.
  */
-export function PhraseConfirm({ words, onConfirmed, onShowAgain }: {
+export function PhraseConfirm({ words, onConfirmed, onShowAgain, onSkip }: {
   words: readonly string[];
   onConfirmed: () => void;
   onShowAgain: () => void;
+  onSkip: () => void;
 }): JSX.Element {
   const [checks] = useState<number[]>(() => phraseChecks(words.length, randomIndex));
   const [answers, setAnswers] = useState<string[]>(() => Array.from({ length: PHRASE_CHECKS }, (): string => ''));
@@ -54,14 +56,18 @@ export function PhraseConfirm({ words, onConfirmed, onShowAgain }: {
         </div>
       ))}
       {error !== null && <p id="recovery-phrase-check-error" role="alert" className="text-sm text-destructive-emphasis">{error}</p>}
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+      <Button type="submit" className="w-full min-h-[44px]" disabled={answers.some((a: string) => a.trim() === '')} data-testid="recovery-phrase-confirm">
+        Continue
+      </Button>
+      <div className="flex flex-wrap gap-2">
         <Button type="button" variant="ghost" className="min-h-[44px]" onClick={onShowAgain} data-testid="recovery-phrase-show-again">
           {PHRASE_COPY.showAgain}
         </Button>
-        <Button type="submit" className="min-h-[44px]" disabled={answers.some((a: string) => a.trim() === '')} data-testid="recovery-phrase-confirm">
-          Continue
+        <Button type="button" variant="outline" className="min-h-[44px]" onClick={onSkip} aria-describedby="recovery-phrase-skip-note" data-testid="recovery-phrase-skip">
+          {PHRASE_COPY.skip}
         </Button>
       </div>
+      <p id="recovery-phrase-skip-note" className="text-xs text-muted-foreground" data-testid="recovery-phrase-skip-note">{PHRASE_COPY.skipConsequence}</p>
     </form>
   );
 }

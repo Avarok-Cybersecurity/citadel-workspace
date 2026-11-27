@@ -18,7 +18,8 @@ export function RecoveryPhrasePanel({ words, account, server, onDone }: {
   /** Named in the copied and downloaded text. */
   account: string;
   server: string | null;
-  onDone: () => void;
+  /** The step is finished: `checked` is false when the person skipped the check. */
+  onDone: (checked: boolean) => void;
 }): JSX.Element {
   const [checking, setChecking] = useState<boolean>(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -26,7 +27,8 @@ export function RecoveryPhrasePanel({ words, account, server, onDone }: {
   useEffect((): void => { if (!checking) headingRef.current?.focus(); }, [checking]);
 
   if (checking) {
-    return <PhraseConfirm words={words.map((w: string) => w.toLowerCase())} onConfirmed={onDone} onShowAgain={(): void => setChecking(false)} />;
+    return <PhraseConfirm words={words.map((w: string) => w.toLowerCase())} onConfirmed={(): void => onDone(true)}
+      onShowAgain={(): void => setChecking(false)} onSkip={(): void => onDone(false)} />;
   }
 
   const text: string = phraseText(words, account, server);
