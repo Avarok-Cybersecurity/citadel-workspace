@@ -123,6 +123,8 @@ pub enum BroadcastAudience {
     Workspace(String),
     /// Only the one session with this CID: a frame the apps relay addresses to it.
     Session(u64),
+    /// Only the sessions signed in as this user: an admin's "there is an ask to take" nudge.
+    User(String),
 }
 
 /// Message for broadcasting workspace updates to connected clients
@@ -684,6 +686,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Send a response to the one session `cid`, whoever else is connected.
     pub fn send_to_session(&self, response: WorkspaceProtocolResponse, cid: u64) {
         self.broadcast_to(response, None, BroadcastAudience::Session(cid))
+    }
+
+    /// Send a response to every session signed in as `user_id`.
+    pub fn broadcast_to_user(&self, response: WorkspaceProtocolResponse, user_id: String) {
+        self.broadcast_to(response, None, BroadcastAudience::User(user_id))
     }
 
     /// Broadcast a response only to sessions entitled to see `group_id`'s chat.

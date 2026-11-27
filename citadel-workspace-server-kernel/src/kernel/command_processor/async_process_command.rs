@@ -1433,6 +1433,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             super::messaging_trust::process(kernel, actor_user_id, requester_cid, request).await
         }
 
+        WorkspaceProtocolRequest::AdminRequests(request) => {
+            super::admin_requests::process(kernel, actor_user_id, request).await
+        }
+
         WorkspaceProtocolRequest::Roles(request) => {
             super::roles::process(kernel, actor_user_id, requester_cid, request).await
         }

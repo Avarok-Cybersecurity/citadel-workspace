@@ -67,6 +67,9 @@ const SCOPED = new Map([
   // A member's ban standing: who is banned is the workspace's business only.
   ['MemberBanned', 'broadcast_to_workspace'],
   ['MemberUnbanned', 'broadcast_to_workspace'],
+  // An admin's "there is an ask to take" nudge: for that one admin's sessions only, never
+  // another member (an ask names who asked and what for). Answers go to the asker alone.
+  ['AdminRequests', 'broadcast_to_user'],
   // Every banned account: the answer to ListBanned, returned to its caller only. Never
   // fanned out; if it ever is, the workspace's sessions are the most it may reach.
   ['BannedMembers', 'broadcast_to_workspace'],
