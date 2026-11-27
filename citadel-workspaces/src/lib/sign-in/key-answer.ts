@@ -52,7 +52,7 @@ export type KeyAnswerResult =
   /** The agent refused the answer; the challenge is still open for another try. */
   | { kind: 'refused'; message: string };
 
-const asBytes = (ids: number[][]): Bytes[] => ids.map((id) => copyBytes(Uint8Array.from(id)));
+const asBytes = (ids: Uint8Array[]): Bytes[] => ids.map((id: Uint8Array) => copyBytes(id));
 
 /** Fail the asking request now, with the reason, instead of at the touch deadline. */
 export async function declineKeyChallenge(deps: Pick<KeyAnswerDeps, 'send'>, challenge: SecurityKeyChallengeNotification, reason: string): Promise<KeyAnswerResult> {
@@ -100,14 +100,14 @@ export async function answerKeyChallenge(
   if (typeof touched === 'string') return declineKeyChallenge(deps, challenge, touched);
 
   const requestId: string = crypto.randomUUID();
-  const prf: number[] = Array.from(touched.prfFirst as Bytes);
+  const prf: Uint8Array = touched.prfFirst as Bytes;
   try {
     // Resolves true on SecurityKeyAnswerSuccess; a SecurityKeyAnswerFailure rejects, and lands below.
     const accepted: boolean = await requestResponse<true>({
       request: {
         SecurityKeyAnswer: {
           request_id: requestId, challenge_id: challenge.challenge_id,
-          credential_id: Array.from(touched.credentialId), prf_output: prf,
+          credential_id: touched.credentialId, prf_output: prf,
         },
       },
       requestId,

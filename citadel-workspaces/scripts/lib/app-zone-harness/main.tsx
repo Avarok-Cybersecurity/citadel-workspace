@@ -98,7 +98,7 @@ async function start(): Promise<void> {
   const key: string = (m.publisher as { mldsa65_public_key: string }).mldsa65_public_key;
   const [mHash, wHash] = [await sha(manifestBytes), await sha(wasm)];
   const signature: string = mode === 'bad-signature' ? 'ab'.repeat(32) : await standIn(key, mHash, wHash);
-  const listing: AppListing = { source: { Global: { catalogue_version: 1n } }, manifest_bytes: Array.from(manifestBytes), signature };
+  const listing: AppListing = { source: { Global: { catalogue_version: 1n } }, manifest_bytes: manifestBytes, signature };
   const install: AppInstall = {
     id: 'inst-h', app_id: APP_ID, version: VERSION, manifest_sha256: mHash, artifact_sha256: wHash, pinned_publisher_key: key,
     scope: 'Workspace', granted: ['canvas', 'events', 'log'],
@@ -110,7 +110,7 @@ async function start(): Promise<void> {
     request: async (r: AppsRequest, isOurs: (a: AppsAnswer) => boolean): Promise<AppsAnswer> => {
       const raw: unknown = typeof r === 'object' && 'GetRelease' in r ? { Release: { install_id: install.id, current: listing, waiting_on: null } }
         : typeof r === 'object' && 'FetchArtifact' in r
-          ? { ArtifactChunk: { ...r.FetchArtifact, total_chunks: Math.ceil(wasm.byteLength / CHUNK), bytes: Array.from(wasm.slice(r.FetchArtifact.index * CHUNK, (r.FetchArtifact.index + 1) * CHUNK)) } }
+          ? { ArtifactChunk: { ...r.FetchArtifact, total_chunks: Math.ceil(wasm.byteLength / CHUNK), bytes: (wasm.slice(r.FetchArtifact.index * CHUNK, (r.FetchArtifact.index + 1) * CHUNK)) } }
           : { Refused: 'ServerFeatureUnavailable' };
       const a: AppsAnswer = readAppsAnswer(raw);
       if (!isOurs(a)) throw new Error(`the harness answer ${a.kind} was not taken`);

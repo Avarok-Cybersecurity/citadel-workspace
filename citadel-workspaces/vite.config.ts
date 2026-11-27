@@ -377,10 +377,6 @@ export default defineConfig(({ mode }) => {
               if (id.includes('lucide-react')) {
                 return 'vendor-icons';
               }
-              // Date utilities
-              if (id.includes('date-fns')) {
-                return 'vendor-date';
-              }
               // Animations
               if (id.includes('framer-motion')) {
                 return 'vendor-motion';

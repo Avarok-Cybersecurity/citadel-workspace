@@ -9,9 +9,9 @@ import { readPauseStatus, type PauseStorage } from './pause-store';
 import type { PauseStatus } from './pause-rules';
 
 export const agentPauseStorage: PauseStorage = {
-  get: (localCid: bigint, key: string): Promise<{ value: number[] } | null> =>
+  get: (localCid: bigint, key: string): Promise<{ value: Uint8Array } | null> =>
     websocketService.sendLocalDBGet(localCid, key),
-  set: (localCid: bigint, key: string, value: number[]): Promise<void> =>
+  set: (localCid: bigint, key: string, value: Uint8Array): Promise<void> =>
     websocketService.sendLocalDBSet(localCid, key, value),
   remove: (localCid: bigint, key: string): Promise<void> =>
     websocketService.sendLocalDBDelete(localCid, key),

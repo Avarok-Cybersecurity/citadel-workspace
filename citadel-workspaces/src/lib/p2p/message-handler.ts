@@ -34,6 +34,7 @@ export type { MessageHandlerConfig } from './message-handler-types';
 import { fnv1a64 } from './message-fingerprint';
 import type { CallSignalPayload } from '@/types/call-signals';
 import { CDOC_CHAT_COMMAND_EVENT, isCdocChatSyncPayload, type CdocChatCommandEvent } from '@/types/cdoc-chat-sync';
+import { isByteArray } from '@/lib/utils/encoding-utils';
 
 export class MessageHandler {
   private readonly config: MessageHandlerConfig;
@@ -121,15 +122,11 @@ export class MessageHandler {
     }
 
     try {
-      let contentBytes: Uint8Array;
-      if (Array.isArray(rawMessage)) {
-        contentBytes = new Uint8Array(rawMessage);
-      } else if (rawMessage instanceof Uint8Array) {
-        contentBytes = rawMessage;
-      } else {
-        debugLog('P2PMessageHandler', 'Unexpected message format (expected array or Uint8Array):', typeof rawMessage);
+      if (!isByteArray(rawMessage)) {
+        debugLog('P2PMessageHandler', 'Unexpected message format (expected a Uint8Array):', typeof rawMessage);
         return;
       }
+      const contentBytes: Uint8Array = rawMessage;
 
       // fp joins this to ILM's `[ILM-DELIVER] ... fp=`. Guarded at the CALL
       // SITE: `debugLog` is a noop in production but its arguments are still

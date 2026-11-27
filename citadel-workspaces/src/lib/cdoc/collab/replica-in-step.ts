@@ -31,7 +31,7 @@ export class ReplicaInStep {
     return this.cursorNow;
   }
 
-  async applyNext(seq: bigint, update: readonly number[]): Promise<void> {
+  async applyNext(seq: bigint, update: Uint8Array): Promise<void> {
     const editor: EditorController | null = this.editorNow;
     if (!editor) return;
     try {

@@ -49,13 +49,21 @@ function Page(): JSX.Element {
   return <WorkspaceView nodeId={new URLSearchParams(location.search).get('nodeId')} />;
 }
 
-const PLAN: DomainNode = { ...domainNode('plan', 'alex', 'Floor', [], 'Quarterly plan'), metadata: Array.from(encodeNodeApp(null, 'docs')) };
+const PLAN: DomainNode = { ...domainNode('plan', 'alex', 'Floor', [], 'Quarterly plan'), metadata: encodeNodeApp(null, 'docs') };
 const SAVED_AT: number = Date.UTC(2026, 9, 18, 9, 30);
 const keptOf = (nodes: DomainNode[]): CachedWorkspaceTree => {
   const tree: CachedWorkspaceTree | null = treeToKeep(Object.fromEntries(nodes.map((n: DomainNode) => [n.id, n])), SAVED_AT);
   if (tree === null) throw new Error('a tree with nodes is kept');
   return tree;
 };
+
+/**
+ * A kept tree with each node's metadata bytes as a list. structuredClone (the store double) makes
+ * its Uint8Arrays in Node's realm and the fixtures are jsdom's, so toEqual on the arrays fails on
+ * the realm alone; the bytes are what this file asserts.
+ */
+const withListedBytes = (nodes: Readonly<Record<string, DomainNode>> | undefined): Record<string, unknown> | undefined =>
+  nodes && Object.fromEntries(Object.entries(nodes).map(([id, n]: [string, DomainNode]) => [id, { ...n, metadata: Array.from(n.metadata) }]));
 
 afterEach((): void => { store.clear(); reconnectingTo.set(null); signedIn.now = ME; });
 
@@ -73,7 +81,7 @@ describe('the kept workspace tree', () => {
     await act(async (): Promise<void> => { await Promise.resolve(); });
     expect(store.has(workspaceTreeKey(11n))).toBe(false);
     hook.rerender({ loading: false });
-    await waitFor(async (): Promise<void> => expect((await loadWorkspaceTree(11n))?.nodes).toEqual(live));
+    await waitFor(async (): Promise<void> => expect(withListedBytes((await loadWorkspaceTree(11n))?.nodes)).toEqual(withListedBytes(live)));
   });
 
   it('is kept under the account that signed in after the page loaded', async () => {
@@ -91,7 +99,7 @@ describe('the kept workspace tree', () => {
     signedIn.now = ME;
     const after: Record<string, DomainNode> = { ...before, plan: PLAN };
     hook.rerender({ nodes: after });
-    await waitFor(async (): Promise<void> => expect((await loadWorkspaceTree(11n))?.nodes).toEqual(after));
+    await waitFor(async (): Promise<void> => expect(withListedBytes((await loadWorkspaceTree(11n))?.nodes)).toEqual(withListedBytes(after)));
     vi.restoreAllMocks();
   });
 
@@ -150,7 +158,9 @@ describe('the kept workspace tree', () => {
     await saveWorkspaceTree(12n, keptOf(ESTATE));
     await forgetAccountDocuments(11n);
     expect(await loadWorkspaceTree(11n)).toBeNull();
-    expect(await loadWorkspaceTree(12n)).toEqual(keptOf(ESTATE));
+    const kept: CachedWorkspaceTree | null = await loadWorkspaceTree(12n);
+    expect(kept?.savedAt).toBe(SAVED_AT);
+    expect(withListedBytes(kept?.nodes)).toEqual(withListedBytes(keptOf(ESTATE).nodes));
   });
 
   it('survives a node\'s removal sweep, even one naming its segment', async () => {

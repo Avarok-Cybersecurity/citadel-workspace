@@ -14,6 +14,7 @@
  */
 import { decode as cborDecode, encode as cborEncode } from 'cbor-x';
 import { isGenuinelyAbsent } from '@/lib/storage/absence';
+import { ownedBytes } from '@/lib/utils/encoding-utils';
 import type { LocalDbPort } from '@/lib/cdoc/chat/chat-local-db';
 import { isChatDocId } from '@/lib/cdoc/chat/chat-wire';
 
@@ -53,8 +54,8 @@ const pictureKey = (account: bigint, docId: string, id: string): string => {
 
 async function load(db: LocalDbPort, account: bigint, key: string): Promise<Uint8Array | null> {
   try {
-    const got: { readonly value: readonly number[] } | null = await db.get(account, key);
-    return got === null ? null : Uint8Array.from(got.value);
+    const got: { readonly value: Uint8Array } | null = await db.get(account, key);
+    return got === null ? null : got.value;
   } catch (error: unknown) {
     if (isGenuinelyAbsent(error)) return null;
     throw error;
@@ -89,9 +90,9 @@ function keyedBlobs(account: bigint, db: LocalDbPort, hash: Hash, keyOf: (id: st
       const chunks: number = Math.max(1, Math.ceil(bytes.length / CHUNK_BYTES));
       // Chunks first, manifest last: the manifest is the only pointer to them.
       for (let n: number = 0; n < chunks; n += 1) {
-        await db.set(account, `${key}#${n}`, Array.from(bytes.subarray(n * CHUNK_BYTES, (n + 1) * CHUNK_BYTES)));
+        await db.set(account, `${key}#${n}`, bytes.slice(n * CHUNK_BYTES, (n + 1) * CHUNK_BYTES));
       }
-      await db.set(account, key, Array.from(cborEncode({ store_version: STORE_VERSION, size: bytes.length, chunks })));
+      await db.set(account, key, ownedBytes(cborEncode({ store_version: STORE_VERSION, size: bytes.length, chunks })));
       return id;
     },
     read: async (id: string): Promise<Uint8Array> => {

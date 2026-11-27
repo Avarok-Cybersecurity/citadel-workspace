@@ -21,7 +21,7 @@ describe('storage.local over the agent', () => {
   it('a get names the install’s namespace and reads the value; a miss is null', async () => {
     const agent: FakeAgent = new FakeAgent((r) => {
       const b: KvGetBody = bodyOf(r) as KvGetBody;
-      return [{ AppKvResponse: { cid: 42n, request_id: b.request_id, result: { Value: b.op.Get.key === 'k' ? [1, 2] : null } } }];
+      return [{ AppKvResponse: { cid: 42n, request_id: b.request_id, result: { Value: b.op.Get.key === 'k' ? new Uint8Array([1, 2]) : null } } }];
     });
     const port: StoragePort = agentKvPort(agent, TARGET);
     expect(await port.KvGet({ backend: 'local', key: 'k' })).toEqual({ ok: { value: Uint8Array.from([1, 2]) } });
@@ -59,12 +59,12 @@ const GET: HttpRequest = { method: 'GET', url: 'https://api.acme.com/x', headers
 
 describe('net.host over the agent', () => {
   it('sends the install’s grant with the request and reads the response', async () => {
-    const agent: FakeAgent = new FakeAgent((r) => [{ AppFetchResponse: { cid: 42n, request_id: (bodyOf(r) as { request_id: string }).request_id, status: 200, headers: [{ name: 'content-type', value: 'text/plain' }], body: [104, 105], redirects: 0 } }]);
+    const agent: FakeAgent = new FakeAgent((r) => [{ AppFetchResponse: { cid: 42n, request_id: (bodyOf(r) as { request_id: string }).request_id, status: 200, headers: [{ name: 'content-type', value: 'text/plain' }], body: new Uint8Array([104, 105]), redirects: 0 } }]);
     const answer: PortAnswer = await agentFetchPort(agent, FETCH).HostFetch({ request: GET });
     expect(answer).toEqual({ ok: { status: 200, headers: [['content-type', 'text/plain']], body: Uint8Array.from([104, 105]) } });
     expect(agent.sent[0]).toEqual({ AppFetch: {
       request_id: 'req-1', cid: 42n, app_id: 'com.acme.kanban', install_id: 'inst-1', grant: { hosts: ['api.acme.com'], private: false },
-      request: { method: 'GET', url: 'https://api.acme.com/x', headers: [{ name: 'accept', value: 'text/plain' }], body: [] }, stream: false,
+      request: { method: 'GET', url: 'https://api.acme.com/x', headers: [{ name: 'accept', value: 'text/plain' }], body: new Uint8Array() }, stream: false,
     } });
   });
 
@@ -78,7 +78,7 @@ describe('net.host over the agent', () => {
     const agent: FakeAgent = new FakeAgent((r, a) => {
       if (variantName(r) !== 'AppFetch') return [];
       const id: string = (bodyOf(r) as { request_id: string }).request_id;
-      a.emitSoon({ AppFetchStreamChunk: { cid: 42n, request_id: id, seq: 0, bytes: [1, 2, 3] } });
+      a.emitSoon({ AppFetchStreamChunk: { cid: 42n, request_id: id, seq: 0, bytes: new Uint8Array([1, 2, 3]) } });
       a.emitSoon({ AppFetchStreamEnd: { cid: 42n, request_id: id, body_bytes: 3n } });
       return [{ AppFetchStreamHead: { cid: 42n, request_id: id, status: 200, headers: [], redirects: 0 } }];
     });
@@ -97,7 +97,7 @@ describe('net.host over the agent', () => {
     const agent: FakeAgent = new FakeAgent((r, a) => {
       if (variantName(r) !== 'AppFetch') return [];
       const id: string = (bodyOf(r) as { request_id: string }).request_id;
-      a.emitSoon({ AppFetchStreamChunk: { cid: 42n, request_id: id, seq: 0, bytes: [9] } });
+      a.emitSoon({ AppFetchStreamChunk: { cid: 42n, request_id: id, seq: 0, bytes: new Uint8Array([9]) } });
       return [{ AppFetchStreamHead: { cid: 42n, request_id: id, status: 200, headers: [], redirects: 0 } }];
     });
     const port: FetchPort = agentFetchPort(agent, FETCH);

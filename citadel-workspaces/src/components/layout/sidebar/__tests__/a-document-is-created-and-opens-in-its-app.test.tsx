@@ -51,7 +51,7 @@ function recordRequests(): WorkspaceRequestView[] {
   return sent;
 }
 
-const PLAN: DomainNode = { ...domainNode('plan', 'alex', 'Floor', [], 'Quarterly plan'), metadata: Array.from(encodeNodeApp(null, 'docs')) };
+const PLAN: DomainNode = { ...domainNode('plan', 'alex', 'Floor', [], 'Quarterly plan'), metadata: encodeNodeApp(null, 'docs') };
 
 describe('New document', () => {
   it('creates a child at the schema level with the app in its metadata', async () => {
@@ -68,7 +68,7 @@ describe('New document', () => {
     await waitFor(() => expect(screen.queryByTestId('new-document-dialog')).toBeNull());
     const create: WorkspaceRequestView['CreateNode'] = sent.find((r: WorkspaceRequestView) => r.CreateNode)?.CreateNode;
     expect(create).toMatchObject({ parent_id: 'alex', entity_type: { Child: 'Floor' }, name: 'Fire plan' });
-    expect(decodeNodeApp(create?.metadata ?? [])).toEqual({ kind: 'document', app: 'docs' });
+    expect(decodeNodeApp(create?.metadata ?? null)).toEqual({ kind: 'document', app: 'docs' });
   });
 
   it('is offered from the create form too, for the same parent', async () => {

@@ -23,12 +23,12 @@ export class KernelLog {
 
   constructor(private readonly nodeId: string, private readonly config: KernelLogConfig) {}
 
-  append(update: readonly number[], docVersion: number, authorCid: bigint, clientSeq: bigint): { answer: DocumentsResponse; stored: DocumentUpdate | null } {
+  append(update: Uint8Array, docVersion: number, authorCid: bigint, clientSeq: bigint): { answer: DocumentsResponse; stored: DocumentUpdate | null } {
     if (update.length > this.config.maxUpdateBytes) {
       return { answer: this.refused({ UpdateTooLarge: { node_id: this.nodeId, size_bytes: BigInt(update.length), max_bytes: BigInt(this.config.maxUpdateBytes) } }), stored: null };
     }
     this.latestSeq += 1n;
-    const stored: DocumentUpdate = { seq: this.latestSeq, doc_version: docVersion, update: [...update], author_cid: authorCid };
+    const stored: DocumentUpdate = { seq: this.latestSeq, doc_version: docVersion, update: update.slice(), author_cid: authorCid };
     this.updates.set(stored.seq, stored);
     const pending: bigint = this.latestSeq - this.snapshotUpto;
     return {
@@ -50,13 +50,13 @@ export class KernelLog {
     return { Updates: { node_id: this.nodeId, snapshot: withSnapshot ? this.snapshot : null, updates, has_more: last < this.latestSeq, latest_seq: this.latestSeq } };
   }
 
-  storeSnapshot(bytes: readonly number[], docVersion: number, uptoSeq: bigint): DocumentsResponse {
+  storeSnapshot(bytes: Uint8Array, docVersion: number, uptoSeq: bigint): DocumentsResponse {
     if (bytes.length > this.config.maxSnapshotBytes) {
       return this.refused({ SnapshotTooLarge: { node_id: this.nodeId, size_bytes: BigInt(bytes.length), max_bytes: BigInt(this.config.maxSnapshotBytes) } });
     }
     if (uptoSeq > this.latestSeq) return this.refused({ SnapshotAhead: { node_id: this.nodeId, upto_seq: uptoSeq, latest_seq: this.latestSeq } });
     if (uptoSeq <= this.snapshotUpto) return this.refused({ SnapshotBehind: { node_id: this.nodeId, upto_seq: uptoSeq, stored_upto_seq: this.snapshotUpto } });
-    this.snapshot = { doc_version: docVersion, bytes: [...bytes], upto_seq: uptoSeq };
+    this.snapshot = { doc_version: docVersion, bytes: bytes.slice(), upto_seq: uptoSeq };
     this.snapshotUpto = uptoSeq;
     for (const seq of [...this.updates.keys()]) if (seq <= uptoSeq) this.updates.delete(seq);
     return { SnapshotStored: { node_id: this.nodeId, upto_seq: uptoSeq } };
@@ -67,10 +67,10 @@ export class KernelLog {
    * after `append` then `storeSnapshot(…, 1n)`, written in one step so every replica opens on
    * one shared base (independent blank replicas share none; see real-replicas.ts).
    */
-  seedBase(bytes: readonly number[], docVersion: number): void {
+  seedBase(bytes: Uint8Array, docVersion: number): void {
     this.latestSeq = 1n;
     this.snapshotUpto = 1n;
-    this.snapshot = { doc_version: docVersion, bytes: [...bytes], upto_seq: 1n };
+    this.snapshot = { doc_version: docVersion, bytes: bytes.slice(), upto_seq: 1n };
   }
 
   /** How many updates the log still holds (after compaction). */

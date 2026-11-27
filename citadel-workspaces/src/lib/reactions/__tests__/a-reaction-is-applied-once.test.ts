@@ -14,7 +14,7 @@ import {
   REACTION_EMOJIS,
   type ReactionChange,
 } from '../reaction-state';
-import type { GroupReaction } from 'citadel-workspace-client-ts';
+import type { Reaction } from 'citadel-workspace-client-ts';
 
 const ME: bigint = 10n;
 const ALICE: bigint = 20n;
@@ -25,8 +25,8 @@ const HEART: string = REACTION_EMOJIS[1];
 const add = (reactorCid: bigint, emoji: string, at: number): ReactionChange => ({ reactorCid, emoji, at, active: true });
 const remove = (reactorCid: bigint, emoji: string, at: number): ReactionChange => ({ reactorCid, emoji, at, active: false });
 
-function fold(changes: ReactionChange[]): GroupReaction[] | undefined {
-  let list: GroupReaction[] | undefined;
+function fold(changes: ReactionChange[]): Reaction[] | undefined {
+  let list: Reaction[] | undefined;
   for (const change of changes) list = foldReaction(list, change) ?? list;
   return list;
 }
@@ -37,29 +37,29 @@ describe('applying a reaction', () => {
   });
 
   it('treats a redelivery as no change at all', () => {
-    const once: GroupReaction[] | null = foldReaction(undefined, add(ALICE, THUMBS, 1));
+    const once: Reaction[] | null = foldReaction(undefined, add(ALICE, THUMBS, 1));
     expect(foldReaction(once ?? undefined, add(ALICE, THUMBS, 1))).toBeNull();
   });
 
   it('counts one per reactor, however many copies arrive', () => {
-    const list: GroupReaction[] | undefined = fold([add(ALICE, THUMBS, 1), add(ALICE, THUMBS, 1), add(BOB, THUMBS, 2), add(BOB, THUMBS, 2)]);
+    const list: Reaction[] | undefined = fold([add(ALICE, THUMBS, 1), add(ALICE, THUMBS, 1), add(BOB, THUMBS, 2), add(BOB, THUMBS, 2)]);
     expect(reactionChips(list, ME)).toEqual([{ emoji: THUMBS, count: 2, mine: false, reactorCids: [ALICE, BOB] }]);
   });
 
   it('does not bring a removed reaction back when the add is redelivered late', () => {
-    const list: GroupReaction[] | undefined = fold([add(ALICE, THUMBS, 1), remove(ALICE, THUMBS, 2), add(ALICE, THUMBS, 1)]);
+    const list: Reaction[] | undefined = fold([add(ALICE, THUMBS, 1), remove(ALICE, THUMBS, 2), add(ALICE, THUMBS, 1)]);
     expect(reactionChips(list, ME)).toEqual([]);
   });
 
   it('honours a removal that overtook its add', () => {
-    const list: GroupReaction[] | undefined = fold([remove(ALICE, THUMBS, 2), add(ALICE, THUMBS, 1)]);
+    const list: Reaction[] | undefined = fold([remove(ALICE, THUMBS, 2), add(ALICE, THUMBS, 1)]);
     expect(reactionChips(list, ME)).toEqual([]);
   });
 
   it("never lets one reactor's removal touch another's reaction", () => {
     // The reactor on a change is the transport's sender, so "Bob removes
     // Alice's thumbs" can only ever be expressed as Bob removing his own.
-    const list: GroupReaction[] | undefined = fold([add(ALICE, THUMBS, 1), remove(BOB, THUMBS, 5)]);
+    const list: Reaction[] | undefined = fold([add(ALICE, THUMBS, 1), remove(BOB, THUMBS, 5)]);
     expect(reactionChips(list, ME)).toEqual([{ emoji: THUMBS, count: 1, mine: false, reactorCids: [ALICE] }]);
   });
 
@@ -72,12 +72,12 @@ describe('toggling your own', () => {
   it('adds when you have not reacted, and removes when you have', () => {
     const first: ReactionChange = toggleReaction(undefined, HEART, ME, 100);
     expect(first).toEqual(add(ME, HEART, 100));
-    const held: GroupReaction[] | undefined = foldReaction(undefined, first) ?? undefined;
+    const held: Reaction[] | undefined = foldReaction(undefined, first) ?? undefined;
     expect(toggleReaction(held, HEART, ME, 200)).toEqual(remove(ME, HEART, 200));
   });
 
   it('moves the clock past the held entry, so a same-millisecond second press still lands', () => {
-    const held: GroupReaction[] | undefined = foldReaction(undefined, add(ME, HEART, 100)) ?? undefined;
+    const held: Reaction[] | undefined = foldReaction(undefined, add(ME, HEART, 100)) ?? undefined;
     const second: ReactionChange = toggleReaction(held, HEART, ME, 100);
     expect(second.at).toBe(101);
     expect(foldReaction(held, second)).not.toBeNull();
@@ -86,7 +86,7 @@ describe('toggling your own', () => {
 
 describe('chips', () => {
   it('highlights your own and orders by the picker', () => {
-    const list: GroupReaction[] | undefined = fold([add(ALICE, HEART, 1), add(ME, THUMBS, 2)]);
+    const list: Reaction[] | undefined = fold([add(ALICE, HEART, 1), add(ME, THUMBS, 2)]);
     expect(reactionChips(list, ME).map((c) => [c.emoji, c.mine])).toEqual([[THUMBS, true], [HEART, false]]);
   });
 });

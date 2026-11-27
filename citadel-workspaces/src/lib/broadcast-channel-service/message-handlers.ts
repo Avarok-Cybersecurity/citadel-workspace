@@ -155,7 +155,7 @@ export async function handleP2PNotification(
       peerCid,
       tabCidStr,
       hasMessageBytes: !!messageBytes,
-      messageLength: Array.isArray(notification.message) ? notification.message.length : 0,
+      messageLength: ArrayBuffer.isView(notification.message) ? notification.message.byteLength : 0,
       isMatch: tabCidStr && notificationCid === tabCidStr
     });
 

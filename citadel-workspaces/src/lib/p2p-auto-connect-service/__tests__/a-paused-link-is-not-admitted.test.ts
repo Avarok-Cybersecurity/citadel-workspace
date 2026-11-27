@@ -25,14 +25,14 @@ const LARA: bigint = 9399548604789644783n;
 const MAX: bigint = 15630987608599047565n;
 const CAROL: bigint = 300n;
 
-const rows: Map<string, number[]> = new Map();
+const rows: Map<string, Uint8Array> = new Map();
 const dropped: Array<[bigint, bigint]> = [];
 let agentLists: bigint[] = [];
 
 vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
-    sendLocalDBGet: async (cid: bigint, key: string): Promise<{ value: number[] } | null> => {
-      const value: number[] | undefined = rows.get(`${cid.toString()}/${key}`);
+    sendLocalDBGet: async (cid: bigint, key: string): Promise<{ value: Uint8Array } | null> => {
+      const value: Uint8Array | undefined = rows.get(`${cid.toString()}/${key}`);
       if (value === undefined) throw new Error(`Key not found: ${key}`);
       return { value };
     },

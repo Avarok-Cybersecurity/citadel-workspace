@@ -33,7 +33,7 @@ export function manifestJson(c: ManifestChanges = {}): Record<string, unknown> {
 export function listingOf(c: ManifestChanges = {}, origin: 'global' | 'workspace' = 'global'): AppListing {
   return {
     source: origin === 'global' ? { Global: { catalogue_version: 1n } } : { WorkspaceRegistry: { entry_id: `entry-${c.id ?? 'com.acme.kanban'}` } },
-    manifest_bytes: Array.from(new TextEncoder().encode(JSON.stringify(manifestJson(c)))),
+    manifest_bytes: new TextEncoder().encode(JSON.stringify(manifestJson(c))),
     signature: '0'.repeat(6618),
   };
 }

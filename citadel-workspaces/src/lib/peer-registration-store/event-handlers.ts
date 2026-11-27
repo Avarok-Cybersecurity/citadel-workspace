@@ -66,7 +66,7 @@ function handleWebSocketMessage(raw: unknown, callbacks: StoreCallbacks): void {
 
   if (hasVariant(message, 'LocalDBGetKVSuccess')) {
     const v: Record<string, unknown> = getVariant(message, 'LocalDBGetKVSuccess')!;
-    resolveKVResponse(kv, v.request_id as string, v.value as number[] | undefined);
+    resolveKVResponse(kv, v.request_id as string, v.value as Uint8Array | undefined);
   }
 
   if (hasVariant(message, 'LocalDBSetKVFailure') || hasVariant(message, 'LocalDBGetKVFailure')) {

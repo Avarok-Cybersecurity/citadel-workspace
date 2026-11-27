@@ -28,6 +28,8 @@ pub enum AppsRequest {
     /// The artifact is uploaded first with `UploadArtifactChunk`.
     Publish {
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         manifest_bytes: Vec<u8>,
         /// The `app.mldsa.sig` text.
         signature: String,
@@ -38,6 +40,8 @@ pub enum AppsRequest {
         index: u32,
         total_chunks: u32,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         bytes: Vec<u8>,
     },
     /// Install a listed app. `granted` is what the installer consents to, at most what the
@@ -136,6 +140,8 @@ pub enum AppsRequest {
     Call {
         install_id: String,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         call: Vec<u8>,
     },
     /// The caller's host serves this install's routes until `until_ms` (repeated while mounted).
@@ -162,6 +168,8 @@ pub enum AppsRequest {
         from_install_id: String,
         to: IhttpAddress,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         frame: Vec<u8>,
     },
 }
@@ -176,6 +184,8 @@ pub enum ListingOffer {
     /// or the installer's own. The server verifies the signature and the artifact itself.
     Signed {
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         manifest_bytes: Vec<u8>,
         /// The `app.mldsa.sig` text.
         signature: String,

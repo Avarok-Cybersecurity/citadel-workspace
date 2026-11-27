@@ -75,8 +75,8 @@ describe('a session the mounted app opened', () => {
     const { r, host } = mounted(agent);
     await until(() => host.dataset.appState === 'running' && agent.sent.length === 1, 4000);
     expect(agent.sent[0]).toEqual({ AppSessionOpen: { request_id: 'req-1', cid: 42n, app_id: 'com.acme.kanban', install_id: 'inst-1', acting_username: 'alice', server: SERVER } });
-    agent.emitSoon({ AppSessionMessage: { cid: 42n, request_id: undefined, install_id: 'inst-2', session: SESSION, body: [9] } });
-    agent.emitSoon({ AppSessionMessage: { cid: 42n, request_id: undefined, install_id: 'inst-1', session: SESSION, body: [1, 2] } });
+    agent.emitSoon({ AppSessionMessage: { cid: 42n, request_id: undefined, install_id: 'inst-2', session: SESSION, body: new Uint8Array([9]) } });
+    agent.emitSoon({ AppSessionMessage: { cid: 42n, request_id: undefined, install_id: 'inst-1', session: SESSION, body: new Uint8Array([1, 2]) } });
     await until(() => sessionEvents(r).length > 0, 4000);
     expect(sessionEvents(r)).toEqual([{ session: { session: SESSION, event: { message: { body: Uint8Array.from([1, 2]) } } } }]);
   });

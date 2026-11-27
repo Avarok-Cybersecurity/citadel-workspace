@@ -17,11 +17,11 @@ import type { DocumentsTransport } from '../ports';
 const BOB: bigint = 18_170_202_856_123_884_154n;
 const DOC_A: string = 'cdoc-3f2a9c1e-7b4d-4e8a-9f01-2c3d4e5f6a7b';
 const DOC_B: string = 'cdoc-0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d';
-const PUSH: DocumentsResponse = { DocumentUpdated: { node_id: 'n1', seq: 3n, doc_version: 2, update: [1, 2], author_cid: 7n } };
+const PUSH: DocumentsResponse = { DocumentUpdated: { node_id: 'n1', seq: 3n, doc_version: 2, update: new Uint8Array([1, 2]), author_cid: 7n } };
 
 function pushOf(response: WorkspaceProtocolResponse): Record<string, unknown> {
   const payload: WorkspaceProtocolPayload = { Response: response };
-  return { MessageNotification: { message: Array.from(encodeWorkspacePayload(payload)), cid: BOB, peer_cid: 0n, request_id: 'the-authors-request' } };
+  return { MessageNotification: { message: encodeWorkspacePayload(payload), cid: BOB, peer_cid: 0n, request_id: 'the-authors-request' } };
 }
 
 function recordingSender(): { sender: ProtocolSender; sent: WorkspaceProtocolRequest[] } {

@@ -21,7 +21,7 @@ const envelope: PeerGroupFileShare = {
 };
 
 function notification(body: Uint8Array, groupKey: { cid: bigint; mgid: bigint } = { cid: 7n, mgid: 42n }): Record<string, unknown> {
-  return { cid: 111n, peer_cid: envelope.sender_cid, message: Array.from(body), group_key: groupKey, request_id: 'r1' };
+  return { cid: 111n, peer_cid: envelope.sender_cid, message: body, group_key: groupKey, request_id: 'r1' };
 }
 
 describe('the shared-file envelope', () => {

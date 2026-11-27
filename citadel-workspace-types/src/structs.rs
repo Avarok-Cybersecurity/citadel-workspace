@@ -778,6 +778,8 @@ pub struct DomainNode {
     pub default_permissions: DomainPermissions,
     /// Flexible metadata for frontend use
     #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
+    #[ts(type = "Uint8Array")]
+    #[serde(with = "citadel_internal_service_types::wire_bytes")]
     pub metadata: Vec<u8>,
 
     // Schema constraints
@@ -1113,6 +1115,8 @@ pub struct Workspace {
     pub members: Vec<String>,
     pub offices: Vec<String>,
     #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
+    #[ts(type = "Uint8Array")]
+    #[serde(with = "citadel_internal_service_types::wire_bytes")]
     pub metadata: Vec<u8>,
     /// The server's domains, canonical first then its former ones: a member named
     /// `handle@<one of these>` is shown as the bare handle. Filled from the server's `[identity]`

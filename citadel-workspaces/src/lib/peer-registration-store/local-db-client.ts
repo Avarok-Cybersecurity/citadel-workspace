@@ -67,7 +67,7 @@ export async function localDBSet(
   const { persistJSON } = await import('../storage-utils');
   const valueStr: string = persistJSON(data);
 
-  const request: { LocalDBSetKV: { request_id: `${string}-${string}-${string}-${string}-${string}`; cid: bigint; peer_cid: null; key: string; value: number[]; }; } = {
+  const request: { LocalDBSetKV: { request_id: `${string}-${string}-${string}-${string}-${string}`; cid: bigint; peer_cid: null; key: string; value: Uint8Array; }; } = {
     LocalDBSetKV: {
       request_id: requestId, cid: 0n, peer_cid: null,
       key, value: stringToBytes(valueStr)

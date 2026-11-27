@@ -29,7 +29,11 @@ pub struct ServerIdentityChallenge {
 #[ts(export)]
 pub struct ServerIdentity {
     pub domain: String,
+    #[ts(type = "Uint8Array")]
+    #[serde(with = "citadel_internal_service_types::wire_bytes")]
     pub pk: Vec<u8>,
+    #[ts(type = "Uint8Array")]
+    #[serde(with = "citadel_internal_service_types::wire_bytes")]
     pub sig: Vec<u8>,
 }
 

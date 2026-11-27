@@ -21,7 +21,7 @@ const peerName = (cid: bigint): string => (cid === 7n ? 'ada' : cid.toString());
 const GROUP: string = '7:42';
 
 function notification(body: Uint8Array): Record<string, unknown> {
-  return { cid: 111n, peer_cid: 7n, message: Array.from(body), group_key: { cid: 7n, mgid: 42n }, request_id: 'r1' };
+  return { cid: 111n, peer_cid: 7n, message: body, group_key: { cid: 7n, mgid: 42n }, request_id: 'r1' };
 }
 
 describe('a peer-group message arriving', () => {

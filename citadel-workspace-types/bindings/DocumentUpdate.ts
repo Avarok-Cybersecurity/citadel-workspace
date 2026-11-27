@@ -3,4 +3,4 @@
 /**
  * One stored update.
  */
-export type DocumentUpdate = { seq: bigint, doc_version: number, update: Array<number>, author_cid: bigint, };
+export type DocumentUpdate = { seq: bigint, doc_version: number, update: Uint8Array, author_cid: bigint, };

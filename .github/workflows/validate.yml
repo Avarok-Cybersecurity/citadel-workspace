@@ -292,6 +292,16 @@ jobs:
           test -n "$version" || { echo "::error::no wasm-bindgen in crates/photo-decode/Cargo.lock"; exit 1; }
           cargo install wasm-bindgen-cli --locked --version "$version" --root "$RUNNER_TEMP/wasm-bindgen-$version"
           PATH="$RUNNER_TEMP/wasm-bindgen-$version/bin:$PATH" node scripts/build-photo-decode.mjs --check
+      # The workspace protocol's codec (citadel-workspace-codec): its native tests, clippy for the
+      # page's wasm32, and the module and binary vendored into the client and the UI must be what
+      # the source builds.
+      - name: Workspace codec - tests, clippy for wasm32, and vendored module match the source
+        run: |
+          (cd citadel-workspace-codec && cargo fmt --check && cargo test --locked && cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings)
+          version="$(sed -n '/^name = "wasm-bindgen"$/{n;s/^version = "\(.*\)"$/\1/p;}' citadel-workspace-codec/Cargo.lock)"
+          test -n "$version" || { echo "::error::no wasm-bindgen in citadel-workspace-codec/Cargo.lock"; exit 1; }
+          cargo install wasm-bindgen-cli --locked --version "$version" --root "$RUNNER_TEMP/wasm-bindgen-$version"
+          PATH="$RUNNER_TEMP/wasm-bindgen-$version/bin:$PATH" node scripts/build-workspace-codec.mjs --check
       - name: The committed first-party apps rebuild byte-for-byte from their source
         run: node scripts/build-first-party-apps.mjs --check
       - name: First-party app signer - fmt, clippy and tests

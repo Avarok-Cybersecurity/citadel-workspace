@@ -10,6 +10,7 @@ import { decodeGroupReaction, type PeerGroupReaction } from './group-reaction-co
 import { groupKeyToId, parseGroupKey, type MessageGroupKey } from './group-key';
 import { toCid } from './group-wire-variants';
 import type { ReactionChange } from '@/lib/reactions/reaction-state';
+import { isByteArray } from '@/lib/utils/encoding-utils';
 
 export interface GroupReactionEvent {
   groupId: string;
@@ -22,8 +23,8 @@ export interface GroupReactionEvent {
 /** The `group:reaction-received` payload, or null when this is not a reaction. */
 export function peerGroupReactionEvent(notification: Record<string, unknown>): GroupReactionEvent | null {
   const raw: unknown = notification.message;
-  if (!Array.isArray(raw)) return null;
-  const decoded: PeerGroupReaction | null = decodeGroupReaction(new Uint8Array(raw as number[]));
+  if (!isByteArray(raw)) return null;
+  const decoded: PeerGroupReaction | null = decodeGroupReaction(raw);
   if (!decoded) return null;
   const reactorCid: bigint | null = toCid(notification.peer_cid);
   if (reactorCid === null) return null;

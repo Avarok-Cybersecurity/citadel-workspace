@@ -18,7 +18,7 @@ const connection: { request_id: string } = { request_id: 'broadcast' };
 
 function record(id: string, members: string[], name: string = 'Acme'): WorkspaceProtocolResponse {
   return {
-    Workspace: { id, name, description: '', owner_id: '', members, offices: [], metadata: [], accepted_domains: [] },
+    Workspace: { id, name, description: '', owner_id: '', members, offices: [], metadata: new Uint8Array(), accepted_domains: [] },
   } as WorkspaceProtocolResponse;
 }
 

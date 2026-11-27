@@ -169,7 +169,9 @@ async function wireSocket(tab: Tab, channel: { relinquishLeadership(): void; req
       throw new Error('WebSocket client not available (leader without client)');
     },
     isOwnedByALiveConnection: (): boolean => false,
+    isGoneFromTheAgent: (): boolean => false,
     reportFailure: (): void => undefined,
+    noteGone: (): void => undefined,
     requestReports: (): void => channel.requestCidReport(),
     unregister: (instanceId: string): void => tab.manager.unregisterInstance(instanceId),
     reportWindowMs: REPORT_WINDOW_MS,

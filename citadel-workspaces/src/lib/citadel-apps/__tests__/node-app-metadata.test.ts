@@ -21,9 +21,9 @@ const FIXTURES: string = resolve(process.cwd(), '../docs/contracts/batch-1116/fi
 const fixture = (name: string): unknown => JSON.parse(readFileSync(join(FIXTURES, name), 'utf8'));
 const names: string[] = readdirSync(FIXTURES).filter((n: string) => n.endsWith('.json')).sort();
 
-const bytesOf = (document: unknown): number[] => Array.from(new TextEncoder().encode(JSON.stringify(document)));
+const bytesOf = (document: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(document));
 const documentOf = (bytes: Uint8Array): Record<string, unknown> => JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
-const asNode = (envelope: unknown): number[] => bytesOf({ [NODE_APP_METADATA_KEY]: envelope });
+const asNode = (envelope: unknown): Uint8Array => bytesOf({ [NODE_APP_METADATA_KEY]: envelope });
 const PAGE: { app: string; installId: string } = { app: 'work.synchronized.app', installId: 'inst_8f3a2c9d1e4b7a60' };
 
 describe('the contract fixtures, as a node carries them', () => {
@@ -60,7 +60,7 @@ describe('the contract fixtures, as a node carries them', () => {
     const encoded: Uint8Array = encodeNodeAppPage(null, PAGE);
     expect(documentOf(encoded)[NODE_APP_METADATA_KEY]).toEqual(fixture('valid-v2-installed.json'));
     expect(decodeNodeApp(encoded)).toEqual({ kind: 'installed', ...PAGE });
-    expect(decodeNodeApp(Array.from(encoded))).toEqual({ kind: 'installed', ...PAGE });
+    expect(decodeNodeApp(encoded)).toEqual({ kind: 'installed', ...PAGE });
   });
 
   it('never writes a page it would refuse to read', () => {
@@ -71,7 +71,7 @@ describe('the contract fixtures, as a node carries them', () => {
 });
 
 describe('a node’s other metadata', () => {
-  const existing: number[] = bytesOf({ initialized: true, pinned: true, theme: { v: 1, kind: 'theme', payload: { hue: 210 } } });
+  const existing: Uint8Array = bytesOf({ initialized: true, pinned: true, theme: { v: 1, kind: 'theme', payload: { hue: 210 } } });
 
   it('survives writing a document app or an app page, and only the app key changes', () => {
     for (const encoded of [encodeNodeApp(existing, 'docs'), encodeNodeAppPage(existing, PAGE)]) {
@@ -88,7 +88,7 @@ describe('a node’s other metadata', () => {
   });
 
   it('is "none", never a default app, when it names no app or is not a JSON object', () => {
-    for (const metadata of [[], null, bytesOf({ pinned: true }), [0xff, 0x00, 0x13]]) expect(decodeNodeApp(metadata)).toEqual({ kind: 'none' });
+    for (const metadata of [new Uint8Array(), null, bytesOf({ pinned: true }), new Uint8Array([0xff, 0x00, 0x13])]) expect(decodeNodeApp(metadata)).toEqual({ kind: 'none' });
   });
 
   it('is unreadable, not "none", when its app record is malformed', () => {

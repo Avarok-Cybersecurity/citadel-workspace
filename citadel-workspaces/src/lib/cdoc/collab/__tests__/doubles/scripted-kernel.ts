@@ -185,7 +185,7 @@ export class ScriptedKernel {
     return true;
   }
 
-  private awareness(cid: bigint, payload: readonly number[]): void {
+  private awareness(cid: bigint, payload: Uint8Array): void {
     if (payload.length > this.config.maxAwarenessBytes) {
       this.toCid(cid, { kind: 'response', response: { Refused: { AwarenessTooLarge: { node_id: this.nodeId, size_bytes: BigInt(payload.length), max_bytes: BigInt(this.config.maxAwarenessBytes) } } } });
       return;
@@ -195,7 +195,7 @@ export class ScriptedKernel {
       this.toCid(cid, { kind: 'response', response: { Refused: { AwarenessRateLimited: { node_id: this.nodeId } } } });
       return;
     }
-    this.push(cid, { DocumentAwareness: { node_id: this.nodeId, from_cid: cid, payload: [...payload] } });
+    this.push(cid, { DocumentAwareness: { node_id: this.nodeId, from_cid: cid, payload: payload.slice() } });
     this.toCid(cid, { kind: 'response', response: { AwarenessRelayed: { node_id: this.nodeId } } });
   }
 

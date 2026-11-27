@@ -18,7 +18,7 @@ import type { TreeSchema } from "./TreeSchema";
 import type { UpdateOperation } from "./UpdateOperation";
 import type { WorkspaceLogoChange } from "./WorkspaceLogoChange";
 
-export type WorkspaceProtocolRequest = { "CreateWorkspace": { name: string, description: string, workspace_master_password: string, metadata: Array<number> | null, } } | { "GetWorkspace": { 
+export type WorkspaceProtocolRequest = { "CreateWorkspace": { name: string, description: string, workspace_master_password: string, metadata: Uint8Array | null, } } | { "GetWorkspace": { 
 /**
  * Workspace ID to retrieve. None defaults to the sentinel workspace-root.
  */
@@ -26,7 +26,7 @@ workspace_id: string | null, } } | "ListWorkspaces" | { "UpdateWorkspace": {
 /**
  * Workspace ID to update. None defaults to the sentinel workspace-root.
  */
-workspace_id: string | null, name: string | null, description: string | null, workspace_master_password: string, metadata: Array<number> | null, } } | { "DeleteWorkspace": { 
+workspace_id: string | null, name: string | null, description: string | null, workspace_master_password: string, metadata: Uint8Array | null, } } | { "DeleteWorkspace": { 
 /**
  * Workspace ID to delete. None defaults to the sentinel workspace-root.
  */
@@ -38,11 +38,11 @@ domain_id: string | null,
 /**
  * The id of a role in the workspace's table.
  */
-role: string, metadata: Array<number> | null, } } | { "GetMember": { user_id: string, } } | { "UpdateMemberRole": { user_id: string, 
+role: string, metadata: Uint8Array | null, } } | { "GetMember": { user_id: string, } } | { "UpdateMemberRole": { user_id: string, 
 /**
  * The id of a role in the workspace's table.
  */
-role: string, metadata: Array<number> | null, } } | { "UpdateMemberPermissions": { user_id: string, domain_id: string, permissions: Array<Permission>, operation: UpdateOperation, } } | { "RemoveMember": { user_id: string, 
+role: string, metadata: Uint8Array | null, } } | { "UpdateMemberPermissions": { user_id: string, domain_id: string, permissions: Array<Permission>, operation: UpdateOperation, } } | { "RemoveMember": { user_id: string, 
 /**
  * Domain (node) to remove the member from. None defaults to workspace root.
  */
@@ -90,7 +90,7 @@ shows_online_status: boolean | null,
  * identity's signature that it holds this username on this server. The server verifies
  * it before storing it, and every member may read it. `None` leaves it.
  */
-identity_binding: string | null, } } | { "Message": { contents: Array<number>, } } | { "SendGroupMessage": { 
+identity_binding: string | null, } } | { "Message": { contents: Uint8Array, } } | { "SendGroupMessage": { 
 /**
  * UUID of the group chat channel (office.chat_channel_id or room.chat_channel_id)
  */
@@ -129,7 +129,7 @@ parent_message_id: string, } } | { "ReactGroupMessage": { group_id: string, mess
  * already sent this field and serde dropped it, so every node was created with
  * empty metadata. Absent means empty; anything else must be a JSON object.
  */
-metadata: Array<number> | null, } } | { "GetNode": { node_id: string, } } | { "UpdateWorkspaceTheme": { 
+metadata: Uint8Array | null, } } | { "GetNode": { node_id: string, } } | { "UpdateWorkspaceTheme": { 
 /**
  * None targets the root workspace, matching UpdateWorkspace.
  */
@@ -140,7 +140,7 @@ workspace_id: string | null,
  * the whole document — metadata is shared with other features, and
  * overwriting it erased the initialisation marker.
  */
-theme: number[], } } | { "UpdateWorkspaceProfile": { 
+theme: Uint8Array, } } | { "UpdateWorkspaceProfile": { 
 /**
  * None targets the root workspace, matching UpdateWorkspace.
  */
@@ -167,4 +167,4 @@ is_default: boolean | null,
  * the workspace), `citadel_app` may not change, any other key is kept as sent. Needs
  * `UpdateNodeSettings` on the node.
  */
-metadata?: Array<number>, } } | { "SetDefaultAppTabs": { app_tabs: Array<string>, } } | { "SetMembersVisible": { node_id: string, visible: boolean, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes" | { "Telemetry": TelemetryRequest } | { "MessagingTrust": MessagingTrustRequest } | { "AdminRequests": AdminRequestsRequest } | { "Roles": RolesRequest } | { "Documents": DocumentsRequest } | { "ChatDocuments": ChatDocumentsRequest } | { "ChatAttachments": ChatAttachmentsRequest } | { "DocumentPictures": DocumentPicturesRequest } | { "SecureLinks": SecureLinksRequest } | { "Apps": AppsRequest } | { "ServerIdentityChallenge": ServerIdentityChallenge };
+metadata?: Uint8Array, } } | { "SetDefaultAppTabs": { app_tabs: Array<string>, } } | { "SetMembersVisible": { node_id: string, visible: boolean, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes" | { "Telemetry": TelemetryRequest } | { "MessagingTrust": MessagingTrustRequest } | { "AdminRequests": AdminRequestsRequest } | { "Roles": RolesRequest } | { "Documents": DocumentsRequest } | { "ChatDocuments": ChatDocumentsRequest } | { "ChatAttachments": ChatAttachmentsRequest } | { "DocumentPictures": DocumentPicturesRequest } | { "SecureLinks": SecureLinksRequest } | { "Apps": AppsRequest } | { "ServerIdentityChallenge": ServerIdentityChallenge };

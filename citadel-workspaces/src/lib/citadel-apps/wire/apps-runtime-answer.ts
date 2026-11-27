@@ -9,13 +9,13 @@ import { exactly, isAppListing, isBytes, isString, isStrings, single } from './i
 
 export type RuntimeAnswer =
   | { kind: 'release'; installId: string; current: AppListing; waitingOn: AppListing | null }
-  | { kind: 'artifact-chunk'; sha256: string; index: number; totalChunks: number; bytes: number[] }
+  | { kind: 'artifact-chunk'; sha256: string; index: number; totalChunks: number; bytes: Uint8Array }
   /** CBOR of the SDK's `HostReply`, decoded by whoever made the call. */
-  | { kind: 'call-reply'; reply: number[] }
+  | { kind: 'call-reply'; reply: Uint8Array }
   | { kind: 'advertised'; untilMs: bigint }
   | { kind: 'withdrawn'; installId: string; closedStreams: number }
   | { kind: 'ihttp-sent' }
-  | { kind: 'ihttp-frame'; from: IhttpFrom; toInstallId: string; frame: number[] }
+  | { kind: 'ihttp-frame'; from: IhttpFrom; toInstallId: string; frame: Uint8Array }
   /** An app wrote to a node this person may view: which install, which store, which keys; never a value. */
   | { kind: 'storage-changed'; installId: string; backend: NodeStore; keys: string[] };
 
@@ -42,9 +42,9 @@ export function readRuntimeAnswer(payload: unknown): RuntimeAnswer | null {
   }
   if (single(payload, 'ArtifactChunk', (x: unknown) => exactly(x, { sha256: isString, index: isU32, total_chunks: isU32, bytes: isBytes }))) {
     const c: Json = inner(payload, 'ArtifactChunk');
-    return { kind: 'artifact-chunk', sha256: c.sha256 as string, index: c.index as number, totalChunks: c.total_chunks as number, bytes: c.bytes as number[] };
+    return { kind: 'artifact-chunk', sha256: c.sha256 as string, index: c.index as number, totalChunks: c.total_chunks as number, bytes: c.bytes as Uint8Array };
   }
-  if (single(payload, 'CallReply', (x: unknown) => exactly(x, { reply: isBytes }))) return { kind: 'call-reply', reply: inner(payload, 'CallReply').reply as number[] };
+  if (single(payload, 'CallReply', (x: unknown) => exactly(x, { reply: isBytes }))) return { kind: 'call-reply', reply: inner(payload, 'CallReply').reply as Uint8Array };
   if (single(payload, 'Advertised', (x: unknown) => exactly(x, { until_ms: isU64 }))) return { kind: 'advertised', untilMs: inner(payload, 'Advertised').until_ms as bigint };
   if (single(payload, 'Withdrawn', (x: unknown) => exactly(x, { install_id: isString, closed_streams: isU32 }))) {
     const w: Json = inner(payload, 'Withdrawn');
@@ -52,7 +52,7 @@ export function readRuntimeAnswer(payload: unknown): RuntimeAnswer | null {
   }
   if (single(payload, 'IhttpFrame', (x: unknown) => exactly(x, { from: isFrom, to_install_id: isString, frame: isBytes }))) {
     const f: Json = inner(payload, 'IhttpFrame');
-    return { kind: 'ihttp-frame', from: f.from as IhttpFrom, toInstallId: f.to_install_id as string, frame: f.frame as number[] };
+    return { kind: 'ihttp-frame', from: f.from as IhttpFrom, toInstallId: f.to_install_id as string, frame: f.frame as Uint8Array };
   }
   if (single(payload, 'StorageChanged', (x: unknown) => exactly(x, { install_id: isString, backend: isNodeStore, keys: isStrings }))) {
     const c: Json = inner(payload, 'StorageChanged');

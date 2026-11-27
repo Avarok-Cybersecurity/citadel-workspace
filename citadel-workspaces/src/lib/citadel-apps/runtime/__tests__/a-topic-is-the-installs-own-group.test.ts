@@ -178,7 +178,7 @@ describe('a topic is the install’s own group', () => {
     for (const admit of [true, false]) {
       const w: World = world('5:9', admit);
       await w.port.TopicOpen({ name: 'pool' });
-      await w.push({ GroupMessageNotification: { cid: ME, peer_cid: 8n, group_key: { cid: 5n, mgid: 9n }, message: Array.from(encodeTopicMessage('pool', new Uint8Array([4]))), request_id: null } });
+      await w.push({ GroupMessageNotification: { cid: ME, peer_cid: 8n, group_key: { cid: 5n, mgid: 9n }, message: encodeTopicMessage('pool', new Uint8Array([4])), request_id: null } });
       expect(w.arrivals).toEqual([admit
         ? { name: 'pool', event: { message: { from: { username: 'alice', cid: 8n, app_id: 'a', install_id: 'i', via: 'group' }, body: new Uint8Array([4]) } } }
         : { name: 'pool', event: { dropped: { from: '8' } } }]);

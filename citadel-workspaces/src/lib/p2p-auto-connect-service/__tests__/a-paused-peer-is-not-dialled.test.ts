@@ -21,16 +21,16 @@ const ALICE: bigint = 100n;
 const BOB: bigint = 200n;
 const CAROL: bigint = 300n;
 
-const rows: Map<string, number[]> = new Map();
+const rows: Map<string, Uint8Array> = new Map();
 let readsFail: boolean = false;
 const dialled: Array<[bigint, bigint]> = [];
 const answered: Array<{ peer: bigint; accept: boolean }> = [];
 
 vi.mock('@/lib/websocket-service', () => ({
   websocketService: {
-    sendLocalDBGet: async (cid: bigint, key: string): Promise<{ value: number[] } | null> => {
+    sendLocalDBGet: async (cid: bigint, key: string): Promise<{ value: Uint8Array } | null> => {
       if (readsFail) throw new Error('LocalDB request timed out after 5000ms');
-      const value: number[] | undefined = rows.get(`${cid.toString()}/${key}`);
+      const value: Uint8Array | undefined = rows.get(`${cid.toString()}/${key}`);
       if (value === undefined) throw new Error(`Key not found: ${key}`);
       return { value };
     },

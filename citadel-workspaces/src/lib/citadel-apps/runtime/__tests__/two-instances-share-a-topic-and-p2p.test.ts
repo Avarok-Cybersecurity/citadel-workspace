@@ -62,7 +62,7 @@ function topics(seat: PlaneSeat, link: AgentLink, arrivals: TopicArrival[]): Own
   return port;
 }
 
-const message: Readonly<Record<string, unknown>> = { GroupMessageNotification: { cid: ME, peer_cid: PEER, group_key: GROUP, message: Array.from(encodeTopicMessage('pool', new Uint8Array([4]))), request_id: null } };
+const message: Readonly<Record<string, unknown>> = { GroupMessageNotification: { cid: ME, peer_cid: PEER, group_key: GROUP, message: encodeTopicMessage('pool', new Uint8Array([4])), request_id: null } };
 
 describe('a topic held by two instances of one install', () => {
   it('is joined once, still reaches the second after the first closes, and is left only when both have', async () => {
@@ -116,7 +116,7 @@ async function p2pPage(instances: number, allow: boolean): Promise<P2pPage> {
     const kind: IhttpFrame['kind'] = (fromWireFrame(d.ok ? d.value : null) as IhttpFrame).kind;
     return typeof kind === 'object' && 'Cancel' in kind ? [kind.Cancel.reason] : [];
   });
-  const push = (f: IhttpFrame): Promise<void> => a.push({ IhttpFrameNotification: { cid: ME, peer_cid: PEER, frame: Array.from(encodeCbor(toWireFrame(f))), request_id: null } });
+  const push = (f: IhttpFrame): Promise<void> => a.push({ IhttpFrameNotification: { cid: ME, peer_cid: PEER, frame: encodeCbor(toWireFrame(f)), request_id: null } });
   return { push, delivered, cancels };
 }
 

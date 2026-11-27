@@ -41,8 +41,8 @@ vi.mock('@/lib/tab-context', () => ({
 }));
 
 /** A theme envelope as it arrives: JSON, encoded to bytes. */
-function bytesOf(document: unknown): number[] {
-  return Array.from(new TextEncoder().encode(JSON.stringify(document)));
+function bytesOf(document: unknown): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify(document));
 }
 
 function harness(): { state: () => Partial<WorkspaceEventState> } {
@@ -61,7 +61,7 @@ function harness(): { state: () => Partial<WorkspaceEventState> } {
 describe('workspace metadata in state', () => {
   it('is the bytes that arrived, not the parse', async () => {
     const h: ReturnType<typeof harness> = harness();
-    const metadata: number[] = bytesOf({ initialized: true, note: 'hello' });
+    const metadata: Uint8Array = bytesOf({ initialized: true, note: 'hello' });
 
     await act(async (): Promise<void> => {
       eventEmitter.emit('workspace:loaded', {
@@ -71,7 +71,7 @@ describe('workspace metadata in state', () => {
       await Promise.resolve();
     });
 
-    expect(Array.isArray(h.state().workspace?.metadata)).toBe(true);
+    expect(ArrayBuffer.isView(h.state().workspace?.metadata)).toBe(true);
     expect(h.state().workspace?.metadata).toEqual(metadata);
   });
 
@@ -102,7 +102,7 @@ describe('workspace metadata in state', () => {
     const envelope: unknown = JSON.parse(
       new TextDecoder().decode(serializeTheme(defaultTheme())),
     );
-    const asStoredByTheServer: number[] = bytesOf({ initialized: true, theme: envelope });
+    const asStoredByTheServer: Uint8Array = bytesOf({ initialized: true, theme: envelope });
 
     expect(deserializeTheme(asStoredByTheServer)).not.toBeNull();
   });

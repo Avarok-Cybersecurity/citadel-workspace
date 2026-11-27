@@ -17,17 +17,17 @@ import { recordAppIcon } from '../installed-app-icons';
 import { citadelApp } from '../registry';
 
 const LEVEL: { Child: string } = { Child: 'Floor' };
-const bytesOf = (document: unknown): number[] => Array.from(new TextEncoder().encode(JSON.stringify(document)));
+const bytesOf = (document: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(document));
 /** The smallest PNG header appIconSrc accepts: the eight magic bytes. */
 const PNG: string = btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a));
 
 describe('the icon a tree row draws', () => {
   it('is the app icon for a document node', () => {
-    expect(nodeIcon({ entity_type: LEVEL, metadata: Array.from(encodeNodeApp(null, 'docs')) })).toBe(citadelApp('docs').icon);
+    expect(nodeIcon({ entity_type: LEVEL, metadata: encodeNodeApp(null, 'docs') })).toBe(citadelApp('docs').icon);
   });
 
   it('is the installed app’s icon for an app page: generic until its listing is read, then its own', () => {
-    const metadata: number[] = Array.from(encodeNodeAppPage(null, { app: 'work.synchronized.app', installId: 'inst-1' }));
+    const metadata: Uint8Array = encodeNodeAppPage(null, { app: 'work.synchronized.app', installId: 'inst-1' });
     const Icon: ReturnType<typeof nodeIcon> = nodeIcon({ entity_type: LEVEL, metadata });
     expect(Icon).not.toBe(getEntityIcon(LEVEL));
     expect(nodeIcon({ entity_type: LEVEL, metadata })).toBe(Icon);
@@ -39,12 +39,12 @@ describe('the icon a tree row draws', () => {
   });
 
   it('is the level icon for a node without an app', () => {
-    expect(nodeIcon({ entity_type: LEVEL, metadata: [] })).toBe(getEntityIcon(LEVEL));
-    expect(nodeIcon({ entity_type: LEVEL, metadata: [] })).not.toBe(citadelApp('docs').icon);
+    expect(nodeIcon({ entity_type: LEVEL, metadata: new Uint8Array() })).toBe(getEntityIcon(LEVEL));
+    expect(nodeIcon({ entity_type: LEVEL, metadata: new Uint8Array() })).not.toBe(citadelApp('docs').icon);
   });
 
   it('is the level icon when the app record cannot be read', () => {
-    const newer: number[] = bytesOf({ citadel_app: { v: 9, kind: 'citadel-app', payload: { app: 'docs' } } });
+    const newer: Uint8Array = bytesOf({ citadel_app: { v: 9, kind: 'citadel-app', payload: { app: 'docs' } } });
     expect(nodeIcon({ entity_type: LEVEL, metadata: newer })).toBe(getEntityIcon(LEVEL));
   });
 });

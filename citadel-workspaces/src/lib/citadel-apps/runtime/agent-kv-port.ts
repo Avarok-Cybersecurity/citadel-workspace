@@ -8,6 +8,7 @@ import type { AppKvRefusal } from 'citadel-workspace-client-ts';
 import type { OpArgs, OpReplies } from '../sdk/generated/AbiConstants';
 import type { PortAnswer, Refused, StoragePort } from '../host/ports';
 import { agentAsk, answering, bytesOf, type AgentLink, type AgentOutcome, type Json } from './agent-link';
+import { ownedBytes } from '@/lib/utils/encoding-utils';
 
 export interface LocalKvTarget {
   readonly cid: bigint;
@@ -53,7 +54,7 @@ export function agentKvPort(link: AgentLink, target: LocalKvTarget): StoragePort
       const b: Uint8Array | null = bytesOf(v);
       return b === null ? undefined : { value: b };
     }),
-    KvSet: ({ key, value }: OpArgs['KvSet']) => run<null>({ Set: { key, value: Array.from(value) } }, done),
+    KvSet: ({ key, value }: OpArgs['KvSet']) => run<null>({ Set: { key, value: ownedBytes(value) } }, done),
     KvDelete: ({ key }: OpArgs['KvDelete']) => run<null>({ Delete: { key } }, done),
     KvList: ({ prefix, cursor }: OpArgs['KvList']) => run<OpReplies['KvList']>({ List: { prefix, after: cursor } }, (r: unknown) => {
       if (typeof r !== 'object' || r === null || !('Keys' in r)) return undefined;

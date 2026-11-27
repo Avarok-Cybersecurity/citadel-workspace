@@ -20,8 +20,8 @@ import {
 
 /** The agent's per-session LocalDB. `get` rejects "Key not found" when absent. */
 export interface PauseStorage {
-  get(localCid: bigint, key: string): Promise<{ value: number[] } | null>;
-  set(localCid: bigint, key: string, value: number[]): Promise<void>;
+  get(localCid: bigint, key: string): Promise<{ value: Uint8Array } | null>;
+  set(localCid: bigint, key: string, value: Uint8Array): Promise<void>;
   remove(localCid: bigint, key: string): Promise<void>;
 }
 

@@ -18,7 +18,7 @@ const transportOf = (raw: (r: AppsRequest) => unknown): AppsTransport => ({
     return a;
   },
 });
-const chunk = (index: number, total: number, bytes: number[]): unknown => ({ ArtifactChunk: { sha256: 'aa', index, total_chunks: total, bytes } });
+const chunk = (index: number, total: number, bytes: number[]): unknown => ({ ArtifactChunk: { sha256: 'aa', index, total_chunks: total, bytes: Uint8Array.from(bytes) } });
 const indexOf = (r: AppsRequest): number => (r as { FetchArtifact: { index: number } }).FetchArtifact.index;
 
 describe('fetching an artifact', () => {
@@ -56,7 +56,7 @@ describe('the runtime answers, read strictly', () => {
   });
 
   it('a call reply is bytes; one of the wrong type is malformed', async () => {
-    expect(await callHost(transportOf(() => ({ CallReply: { reply: [1, 2] } })), 'i', new Uint8Array(0))).toEqual({ ok: true, value: Uint8Array.from([1, 2]) });
+    expect(await callHost(transportOf(() => ({ CallReply: { reply: new Uint8Array([1, 2]) } })), 'i', new Uint8Array(0))).toEqual({ ok: true, value: Uint8Array.from([1, 2]) });
     expect(readAppsAnswer({ CallReply: { reply: [300] } })).toEqual({ kind: 'malformed' });
     expect(readAppsAnswer({ Refused: 'ArtifactUnreachable' })).toEqual({ kind: 'refused', refusal: 'ArtifactUnreachable' });
     expect(readAppsAnswer({ Refused: { AlreadyInstalled: { install_id: 'x' } } })).toEqual({ kind: 'refused', refusal: { AlreadyInstalled: { install_id: 'x' } } });

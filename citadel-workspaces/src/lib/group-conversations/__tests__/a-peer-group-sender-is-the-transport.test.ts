@@ -20,7 +20,7 @@ const FORGED: bigint = 111n; // the reader's own cid: the most damaging forgery
 const peerName = (cid: bigint): string => (cid === AUTHOR ? 'ada' : `cid-${cid.toString()}`);
 
 function notification(body: Uint8Array, peerCid: unknown): Record<string, unknown> {
-  return { cid: 111n, peer_cid: peerCid, message: Array.from(body), group_key: { cid: 7n, mgid: 42n }, request_id: 'r1' };
+  return { cid: 111n, peer_cid: peerCid, message: body, group_key: { cid: 7n, mgid: 42n }, request_id: 'r1' };
 }
 
 const chat: Uint8Array = encodeGroupMessage({

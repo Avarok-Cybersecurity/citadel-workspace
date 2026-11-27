@@ -92,8 +92,8 @@ export function socketAgent(): AgentPort {
           request_id: id,
           issuer: request.issuer,
           aud: request.aud,
-          nonce: Array.from(request.nonce),
-          challenge: Array.from(request.challenge),
+          nonce: request.nonce,
+          challenge: request.challenge,
           unlock_password: stringToBytes(request.password),
         },
       }, IDENTITY_REQUEST_MS);

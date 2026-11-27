@@ -17,19 +17,31 @@
  * is the whole of "only the reactor can remove their own".
  */
 
-import type { GroupReaction } from 'citadel-workspace-client-ts';
+import type { GroupReaction, Reaction } from 'citadel-workspace-client-ts';
 
-export type { GroupReaction };
+export type { GroupReaction, Reaction };
 
 /** The fixed set offered by the picker and accepted off the wire. */
 export const REACTION_EMOJIS: readonly string[] = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
 /**
- * One reaction entry is the generated `GroupReaction`: `at` is the reactor's clock when they last
- * changed it (orders and dedupes); `active: false` is a retraction, kept so a late copy of the
- * add cannot resurrect it. A change is the entry it produces.
+ * One reaction entry is the agent's `Reaction`: `at` is the reactor's clock, in milliseconds, when
+ * they last changed it (orders and dedupes); `active: false` is a retraction, kept so a late copy
+ * of the add cannot resurrect it. A change is the entry it produces.
  */
-export type ReactionChange = GroupReaction;
+export type ReactionChange = Reaction;
+
+/**
+ * A node channel's entry, from the workspace protocol, whose clock is a u64 (a bigint on the
+ * page). A stored transcript written before that may hold it as a number: either is read.
+ */
+export function fromServerReaction(entry: GroupReaction): Reaction {
+  return { emoji: entry.emoji, reactorCid: entry.reactorCid, at: Number(entry.at), active: entry.active };
+}
+
+export function toServerReaction(entry: Reaction): GroupReaction {
+  return { emoji: entry.emoji, reactorCid: entry.reactorCid, at: BigInt(entry.at), active: entry.active };
+}
 
 export interface ReactionChip {
   emoji: string;
@@ -43,7 +55,7 @@ export function isReactionEmoji(value: unknown): value is string {
   return typeof value === 'string' && REACTION_EMOJIS.includes(value);
 }
 
-function sameSlot(entry: GroupReaction, change: ReactionChange): boolean {
+function sameSlot(entry: Reaction, change: ReactionChange): boolean {
   return entry.reactorCid === change.reactorCid && entry.emoji === change.emoji;
 }
 
@@ -53,14 +65,14 @@ function sameSlot(entry: GroupReaction, change: ReactionChange): boolean {
  * Null rather than the same array so a caller can skip the write and the event.
  */
 export function foldReaction(
-  current: readonly GroupReaction[] | undefined,
+  current: readonly Reaction[] | undefined,
   change: ReactionChange,
-): GroupReaction[] | null {
+): Reaction[] | null {
   if (!isReactionEmoji(change.emoji) || !Number.isFinite(change.at)) return null;
-  const list: readonly GroupReaction[] = current ?? [];
-  const held: GroupReaction | undefined = list.find((entry) => sameSlot(entry, change));
+  const list: readonly Reaction[] = current ?? [];
+  const held: Reaction | undefined = list.find((entry) => sameSlot(entry, change));
   if (held && held.at >= change.at) return null;
-  const entry: GroupReaction = { emoji: change.emoji, reactorCid: change.reactorCid, at: change.at, active: change.active };
+  const entry: Reaction = { emoji: change.emoji, reactorCid: change.reactorCid, at: change.at, active: change.active };
   return held ? list.map((e) => (sameSlot(e, change) ? entry : e)) : [...list, entry];
 }
 
@@ -70,12 +82,12 @@ export function foldReaction(
  * same millisecond are still two changes rather than a dropped second one.
  */
 export function toggleReaction(
-  current: readonly GroupReaction[] | undefined,
+  current: readonly Reaction[] | undefined,
   emoji: string,
   self: bigint,
   now: number,
 ): ReactionChange {
-  const held: GroupReaction | undefined = (current ?? []).find((e) => e.reactorCid === self && e.emoji === emoji);
+  const held: Reaction | undefined = (current ?? []).find((e) => e.reactorCid === self && e.emoji === emoji);
   return {
     emoji,
     reactorCid: self,
@@ -85,8 +97,8 @@ export function toggleReaction(
 }
 
 /** One chip per emoji with at least one live reaction, in picker order. */
-export function reactionChips(current: readonly GroupReaction[] | undefined, self: bigint | null): ReactionChip[] {
-  const live: GroupReaction[] = (current ?? []).filter((e) => e.active);
+export function reactionChips(current: readonly Reaction[] | undefined, self: bigint | null): ReactionChip[] {
+  const live: Reaction[] = (current ?? []).filter((e) => e.active);
   return REACTION_EMOJIS.flatMap((emoji: string): ReactionChip[] => {
     const reactorCids: bigint[] = live.filter((e) => e.emoji === emoji).map((e) => e.reactorCid);
     if (reactorCids.length === 0) return [];

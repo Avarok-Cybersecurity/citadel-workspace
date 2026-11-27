@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { encodeCbor } from '@/lib/citadel-apps/host/cbor';
 import { decodeSettings, displayZoneOf, encodeSettings, nodeZone, type ZonedNode } from '../zones';
 
-const meta = (doc: Record<string, unknown> | null): number[] => (doc === null ? [] : [...new TextEncoder().encode(JSON.stringify(doc))]);
+const meta = (doc: Record<string, unknown> | null): Uint8Array => (doc === null ? new Uint8Array() : new TextEncoder().encode(JSON.stringify(doc)));
 
 const TREE: Record<string, ZonedNode> = {
   root: { parent_id: null, metadata: meta({ app_tabs: [] }) },

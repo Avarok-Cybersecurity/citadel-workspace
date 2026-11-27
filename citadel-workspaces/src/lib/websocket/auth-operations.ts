@@ -158,7 +158,7 @@ export class AuthOperations {
       // than being silently sent to the server. The matching round-trip is
       // also pinned in `auth-operations-register.test.ts`.
       server_password: serverPassword
-        ? ({ passwords: [stringToBytes(serverPassword)] } satisfies PreSharedKey)
+        ? ({ passwords: [Array.from(stringToBytes(serverPassword))] } satisfies PreSharedKey)
         : null,
       admission_token: admissionToken,
     };

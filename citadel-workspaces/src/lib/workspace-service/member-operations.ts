@@ -48,7 +48,7 @@ export async function addMember(
       user_id: userId,
       domain_id: domainId ?? null,
       role,
-      metadata: metadata ? Array.from(metadata) : null
+      metadata: metadata ?? null
     }
   };
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
@@ -95,7 +95,7 @@ export async function updateMemberRole(
     UpdateMemberRole: {
       user_id: userId,
       role,
-      metadata: metadata ? Array.from(metadata) : null
+      metadata: metadata ?? null
     }
   };
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
