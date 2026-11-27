@@ -69,6 +69,16 @@ pub(super) async fn node_exists<R: Ratchet + Send + Sync + 'static>(
     Ok(backend.get_all_nodes_shared().await?.contains_key(node_id))
 }
 
+/// Whether the node a `Node` or `NodeTree` scope names is there to install at. The workspace
+/// root is never a stored node, only every top-level node's parent, yet it is a page (the
+/// workspace home) and its tree is the whole workspace, as the UI's reach rules already read it.
+pub(super) async fn scope_node_exists<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    node_id: &str,
+) -> Result<bool, NetworkError> {
+    Ok(node_id == WORKSPACE_ROOT_ID || node_exists(kernel, node_id).await?)
+}
+
 /// The workspace's members who are not banned.
 pub(super) async fn members<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
