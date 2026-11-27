@@ -5,6 +5,8 @@ import { processAvatarImage, validateAvatarFile, avatarToDataUrl, avatarSource }
 import { photoDecoder } from '@/lib/photo-decode/photo-decoder-browser';
 import { runAsyncSetup } from '@/lib/utils/async-utils';
 import { activateOnKey } from '@/lib/a11y';
+import { isPhotoRefusal, type PhotoRefusal } from '@/lib/photo-decode/photo-refusal';
+import { AvatarPhotoRefusal } from './AvatarPhotoRefusal';
 
 interface AvatarUploadProps {
   /** A profile picture or a workspace icon: its size, shape and labels. */
@@ -22,10 +24,12 @@ export function AvatarUpload({ kind, currentAvatar, onAvatarChange, disabled = f
   const [isDragActive, setIsDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refused, setRefused] = useState<{ readonly refusal: PhotoRefusal; readonly file: File } | null>(null);
   const fileInputRef: RefObject<HTMLInputElement> = useRef<HTMLInputElement>(null);
 
   const handleFile: (file: File) => Promise<void> = useCallback(async (file: File): Promise<void> => {
     setError(null);
+    setRefused(null);
 
     // Validate file
     const validation: ReturnType<typeof validateAvatarFile> = validateAvatarFile(file);
@@ -36,9 +40,13 @@ export function AvatarUpload({ kind, currentAvatar, onAvatarChange, disabled = f
 
     setIsProcessing(true);
     try {
-      const source: Blob | string = await avatarSource(file, photoDecoder.decode);
+      const source: Blob | PhotoRefusal | string = await avatarSource(file, photoDecoder.decode);
       if (typeof source === 'string') {
         setError(source);
+        return;
+      }
+      if (isPhotoRefusal(source)) {
+        setRefused({ refusal: source, file });
         return;
       }
       const base64: string = await processAvatarImage(source, kind.maxDimension);
@@ -102,6 +110,7 @@ export function AvatarUpload({ kind, currentAvatar, onAvatarChange, disabled = f
     e.stopPropagation();
     setPreview(null);
     setError(null);
+    setRefused(null);
     onAvatarChange(null);
   }, [onAvatarChange]);
 
@@ -173,6 +182,9 @@ export function AvatarUpload({ kind, currentAvatar, onAvatarChange, disabled = f
 
       {error && (
         <p role="alert" className="text-xs text-destructive-emphasis">{error}</p>
+      )}
+      {refused && (
+        <AvatarPhotoRefusal refusal={refused.refusal} chooseAnother={handleClick} again={(): Promise<void> => handleFile(refused.file)} />
       )}
     </div>
   );

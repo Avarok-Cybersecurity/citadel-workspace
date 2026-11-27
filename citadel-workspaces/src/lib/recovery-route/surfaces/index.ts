@@ -5,6 +5,7 @@
 import { APPS_SURFACES } from './apps';
 import { CALENDAR_SURFACES } from './calendar';
 import { GENERAL_SURFACES } from './general';
+import { PHOTO_SURFACES } from './photo';
 import { SESSION_SURFACES } from './session';
 import { TOPIC_SURFACES } from './topic';
 import { WAVE1_SURFACES } from './wave1';
@@ -16,6 +17,7 @@ export const SURFACES = {
   ...GENERAL_SURFACES,
   ...WAVE1_SURFACES,
   ...CALENDAR_SURFACES,
+  ...PHOTO_SURFACES,
 } as const;
 
 export type SurfaceId = keyof typeof SURFACES;

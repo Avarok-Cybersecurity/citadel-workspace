@@ -2,9 +2,8 @@
  * Image processing utilities for avatar uploads
  * Handles resizing and WebP conversion using Canvas API
  */
-import { MAX_PREVIEW_PIXELS } from '@/lib/received-files/image-preview';
-import { drawnOrRefused, type DecodePhoto, type DrawnPicture } from '@/lib/received-files/shown-picture';
-import { avatarRefusalSentence, type PhotoRefusal } from '@/lib/photo-decode/photo-refusal';
+import { drawnOrRefused, type DecodePhoto, type DrawnPicture, type RefusedPicture } from '@/lib/received-files/shown-picture';
+import type { PhotoRefusal } from '@/lib/photo-decode/photo-refusal';
 
 /** The largest file accepted as an avatar, before it is scaled down. */
 const MAX_AVATAR_FILE_BYTES: number = 5 * 1024 * 1024;
@@ -135,10 +134,11 @@ export function validateAvatarFile(file: File): { isValid: boolean; error?: stri
 
 /**
  * The picture an avatar is made from: the file itself when the browser draws it, a HEIC or TIFF
- * photo converted by the page's decoder; or why it cannot be used, with what to do instead.
+ * photo converted by the page's decoder; the decoder's refusal, for the picker to draw with its
+ * surface; or, when the file is no picture format at all, what to choose instead.
  */
-export async function avatarSource(file: Blob, decode: DecodePhoto): Promise<Blob | string> {
-  const drawn: DrawnPicture | PhotoRefusal | string = await drawnOrRefused(new Uint8Array(await file.arrayBuffer()), decode);
+export async function avatarSource(file: Blob, decode: DecodePhoto): Promise<Blob | PhotoRefusal | string> {
+  const drawn: DrawnPicture | RefusedPicture | string = await drawnOrRefused(new Uint8Array(await file.arrayBuffer()), decode);
   if (typeof drawn === 'string') return 'Please upload a JPEG, PNG, GIF, WebP, HEIC or TIFF image';
-  return 'display' in drawn ? drawn.display : avatarRefusalSentence(drawn, MAX_PREVIEW_PIXELS);
+  return 'display' in drawn ? drawn.display : drawn.refusal;
 }

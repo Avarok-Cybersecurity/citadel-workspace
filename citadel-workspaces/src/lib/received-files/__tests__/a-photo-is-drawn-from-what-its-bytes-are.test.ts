@@ -43,10 +43,16 @@ describe('a picture to draw', () => {
     expect(drawn.original.type).toBe('image/tiff');
   });
 
-  it('refused by the decoder reads as a clause with the way on, and keeps the refusal for others', async () => {
+  it('refused by the decoder reads as a clause with the way on, and keeps the refusal and its bytes for others', async () => {
     const decode = decoding({ kind: 'too-large', width: 8064, height: 6048 });
-    expect(await drawnPictureOf(fixture('checker-64.heic'), decode)).toContain('Download opens it in your photo app');
-    expect(await drawnOrRefused(fixture('checker-64.heic'), decode)).toEqual({ kind: 'too-large', width: 8064, height: 6048 });
+    const heic: Uint8Array = fixture('checker-64.heic');
+    expect(await drawnPictureOf(heic, decode)).toContain('Download saves it for your photo app');
+    const refused = await drawnOrRefused(heic, decode);
+    if (typeof refused === 'string' || !('refusal' in refused)) throw new Error('expected a refusal');
+    expect(refused.refusal).toEqual({ kind: 'too-large', width: 8064, height: 6048 });
+    // Still the file: Download saves these bytes, typed by what they are.
+    expect(refused.original.type).toBe('image/heic');
+    expect(refused.original.size).toBe(heic.byteLength);
   });
 });
 
@@ -55,9 +61,9 @@ describe('an avatar', () => {
     const source = await avatarSource(new NodeBlob([fixture('checker-64.heic').slice().buffer]) as unknown as Blob, decoding({ kind: 'decoded', blob: DECODED, width: 64, height: 64 }));
     expect(source).toBe(DECODED);
   });
-  it('from a photo too large says which photo would do', async () => {
+  it('from a photo too large is the refusal, for the picker to draw with its surface', async () => {
     const source = await avatarSource(new NodeBlob([fixture('checker-64.heic').slice().buffer]) as unknown as Blob, decoding({ kind: 'too-large', width: 9000, height: 9000 }));
-    expect(source).toBe('This photo is 9000 x 9000, too large to use. Choose one under 40 megapixels.');
+    expect(source).toEqual({ kind: 'too-large', width: 9000, height: 9000 });
   });
   it('from a file that is no picture names the formats that are', async () => {
     const source = await avatarSource(new NodeBlob(['<svg/>']) as unknown as Blob, decoding({ kind: 'decoded', blob: DECODED, width: 1, height: 1 }));

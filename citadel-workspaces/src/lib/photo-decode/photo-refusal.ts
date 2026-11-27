@@ -1,11 +1,9 @@
 /**
- * Why a photo the page decodes itself is not shown, and the way on from each reason. Pure.
+ * Why a photo the page decodes itself is not shown, and the words for each reason. Pure.
  *
- * The plans are RecoveryPlan-shaped (RECOVERY-DESIGN.md §2: cause, presentation, a required
- * primary route, alternatives) so they register as surfaces unchanged once lib/recovery-route
- * lands. A preview sits beside the file's own Download control, so a refusal there blocks nothing
- * (acknowledge, and the clause names Download); an avatar has to be a different photo (fix-input);
- * a decoder that failed to load or run is ours (retry, and the bug report the renderer derives).
+ * The way on from each reason is a RecoveryRoute surface (recovery-route/surfaces/photo.ts),
+ * `photo.preview.<kind>` in the picture viewer and `photo.avatar.<kind>` in the avatar picker,
+ * named by literal where each is drawn (the dead-end scan counts only literals).
  */
 
 export type PhotoRefusal =
@@ -22,45 +20,15 @@ export function isPhotoRefusal(value: unknown): value is PhotoRefusal {
   return kind === 'too-large' || kind === 'unsupported' || kind === 'unreadable' || kind === 'decoder-failed';
 }
 
-type PhotoRoute =
-  | { readonly kind: 'acknowledge'; readonly why: 'informational' }
-  | { readonly kind: 'fix-input' }
-  | { readonly kind: 'retry' };
-
-interface PhotoPlan {
-  readonly cause: 'user' | 'ours' | 'environment';
-  readonly presentation: 'inline';
-  readonly primary: PhotoRoute;
-  readonly alternatives: readonly PhotoRoute[];
-}
-
-const SEE_IT: PhotoRoute = { kind: 'acknowledge', why: 'informational' };
-const OTHER_PHOTO: PhotoRoute = { kind: 'fix-input' };
-const RETRY: PhotoRoute = { kind: 'retry' };
-
-export const PHOTO_PREVIEW_PLANS: Readonly<Record<PhotoRefusalKind, PhotoPlan>> = {
-  'too-large': { cause: 'environment', presentation: 'inline', primary: SEE_IT, alternatives: [] },
-  unsupported: { cause: 'environment', presentation: 'inline', primary: SEE_IT, alternatives: [] },
-  unreadable: { cause: 'environment', presentation: 'inline', primary: SEE_IT, alternatives: [] },
-  'decoder-failed': { cause: 'ours', presentation: 'inline', primary: RETRY, alternatives: [] },
-};
-
-export const AVATAR_PHOTO_PLANS: Readonly<Record<PhotoRefusalKind, PhotoPlan>> = {
-  'too-large': { cause: 'user', presentation: 'inline', primary: OTHER_PHOTO, alternatives: [] },
-  unsupported: { cause: 'user', presentation: 'inline', primary: OTHER_PHOTO, alternatives: [] },
-  unreadable: { cause: 'user', presentation: 'inline', primary: OTHER_PHOTO, alternatives: [] },
-  'decoder-failed': { cause: 'ours', presentation: 'inline', primary: RETRY, alternatives: [OTHER_PHOTO] },
-};
-
 const megapixels = (maxPixels: number): string => `${Math.floor(maxPixels / 1_000_000)} megapixels`;
 
 /** A clause for a chat preview ("This picture cannot be shown: <clause>."), naming the way on. */
 export function previewRefusalClause(refusal: PhotoRefusal): string {
   switch (refusal.kind) {
-    case 'too-large': return `at ${refusal.width} x ${refusal.height} it is too large to preview here; Download opens it in your photo app`;
-    case 'unsupported': return `the preview cannot read it (${refusal.detail}); Download opens it in your photo app`;
+    case 'too-large': return `at ${refusal.width} x ${refusal.height} it is too large to preview here; Download saves it for your photo app`;
+    case 'unsupported': return `the preview cannot read it (${refusal.detail}); Download saves it for your photo app`;
     case 'unreadable': return `it could not be read as a photo (${refusal.detail})`;
-    case 'decoder-failed': return `the photo preview did not load (${refusal.detail}); open it again to retry`;
+    case 'decoder-failed': return `the photo preview did not load (${refusal.detail}); try again`;
   }
 }
 

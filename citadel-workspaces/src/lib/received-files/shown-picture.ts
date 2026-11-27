@@ -20,11 +20,17 @@ export interface DrawnPicture {
   readonly size: Dimensions;
 }
 
+/** A photo the decoder would not draw, with its bytes typed by what they are: still a file to save. */
+export interface RefusedPicture {
+  readonly refusal: PhotoRefusal;
+  readonly original: Blob;
+}
+
 /**
  * The picture to draw from `bytes`; or the decoder's refusal, for the surface to word with its
  * own way on; or, when the bytes are no picture format at all, why, as a clause.
  */
-export async function drawnOrRefused(bytes: Uint8Array, decode: DecodePhoto): Promise<DrawnPicture | PhotoRefusal | string> {
+export async function drawnOrRefused(bytes: Uint8Array, decode: DecodePhoto): Promise<DrawnPicture | RefusedPicture | string> {
   const source: PictureSource | string = pictureSourceOf(bytes);
   if (typeof source === 'string') return source;
   if (source.kind === 'native') {
@@ -32,13 +38,13 @@ export async function drawnOrRefused(bytes: Uint8Array, decode: DecodePhoto): Pr
     return { display: original, original, size: source.picture.size };
   }
   const answer: PhotoAnswer = await decode(bytes, source.mime);
-  if (answer.kind !== 'decoded') return answer;
   const original: Blob = new Blob([bytes.slice().buffer], { type: source.mime });
+  if (answer.kind !== 'decoded') return { refusal: answer, original };
   return { display: answer.blob ?? original, original, size: { width: answer.width, height: answer.height } };
 }
 
 /** The picture to draw from `bytes` in a chat, or why there is none, as a clause. */
 export async function drawnPictureOf(bytes: Uint8Array, decode: DecodePhoto): Promise<DrawnPicture | string> {
-  const drawn: DrawnPicture | PhotoRefusal | string = await drawnOrRefused(bytes, decode);
-  return typeof drawn === 'string' || 'display' in drawn ? drawn : previewRefusalClause(drawn);
+  const drawn: DrawnPicture | RefusedPicture | string = await drawnOrRefused(bytes, decode);
+  return typeof drawn === 'string' || 'display' in drawn ? drawn : previewRefusalClause(drawn.refusal);
 }

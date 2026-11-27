@@ -13,6 +13,7 @@ import { looksLikePicture } from './image-preview';
 import { rememberSentPicture, sentPicture, type SentPictureOf } from './sent-pictures';
 import { browserSentPictureStore } from './sent-picture-store';
 import { photoDecoder } from '@/lib/photo-decode/photo-decoder-browser';
+import { previewGate } from './shared-preview-gate';
 
 export const pictureCache: PictureCache = new PictureCache({
   received: browserReceivedFileIO,
@@ -21,7 +22,7 @@ export const pictureCache: PictureCache = new PictureCache({
   decode: photoDecoder.decode,
   objectUrl: (blob: Blob): string => URL.createObjectURL(blob),
   release: (url: string): void => URL.revokeObjectURL(url),
-});
+}, previewGate);
 
 eventEmitter.on<FileSent>(FILE_TRANSFER_EVENTS.FILE_SENT, ({ transfer, file }: FileSent): void => {
   if (!looksLikePicture(file.name, file.type, file.size)) return;

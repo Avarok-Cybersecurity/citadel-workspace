@@ -6,7 +6,8 @@
  */
 import { useCallback, useContext, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type { SharedFile } from '@/lib/chat/attachments/shared-file';
-import { looksLikePicture } from '@/lib/received-files/image-preview';
+import { looksLikePicture, previewReservation } from '@/lib/received-files/image-preview';
+import { previewGate } from '@/lib/received-files/shared-preview-gate';
 import { drawnPictureOf, type DrawnPicture } from '@/lib/received-files/shown-picture';
 import { photoDecoder } from '@/lib/photo-decode/photo-decoder-browser';
 import { blobTypeFor } from '@/lib/received-files/blob-type';
@@ -45,7 +46,8 @@ export function useSharedFile(file: SharedFile): SharedFileView {
     if (io === null || !looksLikePicture(file.name, file.mime, file.size)) return;
     let url: string | null = null;
     let live: boolean = true;
-    read().then((data: Uint8Array): Promise<DrawnPicture | string> => drawnPictureOf(data, photoDecoder.decode)).then((drawn: DrawnPicture | string): void => {
+    const drawing: Promise<DrawnPicture | string> = previewGate.run(previewReservation(file.name), async (): Promise<DrawnPicture | string> => drawnPictureOf(await read(), photoDecoder.decode));
+    drawing.then((drawn: DrawnPicture | string): void => {
       if (!live || typeof drawn === 'string') return;
       url = URL.createObjectURL(drawn.display);
       setPictureUrl(url);

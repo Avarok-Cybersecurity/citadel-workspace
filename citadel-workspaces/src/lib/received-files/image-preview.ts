@@ -33,6 +33,22 @@ export function previewByteLimit(name: string): bigint {
   return RAW_NAME.test(name) ? MAX_RAW_PREVIEW_BYTES : MAX_PREVIEW_BYTES;
 }
 
+/** The most picture bytes read and decoding at once: one camera RAW and one other picture. */
+export const MAX_IN_FLIGHT_PREVIEW_BYTES: bigint = MAX_RAW_PREVIEW_BYTES + MAX_PREVIEW_BYTES;
+
+/**
+ * What reading `name` for a preview holds while it reads and decodes: its limit, not the size its
+ * sender declared, and whether it is a RAW, of which one is read at a time.
+ */
+export function previewReservation(name: string): PreviewReservation {
+  return { bytes: previewByteLimit(name), raw: RAW_NAME.test(name) };
+}
+
+export interface PreviewReservation {
+  readonly bytes: bigint;
+  readonly raw: boolean;
+}
+
 /** Whether a file is worth reading to see if it is a picture: by its name or declared type. */
 export function looksLikePicture(name: string, declaredType: string | undefined, size: number): boolean {
   const named: boolean = PICTURE_NAME.test(name) || RAW_NAME.test(name) || PICTURE_TYPE.test(declaredType ?? '');

@@ -2,15 +2,18 @@
  * A chat file's picture: its bytes read (a received file from the agent, a sent one from this
  * tab), checked as a picture within the limits (decoded by the page when it is a photo format the
  * browser may not draw), and given an object URL. One load per transfer, shared by the bubble and
- * the viewer, and bounded: the oldest is released.
+ * the viewer, and bounded: the oldest is released, and reads and decodes pass the preview gate, so
+ * a conversation of RAW files is read one at a time. A photo the decoder refused keeps its bytes:
+ * it is still a file to save.
  *
  * Pure over its I/O (SBIO): reading, decoding and the object URL are handed in.
  */
 import type { FileTransfer } from '@/lib/file-transfer/types';
 import { readReceivedFile, type ReceivedFileIO, type ReceivedFileRead } from './received-file';
-import { previewByteLimit } from './image-preview';
+import { previewByteLimit, previewReservation } from './image-preview';
+import type { PreviewGate } from './preview-gate';
 import type { Dimensions } from './image-dimensions';
-import { drawnPictureOf, type DecodePhoto, type DrawnPicture } from './shown-picture';
+import { drawnOrRefused, type DecodePhoto, type DrawnPicture, type RefusedPicture } from './shown-picture';
 
 export interface ShownPicture {
   /** An object URL of what is drawn. */
@@ -20,7 +23,7 @@ export interface ShownPicture {
   readonly picture: { readonly size: Dimensions };
 }
 
-export type PictureLoad = ShownPicture | { readonly unavailable: string };
+export type PictureLoad = ShownPicture | RefusedPicture | { readonly unavailable: string };
 
 export interface PictureIO {
   readonly received: ReceivedFileIO;
@@ -43,8 +46,9 @@ async function bytesOf(transfer: FileTransfer, io: PictureIO): Promise<Uint8Arra
 export async function loadPicture(transfer: FileTransfer, io: PictureIO): Promise<PictureLoad> {
   const bytes: Uint8Array | string = await bytesOf(transfer, io);
   if (typeof bytes === 'string') return { unavailable: bytes };
-  const drawn: DrawnPicture | string = await drawnPictureOf(bytes, io.decode);
+  const drawn: DrawnPicture | RefusedPicture | string = await drawnOrRefused(bytes, io.decode);
   if (typeof drawn === 'string') return { unavailable: drawn };
+  if ('refusal' in drawn) return drawn;
   return { url: io.objectUrl(drawn.display), blob: drawn.original, picture: { size: drawn.size } };
 }
 
@@ -54,17 +58,23 @@ const MAX_LOADED: number = 32;
 export class PictureCache {
   private readonly loads: Map<string, Promise<PictureLoad>> = new Map();
 
-  constructor(private readonly io: PictureIO) {}
+  constructor(private readonly io: PictureIO, private readonly gate: PreviewGate) {}
 
   get(transfer: FileTransfer): Promise<PictureLoad> {
     const known: Promise<PictureLoad> | undefined = this.loads.get(transfer.id);
     if (known) return known;
-    const load: Promise<PictureLoad> = loadPicture(transfer, this.io);
+    const load: Promise<PictureLoad> = this.gate.run(previewReservation(transfer.fileName), (): Promise<PictureLoad> => loadPicture(transfer, this.io));
     this.loads.set(transfer.id, load);
-    // A load that found nothing is not kept: the file may arrive, or the agent come back.
-    void load.then((done: PictureLoad): void => { if ('unavailable' in done) this.loads.delete(transfer.id); });
+    // A load that drew nothing is not kept: the file may arrive, the agent come back, or the
+    // decoder load on a second try.
+    void load.then((done: PictureLoad): void => { if (!('url' in done)) this.forget(transfer.id, load); }, (): void => this.forget(transfer.id, load));
     while (this.loads.size > MAX_LOADED) this.evictOldest();
     return load;
+  }
+
+  /** Forgets a load that drew nothing, unless a newer load for the transfer has replaced it. */
+  private forget(id: string, load: Promise<PictureLoad>): void {
+    if (this.loads.get(id) === load) this.loads.delete(id);
   }
 
   private evictOldest(): void {
