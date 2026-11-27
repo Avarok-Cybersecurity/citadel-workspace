@@ -38,7 +38,11 @@ fn a_dng_shows_its_jpeg_preview_turned_as_the_file_asks() {
     let preview = fixture("quadrants-48.jpg");
     let (w, h, orientation, data) = jpeg_of(decode(&dng(&preview, 6), &LIMITS, Depth::Probe));
     assert_eq!((w, h, orientation), (48, 48, 6));
-    assert_eq!(data, preview, "the preview's bytes, untouched");
+    assert_eq!(
+        data,
+        preview_handed_on(),
+        "the preview's bytes, less its Exif"
+    );
 }
 
 #[test]
@@ -50,7 +54,10 @@ fn a_cr2_shows_the_jpeg_in_its_first_directory() {
     let ifd0 = jpeg_strip(6, 48, 48, at[1], preview.len() as u32);
     let file = build(false, &blobs, vec![ifd0], vec![]);
     assert_eq!(&file[8..10], b"CR");
-    assert_eq!(jpeg_of(decode(&file, &LIMITS, Depth::Pixels)).3, preview);
+    assert_eq!(
+        jpeg_of(decode(&file, &LIMITS, Depth::Pixels)).3,
+        preview_handed_on()
+    );
 }
 
 #[test]
@@ -62,7 +69,7 @@ fn a_big_endian_nef_shows_its_jpg_from_raw() {
     let sub: Dir = vec![(0x0201, vec![at[1]]), (0x0202, vec![preview.len() as u32])];
     let file = build(true, &blobs, vec![rgb_strip(8, 8, at[0])], vec![(0, sub)]);
     let (w, h, orientation, data) = jpeg_of(decode(&file, &LIMITS, Depth::Pixels));
-    assert_eq!((w, h, orientation, data), (48, 48, 1, preview));
+    assert_eq!((w, h, orientation, data), (48, 48, 1, preview_handed_on()));
 }
 
 #[test]
@@ -74,7 +81,10 @@ fn an_arw_shows_the_jpeg_its_first_directory_points_at() {
     let mut ifd0 = rgb_strip(2, 2, at[0]);
     ifd0.extend([(0x0201, vec![at[1]]), (0x0202, vec![preview.len() as u32])]);
     let file = build(false, &blobs, vec![ifd0, rgb_strip(2, 2, at[0])], vec![]);
-    assert_eq!(jpeg_of(decode(&file, &LIMITS, Depth::Pixels)).3, preview);
+    assert_eq!(
+        jpeg_of(decode(&file, &LIMITS, Depth::Pixels)).3,
+        preview_handed_on()
+    );
 }
 
 #[test]

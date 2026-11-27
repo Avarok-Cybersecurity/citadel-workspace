@@ -11,5 +11,6 @@ python3 -I "$here/scripts/gen-quadrants.py" "$out/quadrants-48.png"
 sips -s format jpeg -s formatOptions 90 "$out/quadrants-48.png" --out "$out/quadrants-48.jpg" >/dev/null
 sips -s format tiff -s formatOptions lzw "$out/quadrants-48.png" --out "$out/quadrants-48-lzw.tif" >/dev/null
 sips -s format bmp "$out/quadrants-48.png" --out "$out/quadrants-48.bmp" >/dev/null
+python3 -I "$here/scripts/gen-turned.py" "$out"
 cp "$heic/checker-64.heic" "$heic/checker-64.ref.png" "$out/"
 ls -l "$out"

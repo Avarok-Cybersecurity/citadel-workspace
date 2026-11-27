@@ -186,3 +186,12 @@ pub fn jpeg_declaring(width: u16, height: u16) -> Vec<u8> {
     j[sof + 7..sof + 9].copy_from_slice(&width.to_be_bytes());
     j
 }
+
+/// quadrants-48.jpg as a RAW preview is handed on: without the Exif segment sips writes after
+/// JFIF (bytes 20..98), every other byte as written. Sliced by position, not by the code tested.
+pub fn preview_handed_on() -> Vec<u8> {
+    let jpeg = fixture("quadrants-48.jpg");
+    assert_eq!(&jpeg[20..22], &[0xFF, 0xE1]);
+    assert_eq!(&jpeg[24..30], b"Exif\0\0");
+    [&jpeg[..20], &jpeg[98..]].concat()
+}

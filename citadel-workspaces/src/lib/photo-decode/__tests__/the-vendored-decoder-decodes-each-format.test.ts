@@ -56,6 +56,14 @@ describe('the vendored photo decoder', () => {
     expect(Array.from(data.subarray((48 * 48 - 1) * 4))).toEqual([255, 255, 255, 255]);
   });
 
+  it('hands on a RAW preview turned by the RAW alone, its JPEG\'s own Exif cut out', () => {
+    const answer = glue.decode_photo(fixture('turned-6.dng'), ...CAPS, false);
+    expect([answer.kind, answer.width, answer.height, answer.orientation]).toEqual([AnswerKind.Jpeg, 48, 48, 6]);
+    const jpeg: Uint8Array = answer.take_data();
+    expect([jpeg[0], jpeg[1]]).toEqual([0xff, 0xd8]);
+    expect(new TextDecoder('latin1').decode(jpeg).includes('Exif\u0000\u0000')).toBe(false);
+  });
+
   it('refuses a photo over the caps it is given, before decoding', () => {
     const answer = glue.decode_photo(fixture('checker-64.heic'), 64 * 64 - 1, 16_384, true);
     expect([answer.kind, answer.width, answer.height]).toEqual([AnswerKind.TooLarge, 64, 64]);

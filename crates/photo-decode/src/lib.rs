@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 
 mod heif;
+mod jpeg_exif;
 mod jpeg_sof;
 pub mod outcome;
 mod tiff_ifd;
@@ -73,7 +74,7 @@ fn tiff(bytes: &[u8], limits: &Limits, depth: Depth) -> Result<Found, Refusal> {
             width,
             height,
             orientation,
-            data: bytes[start..end].to_vec(),
+            data: jpeg_exif::without_exif(&bytes[start..end]),
         }),
         (
             Candidate::Strips {
