@@ -4,7 +4,7 @@
  */
 import { chromium, webkit } from 'playwright';
 import { serveHarness } from './serve.mjs';
-import { assertParity, newParityContext } from '../ci-parity.mjs';
+import { assertParity, newParityContext, pagesMadeBy } from '../ci-parity.mjs';
 
 const AVAILABLE = { chromium, webkit };
 // CI installs Chromium only; a machine with WebKit sets POLISH_ENGINES=chromium,webkit (the default).
@@ -24,6 +24,15 @@ export function runChecks(CHECKS) {
 }
 
 /**
+ * WebKit's build for this Playwright (2272) stops answering a page's close at about the 64th page one browser
+ * has made, and every later call on that browser then waits for ever at no CPU. Each axe scan makes and closes
+ * a page, so the 64th fell wherever the scan count put it (theCalendarTabSaysWhyAndWhatToDo in the full sweep).
+ * A browser is relaunched before it has made this many pages, in any context a check gives it (ci-parity.mjs
+ * counts them); one rule for every engine keeps the runs alike.
+ */
+const PAGES_PER_BROWSER = 48;
+
+/**
  * The same run over chosen viewports and motions. A motion is the media preference the context
  * reports and the app's own tier (`lite` sets the class the app's Lite motion sets).
  */
@@ -33,10 +42,11 @@ export async function runMatrix(CHECKS, { viewports, motions }) {
   let failures = 0;
   try {
     for (const [engineName, engine] of Object.entries(ENGINES)) {
-      const browser = await engine.launch();
+      let browser = await engine.launch();
       for (const viewport of viewports) {
         for (const theme of THEMES) for (const motion of motions) {
-          const context = await newParityContext(browser, { viewport, reducedMotion: motion.reducedMotion });
+          const newContext = () => newParityContext(browser, { viewport, reducedMotion: motion.reducedMotion });
+          let context = await newContext();
           const origin = (scenario) => `${harness.origin}/?s=${scenario}&theme=${theme}&motion=${motion.tier}`;
           const open = async () => {
             const page = await context.newPage();
@@ -57,6 +67,14 @@ export async function runMatrix(CHECKS, { viewports, motions }) {
           };
           let page = await open();
           for (const [name, check] of Object.entries(CHECKS)) {
+            if (pagesMadeBy(browser) >= PAGES_PER_BROWSER) {
+              await page.close();
+              await context.close();
+              await browser.close();
+              browser = await engine.launch();
+              context = await newContext();
+              page = await open();
+            }
             const label = `${name} [${engineName} ${viewport.width}px ${theme}${motions === REDUCED_ONLY ? '' : ` ${motion.name}`}]`;
             const problem = await attempt(page, check);
             if (problem === null) console.log(`  ok    ${label}`);

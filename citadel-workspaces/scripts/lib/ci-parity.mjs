@@ -61,9 +61,14 @@ export function assertParity() {
     `CPU ${cpuThrottle()}x (Chromium), Node ${process.versions.node}. Not reproduced: Docker stack, Linux/Windows rendering.`);
 }
 
+/** Pages made by each browser, in every context the harness gave it: run-checks relaunches a browser before WebKit's limit. */
+const pagesMade = new WeakMap();
+export const pagesMadeBy = (browser) => pagesMade.get(browser) ?? 0;
+
 /** browser.newContext, plus -- under parity -- the runner's navigator and CPU. */
 export async function newParityContext(browser, options) {
   const context = await browser.newContext(options);
+  context.on('page', () => { pagesMade.set(browser, pagesMadeBy(browser) + 1); });
   if (!parityEnabled()) return context;
   const { hardwareConcurrency, deviceMemory } = CI_RUNNER;
   await context.addInitScript(({ cores, memory }) => {

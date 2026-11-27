@@ -1,0 +1,39 @@
+# Photo previews for the formats a browser cannot draw itself (HEIC/HEIF, TIFF, and the JPEG
+# previews inside camera RAW files). Pure Rust, no I/O: bytes in, RGBA pixels or an embedded JPEG
+# out, built for wasm32-unknown-unknown and loaded by the page in a Web Worker only when such a
+# file is shown. scripts/build-photo-decode.mjs vendors the build into the UI. Its own workspace,
+# as the Calendar's glue is (apps/first-party/calendar).
+[workspace]
+
+[package]
+name = "photo-decode"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Ours: no C, no unsafe, no_std core. `parallel` (rayon) stays off: the page has no wasm threads.
+# Grid tiles are independent, so a later Vortex pool can fan them out (see src/heif.rs).
+heic-rs = { version = "=0.1.5", default-features = false }
+# image-rs's TIFF decoder: LZW, Deflate and PackBits only. JPEG-in-TIFF, fax, WebP and zstd are
+# off; a camera RAW's JPEG preview is cut out by src/tiff_ifd.rs and drawn by the browser instead.
+tiff = { version = "=0.11.3", default-features = false, features = ["lzw", "deflate"] }
+# Exactly the version of the wasm-bindgen CLI that scripts/build-photo-decode.mjs runs (it reads
+# this from the lockfile and refuses any other): the glue and the binary are one build.
+wasm-bindgen = "=0.2.129"
+
+[dev-dependencies]
+# Reads the reference decode Apple made of the HEIC fixture.
+png = "0.17"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true

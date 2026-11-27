@@ -282,6 +282,16 @@ jobs:
           # Into this run's own root, named on PATH: the runner's cargo home need not be on PATH.
           cargo install wasm-bindgen-cli --locked --version "$version" --root "$RUNNER_TEMP/wasm-bindgen-$version"
           PATH="$RUNNER_TEMP/wasm-bindgen-$version/bin:$PATH" node scripts/build-calendar-glue.mjs --check
+      # The photo decoder (crates/photo-decode): HEIC, TIFF and camera RAW previews for the page.
+      # Its tests run natively on generated fixtures; the vendored binary must be what it builds.
+      - name: Photo decoder - fmt, clippy native and wasm32, tests, vendored binary matches the source
+        run: |
+          (cd crates/photo-decode && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings \
+            && cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings && cargo test --locked)
+          version="$(sed -n '/^name = "wasm-bindgen"$/{n;s/^version = "\(.*\)"$/\1/p;}' crates/photo-decode/Cargo.lock)"
+          test -n "$version" || { echo "::error::no wasm-bindgen in crates/photo-decode/Cargo.lock"; exit 1; }
+          cargo install wasm-bindgen-cli --locked --version "$version" --root "$RUNNER_TEMP/wasm-bindgen-$version"
+          PATH="$RUNNER_TEMP/wasm-bindgen-$version/bin:$PATH" node scripts/build-photo-decode.mjs --check
       # The workspace protocol's codec (citadel-workspace-codec): its native tests, clippy for the
       # page's wasm32, and the module and binary vendored into the client and the UI must be what
       # the source builds.

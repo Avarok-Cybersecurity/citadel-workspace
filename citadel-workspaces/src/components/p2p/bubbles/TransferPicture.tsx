@@ -23,7 +23,7 @@ function picturesWith(peerCid: string): FileTransfer[] {
 export function TransferPicture({ message, isOwn }: { message: PaneMessage; isOwn: boolean }): JSX.Element | null {
   const name: string = message.file_name ?? '';
   const eligible: boolean = looksLikePicture(name, message.file_type, message.file_size ?? 0);
-  const load: PictureLoad | null = useTransferPicture(eligible && message.transfer_id ? fileTransferService.getTransfer(message.transfer_id) : undefined);
+  const { load }: { load: PictureLoad | null } = useTransferPicture(eligible && message.transfer_id ? fileTransferService.getTransfer(message.transfer_id) : undefined);
   const [gallery, setGallery] = useState<{ pictures: FileTransfer[]; at: number } | null>(null);
   if (!eligible || !message.transfer_id) return null;
 
