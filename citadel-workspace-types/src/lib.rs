@@ -1,3 +1,5 @@
+/// A member's ask of the admins, landed in their Scratchpads.
+pub mod admin_requests;
 /// Citadel Apps: capabilities, install scopes and audiences.
 pub mod apps;
 /// An app install as stored, and why an apps request is refused.
@@ -53,6 +55,10 @@ pub mod ice;
 pub mod messaging_trust;
 /// The metadata keys behind a node's tabs and time zone, and what each may hold.
 pub mod node_tabs;
+/// A request frame's optional id, and the digest its answer is named by.
+pub mod request_frame;
+#[cfg(test)]
+mod request_frame_tests;
 /// A workspace's role table and its built-ins.
 pub mod roles;
 /// Reading and editing the role table.
@@ -154,6 +160,9 @@ pub enum WorkspaceProtocolRequest {
         #[debug(with = secret_debug_fmt)]
         workspace_master_password: String,
         #[debug(with = bytes_opt_debug_fmt)]
+        #[ts(type = "Uint8Array | null")]
+        #[serde(default)]
+        #[serde(with = "citadel_internal_service_types::wire_bytes::option")]
         metadata: Option<Vec<u8>>,
     },
     GetWorkspace {
@@ -170,6 +179,9 @@ pub enum WorkspaceProtocolRequest {
         #[debug(with = secret_debug_fmt)]
         workspace_master_password: String,
         #[debug(with = bytes_opt_debug_fmt)]
+        #[ts(type = "Uint8Array | null")]
+        #[serde(default)]
+        #[serde(with = "citadel_internal_service_types::wire_bytes::option")]
         metadata: Option<Vec<u8>>,
     },
     DeleteWorkspace {
@@ -187,6 +199,9 @@ pub enum WorkspaceProtocolRequest {
         /// The id of a role in the workspace's table.
         role: String,
         #[debug(with = bytes_opt_debug_fmt)]
+        #[ts(type = "Uint8Array | null")]
+        #[serde(default)]
+        #[serde(with = "citadel_internal_service_types::wire_bytes::option")]
         metadata: Option<Vec<u8>>,
     },
     GetMember {
@@ -197,6 +212,9 @@ pub enum WorkspaceProtocolRequest {
         /// The id of a role in the workspace's table.
         role: String,
         #[debug(with = bytes_opt_debug_fmt)]
+        #[ts(type = "Uint8Array | null")]
+        #[serde(default)]
+        #[serde(with = "citadel_internal_service_types::wire_bytes::option")]
         metadata: Option<Vec<u8>>,
     },
     UpdateMemberPermissions {
@@ -266,6 +284,8 @@ pub enum WorkspaceProtocolRequest {
         // UI can inscribe whatever subprotocol it wishes on this for e.g., the actual message contents,
         // read receipts, typing indicators, etc, likely using an enum.
         #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         contents: Vec<u8>,
     },
 
@@ -378,6 +398,9 @@ pub enum WorkspaceProtocolRequest {
         /// already sent this field and serde dropped it, so every node was created with
         /// empty metadata. Absent means empty; anything else must be a JSON object.
         #[debug(with = bytes_opt_debug_fmt)]
+        #[ts(type = "Uint8Array | null")]
+        #[serde(default)]
+        #[serde(with = "citadel_internal_service_types::wire_bytes::option")]
         metadata: Option<Vec<u8>>,
     },
 
@@ -400,7 +423,8 @@ pub enum WorkspaceProtocolRequest {
         /// workspace's metadata under a `theme` key rather than storing it as
         /// the whole document — metadata is shared with other features, and
         /// overwriting it erased the initialisation marker.
-        #[ts(type = "number[]")]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         theme: Vec<u8>,
     },
 
@@ -443,8 +467,10 @@ pub enum WorkspaceProtocolRequest {
         /// and `time_zone` are checked, `null` under either removes it (the node then follows
         /// the workspace), `citadel_app` may not change, any other key is kept as sent. Needs
         /// `UpdateNodeSettings` on the node.
-        #[ts(optional)]
+        #[ts(optional, type = "Uint8Array")]
         #[debug(with = bytes_opt_debug_fmt)]
+        #[serde(default)]
+        #[serde(with = "citadel_internal_service_types::wire_bytes::option")]
         metadata: Option<Vec<u8>>,
     },
 
@@ -544,6 +570,9 @@ pub enum WorkspaceProtocolRequest {
 
     /// Who connects without asking; see `messaging_trust`.
     MessagingTrust(messaging_trust::MessagingTrustRequest),
+
+    /// A member's ask of the workspace's admins, landed in their Scratchpads; see `admin_requests`.
+    AdminRequests(admin_requests::AdminRequestsRequest),
 
     /// The workspace's role table; see `roles`.
     Roles(roles_protocol::RolesRequest),
@@ -729,6 +758,11 @@ pub enum WorkspaceProtocolResponse {
         /// RE-VFS storage quota per user (in megabytes)
         #[ts(type = "bigint")]
         revfs_storage_quota_mb: u64,
+        /// `Some(true)` from a kernel that reads a request frame's `request_id` and pairs each
+        /// such answer with `Answered`; absent from one built before (request_frame.rs).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        request_ids: Option<bool>,
     },
 
     /// Relay servers for this member, valid until `expires_at` (unix seconds). Ask again
@@ -742,6 +776,14 @@ pub enum WorkspaceProtocolResponse {
     /// No relay servers are available to this member now, and why.
     IceServersUnavailable {
         reason: String,
+    },
+
+    /// Sent right after the answer to a request that named `request_id`: that answer frame's
+    /// `request_frame::answer_digest`. Never sent for a request without one, nor for a broadcast.
+    Answered {
+        #[ts(type = "bigint")]
+        request_id: u64,
+        digest: String,
     },
 
     /// This workspace's sign-in settings, as stored now.
@@ -800,6 +842,8 @@ pub enum WorkspaceProtocolResponse {
     Telemetry(telemetry::TelemetryResponse),
 
     MessagingTrust(messaging_trust::MessagingTrustResponse),
+
+    AdminRequests(admin_requests::AdminRequestsResponse),
 
     Roles(roles_protocol::RolesResponse),
 

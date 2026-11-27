@@ -23,6 +23,7 @@ vi.mock('@/lib/workspace-service', () => ({
     listNodes: async (): Promise<void> => undefined,
     getTreeSchema: async (): Promise<void> => undefined,
     listMembers: async (): Promise<void> => undefined,
+    getServerCapabilities: async (): Promise<void> => undefined,
   },
 }));
 

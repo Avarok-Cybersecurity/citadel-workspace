@@ -18,10 +18,9 @@ import { transportRouter } from './ihttp-transport-router';
 import type { PlaneSeat } from './install-plane-registry';
 import { PeerAuthority } from './peer-authority';
 import { topicPort, type OwnedTopicPort } from './topic-port';
-import { rejoining, type RejoiningTopicPort, type TopicJoin } from './topic-rejoin';
+import { rejoining, TOPIC_WAIT, type RejoiningTopicPort, type TopicJoin, type TopicOwner } from './topic-rejoin';
 import { offerTopicRetry, showTopicJoin } from '../topic-join-store';
-import { groupIdToKey, isValidGroupId } from '@/lib/group-conversations/group-key';
-import type { PeerAuthorization } from '../member-consent-types';
+import { ownerOf } from './topic-owner';
 
 /** What the page tells the peer planes; page-runtime.ts gives the tab's own. */
 export interface PeerWorld {
@@ -35,6 +34,8 @@ export interface PeerWorld {
   readonly policy: HostPolicy;
   /** A registered peer's CID by username; null when this member has no P2P relationship with them. */
   readonly peerCid: (username: string) => bigint | null;
+  /** Whether a member is shown online, as every presence surface shows it (lib/presence.ts); null: not known or not shown. */
+  readonly presence: (cid: bigint) => boolean | null;
   /** This member's own answer for an install (ListInstalls `peer_for_me`); null: never answered. */
   readonly peerForMe: (installId: string) => PeerForMe | null;
   /** What the chat pipeline must skip (group-conversations/app-topic-groups.ts). */
@@ -62,13 +63,6 @@ const CHANGES: ReadonlySet<AppsAnswer['kind']> = new Set<AppsAnswer['kind']>([
 /** A member's answer changed: a joiner refused before may be admitted now (topic-rejoin.ts). */
 const CONSENT_CHANGES: ReadonlySet<AppsAnswer['kind']> = new Set<AppsAnswer['kind']>(['consented', 'peer-consent', 'peer-answers-changed']);
 
-/** The topic's owner by name: the group's creator (its key's cid), as the kernel names that member to this install. */
-async function ownerOf(groupId: string | null | 'refused', name: string, authority: PeerAuthority): Promise<string | null> {
-  if (groupId === null || groupId === 'refused' || !isValidGroupId(groupId)) return null;
-  const said: PeerAuthorization | 'limited' = await authority.authorize(groupIdToKey(groupId).cid, { Topic: { topic: name } });
-  return said !== 'limited' && said.ok ? said.peer.username : null;
-}
-
 /** `scopeKey`: the scope key the install is addressed by, which every call's head names; `seat`: the instance's place on the page. */
 export function peerPorts(install: AppInstall, scopeKey: string, limits: AppLimits, relay: IhttpPort, seat: PlaneSeat, w: PeerWorld): PeerPorts {
   const held: ReadonlySet<Capability> = new Set(effectiveForMember(install.granted, w.peerForMe(install.id)?.consent ?? null, false));
@@ -84,14 +78,14 @@ export function peerPorts(install: AppInstall, scopeKey: string, limits: AppLimi
   });
   const inner: OwnedTopicPort | null = install.details.topics.length === 0 || limits.topics === undefined ? null : topicPort({
     cid: session.cid, seat, agent: w.agent, topics: install.details.topics, limits: limits.topics, authority, record: w.topicRecord,
-    topicGroup: (name: string, claim: string | null) => topicGroup(w.transport, install.id, name, claim), timeoutMs: w.policy.portTimeoutMs,
+    topicGroup: (name: string, claim: string | null, replaces: string | null) => topicGroup(w.transport, install.id, name, claim, replaces), timeoutMs: w.policy.portTimeoutMs,
     refused: (name: string, limit: string): void => w.report(`[apps] ${install.app_id} (install ${install.id}): the server refused a message to topic ${name}`, limit),
     notAMember: (name: string): void => w.report(`[apps] ${install.app_id} (install ${install.id}): the server refused a message to topic ${name}: this session is not in its group`, 'NotAMember'),
   });
   const topic: RejoiningTopicPort | null = inner === null ? null : rejoining(inner, {
-    intervalMs: w.policy.portTimeoutMs,
+    intervalMs: w.policy.portTimeoutMs, wait: TOPIC_WAIT, nowMs: w.nowMs, presence: w.presence,
     after: (ms: number, fire: () => void): (() => void) => { const timer: ReturnType<typeof setTimeout> = setTimeout(fire, ms); return (): void => clearTimeout(timer); },
-    owner: async (name: string): Promise<string | null> => ownerOf(await topicGroup(w.transport, install.id, name, null), name, authority),
+    owner: async (name: string): Promise<TopicOwner | null> => ownerOf(await topicGroup(w.transport, install.id, name, null, null), name, session.cid, authority),
     consentChanges: (listener: () => void): (() => void) => w.pushes((answer: unknown): void => { if (CONSENT_CHANGES.has(readAppsAnswer(answer).kind)) listener(); }),
     shown: (name: string, join: TopicJoin): void => showTopicJoin(install.id, name, join),
   });

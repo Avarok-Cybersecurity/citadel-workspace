@@ -116,7 +116,7 @@ describe('Settings -> Sign-in keys', () => {
     expect(shown).toEqual(alice.phrase);
     expect(shown).not.toEqual(before);
     const op: Record<string, unknown> | undefined = h.w.agent.sent.map(([, b]) => b).find((b) => b.op === 'RegenerateRecoveryPhrase');
-    expect(op?.step_up).toEqual({ password: Array.from(new TextEncoder().encode(PASSWORD)), security_key: true });
+    expect(op?.step_up).toEqual({ password: new TextEncoder().encode(PASSWORD), security_key: true });
     fireEvent.click(screen.getByTestId('recovery-phrase-written'));
     screen.getAllByTestId('recovery-phrase-check-word').forEach((box: HTMLElement) => {
       fireEvent.change(box, { target: { value: shown[Number(box.getAttribute('data-position'))] } });
@@ -140,7 +140,7 @@ describe('Settings -> Sign-in keys', () => {
     await stepUpWithPassword();
     await screen.findByText('YubiKey');
     const list: Record<string, unknown> | undefined = h.w.agent.sent.map(([, b]) => b).find((b) => b.op === 'ListCredentials');
-    expect(list?.step_up).toEqual({ password: Array.from(new TextEncoder().encode(PASSWORD)), security_key: true });
+    expect(list?.step_up).toEqual({ password: new TextEncoder().encode(PASSWORD), security_key: true });
   });
 
   it('shows the policy the server reports', async () => {

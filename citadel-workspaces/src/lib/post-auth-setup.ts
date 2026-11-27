@@ -43,6 +43,9 @@ export async function postAuthSetup(
 
   // Step 1: Set the connection ID on the workspace service
   WorkspaceService.setConnectionId(cid);
+  // Whether this server pairs answers with request ids (answers/answer-pairing.ts); until it
+  // answers, writes wait for the next answer of their kind, as against an older server.
+  await WorkspaceService.getServerCapabilities();
 
   // Step 2: Load workspace metadata
   await WorkspaceService.loadWorkspace();

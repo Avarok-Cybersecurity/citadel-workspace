@@ -62,7 +62,6 @@ export const WorkspaceInitializationModal: React.FC<WorkspaceInitializationModal
         try {
             const metadata: { initialized: boolean; } = { initialized: true };
             const metadataBytes: Uint8Array<ArrayBuffer> = new TextEncoder().encode(JSON.stringify(metadata));
-            const metadataArray: number[] = Array.from(metadataBytes);
 
             const request: WorkspaceProtocolRequest = {
                 UpdateWorkspace: {
@@ -70,7 +69,7 @@ export const WorkspaceInitializationModal: React.FC<WorkspaceInitializationModal
                     workspace_master_password: masterPassword,
                     name: null,
                     description: null,
-                    metadata: metadataArray
+                    metadata: metadataBytes
                 }
             };
 

@@ -9,6 +9,7 @@ import { APP_TABS_KEY, DEFAULT_APP_TABS_KEY } from '@/lib/node-tabs/tab-keys';
 import type { MetadataSource } from '@/lib/workspace-metadata/metadata-document';
 import { awaitWriteResponse } from './await-write-response';
 import type { ProtocolSender } from './workspace-operations';
+import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
 const sameList = (stored: StoredTabs, appIds: readonly string[] | null): boolean =>
   appIds === null
@@ -21,18 +22,20 @@ const metadataOf = (payload: unknown): MetadataSource =>
 /**
  * Set the node's own app tabs to `appIds`, in order, or with `null` remove its list so it
  * follows the workspace default again. Every other metadata key is kept by the server's merge.
+ * The workspace home (the root) is no stored node: the server keeps its list in the workspace
+ * record and answers with that record, so the home's write waits for the workspace instead.
  */
 export async function writeNodeTabs(sender: ProtocolSender, nodeId: string, appIds: readonly string[] | null): Promise<void> {
   const patch: string = JSON.stringify({ [APP_TABS_KEY]: appIds });
   const requestPart: WorkspaceProtocolRequest = {
     UpdateNode: {
       node_id: nodeId, name: null, description: null, mdx_content: null, rules: null, chat_enabled: null, is_default: null,
-      metadata: Array.from(new TextEncoder().encode(patch)),
+      metadata: new TextEncoder().encode(patch),
     },
   };
   return awaitWriteResponse(
-    'UpdateNode',
-    () => sender.sendProtocolRequest(requestPart),
+    nodeId === WORKSPACE_ROOT_ID ? 'UpdateHomeTabs' : 'UpdateNode',
+    sender, requestPart,
     (payload: unknown): boolean =>
       (payload as { id?: unknown } | null)?.id === nodeId && sameList(storedTabs(metadataOf(payload), APP_TABS_KEY), appIds),
   );
@@ -43,7 +46,7 @@ export async function setDefaultAppTabs(sender: ProtocolSender, appIds: readonly
   const requestPart: WorkspaceProtocolRequest = { SetDefaultAppTabs: { app_tabs: [...appIds] } };
   return awaitWriteResponse(
     'SetDefaultAppTabs',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     (payload: unknown): boolean => sameList(storedTabs(metadataOf(payload), DEFAULT_APP_TABS_KEY), appIds),
   );
 }

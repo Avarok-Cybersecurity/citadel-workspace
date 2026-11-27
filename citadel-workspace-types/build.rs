@@ -9,7 +9,11 @@ include!("src/submodule_freshness.rs");
 include!("src/dependency_agreement.rs");
 
 fn main() {
-    let manifest: PathBuf = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    // Canonical, so a build reaching this crate through a symlink (citadel-workspace-codec/parent/)
+    // checks and writes the real checkout rather than the directory holding the link.
+    let manifest: PathBuf = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
+        .canonicalize()
+        .unwrap();
     let workspace_root: &Path = manifest.parent().unwrap();
 
     let submodule_paths: Vec<String> = check_submodules(workspace_root);

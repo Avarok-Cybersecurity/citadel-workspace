@@ -6,7 +6,7 @@ import react from "@vitejs/plugin-react-swc";
 import { VitePWA } from 'vite-plugin-pwa';
 import path from "path";
 import { stripWsPrefix } from "./src/lib/websocket-service/proxy-path";
-import { manifestForBuild, checkedMinSeq, crateVersion } from "./src/lib/pwa/version-manifest";
+import { manifestForBuild, checkedMinSeq, crateVersion, recordedUxScore } from "./src/lib/pwa/version-manifest";
 import { MIN_BUILD_SEQ } from "./src/lib/pwa/min-build-seq";
 import { VERSION_MANIFEST_PATH } from "./src/lib/pwa/deployed-version";
 import { KIT_MANIFEST } from "./src/pwa/kit-manifest.generated";
@@ -128,7 +128,8 @@ function versionManifestPlugin(): Plugin {
       try {
         const minSeq: number = checkedMinSeq(MIN_BUILD_SEQ, BUILD_SEQ);
         const agent: string = crateVersion(readFileSync(AGENT_CRATE_MANIFEST, 'utf8'));
-        this.emitFile({ type: 'asset', fileName: VERSION_MANIFEST_PATH.slice(1), source: manifestForBuild(bundle, base, { seq: BUILD_SEQ, minSeq }, agent) });
+        const ux: number = recordedUxScore(readFileSync(path.resolve(__dirname, 'scripts/ux-score.baseline.json'), 'utf8'));
+        this.emitFile({ type: 'asset', fileName: VERSION_MANIFEST_PATH.slice(1), source: manifestForBuild(bundle, base, { seq: BUILD_SEQ, minSeq }, agent, ux) });
       } catch (error: unknown) {
         this.error(error instanceof Error ? error.message : String(error));
       }
@@ -375,10 +376,6 @@ export default defineConfig(({ mode }) => {
               // Icons
               if (id.includes('lucide-react')) {
                 return 'vendor-icons';
-              }
-              // Date utilities
-              if (id.includes('date-fns')) {
-                return 'vendor-date';
               }
               // Animations
               if (id.includes('framer-motion')) {

@@ -16,6 +16,9 @@ const be16 = (b: Uint8Array, at: number): number => (b[at] << 8) | b[at + 1];
 const le16 = (b: Uint8Array, at: number): number => b[at] | (b[at + 1] << 8);
 const be32 = (b: Uint8Array, at: number): number => ((b[at] << 24) >>> 0) + (b[at + 1] << 16) + (b[at + 2] << 8) + b[at + 3];
 const le24 = (b: Uint8Array, at: number): number => b[at] | (b[at + 1] << 8) | (b[at + 2] << 16);
+const le32 = (b: Uint8Array, at: number): number => (b[at] | (b[at + 1] << 8) | (b[at + 2] << 16) | (b[at + 3] << 24)) >>> 0;
+/** A signed 32-bit little-endian value's magnitude (a BMP's height is negative when top-down). */
+const leAbs32 = (b: Uint8Array, at: number): number => Math.abs(le32(b, at) | 0);
 
 function png(b: Uint8Array): Dimensions | null {
   return b.length >= 24 ? { width: be32(b, 16), height: be32(b, 20) } : null;
@@ -61,8 +64,49 @@ function avif(b: Uint8Array): Dimensions | null {
   return null;
 }
 
+/** A BMP's DIB header: the 12-byte OS/2 core header has 16-bit sizes, every later one 32-bit. */
+function dib(b: Uint8Array, at: number): Dimensions | null {
+  if (at + 12 > b.length) return null;
+  if (le32(b, at) === 12) return { width: le16(b, at + 4), height: le16(b, at + 6) };
+  return { width: leAbs32(b, at + 4), height: leAbs32(b, at + 8) };
+}
+
+function bmp(b: Uint8Array): Dimensions | null {
+  return dib(b, 14);
+}
+
+const ICO_MAX_ENTRIES: number = 64;
+
+/** An icon entry's image: a PNG, or a BMP without its file header whose height counts its mask. */
+function icoImage(b: Uint8Array, offset: number): Dimensions | null {
+  if (b[offset] === 0x89) return png(b.subarray(offset));
+  const size: Dimensions | null = dib(b, offset);
+  return size === null ? null : { width: size.width, height: Math.ceil(size.height / 2) };
+}
+
+/**
+ * An icon holds several images and the browser picks one. Each entry's directory size is a byte
+ * (0 means 256), but the image it points at declares its own, and that is what gets decoded: the
+ * largest size anything in the file declares is the one checked, and an unreadable entry fails it.
+ */
+function ico(b: Uint8Array): Dimensions | null {
+  const count: number = Math.min(le16(b, 4), ICO_MAX_ENTRIES);
+  let width: number = 0;
+  let height: number = 0;
+  for (let i: number = 0; i < count; i++) {
+    const entry: number = 6 + i * 16;
+    if (entry + 16 > b.length) return null;
+    const image: Dimensions | null = icoImage(b, le32(b, entry + 12));
+    if (image === null) return null;
+    width = Math.max(width, b[entry] || 256, image.width);
+    height = Math.max(height, b[entry + 1] || 256, image.height);
+  }
+  return count > 0 ? { width, height } : null;
+}
+
 const READERS: Record<RasterMime, (b: Uint8Array) => Dimensions | null> = {
   'image/png': png, 'image/gif': gif, 'image/jpeg': jpeg, 'image/webp': webp, 'image/avif': avif,
+  'image/bmp': bmp, 'image/x-icon': ico,
 };
 
 export function headerDimensions(bytes: Uint8Array, mime: RasterMime): Dimensions | null {

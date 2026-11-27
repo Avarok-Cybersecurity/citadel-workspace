@@ -96,7 +96,7 @@ describe('New app page', () => {
     await waitFor(() => expect(screen.queryByTestId('new-app-page-dialog')).toBeNull());
     const create: WorkspaceRequestView['CreateNode'] = sent.find((r: WorkspaceRequestView) => r.CreateNode)?.CreateNode;
     expect(create).toMatchObject({ parent_id: 'alex', entity_type: { Child: 'Floor' }, name: 'Sync board' });
-    expect(decodeNodeApp(create?.metadata ?? [])).toEqual({ kind: 'installed', app: PAGE_APP, installId: 'inst-ws' });
+    expect(decodeNodeApp(create?.metadata ?? null)).toEqual({ kind: 'installed', app: PAGE_APP, installId: 'inst-ws' });
   });
 
   it('with nothing that may be a page here, says so and offers the Apps marketplace', async () => {

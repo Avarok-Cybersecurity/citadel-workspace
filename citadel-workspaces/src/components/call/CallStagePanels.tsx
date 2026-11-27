@@ -112,3 +112,16 @@ export function ErrorPanel({ title, detail }: { title: string; detail: string })
     </div>
   );
 }
+
+/**
+ * The failure's words for the person, inside a RecoveryNotice (which announces it and offers Call
+ * again). The raw transport text stays on the element, as on ErrorPanel, for support and specs.
+ */
+export function FailureDetail({ detail }: { detail: string }): JSX.Element {
+  const shown: CallFailureDetail = callFailureDetail(detail);
+  return (
+    <p className="text-xs text-muted-foreground" data-testid="call-error" data-raw-reason={shown.raw} data-reason-recognised={String(shown.recognised)}>
+      {shown.detail}
+    </p>
+  );
+}

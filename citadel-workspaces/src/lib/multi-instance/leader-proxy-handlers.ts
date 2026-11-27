@@ -43,7 +43,9 @@ export async function handleWorkspaceRequestProxy(
   }
 
   const cid: bigint = BigInt(request.payload.cid as string | number | bigint | boolean);
-  await client.sendWorkspaceRequest(cid, request.payload.request as WorkspaceProtocolRequest);
+  // Structured clone carries the bigint; a follower on an older build sends none.
+  const wireRequestId: unknown = request.payload.wireRequestId;
+  await client.sendWorkspaceRequest(cid, request.payload.request as WorkspaceProtocolRequest, 'Standard', typeof wireRequestId === 'bigint' ? wireRequestId : null);
 
   sendAck(request.senderInstanceId, request.requestId, 'processed');
   debugLog('LeaderProxyHandlers', `Workspace request proxy processed for ${request.requestId}`);

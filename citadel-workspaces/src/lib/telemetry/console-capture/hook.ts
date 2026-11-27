@@ -1,7 +1,9 @@
 /**
  * Wraps a console's `error` and `warn` so each call is also handed to `onLine`, after the
- * original has printed it. Undone by the returned function, unless something has wrapped the
- * console since, which is then left as it is (its own undo restores ours).
+ * original has printed it. Undone by the returned function: each method is restored only while it
+ * is still our wrapper. One wrapped since is left in place (its undo restores ours), and ours,
+ * still beneath it, from then on only passes calls through, so an undone hook never hears a
+ * line again however the wrappers were stacked.
  *
  * A console call made while a line is being handled is not handed on again, so nothing the
  * capture itself logs can feed back into it. `onLine` throwing calls `onFailure` instead of
@@ -20,9 +22,10 @@ export function hookConsole(
 ): () => void {
   const originals: ConsoleTarget = { error: target.error, warn: target.warn };
   let inside: boolean = false;
+  let undone: boolean = false;
   const wrap = (level: ConsoleLevel): ((...args: unknown[]) => void) => (...args: unknown[]): void => {
     originals[level].apply(target, args);
-    if (inside) return;
+    if (inside || undone) return;
     inside = true;
     try {
       onLine(level, args);
@@ -36,6 +39,7 @@ export function hookConsole(
   const wrappers: ConsoleTarget = { error: wrap('error'), warn: wrap('warn') };
   for (const level of LEVELS) target[level] = wrappers[level];
   return (): void => {
+    undone = true;
     for (const level of LEVELS) if (target[level] === wrappers[level]) target[level] = originals[level];
   };
 }

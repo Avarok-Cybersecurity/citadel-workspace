@@ -10,10 +10,37 @@
  *     id): the SDK opens it when the owner's Welcome arrives (citadel_proto `group_broadcast.rs`).
  *
  * Out: the join's own failure, `GroupRequestJoinDeclineResponse` for this session and group, or
- * no channel within `timeoutMs`. Pure over the injected agent and its timers.
+ * no channel within `timeoutMs`. Gone: the join's failure says the group no longer exists (the
+ * server's `GroupNonExists`: its last member left, or its owner ended it), so no owner will ever
+ * admit anyone to it and the topic needs a new group (topic-port.ts). Pure over the injected
+ * agent and its timers.
  */
-import { groupKeyToId, parseGroupKey } from '@/lib/group-conversations/group-key';
-import { variantOf, type AgentLink, type Json } from './agent-link';
+import { groupIdToKey, groupKeyToId, parseGroupKey } from '@/lib/group-conversations/group-key';
+import { agentAsk, variantOf, type AgentLink, type AgentOutcome, type Json } from './agent-link';
+
+/**
+ * The agent's words for a join to a group the server does not have (agent `request_join.rs`,
+ * `JoinOutcome::GroupGone`); the failure carries no other sign of it. Held to the agent's source by
+ * __tests__/a-gone-group-is-the-agents-wording.test.ts.
+ */
+export const GROUP_GONE: string = 'That group no longer exists';
+
+/** What asking to join came to: the owner was asked, the ask failed, or the group is gone. */
+export type Asked = 'asked' | 'failed' | 'gone';
+
+/**
+ * Why a join left this session out: the owner's host declined it (`refused`), or no admission came
+ * in time, whatever the reason on the way (`timeout`: the owner's app closed, an agent that did not answer).
+ */
+export type JoinOut = 'refused' | 'timeout';
+
+/** Where a join left this session: in the group, out of it and why, or facing a group that no longer exists. */
+export type Joined = 'in' | JoinOut | 'gone';
+
+/** The agent's failure to a join, read: gone only by the agent's own words for it. */
+export function askRefusal(failure: Json): Exclude<Asked, 'asked'> {
+  return failure.message === GROUP_GONE ? 'gone' : 'failed';
+}
 
 export interface Admission {
   readonly agent: AgentLink;
@@ -29,16 +56,27 @@ export function admissionOf(message: unknown, cid: bigint, groupId: string): boo
   return about(variantOf(message, 'GroupRequestJoinDeclineResponse')) ? false : undefined;
 }
 
+/** Asks the agent to join `a.groupId` for this session: the owner asked, the ask failed, or the group is gone. */
+export async function askToJoin(a: Admission): Promise<Asked> {
+  const r: AgentOutcome<Asked> = await agentAsk<Asked>(a.agent, (request_id: string): Json => ({ GroupRequestJoin: { cid: a.cid, group_key: groupIdToKey(a.groupId), request_id } }),
+    (m: unknown, id: string): Asked | undefined => {
+      if (variantOf(m, 'GroupRequestJoinSuccess')?.request_id === id) return 'asked';
+      const failed: Json | undefined = variantOf(m, 'GroupRequestJoinFailure');
+      return failed?.request_id === id ? askRefusal(failed) : undefined;
+    }, a.timeoutMs);
+  return r.ok ? r.value : 'failed';
+}
+
 /**
- * True when this session is in `groupId`: listed as joined (`joined`, the session's group ids, null
- * when the agent did not say), or admitted after `ask` (true when the owner was asked). Listening
- * starts before the ask goes out: the channel can open as soon as the owner answers.
+ * In when this session is in `groupId`: listed as joined (`joined`, the session's group ids, null
+ * when the agent did not say), or admitted after `ask`. Listening starts before the ask goes out:
+ * the channel can open as soon as the owner answers.
  */
-export async function joinAdmitted(a: Admission, joined: () => Promise<readonly string[] | null>, ask: () => Promise<boolean>): Promise<boolean> {
-  if ((await joined())?.includes(a.groupId) === true) return true;
-  return new Promise<boolean>((resolve: (admitted: boolean) => void): void => {
+export async function joinAdmitted(a: Admission, joined: () => Promise<readonly string[] | null>, ask: (a: Admission) => Promise<Asked>): Promise<Joined> {
+  if ((await joined())?.includes(a.groupId) === true) return 'in';
+  return new Promise<Joined>((resolve: (admitted: Joined) => void): void => {
     let done: boolean = false;
-    const finish = (admitted: boolean): void => {
+    const finish = (admitted: Joined): void => {
       if (done) return;
       done = true;
       clearTimeout(timer);
@@ -47,9 +85,9 @@ export async function joinAdmitted(a: Admission, joined: () => Promise<readonly 
     };
     const stop: () => void = a.agent.listen((m: unknown): void => {
       const word: boolean | undefined = admissionOf(m, a.cid, a.groupId);
-      if (word !== undefined) finish(word);
+      if (word !== undefined) finish(word ? 'in' : 'refused');
     });
-    const timer: ReturnType<typeof setTimeout> = setTimeout((): void => finish(false), a.timeoutMs);
-    ask().then((asked: boolean): void => { if (!asked) finish(false); }, (): void => finish(false));
+    const timer: ReturnType<typeof setTimeout> = setTimeout((): void => finish('timeout'), a.timeoutMs);
+    ask(a).then((asked: Asked): void => { if (asked !== 'asked') finish(asked === 'gone' ? 'gone' : 'timeout'); }, (): void => finish('timeout'));
   });
 }

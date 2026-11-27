@@ -16,6 +16,7 @@ import type { ReadChunkAnswer, RevfsIntentResult } from '@/types/revfs-intents';
 import { eventEmitter } from '../event-emitter';
 import { debugLog } from '@/lib/debug-config';
 import { BACKEND_TIMEOUT_MS, type NetworkIODeps } from './revfs-io-network';
+import { isByteArray } from '@/lib/utils/encoding-utils';
 
 export interface ReadChunkAsk {
   readonly cid: bigint;
@@ -41,14 +42,7 @@ export function readChunkRequest(requestId: string, ask: ReadChunkAsk): Internal
 const isRecord: (value: unknown) => value is Record<string, unknown> = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
 function bytesOf(data: unknown): Uint8Array | null {
-  if (!Array.isArray(data)) return null;
-  const out: Uint8Array = new Uint8Array(data.length);
-  for (let i: number = 0; i < data.length; i++) {
-    const byte: unknown = data[i];
-    if (typeof byte !== 'number' || !Number.isInteger(byte) || byte < 0 || byte > 255) return null;
-    out[i] = byte;
-  }
-  return out;
+  return isByteArray(data) ? data : null;
 }
 
 /**

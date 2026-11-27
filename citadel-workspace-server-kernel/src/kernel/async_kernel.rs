@@ -123,6 +123,8 @@ pub enum BroadcastAudience {
     Workspace(String),
     /// Only the one session with this CID: a frame the apps relay addresses to it.
     Session(u64),
+    /// Only the sessions signed in as this user: an admin's "there is an ask to take" nudge.
+    User(String),
 }
 
 /// Message for broadcasting workspace updates to connected clients
@@ -684,6 +686,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Send a response to the one session `cid`, whoever else is connected.
     pub fn send_to_session(&self, response: WorkspaceProtocolResponse, cid: u64) {
         self.broadcast_to(response, None, BroadcastAudience::Session(cid))
+    }
+
+    /// Send a response to every session signed in as `user_id`.
+    pub fn broadcast_to_user(&self, response: WorkspaceProtocolResponse, user_id: String) {
+        self.broadcast_to(response, None, BroadcastAudience::User(user_id))
     }
 
     /// Broadcast a response only to sessions entitled to see `group_id`'s chat.
@@ -1759,7 +1766,6 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
         &self,
         event: citadel_sdk::prelude::NodeResult<R>,
     ) -> Result<(), NetworkError> {
-        use crate::WorkspaceProtocolResponse;
         use citadel_logging::{debug, error, info, warn};
         use citadel_workspace_types::WorkspaceProtocolPayload;
         use tokio_stream::StreamExt;
@@ -2080,67 +2086,17 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     break;
                                 };
 
-                                if !rate_limiter.try_consume(current_cid, crate::platform::Instant::now()) {
-                                    warn!(target: "citadel", "[ASYNC_KERNEL] Rate limit exceeded for CID {}", current_cid);
-                                    let response = WorkspaceProtocolPayload::Response(Box::new(
-                                        WorkspaceProtocolResponse::Error("Rate limit exceeded. Please slow down.".to_string())
-                                    ));
-                                    if let Ok(serialized) = serde_json::to_vec(&response) {
-                                        let _ = tx.send(serialized).await;
+                                let within_rate = rate_limiter.try_consume(current_cid, crate::platform::Instant::now());
+                                let mut sent = true;
+                                for frame in crate::kernel::answer_frames::frames_for(&this, msg.as_ref(), &user_id, current_cid, within_rate).await {
+                                    if let Err(e) = tx.send(frame).await {
+                                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to send response: {:?}", e);
+                                        sent = false;
+                                        break;
                                     }
-                                    continue;
                                 }
-
-                                let max_frame = this.documents_relay().map(|relay| relay.config.max_request_frame_bytes);
-                                match crate::kernel::documents::frame::decode_request(msg.as_ref(), max_frame) {
-                                    Ok(command_payload) => {
-                                        if let WorkspaceProtocolPayload::Request(request) = command_payload
-                                        {
-                                            // Process command using async command processor with user context and CID
-                                            use crate::kernel::command_processor::async_process_command::process_command_with_user_and_cid;
-                                            let response =
-                                                process_command_with_user_and_cid(&this, &request, &user_id, Some(current_cid))
-                                                    .await
-                                                    .unwrap_or_else(|e| {
-                                                        WorkspaceProtocolResponse::Error(e.to_string())
-                                                    });
-
-                                            let response_wrapped =
-                                                WorkspaceProtocolPayload::Response(Box::new(response));
-                                            match serde_json::to_vec(&response_wrapped) {
-                                                Ok(serialized_response) => {
-                                                    if let Err(e) = tx.send(serialized_response).await {
-                                                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to send response: {:?}", e);
-                                                        break;
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    error!(target: "citadel", "[ASYNC_KERNEL] Failed to serialize response with serde_json: {:?}", e);
-                                                }
-                                            }
-                                        } else {
-                                            warn!(target: "citadel", "[ASYNC_KERNEL] Server received a WorkspaceProtocolPayload::Response when it expected a Request: {:?}", command_payload);
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!(target: "citadel", "[ASYNC_KERNEL] Refused a request frame: {}. Message (first 50 bytes): {:?}", e, msg.as_ref().iter().take(50).collect::<Vec<_>>());
-                                        let error_response = WorkspaceProtocolResponse::Error(e.to_string());
-                                        let response_wrapped =
-                                            WorkspaceProtocolPayload::Response(Box::new(error_response));
-                                        match serde_json::to_vec(&response_wrapped) {
-                                            Ok(serialized_error_response) => {
-                                                if let Err(send_err) =
-                                                    tx.send(serialized_error_response).await
-                                                {
-                                                    error!(target: "citadel", "[ASYNC_KERNEL] Failed to send deserialization error response: {:?}", send_err);
-                                                    break;
-                                                }
-                                            }
-                                            Err(serialize_err) => {
-                                                error!(target: "citadel", "[ASYNC_KERNEL] Failed to serialize deserialization error response with serde_json: {:?}", serialize_err);
-                                            }
-                                        }
-                                    }
+                                if !sent {
+                                    break;
                                 }
                             }
 

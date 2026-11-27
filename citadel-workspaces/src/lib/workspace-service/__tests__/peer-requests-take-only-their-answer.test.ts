@@ -36,8 +36,8 @@ describe('the per-member P2P requests', () => {
 
   it('TopicGroup: a held group, none held, or refused', async () => {
     const t = (groupKey: string | null): { TopicGroup: Record<string, unknown> } => ({ TopicGroup: { install_id: 'i-1', topic: 'pool', group_key: groupKey } });
-    expect(await topicGroup(kernel(t('5:9')), 'i-1', 'pool', null)).toBe('5:9');
-    expect(await topicGroup(kernel(t(null)), 'i-1', 'pool', null)).toBeNull();
-    expect(await topicGroup(kernel({ Refused: 'NoHost' }), 'i-1', 'pool', null)).toBe('refused');
+    expect(await topicGroup(kernel(t('5:9')), 'i-1', 'pool', null, null)).toBe('5:9');
+    expect(await topicGroup(kernel(t(null)), 'i-1', 'pool', null, null)).toBeNull();
+    expect(await topicGroup(kernel({ Refused: 'NoHost' }), 'i-1', 'pool', null, null)).toBe('refused');
   });
 });

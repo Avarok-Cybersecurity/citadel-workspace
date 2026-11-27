@@ -11,6 +11,7 @@ export function redactDocumentsForDebug(answer: DocumentsResponse): unknown {
 }
 
 function redact(value: unknown): unknown {
+  if (ArrayBuffer.isView(value)) return `<${value.byteLength} bytes>`;
   if (Array.isArray(value)) {
     if (value.every((item: unknown): boolean => typeof item === 'number')) return `<${value.length} bytes>`;
     return value.map(redact);

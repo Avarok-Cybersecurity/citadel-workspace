@@ -17,6 +17,7 @@ import { actionForKey, step, type ViewerAction, type ViewerState } from '@/lib/r
 import type { FileTransfer } from '@/lib/file-transfer/types';
 import type { PictureLoad } from '@/lib/received-files/picture-load';
 import { useTransferPicture } from './hooks/useTransferPicture';
+import { PictureStageMessage } from './PictureStageMessage';
 
 interface PictureViewerProps {
   readonly pictures: readonly FileTransfer[];
@@ -29,9 +30,11 @@ const TOOL: string = 'min-h-11 min-w-11';
 export function PictureViewer({ pictures, startIndex, onClose }: PictureViewerProps): JSX.Element {
   const [view, act] = useReducer((s: ViewerState, a: ViewerAction): ViewerState => step(s, a, pictures.length), { index: startIndex, zoom: null });
   const current: FileTransfer = pictures[view.index];
-  const load: PictureLoad | null = useTransferPicture(current);
+  const { load, again }: { load: PictureLoad | null; again: () => Promise<void> } = useTransferPicture(current);
   const shown: { url: string; blob: Blob; width: number } | null = load !== null && 'url' in load ? { url: load.url, blob: load.blob, width: load.picture.size.width } : null;
   const src: string | null = shown?.url ?? safeThumbnail(current.thumbnail);
+  // A photo the decoder refused is still the file: Download saves its bytes.
+  const saved: Blob | null = shown?.blob ?? (load !== null && 'refusal' in load ? load.original : null);
   const name: string = safeDownloadName(current.fileName);
   const many: boolean = pictures.length > 1;
 
@@ -59,7 +62,7 @@ export function PictureViewer({ pictures, startIndex, onClose }: PictureViewerPr
               className={view.zoom === null ? 'max-h-full max-w-full object-contain' : 'max-w-none'}
               style={view.zoom === null || shown === null ? undefined : { width: `${shown.width * view.zoom}px` }} />
           ) : (
-            <p className="p-6 text-sm text-muted-foreground">{load !== null && 'unavailable' in load ? `This picture cannot be shown: ${load.unavailable}.` : 'Loading picture...'}</p>
+            <PictureStageMessage load={load} onClose={onClose} again={again} />
           )}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2" role="toolbar" aria-label="Picture controls">
@@ -77,8 +80,8 @@ export function PictureViewer({ pictures, startIndex, onClose }: PictureViewerPr
               onClick={(): void => { if (shown) window.open(shown.url, '_blank', 'noopener,noreferrer'); }}>
               <ExternalLink className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">Open</span>
             </Button>
-            <Button className={TOOL} disabled={shown === null} data-testid="picture-viewer-download"
-              onClick={(): void => { if (shown) downloadBlob(shown.blob, name); }}>
+            <Button className={TOOL} disabled={saved === null} data-testid="picture-viewer-download"
+              onClick={(): void => { if (saved) downloadBlob(saved, name); }}>
               <Download className="h-4 w-4" aria-hidden="true" />Download
             </Button>
           </div>

@@ -3,4 +3,4 @@
 /**
  * The stored snapshot: the document as of `upto_seq`.
  */
-export type DocumentSnapshot = { doc_version: number, bytes: Array<number>, upto_seq: bigint, };
+export type DocumentSnapshot = { doc_version: number, bytes: Uint8Array, upto_seq: bigint, };

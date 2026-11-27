@@ -68,11 +68,13 @@ mod members_visibility;
 mod default_app_tabs;
 /// Installing the first-party apps every workspace is provisioned with.
 mod first_party_provisioning;
+mod home_tabs;
 pub use first_party_provisioning::PROVISIONING_INSTALLER;
 
 /// Terms, consent and the Telemetry Service.
 mod telemetry;
 
+mod admin_requests;
 /// Who connects without asking: the workspace's policy, a member's own, and the check.
 mod messaging_trust;
 

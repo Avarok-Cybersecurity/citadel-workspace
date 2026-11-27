@@ -14,6 +14,7 @@ import { extractWorkspaceResponse } from './message-extraction';
 import { handleWorkspaceVariants, buildConnectionInfo } from './workspace-handlers';
 import { handleGroupVariants } from './group-handlers';
 import { formatForDebug } from '@/lib/debug-formatter';
+import { recordCrumb } from '@/lib/bug-report/breadcrumbs';
 
 /**
  * Handles workspace protocol responses and emits appropriate events.
@@ -42,6 +43,7 @@ export class WorkspaceResponseHandler {
   }
 
   private processWorkspaceResponse(response: WorkspaceProtocolResponse): void {
+    recordCrumb('received', response, Date.now());
     // Through formatForDebug, which redacts secret-named fields: an IceServers
     // answer carries a TURN `credential`. Guarded: the walk is not free.
     // A Documents answer's bytes are the document itself: its log shows lengths (documents-debug.ts).

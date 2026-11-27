@@ -125,7 +125,7 @@ export class HeldOutbox {
   /** Durable before it resolves: a caller that tells the user "this will wait" may rely on it. */
   async hold(localCid: bigint, peerCid: bigint, bytes: Uint8Array, options: ReliableSendOptions, reason: HoldReason): Promise<void> {
     const key: string = `${outboxPrefix(peerCid)}${this.nextStamp().toString().padStart(TIME_WIDTH, '0')}_${crypto.randomUUID()}${entrySuffix(options, reason)}`;
-    await this.storage.set(localCid, key, Array.from(bytes));
+    await this.storage.set(localCid, key, bytes);
   }
 
   /** For sends with no queue behind them: refuse unless known not to be paused. */
@@ -153,8 +153,8 @@ export class HeldOutbox {
     for (const key of keys) {
       const entry: HeldEntry = entryFromKey(key, outboxPrefix(peerCid));
       if (entry.reason !== reason) continue;
-      const stored: { value: number[] } | null = await this.storage.get(localCid, key);
-      if (stored !== null) await send(Uint8Array.from(stored.value), entry.options);
+      const stored: { value: Uint8Array } | null = await this.storage.get(localCid, key);
+      if (stored !== null) await send(stored.value, entry.options);
       await this.storage.remove(localCid, key);
       flushed += 1;
     }

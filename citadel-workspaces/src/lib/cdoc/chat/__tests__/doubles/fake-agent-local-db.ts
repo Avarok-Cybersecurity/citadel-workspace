@@ -14,30 +14,30 @@ export interface DbRequest {
 
 export class FakeAgentLocalDb {
   readonly requests: DbRequest[] = [];
-  private readonly spaces: Map<bigint, Map<string, number[]>> = new Map<bigint, Map<string, number[]>>();
+  private readonly spaces: Map<bigint, Map<string, Uint8Array>> = new Map<bigint, Map<string, Uint8Array>>();
   /** Writes fail while set, as when the agent is unreachable. */
   failWrites: boolean = false;
 
   /** The LocalDB as one browser connection sees it: it owns the sessions in `owned`. */
   connection(owned: readonly bigint[]): LocalDbPort {
-    const gate = (cid: bigint): Map<string, number[]> => {
+    const gate = (cid: bigint): Map<string, Uint8Array> => {
       if (!owned.includes(cid)) throw new Error(`Refused: session ${cid.toString()} is not this connection's`);
-      const space: Map<string, number[]> = this.spaces.get(cid) ?? new Map<string, number[]>();
+      const space: Map<string, Uint8Array> = this.spaces.get(cid) ?? new Map<string, Uint8Array>();
       this.spaces.set(cid, space);
       return space;
     };
     return {
-      get: async (cid: bigint, key: string): Promise<{ readonly value: readonly number[] } | null> => {
+      get: async (cid: bigint, key: string): Promise<{ readonly value: Uint8Array } | null> => {
         this.requests.push({ op: 'get', cid, key });
-        const value: number[] | undefined = gate(cid).get(key);
+        const value: Uint8Array | undefined = gate(cid).get(key);
         if (value === undefined) throw new Error('Key not found');
-        return { value: [...value] };
+        return { value: value.slice() };
       },
-      set: async (cid: bigint, key: string, value: number[]): Promise<void> => {
+      set: async (cid: bigint, key: string, value: Uint8Array): Promise<void> => {
         this.requests.push({ op: 'set', cid, key });
-        const space: Map<string, number[]> = gate(cid);
+        const space: Map<string, Uint8Array> = gate(cid);
         if (this.failWrites) throw new Error('LocalDB set failed');
-        space.set(key, [...value]);
+        space.set(key, value.slice());
       },
     };
   }

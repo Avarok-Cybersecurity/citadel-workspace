@@ -5,6 +5,7 @@
 import type { HttpRequest } from '../sdk/generated/HttpRequest';
 import type { Refused } from '../host/ports';
 import type { Json } from './agent-link';
+import { ownedBytes } from '@/lib/utils/encoding-utils';
 
 export interface HostFetchTarget {
   readonly cid: bigint;
@@ -38,7 +39,7 @@ export function appFetchRequest(target: HostFetchTarget, request: HttpRequest, s
     AppFetch: {
       request_id, cid: target.cid, app_id: target.appId, install_id: target.installId,
       grant: { hosts: [...target.grant.hosts], private: target.grant.private },
-      request: { method: request.method, url: request.url, headers: request.headers.map(([name, value]: [string, string]) => ({ name, value })), body: Array.from(request.body) },
+      request: { method: request.method, url: request.url, headers: request.headers.map(([name, value]: [string, string]) => ({ name, value })), body: ownedBytes(request.body) },
       stream,
     },
   });

@@ -31,6 +31,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     pub async fn may_receive(&self, user_id: &str, audience: &BroadcastAudience) -> bool {
         match audience {
             BroadcastAudience::Session(_) => false,
+            BroadcastAudience::User(target) => target == user_id,
             BroadcastAudience::Everyone => true,
             // A group-scoped broadcast reaches only sessions entitled to that channel.
             BroadcastAudience::Group(group_id) => authorize_group_read(self, user_id, group_id)

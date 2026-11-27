@@ -120,8 +120,8 @@ describe('writes whose answer is also broadcast', () => {
       for (const match of source.matchAll(/awaitWriteResponse\(\s*'(\w+)'([\s\S]*?)\)\s*;/g)) {
         const [, requestType, rest] = match;
         if (!broadcastWrites.has(requestType)) continue;
-        // Two commas after the type means a third argument was passed.
-        if ((rest.match(/,/g) ?? []).length < 2) {
+        // After the type come the sender and the request, so a third comma means a matcher.
+        if ((rest.match(/,/g) ?? []).length < 3) {
           offenders.push(`${rel}: awaitWriteResponse('${requestType}', …) has no matcher`);
         }
       }

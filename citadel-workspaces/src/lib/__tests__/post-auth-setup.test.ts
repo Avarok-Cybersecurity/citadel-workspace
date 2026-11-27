@@ -23,6 +23,7 @@ const spies: {
   listNodesSpy: Mock;
   listMembersSpy: Mock;
   getTreeSchemaSpy: Mock;
+  getServerCapabilitiesSpy: Mock;
 } = vi.hoisted(() => {
   const calls: { name: string; args: unknown[] }[] = [];
   return {
@@ -42,6 +43,9 @@ const spies: {
     getTreeSchemaSpy: vi.fn(async () => {
       calls.push({ name: 'getTreeSchema', args: [] });
     }),
+    getServerCapabilitiesSpy: vi.fn(async () => {
+      calls.push({ name: 'getServerCapabilities', args: [] });
+    }),
   };
 });
 
@@ -52,6 +56,7 @@ vi.mock('@/lib/workspace-service', () => ({
     listNodes: spies.listNodesSpy,
     getTreeSchema: spies.getTreeSchemaSpy,
     listMembers: spies.listMembersSpy,
+    getServerCapabilities: spies.getServerCapabilitiesSpy,
   },
 }));
 
@@ -83,6 +88,8 @@ describe('postAuthSetup', () => {
 
     expect(spies.calls.map(c => c.name)).toEqual([
       'setConnectionId',
+      // Whether this server pairs answers with request ids, asked before any write can be made.
+      'getServerCapabilities',
       'loadWorkspace',
       'listNodes',
       'getTreeSchema',
@@ -102,6 +109,8 @@ describe('postAuthSetup', () => {
     await postAuthSetup(99n, { skipTreeSchema: true });
     expect(spies.calls.map(c => c.name)).toEqual([
       'setConnectionId',
+      // Whether this server pairs answers with request ids, asked before any write can be made.
+      'getServerCapabilities',
       'loadWorkspace',
       'listNodes',
       // Skipping the tree schema does not skip the role: a caller that does not

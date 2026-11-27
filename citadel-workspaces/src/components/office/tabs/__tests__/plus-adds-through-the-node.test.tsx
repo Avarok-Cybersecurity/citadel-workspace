@@ -12,6 +12,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { INSTALLS_UNKNOWN } from '@/lib/node-tabs/installed-tabs';
 import { act, renderHook, type RenderHookResult } from '@testing-library/react';
 import type { AppsModalRequest } from '@/lib/citadel-apps/apps-modal-store';
+import { appIdsOf, ownTabsSource } from '@/lib/node-tabs/tab-list';
+import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
 vi.mock('@/hooks/use-permission', () => ({ usePermission: (): unknown => ({ allowed: true, loading: false, unanswered: false, answered: true }) }));
 vi.mock('@/hooks/use-toast', () => ({ toast: vi.fn() }));
@@ -46,5 +48,23 @@ describe('"+" on a node', () => {
     let refusedAdd: boolean = true;
     await act(async (): Promise<void> => { refusedAdd = await nope.target.add('net.avarok.calendar'); });
     expect([refusedAdd, refused.result.current.active]).toEqual([false, 'content']);
+  });
+
+  it('on the workspace home, reads the home’s own list from the workspace record and appends to it', async () => {
+    const writes: Array<[string, readonly string[] | null]> = [];
+    const workspace: Record<string, unknown> = { default_app_tabs: ['net.avarok.calendar'], app_tabs: ['com.acme.kanban'] };
+    const { result } = renderHook((): Model => useNodeTabs({
+      nodeId: WORKSPACE_ROOT_ID, chatEnabled: false, nodeMetadata: ownTabsSource(WORKSPACE_ROOT_ID, undefined, workspace), workspaceMetadata: workspace, here: INSTALLS_UNKNOWN,
+      writer: { writeNodeTabs: async (n: string, appIds: readonly string[] | null): Promise<void> => { writes.push([n, appIds]); }, setDefaultAppTabs: async (): Promise<void> => undefined },
+    }));
+    expect(appIdsOf(result.current.list)).toEqual(['com.acme.kanban']);
+    const request: AppsModalRequest = addTabRequest(WORKSPACE_ROOT_ID, result.current);
+    if (request.kind !== 'tab') throw new Error('"+" did not open the tab view');
+    await act(async (): Promise<void> => { await request.target.add('work.synchronized.app'); });
+    expect(writes).toEqual([[WORKSPACE_ROOT_ID, ['com.acme.kanban', 'work.synchronized.app']]]);
+  });
+
+  it('control: a stored node reads its own metadata, not the workspace record', () => {
+    expect(ownTabsSource('n1', { app_tabs: [] }, { app_tabs: ['x.y.z'] })).toEqual({ app_tabs: [] });
   });
 });

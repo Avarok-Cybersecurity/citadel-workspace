@@ -54,7 +54,7 @@ describe('round trip', () => {
   });
 
   it('accepts the plain number[] form a wire decoder may hand back', () => {
-    expect(deserializeTheme(Array.from(metadataBytes(defaultTheme())))).toEqual(defaultTheme());
+    expect(deserializeTheme(metadataBytes(defaultTheme()))).toEqual(defaultTheme());
   });
 
   it('accepts the parsed object the workspace keeps on state', () => {

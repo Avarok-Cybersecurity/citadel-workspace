@@ -12,6 +12,7 @@
  * as a consequence — TreeNodesSection's delete dialog closes only on success and
  * renders its own role="alert", and neither could ever fire.
  */
+import { senderOf, SOME_REQUEST } from '@/test-utils/protocol-sender';
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { eventEmitter } from '@/lib/event-emitter';
 import {
@@ -33,7 +34,7 @@ describe('a write', () => {
       serverAnswers({ NodeDeleted: { node_id: 'n1' } });
     });
 
-    await expect(awaitWriteResponse('DeleteNode', send)).resolves.toBeUndefined();
+    await expect(awaitWriteResponse('DeleteNode', senderOf(send), SOME_REQUEST)).resolves.toBeUndefined();
     expect(send).toHaveBeenCalledTimes(1);
   });
 
@@ -42,7 +43,7 @@ describe('a write', () => {
       serverAnswers({ Error: 'Permission denied: EditTreeStructure required' });
     });
 
-    await expect(awaitWriteResponse('DeleteNode', send)).rejects.toThrow(
+    await expect(awaitWriteResponse('DeleteNode', senderOf(send), SOME_REQUEST)).rejects.toThrow(
       /EditTreeStructure required/
     );
   });
@@ -54,14 +55,14 @@ describe('a write', () => {
       setTimeout(() => eventEmitter.emit('workspace:raw-response', { Error: 'nope' }), 5);
     });
 
-    await expect(awaitWriteResponse('DeleteNode', send)).rejects.toThrow(/nope/);
+    await expect(awaitWriteResponse('DeleteNode', senderOf(send), SOME_REQUEST)).rejects.toThrow(/nope/);
   });
 
   it('fails rather than hanging when the server never answers', async () => {
     vi.useFakeTimers();
     const send: Mock = vi.fn(async (): Promise<undefined> => undefined);
 
-    const pending: Promise<void> = awaitWriteResponse('DeleteNode', send);
+    const pending: Promise<void> = awaitWriteResponse('DeleteNode', senderOf(send), SOME_REQUEST);
     const assertion: Promise<void> = expect(pending).rejects.toThrow(/did not answer/);
     await vi.advanceTimersByTimeAsync(WRITE_RESPONSE_TIMEOUT_MS + 1);
     await assertion;
@@ -72,6 +73,6 @@ describe('a write', () => {
       throw new Error('socket is closed');
     });
 
-    await expect(awaitWriteResponse('DeleteNode', send)).rejects.toThrow('socket is closed');
+    await expect(awaitWriteResponse('DeleteNode', senderOf(send), SOME_REQUEST)).rejects.toThrow('socket is closed');
   });
 });

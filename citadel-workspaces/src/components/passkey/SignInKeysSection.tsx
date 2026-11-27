@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, type LazyExoticComponent } from 'react';
 import type { RecoveryPhrasePanel as RecoveryPhrasePanelComponent } from '@/components/recovery/RecoveryPhrasePanel';
-import { KeyRound, RefreshCw } from 'lucide-react';
+import { KeyRound, RefreshCw, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,7 +34,7 @@ export function SignInKeysSection(): JSX.Element | null {
     return (
       <div className="p-3 rounded-lg bg-background/50">
         <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-          <RecoveryPhrasePanel words={k.freshPhrase} account={k.account.username} server={k.account.tenant} onDone={k.forgetPhrase} />
+          <RecoveryPhrasePanel words={k.freshPhrase} account={k.account.username} server={k.account.tenant} onDone={(checked: boolean) => { void k.finishPhrase(checked); }} />
         </Suspense>
       </div>
     );
@@ -53,6 +53,18 @@ export function SignInKeysSection(): JSX.Element | null {
         {PASSKEY_COPY.sectionTitle}
       </div>
       <p className="text-xs text-muted-foreground">{SIGN_IN_COPY.addKeyBody}</p>
+
+      {k.phraseUnchecked && (
+        <div className="space-y-2 p-3 rounded-lg border border-warning/30 bg-warning/10" data-testid="recovery-phrase-unchecked">
+          <p className="flex gap-2 text-sm text-foreground">
+            <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5 text-warning-emphasis" aria-hidden="true" />{PHRASE_COPY.uncheckedReminder}
+          </p>
+          <Button type="button" size="sm" variant="outline" className="gap-2 min-h-[44px]" disabled={k.busy}
+            onClick={() => { void k.regeneratePhrase(); }} data-testid="recovery-phrase-unchecked-fix">
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />{PHRASE_COPY.uncheckedFix}
+          </Button>
+        </div>
+      )}
 
       {k.listing === null ? (
         <div className="space-y-2 p-3 rounded-lg bg-background/50">

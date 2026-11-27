@@ -11,13 +11,14 @@
 import { describe, it, expect } from 'vitest';
 import { cidsToClaim, installFollowerSessionClaims, readClaimOutcome } from '../follower-session-claims';
 import type { InstanceInfo } from '../instance-manager-types';
-import { isOwnedByALiveConnection } from '@/lib/sessions/claim-session';
+import { isGoneFromTheAgent, isOwnedByALiveConnection } from '@/lib/sessions/claim-session';
 
 type Handler = (payload: unknown) => void;
 
 interface World {
   claims: bigint[];
   failures: bigint[];
+  gone: bigint[];
   reportRequests: () => number;
   instances: InstanceInfo[];
   emit: (event: string, payload?: unknown) => Promise<void>;
@@ -27,10 +28,11 @@ interface World {
   resign: () => void;
 }
 
-function world(tabs: InstanceInfo[], opts: { leader: boolean; ownedByThisConnection?: bigint[]; failing?: bigint[] }): World {
+function world(tabs: InstanceInfo[], opts: { leader: boolean; ownedByThisConnection?: bigint[]; failing?: bigint[]; heldByNoSession?: bigint[] }): World {
   const handlers: Map<string, Handler[]> = new Map();
   const claims: bigint[] = [];
   const failures: bigint[] = [];
+  const gone: bigint[] = [];
   const instances: InstanceInfo[] = tabs.map((t: InstanceInfo) => ({ ...t }));
   let reportRequests: number = 0;
   let pending: Array<() => void> = [];
@@ -44,10 +46,14 @@ function world(tabs: InstanceInfo[], opts: { leader: boolean; ownedByThisConnect
       claims.push(cid);
       if (opts.failing?.includes(cid)) throw new Error('ClaimSession request timed out');
       if (opts.ownedByThisConnection?.includes(cid)) throw new Error(`Session ${cid} is not orphaned`);
+      // The agent's answer for a CID it holds no session for (connection_management_claim.rs).
+      if (opts.heldByNoSession?.includes(cid)) throw new Error(`Session ${cid} not found`);
       return {};
     },
     isOwnedByALiveConnection,
+    isGoneFromTheAgent,
     reportFailure: (cid: bigint): void => { failures.push(cid); },
+    noteGone: (cid: bigint): void => { gone.push(cid); },
     requestReports: (): void => { reportRequests += 1; },
     unregister: (instanceId: string): void => {
       const at: number = instances.findIndex((i: InstanceInfo) => i.instanceId === instanceId);
@@ -61,7 +67,7 @@ function world(tabs: InstanceInfo[], opts: { leader: boolean; ownedByThisConnect
     await claimer.settle();
   };
   const closeWindow = (): void => { const due: Array<() => void> = pending; pending = []; for (const fn of due) fn(); };
-  return { claims, failures, reportRequests: (): number => reportRequests, instances, emit, closeWindow, becomeLeader: (): void => { leader = true; }, resign: (): void => { leader = false; } };
+  return { claims, failures, gone, reportRequests: (): number => reportRequests, instances, emit, closeWindow, becomeLeader: (): void => { leader = true; }, resign: (): void => { leader = false; } };
 }
 
 const TABS: InstanceInfo[] = [
@@ -81,10 +87,13 @@ describe('which sessions the leader claims', () => {
     expect(cidsToClaim(TABS, 'me', new Set([2n]), false)).toEqual([3n]);
   });
 
-  it('treats "not orphaned" as already held here, and anything else as a failure', () => {
-    expect(readClaimOutcome(null, isOwnedByALiveConnection)).toBe('settled');
-    expect(readClaimOutcome(new Error('Session 2 is not orphaned'), isOwnedByALiveConnection)).toBe('settled');
-    expect(readClaimOutcome(new Error('ClaimSession request timed out'), isOwnedByALiveConnection)).toBe('failed');
+  it('treats "not orphaned" as already held here, "not found" as gone, and anything else as a failure', () => {
+    const read = (error: unknown | null): string => readClaimOutcome(error, isOwnedByALiveConnection, isGoneFromTheAgent);
+    expect(read(null)).toBe('settled');
+    expect(read(new Error('Session 2 is not orphaned'))).toBe('settled');
+    expect(read(new Error('Session 545214768738363331 not found'))).toBe('gone');
+    expect(read(new Error('Session 2 is not claimable: SDK session is disconnected'))).toBe('gone');
+    expect(read(new Error('ClaimSession request timed out'))).toBe('failed');
   });
 });
 
@@ -128,6 +137,33 @@ describe('when the leader connection is replaced', () => {
     expect(w.failures).toEqual([3n]);
     await w.emit('instance:registered', { instanceId: 'carol-tab', cid: 3n });
     expect(w.claims).toEqual([2n, 3n, 3n]);
+  });
+});
+
+describe('a session the agent no longer holds', () => {
+  // Live (0.15.4): "[FollowerSessionClaims] claiming <cid> for another tab failed Error: Session
+  // <cid> not found". The agent removes a session only when it is signed out, deleted or lost
+  // with its server, or when the agent restarts; there is nothing left to claim, and nothing to retry.
+  it('is not reported as a failure', async () => {
+    const w: World = world(TABS, { leader: true, heldByNoSession: [3n] });
+    await w.emit('on-ws-connection-success');
+    expect(w.failures).toEqual([]);
+    expect(w.gone).toEqual([3n]);
+  });
+
+  it('is not claimed again on this connection when its tab reports it again', async () => {
+    const w: World = world(TABS, { leader: true, heldByNoSession: [3n] });
+    await w.emit('on-ws-connection-success');
+    await w.emit('instance:registered', { instanceId: 'carol-tab', cid: 3n });
+    expect(w.claims).toEqual([2n, 3n]);
+  });
+
+  it('is asked about again on the next connection: the account may have signed in again', async () => {
+    const w: World = world(TABS, { leader: true, heldByNoSession: [3n] });
+    await w.emit('on-ws-connection-success');
+    await w.emit('websocket-disconnected');
+    await w.emit('on-ws-connection-success');
+    expect(w.claims.filter((c: bigint) => c === 3n)).toEqual([3n, 3n]);
   });
 });
 

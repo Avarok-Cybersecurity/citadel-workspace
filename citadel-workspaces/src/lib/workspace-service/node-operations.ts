@@ -28,7 +28,7 @@ export async function createNode(
       entity_type: entityType,
       name,
       description,
-      metadata: options?.metadata ? Array.from(options.metadata) : null,
+      metadata: options?.metadata ?? null,
     },
   };
   // Resolves when the SERVER has accepted it, not when the frame leaves.
@@ -38,7 +38,7 @@ export async function createNode(
   // other member: without it, any other member's tree write resolves this one.
   return awaitWriteResponse(
     'CreateNode',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     newChildOf(parentId, name),
   );
 }
@@ -74,7 +74,7 @@ export async function updateNode(
   // so this used to report success for writes the server was about to refuse.
   return awaitWriteResponse(
     'UpdateNode',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     nodeWithId(nodeId),
   );
 }
@@ -85,7 +85,7 @@ export async function updateNode(
  */
 export async function setMembersVisible(sender: ProtocolSender, nodeId: string, visible: boolean): Promise<void> {
   const requestPart: WorkspaceProtocolRequest = { SetMembersVisible: { node_id: nodeId, visible } };
-  return awaitWriteResponse('SetMembersVisible', () => sender.sendProtocolRequest(requestPart), nodeWithId(nodeId));
+  return awaitWriteResponse('SetMembersVisible', sender, requestPart, nodeWithId(nodeId));
 }
 
 /**
@@ -104,7 +104,7 @@ export async function deleteNode(
   // so this used to report success for writes the server was about to refuse.
   return awaitWriteResponse(
     'DeleteNode',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     aboutNode(nodeId),
   );
 }
@@ -131,7 +131,7 @@ export async function listNodes(
       entity_types: entityTypes ?? null,
     },
   };
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -148,7 +148,7 @@ export async function getTreeStructure(
       max_depth: maxDepth ?? null,
     },
   };
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -156,7 +156,7 @@ export async function getTreeStructure(
  */
 export async function getTreeSchema(sender: ProtocolSender): Promise<void> {
   const requestPart: WorkspaceProtocolRequest = 'GetTreeSchema';
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -164,7 +164,7 @@ export async function getTreeSchema(sender: ProtocolSender): Promise<void> {
  */
 export async function getServerCapabilities(sender: ProtocolSender): Promise<void> {
   const requestPart: WorkspaceProtocolRequest = 'GetServerCapabilities';
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -192,7 +192,7 @@ export async function moveNode(
   };
   return awaitWriteResponse(
     'MoveNode',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     aboutNode(nodeId),
   );
 }

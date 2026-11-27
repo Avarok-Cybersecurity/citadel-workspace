@@ -3,7 +3,7 @@
  *
  * The workspace protocol has a `GroupMessageNotification` too, and it is a
  * different shape: `{ group_id, message }` there, where `message` is already a
- * `GroupMessage`. This one is `{ cid, peer_cid, message: number[], group_key,
+ * `GroupMessage`. This one is `{ cid, peer_cid, message: Uint8Array, group_key,
  * request_id }` — an opaque body the two peers agree on, see
  * group-message-codec.
  *
@@ -30,6 +30,7 @@ import { debugLog } from '@/lib/debug-config';
 import { decodeGroupFileShare, fileInfoOf, type PeerGroupFileShare } from './group-file-codec';
 import { sharedFileText } from './group-file-preview';
 import type { GroupFileShare } from '@/types/group-file-share';
+import { isByteArray } from '@/lib/utils/encoding-utils';
 
 export interface PeerGroupMessageSummary {
   groupId: string;
@@ -61,9 +62,9 @@ export function peerGroupMessageEvent(
   peerName: (cid: bigint) => string,
 ): PeerGroupMessageSummary | null {
   const raw: unknown = notification.message;
-  if (!Array.isArray(raw)) return null;
+  if (!isByteArray(raw)) return null;
 
-  const bytes: Uint8Array = new Uint8Array(raw as number[]);
+  const bytes: Uint8Array = raw;
   const file: PeerGroupFileShare | null = decodeGroupFileShare(bytes);
   if (file) return fileShareEvent(notification, file, peerName);
   const decoded: PeerGroupMessage | null = decodeGroupMessage(bytes);

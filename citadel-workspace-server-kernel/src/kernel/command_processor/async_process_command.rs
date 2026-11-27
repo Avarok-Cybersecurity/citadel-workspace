@@ -1203,6 +1203,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 revfs_storage_refusal,
                 max_file_transfer_size_mb: config.max_file_transfer_size_mb,
                 revfs_storage_quota_mb: config.revfs_storage_quota_mb,
+                request_ids: Some(true),
             })
         }
 
@@ -1305,6 +1306,24 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             is_default,
             metadata,
         } => {
+            if node_id == crate::WORKSPACE_ROOT_ID {
+                let other = mdx_content.is_some()
+                    || crate::handlers::domain::node_ops::update_changes_structure(
+                        name.as_deref(),
+                        description.as_deref(),
+                        rules.as_deref(),
+                        *chat_enabled,
+                        *is_default,
+                    );
+                return super::home_tabs::update_home_tabs(
+                    kernel,
+                    actor_user_id,
+                    requester_cid,
+                    other,
+                    metadata.as_deref(),
+                )
+                .await;
+            }
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             use crate::platform::{SystemTime, UNIX_EPOCH};
             match kernel
@@ -1431,6 +1450,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
         WorkspaceProtocolRequest::MessagingTrust(request) => {
             super::messaging_trust::process(kernel, actor_user_id, requester_cid, request).await
+        }
+
+        WorkspaceProtocolRequest::AdminRequests(request) => {
+            super::admin_requests::process(kernel, actor_user_id, request).await
         }
 
         WorkspaceProtocolRequest::Roles(request) => {

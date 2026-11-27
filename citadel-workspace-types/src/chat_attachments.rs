@@ -46,6 +46,8 @@ pub enum ChatAttachmentsRequest {
         index: u32,
         total_chunks: u32,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         bytes: Vec<u8>,
     },
     /// Chunk `index` of the file `attachment_id` shared at the node `node_id`.
@@ -74,6 +76,8 @@ pub enum ChatAttachmentsResponse {
         #[ts(type = "bigint")]
         size_bytes: u64,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         bytes: Vec<u8>,
     },
     Refused {

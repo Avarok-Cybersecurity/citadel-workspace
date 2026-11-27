@@ -38,7 +38,7 @@ async function exchange<T>(
   read: (payload: unknown) => T | null,
 ): Promise<T> {
   let answered: T | null = null;
-  await awaitWriteResponse('MessagingTrust', () => sender.sendProtocolRequest({ MessagingTrust: request }), (payload: unknown): boolean => {
+  await awaitWriteResponse('MessagingTrust', sender, { MessagingTrust: request }, (payload: unknown): boolean => {
     answered = read(payload);
     return answered !== null;
   });

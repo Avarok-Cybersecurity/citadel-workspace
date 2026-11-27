@@ -64,7 +64,7 @@ default_permissions: DomainPermissions,
 /**
  * Flexible metadata for frontend use
  */
-metadata: Array<number>, 
+metadata: Uint8Array, 
 /**
  * If set, only these child types are allowed under this node
  */

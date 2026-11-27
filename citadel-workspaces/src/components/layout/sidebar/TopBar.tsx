@@ -19,7 +19,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import NotificationCenter from "@/components/notification/NotificationCenter";
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { SettingsModal, type SettingsTab } from "@/components/SettingsModal";
+import { SettingsModal } from "@/components/SettingsModal";
+import type { SettingsTab } from "@/lib/settings-request";
 import { useSettingsRequests } from "@/hooks/use-settings-requests";
 import { openAppsModal } from "@/lib/citadel-apps/apps-modal-store";
 import { getUserInitials } from "@/lib/workspace-metadata-service";

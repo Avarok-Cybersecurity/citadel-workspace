@@ -13,6 +13,7 @@ export default tseslint.config(
     "public/**",
     "ui/public/**",  // WASM generated files
     "vendor/cdoc/**",  // cdoc-wasm glue, vendored by scripts/sync-cdoc-wasm.sh and pinned by PROVENANCE.json
+    "vendor/photo/**",  // photo-decode glue, vendored by scripts/build-photo-decode.mjs and pinned by PROVENANCE.json
     "*.config.js",
     "*.config.ts",
     "integration-tests/**",  // Has its own ESLint config

@@ -19,6 +19,9 @@ const OTHER_SEED: [u8; SEED_LEN] = [0x0e; SEED_LEN];
 const NOW_MS: u64 = 1_800_000_000_000;
 const LIFETIME_MS: u64 = 120_000;
 const AUDIENCE: &str = "work.avarok.net";
+/// The report support.test.mjs stores before reading it back, and one it never stores.
+const BUG_ID: &str = "br_0123456789abcdef01234567";
+const MISSING_BUG_ID: &str = "br_fedcba9876543210fedcba98";
 
 fn fetch(tenant: &str) -> SupportAction {
     SupportAction::FetchTelemetry {
@@ -88,6 +91,10 @@ fn main() {
             "release_domain": release_domain,
             "fetch_beta": sign(&request(fetch("support-beta"), 10, NOW_MS, LIFETIME_MS)),
             "list_grants_again": sign(&request(SupportAction::ListGrants, 11, NOW_MS, LIFETIME_MS)),
+            "list_bug_reports": sign(&request(SupportAction::ListBugReports { since_ms: 0 }, 12, NOW_MS, LIFETIME_MS)),
+            "fetch_bug_report": sign(&request(SupportAction::FetchBugReport { id: BUG_ID.to_string() }, 13, NOW_MS, LIFETIME_MS)),
+            "fetch_missing_bug_report": sign(&request(SupportAction::FetchBugReport { id: MISSING_BUG_ID.to_string() }, 14, NOW_MS, LIFETIME_MS)),
+            "list_bug_reports_at_bug": sign(&request(SupportAction::ListBugReports { since_ms: 0 }, 15, NOW_MS, LIFETIME_MS)),
         },
     });
     let text = serde_json::to_string_pretty(&fixtures).expect("serialises") + "\n";

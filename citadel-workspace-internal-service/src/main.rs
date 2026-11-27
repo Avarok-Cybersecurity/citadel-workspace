@@ -8,6 +8,8 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+#[cfg(test)]
+mod answer_pairing_frames_tests;
 mod app_net;
 mod apps_authority;
 mod fresh_start;

@@ -120,7 +120,7 @@ export function newKernel(overrides: Partial<ScriptedKernelConfig>): { readonly 
  */
 export async function newDocument(overrides: Partial<ScriptedKernelConfig>): Promise<{ readonly kernel: ScriptedKernel; readonly clock: ManualClock }> {
   const made: { readonly kernel: ScriptedKernel; readonly clock: ManualClock } = newKernel(overrides);
-  made.kernel.log.seedBase(Array.from(await baseSnapshot()), CDOC_CRDT_DOC_VERSION);
+  made.kernel.log.seedBase(await baseSnapshot(), CDOC_CRDT_DOC_VERSION);
   return made;
 }
 

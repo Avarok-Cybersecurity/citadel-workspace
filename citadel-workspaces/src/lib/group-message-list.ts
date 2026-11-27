@@ -3,7 +3,7 @@
  * own — the manager holds the state and the events, these hold the arithmetic.
  */
 import type { GroupMessage } from '@/types/workspace-entities';
-import { foldReaction, type ReactionChange } from '@/lib/reactions/reaction-state';
+import { foldReaction, fromServerReaction, toServerReaction, type Reaction, type ReactionChange } from '@/lib/reactions/reaction-state';
 import type { GroupReaction } from 'citadel-workspace-client-ts';
 
 export function sortByTime(messages: GroupMessage[]): GroupMessage[] {
@@ -50,7 +50,8 @@ export function reactToGroupMessage(
 ): GroupMessage[] | null {
   const target: GroupMessage | undefined = messages.find((msg) => msg.id === messageId);
   if (!target) return null;
-  const reactions: GroupReaction[] | null = foldReaction(target.reactions, change);
-  if (!reactions) return null;
+  const folded: Reaction[] | null = foldReaction(target.reactions?.map(fromServerReaction), change);
+  if (!folded) return null;
+  const reactions: GroupReaction[] = folded.map(toServerReaction);
   return messages.map((msg) => (msg === target ? { ...msg, reactions } : msg));
 }

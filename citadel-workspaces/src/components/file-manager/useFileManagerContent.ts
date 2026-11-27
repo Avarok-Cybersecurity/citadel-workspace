@@ -40,6 +40,8 @@ export type UseFileManagerContentResult = ReturnType<typeof useFileManagerHandle
   peerRegistered: boolean;
   /** The peer whose storage is open; null for the server or a peer that cannot be opened. */
   selectedPeerCid: bigint | null;
+  /** The open peer's display name, when the storage open is a peer's. */
+  peerName: string | null;
   storageMode: TreeScope;
   tree: UseServerRevfsTreeResult['tree'];
   loading: UseServerRevfsTreeResult['loading'];
@@ -222,7 +224,7 @@ export function useFileManagerContent(): UseFileManagerContentResult {
   });
 
   return {
-    myCid, registeredPeers, peersLoading, place, storage, peerRegistered, selectedPeerCid,
+    myCid, registeredPeers, peersLoading, place, storage, peerRegistered, selectedPeerCid, peerName,
     storageMode,
     tree, loading, error,
     // Exposed so the error screen can offer a way out. It was already threaded

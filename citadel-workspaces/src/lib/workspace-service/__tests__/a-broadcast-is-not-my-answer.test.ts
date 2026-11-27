@@ -15,6 +15,7 @@
  * group messages.
  */
 
+import { senderOf, SOME_REQUEST } from '@/test-utils/protocol-sender';
 import { describe, it, expect, vi, type Mock } from 'vitest';
 import { awaitWriteResponse } from '../await-write-response';
 import { eventEmitter } from '@/lib/event-emitter';
@@ -38,7 +39,7 @@ describe('a write waiting for its answer', () => {
     const send: Mock = vi.fn().mockResolvedValue(undefined);
     let settled: boolean = false;
 
-    const pending: Promise<void> = awaitWriteResponse('UpdateNode', send, nodeWithId(MINE))
+    const pending: Promise<void> = awaitWriteResponse('UpdateNode', senderOf(send), SOME_REQUEST, nodeWithId(MINE))
       .then(() => { settled = true; })
       .catch(() => { settled = true; });
 
@@ -54,7 +55,7 @@ describe('a write waiting for its answer', () => {
 
   it('is resolved by its own answer', async () => {
     const send: Mock = vi.fn().mockResolvedValue(undefined);
-    const pending: Promise<void> = awaitWriteResponse('UpdateNode', send, nodeWithId(MINE));
+    const pending: Promise<void> = awaitWriteResponse('UpdateNode', senderOf(send), SOME_REQUEST, nodeWithId(MINE));
 
     emitLater({ Node: { id: MINE, name: 'saved' } });
 
@@ -63,7 +64,7 @@ describe('a write waiting for its answer', () => {
 
   it('still rejects on a refusal, which carries no node id at all', async () => {
     const send: Mock = vi.fn().mockResolvedValue(undefined);
-    const pending: Promise<void> = awaitWriteResponse('UpdateNode', send, nodeWithId(MINE));
+    const pending: Promise<void> = awaitWriteResponse('UpdateNode', senderOf(send), SOME_REQUEST, nodeWithId(MINE));
 
     // An Error has to settle the write whatever the matcher says, or a refusal
     // would time out at 15s instead of reporting the reason.
@@ -76,7 +77,7 @@ describe('a write waiting for its answer', () => {
     const send: Mock = vi.fn().mockResolvedValue(undefined);
     let settled: boolean = false;
 
-    const pending: Promise<void> = awaitWriteResponse('DeleteNode', send, aboutNode(MINE))
+    const pending: Promise<void> = awaitWriteResponse('DeleteNode', senderOf(send), SOME_REQUEST, aboutNode(MINE))
       .then(() => { settled = true; })
       .catch(() => { settled = true; });
 
@@ -124,7 +125,7 @@ describe('a workspace write waiting for its answer', () => {
     // The rename in flight: "Acme" -> "Acme Corp".
     const pending: Promise<void> = awaitWriteResponse(
       'UpdateWorkspace',
-      send,
+      senderOf(send), SOME_REQUEST,
       workspaceChangedTo({ name: 'Acme Corp' }),
     )
       .then(() => { settled = true; })
@@ -144,7 +145,7 @@ describe('a workspace write waiting for its answer', () => {
     const send: Mock = vi.fn().mockResolvedValue(undefined);
     const pending: Promise<void> = awaitWriteResponse(
       'UpdateWorkspace',
-      send,
+      senderOf(send), SOME_REQUEST,
       workspaceChangedTo({ name: 'Acme Corp' }),
     );
 
@@ -159,7 +160,7 @@ describe('a workspace write waiting for its answer', () => {
 
     const pending: Promise<void> = awaitWriteResponse(
       'UpdateWorkspaceTheme',
-      send,
+      senderOf(send), SOME_REQUEST,
       workspaceWithId('w-mine'),
     )
       .then(() => { settled = true; })

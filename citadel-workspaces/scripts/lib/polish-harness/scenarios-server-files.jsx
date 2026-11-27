@@ -61,7 +61,7 @@ function wire(mode, files) {
         const file = files.find((f) => f.id === attachment_id);
         if (file.mime === 'application/pdf' && mode === 'server-files') return; // the download stays busy
         if (file.mime === 'application/pdf') return answer({ Refused: { node_id, attachment_id, refusal: 'Denied' } });
-        return answer({ Chunk: { node_id, attachment_id, index, total_chunks: 1, size_bytes: BigInt(file.bytes.length), bytes: Array.from(file.bytes) } });
+        return answer({ Chunk: { node_id, attachment_id, index, total_chunks: 1, size_bytes: BigInt(file.bytes.length), bytes: file.bytes.slice() } });
       }
       const { node_id, sha256, index, total_chunks } = request.UploadChunk;
       if (mode === 'server-files-refusing') return answer({ Refused: { node_id, attachment_id: sha256, refusal: { TooLarge: { max_bytes: 10n * 1024n * 1024n } } } });

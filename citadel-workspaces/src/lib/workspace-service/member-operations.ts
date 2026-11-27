@@ -48,14 +48,14 @@ export async function addMember(
       user_id: userId,
       domain_id: domainId ?? null,
       role,
-      metadata: metadata ? Array.from(metadata) : null
+      metadata: metadata ?? null
     }
   };
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
   // which cannot reject a send-only promise — so this used to report success
   // for writes the server was about to refuse.
   return afterMemberWrite(
-    awaitWriteResponse('AddMember', () => sender.sendProtocolRequest(requestPart)),
+    awaitWriteResponse('AddMember', sender, requestPart),
   );
 }
 
@@ -66,7 +66,7 @@ export async function getMember(sender: ProtocolSender, userId: string): Promise
   const requestPart: WorkspaceProtocolRequest = {
     GetMember: { user_id: userId }
   };
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -95,7 +95,7 @@ export async function updateMemberRole(
     UpdateMemberRole: {
       user_id: userId,
       role,
-      metadata: metadata ? Array.from(metadata) : null
+      metadata: metadata ?? null
     }
   };
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
@@ -104,7 +104,7 @@ export async function updateMemberRole(
   return afterMemberWrite(
     awaitWriteResponse(
       'UpdateMemberRole',
-      () => sender.sendProtocolRequest(requestPart),
+      sender, requestPart,
       aboutMember(userId),
     ),
   );
@@ -131,7 +131,7 @@ export async function updateMemberPermissions(
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
   // which cannot reject a send-only promise — so this used to report success
   // for writes the server was about to refuse.
-  return awaitWriteResponse('UpdateMemberPermissions', () => sender.sendProtocolRequest(requestPart));
+  return awaitWriteResponse('UpdateMemberPermissions', sender, requestPart);
 }
 
 /**
@@ -141,7 +141,7 @@ export async function updateMemberPermissions(
 export async function setBanned(sender: ProtocolSender, userId: string, banned: boolean): Promise<unknown> {
   const requestPart: WorkspaceProtocolRequest = banned ? { Ban: { user_id: userId } } : { Unban: { user_id: userId } };
   return afterMemberWrite(
-    awaitWriteResponse(banned ? 'Ban' : 'Unban', () => sender.sendProtocolRequest(requestPart), aboutMember(userId)),
+    awaitWriteResponse(banned ? 'Ban' : 'Unban', sender, requestPart, aboutMember(userId)),
   );
 }
 
@@ -163,7 +163,7 @@ export async function removeMember(
   // which cannot reject a send-only promise — so this used to report success
   // for writes the server was about to refuse.
   return afterMemberWrite(
-    awaitWriteResponse('RemoveMember', () => sender.sendProtocolRequest(requestPart)),
+    awaitWriteResponse('RemoveMember', sender, requestPart),
   );
 }
 
@@ -178,13 +178,13 @@ export async function listMembers(sender: ProtocolSender, domainId?: string): Pr
   const requestPart: WorkspaceProtocolRequest = {
     ListMembers: { domain_id: domainId ?? null }
   };
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /** Ask for every banned account; the answer arrives as `members:banned-loaded`. */
 export async function listBanned(sender: ProtocolSender): Promise<void> {
   const requestPart: WorkspaceProtocolRequest = 'ListBanned';
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -201,5 +201,5 @@ export async function getUserPermissions(
       domain_id: domainId
     }
   };
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }

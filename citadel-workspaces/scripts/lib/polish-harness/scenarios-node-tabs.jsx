@@ -75,7 +75,7 @@ function UninstallPane() {
 
 const listing = (id, name, categories) => {
   const m = { ...structuredClone(manifestCases.base), id, name, categories, surfaces: ['node_tab'], summary: `${name}: everything the team plans together, on this page and every page below it` };
-  return { source: { WorkspaceRegistry: { entry_id: id } }, manifest_bytes: Array.from(new TextEncoder().encode(JSON.stringify(m))), signature: '0'.repeat(6618) };
+  return { source: { WorkspaceRegistry: { entry_id: id } }, manifest_bytes: new TextEncoder().encode(JSON.stringify(m)), signature: '0'.repeat(6618) };
 };
 const FOR_TAB = listedApps([
   listing('net.avarok.calendar', 'Calendar', ['planning']),

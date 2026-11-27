@@ -9,11 +9,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import type { AppsModalRequest, TabTarget } from '@/lib/citadel-apps/apps-modal-store';
 import type { ListedApp } from '@/lib/citadel-apps/listing-model';
-import { NOT_AVAILABLE_COPY } from '@/lib/citadel-apps/refusal-copy';
+import type { AppsFailure } from '@/lib/workspace-service/apps-operations';
+import { NOT_AVAILABLE_COPY, refusalCopy } from '@/lib/citadel-apps/refusal-copy';
+import { adminAskAbout, managersLine } from '@/lib/citadel-apps/refused-install';
+import { appLinkUrl, type AppLink } from '@/lib/citadel-apps/app-link';
 import { useMarketplaceData, type MarketplaceData } from './use-marketplace-data';
 import { useLinkedApp, type LinkedApp } from './use-linked-app';
 import { AppsBrowse, type TabBrowse } from './AppsBrowse';
 import { AppFlow } from './AppFlow';
+import { AppsRefusalNotice } from './AppsRefusalNotice';
 import { InstalledApps } from './InstalledApps';
 import type { MarketplaceDeps, MarketplaceViewer, MarketTab } from './marketplace-types';
 
@@ -32,6 +36,13 @@ export function AppsModal({ open, onOpenChange, request, deps, viewer }: AppsMod
   const [tab, setTab] = useState<MarketTab>('global');
   const [opened, setOpened] = useState<ListedApp | null>(null);
   const [linkDismissed, setLinkDismissed] = useState<boolean>(false);
+  // Asked to open on something else while open (a refusal's "See all apps"): start from the list.
+  const [openedFor, setOpenedFor] = useState<AppsModalRequest>(request);
+  if (openedFor !== request) {
+    setOpenedFor(request);
+    setOpened(null);
+    setLinkDismissed(false);
+  }
   const linkedId: string | null = request.kind === 'link' && !linkDismissed ? request.link.appId : null;
   const linked: LinkedApp = useLinkedApp(linkedId, data, deps);
   const manages: boolean = viewer.authority.holds('AppManage', viewer.rootId) === 'yes';
@@ -61,16 +72,30 @@ export function AppsModal({ open, onOpenChange, request, deps, viewer }: AppsMod
         <Button variant="ghost" className="min-h-[44px] self-start" onClick={back} data-testid="apps-back-to-list">← All apps</Button>
         <AppFlow
           key={showing.manifest.id} app={showing} installs={data.installs} deps={deps} viewer={flowViewer} onInstalled={data.recordInstall}
-          onDone={target === null ? back : (): void => onOpenChange(false)} forTab={target === null ? null : { add: target.add }}
+          onDone={target === null ? back : (): void => onOpenChange(false)} onShowInstalled={(): void => { back(); setTab('installed'); }}
+          forTab={target === null ? null : { add: target.add }}
         />
       </div>
     );
-  } else if (linked.kind === 'unavailable' || linked.kind === 'looking') {
+  } else if (linked.kind === 'looking') {
+    body = <p role="status" className="py-[12px] text-foreground" data-testid="apps-link-looking">Looking for the app…</p>;
+  } else if ((linked.kind === 'unavailable' || linked.kind === 'unreachable') && request.kind === 'link') {
+    const link: AppLink = request.link;
+    const copy: string = linked.kind === 'unreachable' ? refusalCopy(linked.failure) : NOT_AVAILABLE_COPY;
+    const refusal: AppsFailure = linked.kind === 'unreachable' ? linked.failure : 'Unavailable';
     body = (
-      <div className="flex flex-col gap-[12px] py-[12px]" data-testid={`apps-link-${linked.kind}`}>
-        <p role={linked.kind === 'unavailable' ? 'alert' : 'status'} className="text-foreground">{linked.kind === 'unavailable' ? NOT_AVAILABLE_COPY : 'Looking for the app…'}</p>
-        <Button variant="outline" className="min-h-[44px] self-start" onClick={back}>See all apps</Button>
-      </div>
+      <AppsRefusalNotice
+        testId={`apps-link-${linked.kind}`} message={copy} forManagers={managersLine(refusal, manages)}
+        surface={linked.kind === 'unreachable' ? 'apps.listing-unreachable' : 'apps.Unavailable'}
+        binding={{
+          retry: linked.kind === 'unreachable' ? linked.retry : async (): Promise<void> => back(),
+          focus: back, dismiss: back,
+          askAbout: adminAskAbout({
+            appName: link.appId, version: link.version ?? 'its latest version',
+            where: (link.nodeId === null ? null : viewer.nodeName(link.nodeId)) ?? 'this workspace', link: appLinkUrl(viewer.origin, link), copy,
+          }),
+        }}
+      />
     );
   } else {
     body = (

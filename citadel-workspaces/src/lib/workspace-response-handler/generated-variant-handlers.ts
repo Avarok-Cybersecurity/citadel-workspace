@@ -6,6 +6,7 @@
  * plain forwarding.
  */
 
+import { answerPairing } from '@/lib/workspace-service/answers/answer-pairing';
 import { eventEmitter } from '@/lib/event-emitter';
 import { debugLog } from '@/lib/debug-config';
 import { isVariant , type SignInSettings, type WorkspaceProtocolResponse } from 'citadel-workspace-client-ts';
@@ -159,6 +160,8 @@ export function handleGeneratedVariants(
   if (isVariant(response, 'ServerCapabilities')) {
     const caps: Extract<WorkspaceProtocolResponse, { ServerCapabilities: unknown }>['ServerCapabilities'] = response.ServerCapabilities;
     debugLog('WorkspaceResponseHandler', 'ServerCapabilities received', caps);
+    // Absent from a server built before request ids: it does not pair, and is sent none.
+    answerPairing.setServerPairs(caps.request_ids === true);
     eventEmitter.emit('server:capabilities:loaded', {
       allowServerFileTransfer: caps.allow_server_file_transfer,
       allowServerRevfsStorage: caps.allow_server_revfs_storage,
@@ -191,6 +194,14 @@ export function handleGeneratedVariants(
     // Not logged here: its records are other people's diagnostic lines. The requests in
     // telemetry-operations.ts wait on the raw event.
     eventEmitter.emit('workspace:telemetry', { answer: response.Telemetry, connection: connectionInfo });
+    eventEmitter.emit('workspace:raw-response', response);
+    return true;
+  }
+
+  if (isVariant(response, 'AdminRequests')) {
+    // An admin's "there is an ask to take" nudge (admin-requests/boot.ts), or an answer that
+    // admin-requests-operations.ts waits on through the raw event.
+    eventEmitter.emit('workspace:admin-requests', { answer: response.AdminRequests });
     eventEmitter.emit('workspace:raw-response', response);
     return true;
   }

@@ -1,6 +1,6 @@
 /**
  * The browser's PictureCache: the agent socket for received files, IndexedDB for sent ones,
- * object URLs. Sent pictures are kept as their sends begin (FILE_SENT); this module is loaded by
+ * the photo decoder's worker, object URLs. Sent pictures are kept as their sends begin (FILE_SENT); this module is loaded by
  * the chat's file bubble, so it listens wherever a send can start.
  */
 import type { FileTransfer } from '@/lib/file-transfer/types';
@@ -12,14 +12,17 @@ import { PictureCache } from './picture-load';
 import { looksLikePicture } from './image-preview';
 import { rememberSentPicture, sentPicture, type SentPictureOf } from './sent-pictures';
 import { browserSentPictureStore } from './sent-picture-store';
+import { photoDecoder } from '@/lib/photo-decode/photo-decoder-browser';
+import { previewGate } from './shared-preview-gate';
 
 export const pictureCache: PictureCache = new PictureCache({
   received: browserReceivedFileIO,
   sent: (transfer: FileTransfer): Promise<Blob | undefined> =>
     sentPicture(browserSentPictureStore, { own: transfer.sender_cid, peer: transfer.recipient_cid, transferId: transfer.id }),
+  decode: photoDecoder.decode,
   objectUrl: (blob: Blob): string => URL.createObjectURL(blob),
   release: (url: string): void => URL.revokeObjectURL(url),
-});
+}, previewGate);
 
 eventEmitter.on<FileSent>(FILE_TRANSFER_EVENTS.FILE_SENT, ({ transfer, file }: FileSent): void => {
   if (!looksLikePicture(file.name, file.type, file.size)) return;

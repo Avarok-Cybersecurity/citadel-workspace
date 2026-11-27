@@ -76,7 +76,8 @@ async function thePhraseFits({ page, url, viewport }) {
 async function thePhraseCheckFits({ page, url, viewport }) {
   await open(page, url, 'recovery-phrase-check', 'recovery-phrase-check');
   assert.equal(await page.getByTestId('recovery-phrase-check-word').count(), 3, 'the check does not ask for three words');
-  await fits(page, viewport, ['recovery-phrase-confirm', 'recovery-phrase-show-again']);
+  await fits(page, viewport, ['recovery-phrase-confirm', 'recovery-phrase-show-again', 'recovery-phrase-skip']);
+  await statedBeside(page, 'recovery-phrase-skip', 'recovery-phrase-skip-note');
   await axe(page);
 }
 
@@ -104,6 +105,30 @@ async function theRecoverFormCheckFits({ page, url, viewport }) {
   await axe(page);
 }
 
+/** `line` is drawn whole inside the card, right below `control`, which it describes. */
+async function statedBeside(page, control, line) {
+  const card = await page.getByTestId('recovery-card').boundingBox();
+  const c = await page.getByTestId(control).boundingBox();
+  const l = await page.getByTestId(line).boundingBox();
+  assert.ok(inside(l, card), `${line} ${JSON.stringify(l)} leaves the card ${JSON.stringify(card)}`);
+  assert.ok(l.y >= c.y + c.height - 0.5 && l.y - (c.y + c.height) <= 24, `${line} ${JSON.stringify(l)} is not right below ${control} ${JSON.stringify(c)}`);
+  const clipped = await page.getByTestId(line).evaluate((e) => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1);
+  assert.ok(!clipped, `${line} is clipped`);
+}
+
+async function theUncheckedReminderFits({ page, url, viewport }) {
+  await open(page, url, 'settings-phrase-unchecked', 'recovery-phrase-unchecked');
+  await fits(page, viewport, ['recovery-phrase-unchecked-fix']);
+  const card = await page.getByTestId('recovery-card').boundingBox();
+  const notice = await page.getByTestId('recovery-phrase-unchecked').boundingBox();
+  const fix = await page.getByTestId('recovery-phrase-unchecked-fix').boundingBox();
+  assert.ok(inside(notice, card), `the reminder ${JSON.stringify(notice)} leaves the card ${JSON.stringify(card)}`);
+  assert.ok(inside(fix, notice), `its fix ${JSON.stringify(fix)} leaves the reminder ${JSON.stringify(notice)}`);
+  const clipped = await page.getByTestId('recovery-phrase-unchecked').locator('p').evaluate((e) => e.scrollWidth > e.clientWidth + 1);
+  assert.ok(!clipped, 'the reminder sentence is clipped');
+  await axe(page);
+}
+
 const theConsoleFits = (scenario, view, primary) => async ({ page, url, viewport }) => {
   await open(page, url, scenario, 'recovery-console');
   await page.locator(`[data-testid="recovery-console"][data-view="${view}"]`).waitFor();
@@ -119,6 +144,7 @@ const theConsoleFits = (scenario, view, primary) => async ({ page, url, viewport
 export const RECOVERY_CHECKS = {
   theRecoveryPhraseFits: thePhraseFits,
   theRecoveryPhraseCheckFits: thePhraseCheckFits,
+  theUncheckedPhraseReminderFits: theUncheckedReminderFits,
   theRecoverAccountFormFits: theRecoverFormFits,
   theRecoverAccountFormCheckFits: theRecoverFormCheckFits,
   theRecoveryConsoleWelcomeFits: theConsoleFits('recovery-console-welcome', 'welcome', ['recovery-console-begin', 'recovery-console-sign-out']),

@@ -5,4 +5,4 @@ import type { ListingSource } from "./ListingSource";
  * A listing as the catalogue and the registry hold it: the publisher's exact bytes, so the
  * client verifies the signature itself before it shows anything.
  */
-export type AppListing = { source: ListingSource, manifest_bytes: Array<number>, signature: string, };
+export type AppListing = { source: ListingSource, manifest_bytes: Uint8Array, signature: string, };

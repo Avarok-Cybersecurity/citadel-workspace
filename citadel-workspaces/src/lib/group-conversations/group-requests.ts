@@ -16,6 +16,7 @@ import { groupIdToKey } from './group-key';
 import { encodeGroupMessage } from './group-message-codec';
 import type { CurrentConnectionInfo } from '@/lib/connection/types';
 import type { MessageGroupKey } from '@/lib/group-conversations/group-key';
+import { ownedBytes } from '@/lib/utils/encoding-utils';
 
 async function requireCid(): Promise<bigint> {
   const connectionInfo: CurrentConnectionInfo | null = (await import('../connection')).connectionManager.getConnectionInfo();
@@ -236,8 +237,8 @@ export async function sendPeerGroupBody(
   // The agent names this request in the server's answer to the send (group-send-outcomes).
   const request_id: string = crypto.randomUUID();
   expectSendOutcome(request_id, groupId, messageId);
-  const request: { GroupMessage: { cid: bigint; message: number[]; group_key: MessageGroupKey; request_id: string } } = {
-    GroupMessage: { cid, message: Array.from(body), group_key: groupKey, request_id },
+  const request: { GroupMessage: { cid: bigint; message: Uint8Array; group_key: MessageGroupKey; request_id: string } } = {
+    GroupMessage: { cid, message: ownedBytes(body), group_key: groupKey, request_id },
   };
   await sendGroupRequest(request);
   return messageId;

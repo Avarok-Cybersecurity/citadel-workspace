@@ -2,7 +2,7 @@
 //! the release, the install and, when asked, the document's requirement, under `APPS_LOCK`.
 
 use super::apps::{audit_entry, finish, Answer, Caller, Step};
-use super::apps_gather::{gather, members, node_exists, snapshot};
+use super::apps_gather::{gather, members, scope_node_exists, snapshot};
 use super::apps_header::rewrite_mdx;
 use super::apps_offer::{commit_artifact, obtain_artifact, resolve_offer};
 use crate::kernel::apps::facts::{authority_node, ViewsNeeded};
@@ -75,7 +75,7 @@ async fn install_steps<R: Ratchet + Send + Sync + 'static>(
         inject_requirement: *inject_requirement,
         at_root: &at_root,
         at_authority: &at_authority,
-        scope_node_exists: node_exists(kernel, authority).await?,
+        scope_node_exists: scope_node_exists(kernel, authority).await?,
         facts: &facts,
     })?;
     // A glue release's module is in the UI bundle: there is none to store. Any other release's

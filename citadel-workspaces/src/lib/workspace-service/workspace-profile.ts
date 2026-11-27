@@ -25,7 +25,7 @@ export async function updateWorkspaceProfile(
   // Resolves when the SERVER accepts it; a refusal rejects with the server's reason.
   return awaitWriteResponse(
     'UpdateWorkspaceProfile',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     workspaceProfileIs(workspaceId, change),
   );
 }

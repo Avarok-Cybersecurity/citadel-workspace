@@ -23,6 +23,7 @@ import { VIEWER } from '@/lib/calendar/__tests__/placement-fixture';
 import calendarManifest from '../../../../apps/first-party/calendar/manifest.json';
 import { TREE, seededGlue, useCalendarEngine } from './scenarios-calendar.jsx';
 import { workspaceState } from './workspace-state';
+import { offerTopicRetry, showTopicJoin } from '@/lib/citadel-apps/topic-join-store';
 
 const CALENDAR = calendarManifest.id;
 /** @type {import('citadel-workspace-client-ts').Capability[]} */
@@ -36,10 +37,10 @@ const INSTALL = {
 };
 const LISTED = listedApps([{
   source: { WorkspaceRegistry: { entry_id: CALENDAR } },
-  manifest_bytes: Array.from(new TextEncoder().encode(JSON.stringify(calendarManifest))),
+  manifest_bytes: new TextEncoder().encode(JSON.stringify(calendarManifest)),
   signature: '0'.repeat(6618),
 }])[0];
-const STATE = workspaceState({ currentUser: { id: VIEWER, username: VIEWER, name: VIEWER }, nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: [] } });
+const STATE = workspaceState({ currentUser: { id: VIEWER, username: VIEWER, name: VIEWER }, nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: new Uint8Array() } });
 const REFUSE = () => { throw new Error('this scenario mounts the Calendar only'); };
 const NO_WRITES = { writeNodeTabs: async () => undefined, setDefaultAppTabs: async () => undefined };
 
@@ -100,6 +101,19 @@ function Page() {
   );
 }
 
+/** The Calendar's topic not joined: the notice the page shows above it, with Try again, under the tab row. */
+let seeded = false;
+function waitingOnTheTopic() {
+  // Once, before the notice subscribes: the store is the page's, as an instance's rejoin writes it.
+  if (!seeded) {
+    seeded = true;
+    offerTopicRetry(INSTALL.id, () => undefined);
+    showTopicJoin(INSTALL.id, 'cal', { kind: 'waiting', reason: 'owner-offline', owner: { username: 'a-member-whose-username-runs-long', cid: 5n }, wake: { kind: 'auto', deadlineMs: Date.UTC(2026, 10, 27, 15, 5) } });
+  }
+  return <Page />;
+}
+
 export const APP_OVERFLOW_SCENARIOS = {
   'app-tab-overflow': () => <Page />,
+  'app-tab-topic-waiting': waitingOnTheTopic,
 };

@@ -98,7 +98,7 @@ async function start(): Promise<void> {
   const key: string = (m.publisher as { mldsa65_public_key: string }).mldsa65_public_key;
   const [mHash, wHash] = [await sha(manifestBytes), await sha(wasm)];
   const signature: string = mode === 'bad-signature' ? 'ab'.repeat(32) : await standIn(key, mHash, wHash);
-  const listing: AppListing = { source: { Global: { catalogue_version: 1n } }, manifest_bytes: Array.from(manifestBytes), signature };
+  const listing: AppListing = { source: { Global: { catalogue_version: 1n } }, manifest_bytes: manifestBytes, signature };
   const install: AppInstall = {
     id: 'inst-h', app_id: APP_ID, version: VERSION, manifest_sha256: mHash, artifact_sha256: wHash, pinned_publisher_key: key,
     scope: 'Workspace', granted: ['canvas', 'events', 'log'],
@@ -110,7 +110,7 @@ async function start(): Promise<void> {
     request: async (r: AppsRequest, isOurs: (a: AppsAnswer) => boolean): Promise<AppsAnswer> => {
       const raw: unknown = typeof r === 'object' && 'GetRelease' in r ? { Release: { install_id: install.id, current: listing, waiting_on: null } }
         : typeof r === 'object' && 'FetchArtifact' in r
-          ? { ArtifactChunk: { ...r.FetchArtifact, total_chunks: Math.ceil(wasm.byteLength / CHUNK), bytes: Array.from(wasm.slice(r.FetchArtifact.index * CHUNK, (r.FetchArtifact.index + 1) * CHUNK)) } }
+          ? { ArtifactChunk: { ...r.FetchArtifact, total_chunks: Math.ceil(wasm.byteLength / CHUNK), bytes: (wasm.slice(r.FetchArtifact.index * CHUNK, (r.FetchArtifact.index + 1) * CHUNK)) } }
           : { Refused: 'ServerFeatureUnavailable' };
       const a: AppsAnswer = readAppsAnswer(raw);
       if (!isOurs(a)) throw new Error(`the harness answer ${a.kind} was not taken`);
@@ -128,7 +128,7 @@ async function start(): Promise<void> {
       transport: server, agent: { send: async () => undefined, listen: () => () => undefined, newRequestId: () => crypto.randomUUID() }, agentSession: null,
       log: { LogWrite: () => ({ ok: null }) }, pushes: () => () => undefined, sha256Hex: verifier.sha256Hex, nowMs: () => Date.now(), every: () => () => undefined,
       // No agent session here, so no peer plane: nobody to reach and no answer of one's own.
-      peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string, detail: unknown): void => console.warn(what, detail),
+      peerCid: () => null, presence: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (what: string, detail: unknown): void => console.warn(what, detail),
       notices: (n: AppNoticeEntry): void => console.info(`[harness] ${n.from} notified: ${n.title}`),
       // A worker app hears no storage changes, so there is nobody to announce its own-store writes to.
       ownWrites: null,

@@ -16,6 +16,7 @@ import { setupPageDepartureHandlers } from './channel-lifecycle';
 import { ownEnvelope } from './channel-envelope';
 import { envelopeEpoch } from './leadership-epoch';
 import { admitByVersion } from './version-skew';
+import { hasHeardEnd } from '@/lib/sessions/release-ended-session';
 // Re-export types for consumers
 export type { ChannelMessage, ChannelMessageType } from './channel-types';
 
@@ -132,7 +133,7 @@ class InstanceChannel {
     void (async (): Promise<void> => {
       const { getSelectedUser } = await import('../tab-context');
       const tab: TabUserContext | null = await getSelectedUser();
-      if (tab?.selectedCid) { instanceManager.setCid(tab.selectedCid); this.sendCidUpdate(tab.selectedCid); }
+      if (tab?.selectedCid && !hasHeardEnd(tab.selectedCid)) { instanceManager.setCid(tab.selectedCid); this.sendCidUpdate(tab.selectedCid); }
     })().catch((error) => {
       debugLog('InstanceChannel', 'broadcastCid: could not read the selected tab CID', error);
     });

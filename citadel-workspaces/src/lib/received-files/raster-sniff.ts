@@ -1,9 +1,14 @@
 /**
  * What raster image a file's bytes are, by their magic numbers alone: never by its name, its
- * declared type, or a peer's say-so. Only these five decode as a bitmap; anything else (SVG,
- * HTML, a renamed executable) is not an image here, whatever it calls itself.
+ * declared type, or a peer's say-so. Only these decode as a bitmap; anything else (SVG, HTML, a
+ * renamed executable) is not an image here, whatever it calls itself.
+ *
+ * Two families: the formats every browser draws itself (RasterMime), and the photo formats the
+ * page decodes in its own worker (PhotoMime, lib/photo-decode): HEIC/HEIF, and TIFF with the
+ * camera RAW files built on it.
  */
-export type RasterMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/avif';
+export type RasterMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/avif' | 'image/bmp' | 'image/x-icon';
+export type PhotoMime = 'image/heic' | 'image/tiff';
 
 function startsWith(bytes: Uint8Array, at: number, ascii: string): boolean {
   if (bytes.length < at + ascii.length) return false;
@@ -21,5 +26,16 @@ export function sniffRaster(bytes: Uint8Array): RasterMime | null {
   if (startsWith(bytes, 0, 'GIF87a') || startsWith(bytes, 0, 'GIF89a')) return 'image/gif';
   if (startsWith(bytes, 0, 'RIFF') && startsWith(bytes, 8, 'WEBP')) return 'image/webp';
   if (startsWith(bytes, 4, 'ftyp') && (startsWith(bytes, 8, 'avif') || startsWith(bytes, 8, 'avis'))) return 'image/avif';
+  if (startsWith(bytes, 0, 'BM') && bytes.length >= 26) return 'image/bmp';
+  if (bytes.length >= 6 && bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 1 && bytes[3] === 0 && (bytes[4] | bytes[5]) !== 0) return 'image/x-icon';
+  return null;
+}
+
+/** HEIF major brands; crates/photo-decode/src/lib.rs HEIF_BRANDS decides, and a test holds the two equal. */
+export const HEIF_BRANDS: readonly string[] = ['heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'mif1', 'msf1'];
+
+export function sniffPhoto(bytes: Uint8Array): PhotoMime | null {
+  if (startsWith(bytes, 0, 'II*\u0000') || startsWith(bytes, 0, 'MM\u0000*')) return 'image/tiff';
+  if (startsWith(bytes, 4, 'ftyp') && HEIF_BRANDS.some((brand: string): boolean => startsWith(bytes, 8, brand))) return 'image/heic';
   return null;
 }

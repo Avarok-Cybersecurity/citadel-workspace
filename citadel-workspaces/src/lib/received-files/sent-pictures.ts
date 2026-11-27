@@ -7,12 +7,12 @@
  * deleted when its transfer ends (browser_payload.rs), and a native-picker send names a file of
  * the person's own that may since have moved. So the picked file is kept here, in IndexedDB,
  * for the conversation it was sent in, when it passes the same decode limits as a received
- * picture (pictureOf). Each conversation keeps at most SENT_PICTURE_BUDGET_BYTES, the oldest
+ * picture (pictureSourceOf: a photo format is kept as it is and decoded when shown). Each conversation keeps at most SENT_PICTURE_BUDGET_BYTES, the oldest
  * dropped first.
  *
  * Pure over its store (SBIO): sent-picture-store.ts is the browser's.
  */
-import { MAX_PREVIEW_BYTES, pictureOf, type Picture } from './image-preview';
+import { MAX_PREVIEW_BYTES, pictureSourceOf, type PictureSource } from './image-preview';
 
 /** The most one conversation keeps of the pictures sent in it. */
 export const SENT_PICTURE_BUDGET_BYTES: number = 64 * 1024 * 1024;
@@ -55,7 +55,7 @@ export function overBudget(entries: readonly { key: string; size: number; at: nu
 /** Keeps `file` when it is a picture within the limits; says why not when it is not. */
 export async function rememberSentPicture(store: SentPictureStore, of: SentPictureOf, file: Blob, now: number): Promise<string | null> {
   if (file.size === 0 || BigInt(file.size) > MAX_PREVIEW_BYTES || file.size > SENT_PICTURE_BUDGET_BYTES) return 'not kept: over the size a picture is kept at';
-  const picture: Picture | string = pictureOf(new Uint8Array(await file.arrayBuffer()));
+  const picture: PictureSource | string = pictureSourceOf(new Uint8Array(await file.arrayBuffer()));
   if (typeof picture === 'string') return `not kept: ${picture}`;
   await store.put(keyOf(of), { blob: file, size: file.size, at: now });
   const prefix: string = conversationPrefix(of);

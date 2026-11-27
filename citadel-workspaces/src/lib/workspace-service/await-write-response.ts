@@ -17,25 +17,26 @@
  * `role="alert"` — but the handler it awaits swallowed its errors and always
  * resolved, so neither could ever fire.
  *
- * KNOWN LIMITATION, recorded rather than hidden: the workspace protocol carries
- * no request id (`grep -c request_id citadel-workspace-types/src/lib.rs` is 0),
- * so responses can only be matched by TYPE. Two writes of the same kind in
- * flight at once could take each other's answer. The UI issues these one at a
- * time from a modal or a confirm dialog, so that is not reachable today — but it
- * is a property of the protocol, not of this module, and the real fix is a
- * request id on the wire.
+ * Which answer is ours: against a server that pairs answers with request ids, the one named for
+ * this request (answers/answer-pairing.ts); against an older one, the next answer of the right
+ * type that the optional payload check lets through (answers/answer-waits.ts). Every write goes
+ * through here, so every write is paired the moment the server can pair it.
  */
 
-import { eventEmitter } from '../event-emitter';
+import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { debugLog } from '@/lib/debug-config';
+import type { ProtocolSender } from './workspace-operations';
+import { answerPairing, newRequestId } from './answers/answer-pairing';
+import { waitForNextAnswer, waitForPairedAnswer, WriteRefused, type AnswerWait } from './answers/answer-waits';
 
-/** How long to wait before treating silence as a failure. */
-export const WRITE_RESPONSE_TIMEOUT_MS: number = 15_000;
+export { WRITE_RESPONSE_TIMEOUT_MS, WriteResponseTimeout, WriteAnswerUnfit, WriteRefused } from './answers/answer-waits';
 
 /** The response variants that mean a given request succeeded. */
 export const SUCCESS_RESPONSES: Record<string, readonly string[]> = {
   CreateNode: ['Node'],
   UpdateNode: ['Node'],
+  // UpdateNode naming the workspace root: the home's own tabs, kept in and answered as the workspace record.
+  UpdateHomeTabs: ['Workspace'],
   SetMembersVisible: ['Node'],
   // A workspace's default tabs; answered and broadcast as the workspace record.
   SetDefaultAppTabs: ['Workspace'],
@@ -44,6 +45,8 @@ export const SUCCESS_RESPONSES: Record<string, readonly string[]> = {
   Telemetry: ['Telemetry'],
   // Likewise MessagingTrust; messaging-trust-operations picks the kind and the peer.
   MessagingTrust: ['MessagingTrust'],
+  // Likewise AdminRequests; admin-requests-operations picks the kind (and skips the Waiting push).
+  AdminRequests: ['AdminRequests'],
   // And Roles: a List is answered with the table, an edit with RoleChanged; roles-operations matches which.
   Roles: ['Roles'],
   // And SecureLinks: secure-links-operations matches the kind, and the link, to the request.
@@ -107,32 +110,21 @@ export const SUCCESS_RESPONSES: Record<string, readonly string[]> = {
   MarkGroupRead: ['GroupReadCursorMoved'],
 };
 
-function describeFailure(response: Record<string, unknown>): string {
-  const detail: unknown = response.Error;
-  if (typeof detail === 'string') return detail;
-  if (detail && typeof detail === 'object') {
-    const [variant, value] = Object.entries(detail)[0] ?? [];
-    return typeof value === 'string' ? `${variant}: ${value}` : String(variant);
-  }
-  return 'The server rejected the request.';
-}
-
 /**
- * Send a write and resolve only when the server has accepted it.
+ * Send `request` and resolve only when the server has accepted it.
  *
- * Rejects on `Error`, and on silence past the timeout. Callers already treat a
- * rejection as failure — that is the path their toasts and dialogs were written
- * for and could never reach.
+ * Rejects on the server's refusal, and on silence past the timeout. Callers already treat a
+ * rejection as failure -- that is the path their toasts and dialogs were written for.
  */
 export async function awaitWriteResponse(
   requestType: keyof typeof SUCCESS_RESPONSES,
-  send: () => Promise<void>,
+  sender: ProtocolSender,
+  request: WorkspaceProtocolRequest,
   /**
-   * Optional payload check, for variants that are ALSO broadcast to other
-   * members. `GroupMessageNotification` is both this sender's response and
-   * everyone else's copy of every message, so type alone would let another
-   * member's message resolve this write. Matching on the payload narrows the
-   * window the missing request-id leaves open.
+   * Optional payload check. Against a server that pairs answers it judges the paired answer;
+   * against an older one it is what tells this write's answer from another member's broadcast of
+   * the same variant (`GroupMessageNotification` is both this sender's response and everyone
+   * else's copy of every message).
    */
   matches?: (payload: unknown) => boolean
 ): Promise<void> {
@@ -140,61 +132,51 @@ export async function awaitWriteResponse(
   if (!accepted) {
     // An unmapped write would wait for a response that never matches and then
     // fail a correct operation, which is worse than the original defect.
-    await send();
+    await sender.sendProtocolRequest(request, null);
     return;
   }
 
-  // Held out here so a send that fails can stand the wait down. It used to leave the timer and
-  // the listener behind, and the timer then rejected a promise nobody held, 15s later.
-  let standDown: () => void = (): void => {};
-  const settled: Promise<void> = new Promise<void>((resolve, reject) => {
-    const timeoutId: NodeJS.Timeout = setTimeout((): void => {
-      eventEmitter.off('workspace:raw-response', handler);
-      reject(
-        new Error(
-          `The server did not answer within ${WRITE_RESPONSE_TIMEOUT_MS / 1000}s. ` +
-            'The change may not have been saved.'
-        )
-      );
-    }, WRITE_RESPONSE_TIMEOUT_MS);
-
-    const handler = (response: unknown): void => {
-      if (!response || typeof response !== 'object') return;
-      const responseType: string = Object.keys(response)[0];
-      if (responseType === undefined) return;
-
-      if (responseType === 'Error') {
-        clearTimeout(timeoutId);
-        eventEmitter.off('workspace:raw-response', handler);
-        reject(new Error(describeFailure(response as Record<string, unknown>)));
-        return;
-      }
-      if (accepted.includes(responseType)) {
-        // A broadcast of the same variant from another member is not our answer.
-        if (matches && !matches((response as Record<string, unknown>)[responseType])) return;
-        clearTimeout(timeoutId);
-        eventEmitter.off('workspace:raw-response', handler);
-        resolve();
-      }
-    };
-
-    eventEmitter.on('workspace:raw-response', handler);
-    standDown = (): void => {
-      clearTimeout(timeoutId);
-      eventEmitter.off('workspace:raw-response', handler);
-    };
-  });
-
-  // Subscribe BEFORE sending. The response can arrive within the same tick on a
-  // warm local socket, and a listener attached afterwards would miss it and then
-  // time out a write that actually succeeded.
+  // Subscribed BEFORE sending: on a warm local socket the answer can arrive in the same tick.
+  const requestId: bigint | null = answerPairing.serverPairs() ? newRequestId() : null;
+  const wait: AnswerWait = requestId === null ? waitForNextAnswer(accepted, matches) : waitForPairedAnswer(requestId, accepted, matches);
   try {
-    await send();
+    await sender.sendProtocolRequest(request, requestId);
   } catch (sendError) {
+    // A send that failed stands the wait down; its timer used to reject a promise nobody held.
     debugLog('WorkspaceService', `${requestType} failed to send`, sendError);
-    standDown();
+    wait.standDown();
     throw sendError;
   }
+  return wait.settled;
+}
 
-  return settled;
+/**
+ * Against a server that does not pair answers: wait, sending nothing, for the next answer of
+ * `requestType` that `matches` lets through (or an Error), as a request that timed out still owes.
+ */
+export function awaitLateAnswer(requestType: keyof typeof SUCCESS_RESPONSES, matches: (payload: unknown) => boolean): Promise<void> {
+  return waitForNextAnswer(SUCCESS_RESPONSES[requestType], matches).settled;
+}
+
+/**
+ * Send `request` without waiting for its answer, and hear its refusal: against a server that pairs
+ * answers, `onRefused` is told the words of this request's own `Error` answer and of nobody else's.
+ * Against an older one an Error names no request, so nothing here can tell whose it is; the caller
+ * keeps its own reading of plain Errors for that server (documents-transport.ts).
+ */
+export async function sendHearingRefusal(sender: ProtocolSender, request: WorkspaceProtocolRequest, onRefused: (message: string) => void): Promise<void> {
+  if (!answerPairing.serverPairs()) {
+    await sender.sendProtocolRequest(request, null);
+    return;
+  }
+  const requestId: bigint = newRequestId();
+  const wait: AnswerWait = waitForPairedAnswer(requestId, null, undefined);
+  try {
+    await sender.sendProtocolRequest(request, requestId);
+  } catch (sendError) {
+    wait.standDown();
+    throw sendError;
+  }
+  // Silence or an unreadable answer is not a refusal: the caller's own request logic owns those.
+  void wait.settled.catch((error: unknown): void => { if (error instanceof WriteRefused) onRefused(error.message); });
 }

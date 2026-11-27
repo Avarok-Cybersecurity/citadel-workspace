@@ -34,7 +34,7 @@ export async function fetchArtifact(t: AppsTransport, sha256: string, maxBytes: 
     total = chunk.value.totalChunks;
     size += chunk.value.bytes.length;
     if (size > maxBytes) return { ok: false, refusal: 'Malformed' };
-    parts.push(Uint8Array.from(chunk.value.bytes));
+    parts.push(chunk.value.bytes);
   }
   const out: Uint8Array = new Uint8Array(size);
   let at: number = 0;
@@ -47,7 +47,7 @@ export async function fetchArtifact(t: AppsTransport, sha256: string, maxBytes: 
 
 /** One server-backed host call: `call` is CBOR of the SDK's `HostCall`, the reply CBOR of its `HostReply`. */
 export const callHost = (t: AppsTransport, installId: string, call: Uint8Array): Promise<AppsResult<Uint8Array>> =>
-  ask(t, { Call: { install_id: installId, call: Array.from(call) } }, 'call-reply', (): boolean => true, (a: Of<'call-reply'>) => Uint8Array.from(a.reply));
+  ask(t, { Call: { install_id: installId, call } }, 'call-reply', (): boolean => true, (a: Of<'call-reply'>) => a.reply);
 
 /** `instance`: which running instance of the install serves; one closing withdraws only its own. */
 export const advertiseService = (t: AppsTransport, installId: string, instance: string, routesDigest: string, untilMs: bigint): Promise<AppsResult<bigint>> =>
@@ -59,4 +59,4 @@ export const withdrawService = (t: AppsTransport, installId: string, instance: s
 
 /** `frame` is CBOR of `citadel_ihttp_types::IhttpFrame`. */
 export const ihttpSend = (t: AppsTransport, fromInstallId: string, to: IhttpAddress, frame: Uint8Array): Promise<AppsResult<null>> =>
-  ask(t, { IhttpSend: { from_install_id: fromInstallId, to, frame: Array.from(frame) } }, 'ihttp-sent', (): boolean => true, (): null => null);
+  ask(t, { IhttpSend: { from_install_id: fromInstallId, to, frame } }, 'ihttp-sent', (): boolean => true, (): null => null);

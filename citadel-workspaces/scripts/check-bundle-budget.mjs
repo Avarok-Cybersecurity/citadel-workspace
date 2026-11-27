@@ -298,8 +298,20 @@ const dist = join(root, 'dist');
  * own (cdoc/chat/chat-snapshot-diff.ts), loaded lazily; the lazy import only adds its entry to the
  * entry chunk's preload map (alone it measured 348.007). Nothing new runs on the landing page.
  * Both together, after merging #316 into #318, measured 348.10 (356,454 B gzip), under 349.
+ *
+ * 349 -> 352 (2026-11-27), for release 0.15.5 (REL-1127). The fold measured 356.1; the RECOVERY
+ * lane moved the recovery-route renderer, surface registries, toast view, ports, ask-an-admin and
+ * the bug-report host/dialog behind lazy imports (10 DEFERRED_MODULES entries), down to 351.5.
+ * What stays must run before anything else and was measured by removing it from main.tsx and
+ * restoring it byte-identical: the console ring with redaction at capture, 1.5 KB (it must hook
+ * the console before the app boots so a bug report holds boot errors, and it redacts as it
+ * captures so no unredacted line is ever held); the boot-failure page, 0.7 KB (it must work when
+ * React or a chunk fails to load, so it cannot itself be a chunk). Without both: 349.2. The last
+ * 0.2 KB is request breadcrumbs from the first frame, the outage copy by cause and the answer
+ * pairing every server frame passes through (REL-1127 APP-AVAIL). Lower it by moving the ring's
+ * formatter behind the first flush if a future measurement shows that is safe.
  */
-const BUDGET_KB = 349;
+const BUDGET_KB = 352;
 
 /**
  * Modules that must stay OFF the critical path, checked against the source
@@ -369,6 +381,21 @@ const DEFERRED_MODULES = [
   'src/components/documents/chat-replica.ts',
   'src/lib/cdoc/chat/chat-replica-keeper.ts',
   'src/lib/cdoc/chat/chat-sync.ts',
+  // RecoveryRoute: the plan registry, its renderer and controls load with the first notice or
+  // recovery toast (components/recovery-route/recovery-toast.ts by dynamic import, RecoveryNotice
+  // inside lazy pages); the ports and the bug reporter mount lazily (App.tsx), and asking an admin
+  // or a browser permission loads with its press. Boot keeps the console ring and the self-contained
+  // boot failure page (lib/recovery-route/dom-fallback.ts), which must work when chunks do not load.
+  'src/lib/recovery-route/surfaces/index.ts',
+  'src/lib/recovery-route/controls.ts',
+  'src/lib/recovery-route/labels.ts',
+  'src/components/recovery-route/RecoveryNotice.tsx',
+  'src/components/recovery-route/recovery-toast-view.ts',
+  'src/components/recovery-route/use-recovery-ports.ts',
+  'src/components/recovery-route/recovery-ports-ask.ts',
+  'src/lib/recovery-route/permission-how.ts',
+  'src/components/bug-report/BugReportHost.tsx',
+  'src/components/bug-report/BugReportDialog.tsx',
 ];
 
 /**

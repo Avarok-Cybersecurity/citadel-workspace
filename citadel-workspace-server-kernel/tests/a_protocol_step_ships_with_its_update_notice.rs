@@ -64,7 +64,7 @@ fn the_page_a_sessions_outage_shows_is_the_one_that_checks_the_agents_version() 
         "OutageNotice must decide from the site's released agent (lib/reconnect/outdated-agent.ts)"
     );
     assert!(
-        NOTICE_TEST.contains("update-agent-notice") && NOTICE_TEST.contains("OUTAGE_COPY.title"),
+        NOTICE_TEST.contains("update-agent-notice") && NOTICE_TEST.contains("OUTAGE_TITLE"),
         "the UI test that holds the update notice is gone"
     );
 }

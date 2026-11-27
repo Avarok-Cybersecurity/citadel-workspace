@@ -122,7 +122,7 @@ export async function getAutoAcceptSetting(cidOverride?: bigint): Promise<boolea
     const currentCid: bigint | null = cidOverride ?? await getCurrentCid();
     if (!currentCid || currentCid === 0n) return false;
 
-    const result: { value: number[]; } | null = await websocketService.sendLocalDBGet(currentCid, AUTO_ACCEPT_KEY);
+    const result: { value: Uint8Array; } | null = await websocketService.sendLocalDBGet(currentCid, AUTO_ACCEPT_KEY);
     if (result?.value) {
       const decoded: string = bytesToString(result.value);
       return decoded === 'true';

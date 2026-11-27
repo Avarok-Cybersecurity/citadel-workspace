@@ -12,6 +12,7 @@
 import { isAppId } from '@/lib/citadel-apps/app-identity';
 import { metadataDocument, type MetadataSource } from '@/lib/workspace-metadata/metadata-document';
 import { APP_TABS_KEY, DEFAULT_APP_TABS_KEY, MAX_APP_TABS } from './tab-keys';
+import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
 export type NodeTabKey = 'content' | 'chat' | `app:${string}`;
 
@@ -52,6 +53,15 @@ export function readAppTabs(value: unknown): StoredTabs {
 /** The stored list under `key` of a metadata document, however the bytes arrived. */
 export function storedTabs(metadata: MetadataSource, key: typeof APP_TABS_KEY | typeof DEFAULT_APP_TABS_KEY): StoredTabs {
   return readAppTabs(metadataDocument(metadata)?.[key]);
+}
+
+/**
+ * Where a node's own tab list is read from: its metadata, or for the workspace home -- the root,
+ * which is never a stored node -- the workspace record's, where the server keeps the home's list
+ * beside the default (`UpdateNode` naming the root, kernel home_tabs.rs).
+ */
+export function ownTabsSource(nodeId: string, nodeMetadata: MetadataSource, workspaceMetadata: MetadataSource): MetadataSource {
+  return nodeId === WORKSPACE_ROOT_ID ? workspaceMetadata : nodeMetadata;
 }
 
 export const appTabKey = (appId: string): `app:${string}` => `app:${appId}`;

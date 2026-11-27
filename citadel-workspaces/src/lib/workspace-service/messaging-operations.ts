@@ -14,9 +14,9 @@ import { awaitWriteResponse } from './await-write-response';
  */
 export async function sendMessage(sender: ProtocolSender, contents: Uint8Array): Promise<void> {
   const requestPart: WorkspaceProtocolRequest = {
-    Message: { contents: Array.from(contents) }
+    Message: { contents }
   };
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -45,7 +45,7 @@ export async function sendGroupMessage(
   // error shown, because the refusal arrives as a generic Error nothing handles.
   return awaitWriteResponse(
     'SendGroupMessage',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     (payload) => {
       const p: { group_id?: string; message?: { content?: string; }; } | undefined = payload as { group_id?: string; message?: { content?: string } } | undefined;
       return p?.group_id === groupId && p?.message?.content === content;
@@ -72,7 +72,7 @@ export async function editGroupMessage(
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
   // which cannot reject a send-only promise — so this used to report success
   // for writes the server was about to refuse.
-  return awaitWriteResponse('EditGroupMessage', () => sender.sendProtocolRequest(requestPart));
+  return awaitWriteResponse('EditGroupMessage', sender, requestPart);
 }
 
 /**
@@ -92,7 +92,7 @@ export async function deleteGroupMessage(
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
   // which cannot reject a send-only promise — so this used to report success
   // for writes the server was about to refuse.
-  return awaitWriteResponse('DeleteGroupMessage', () => sender.sendProtocolRequest(requestPart));
+  return awaitWriteResponse('DeleteGroupMessage', sender, requestPart);
 }
 
 /**
@@ -111,7 +111,7 @@ export async function getGroupMessages(
       limit
     }
   };
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -128,7 +128,7 @@ export async function getThreadMessages(
       parent_message_id: parentMessageId
     }
   };
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -171,5 +171,5 @@ export async function updateUserProfile(
   // the success event, so a refusal locked the whole panel in "Saving…" until
   // it was closed and reopened. Gating makes the refusal a rejection the caller
   // can actually see.
-  return awaitWriteResponse('UpdateUserProfile', () => sender.sendProtocolRequest(requestPart));
+  return awaitWriteResponse('UpdateUserProfile', sender, requestPart);
 }

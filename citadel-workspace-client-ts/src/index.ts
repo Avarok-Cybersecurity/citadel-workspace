@@ -12,9 +12,16 @@ export * from './types/workspace-types.js';
 export { WorkspaceClient } from './WorkspaceClient.js';
 export type { WorkspaceClientConfig } from './WorkspaceClient.js';
 
-// The u64-exact JSON codec: every receive path that parses workspace protocol bytes must use it,
-// or u64 fields arrive as lossy numbers where the types promise bigint.
-export { decodeWorkspacePayload, encodeWorkspacePayload } from './workspace-json.js';
+// The workspace protocol codec (Rust, over citadel-workspace-types): every path that reads or
+// writes workspace protocol bytes uses it, so a payload is checked and u64 fields are exact.
+export {
+  decodeWorkspacePayload,
+  encodeWorkspacePayload,
+  encodeWorkspaceRequest,
+  loadWorkspaceCodec,
+  loadWorkspaceCodecFrom,
+  WORKSPACE_CODEC_WASM_URL,
+} from './workspace-codec.js';
 
 // Export auth module
 export { WorkspaceAuth } from './auth.js';

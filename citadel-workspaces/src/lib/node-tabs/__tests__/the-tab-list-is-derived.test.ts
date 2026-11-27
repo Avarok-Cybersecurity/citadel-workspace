@@ -8,7 +8,7 @@ import { deriveTabList, readAppTabs, storedTabs, type NodeTab, type StoredTabs, 
 const keys = (list: TabList): string[] => list.tabs.map((tab: NodeTab): string => tab.key);
 const list = (appIds: string[]): StoredTabs => ({ kind: 'list', appIds });
 const ABSENT: StoredTabs = { kind: 'absent' };
-const bytes = (doc: unknown): number[] => Array.from(new TextEncoder().encode(JSON.stringify(doc)));
+const bytes = (doc: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(doc));
 
 describe('the tab list of a node', () => {
   it('opens with the page, then chat when chat is on, then the app tabs in stored order', () => {
@@ -61,7 +61,7 @@ describe('the tab list of a node', () => {
     expect(storedTabs(bytes({ app_tabs: ['com.acme.kanban'] }), 'app_tabs')).toEqual(list(['com.acme.kanban']));
     expect(storedTabs(new Uint8Array(bytes({ default_app_tabs: [] })), 'default_app_tabs')).toEqual(list([]));
     expect(storedTabs({ app_tabs: ['com.acme.kanban'] }, 'app_tabs')).toEqual(list(['com.acme.kanban']));
-    expect(storedTabs([], 'app_tabs')).toEqual(ABSENT);
+    expect(storedTabs(new Uint8Array(), 'app_tabs')).toEqual(ABSENT);
     expect(storedTabs(undefined, 'default_app_tabs')).toEqual(ABSENT);
   });
 });

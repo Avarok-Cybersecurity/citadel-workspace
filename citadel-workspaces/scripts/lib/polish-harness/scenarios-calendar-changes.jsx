@@ -27,9 +27,9 @@ import { treeNodesPort } from '@/lib/citadel-apps/runtime/nodes-port';
 
 const PAGE_CLOCK = pinnedClock();
 const TREE = {
-  company: domainNode({ id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: [] }),
-  n1: domainNode({ id: 'n1', name: 'Platform', parent_id: 'company', children: ['n2'], metadata: [] }),
-  n2: domainNode({ id: 'n2', name: 'Team', parent_id: 'n1', children: [], metadata: [] }),
+  company: domainNode({ id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: new Uint8Array() }),
+  n1: domainNode({ id: 'n1', name: 'Platform', parent_id: 'company', children: ['n2'], metadata: new Uint8Array() }),
+  n2: domainNode({ id: 'n2', name: 'Team', parent_id: 'n1', children: [], metadata: new Uint8Array() }),
 };
 const ZONE = 'America/New_York';
 
@@ -74,7 +74,7 @@ function Changes() {
     });
   }, []);
   if (ready === null) return <p>Loading the calendar</p>;
-  const state = workspaceState({ nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: [] } });
+  const state = workspaceState({ nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: new Uint8Array() } });
   return (
     <WorkspaceContext.Provider value={{ state }}>
       <main className="mx-auto max-w-6xl">

@@ -119,9 +119,9 @@ describe('internal HTTP over the relay', () => {
     const r: ReturnType<typeof relay> = relay();
     const got: InboundIhttpFrame[] = [];
     relayIhttpPort(r.deps).onFrame((f) => got.push(f));
-    const bytes: number[] = Array.from(encodeCbor(frame));
+    const bytes: Uint8Array = encodeCbor(frame);
     r.push({ IhttpFrame: { from, to_install_id: 'inst-2', frame: bytes } });
-    r.push({ IhttpFrame: { from, to_install_id: 'inst-1', frame: Array.from(encodeCbor({ v: 1 })) } });
+    r.push({ IhttpFrame: { from, to_install_id: 'inst-1', frame: encodeCbor({ v: 1 }) } });
     expect(got).toEqual([]);
     r.push({ IhttpFrame: { from, to_install_id: 'inst-1', frame: bytes } });
     expect(got).toEqual([{ from: { ...from, via: 'relay' }, frame: { v: 1, stream: 3n, kind: 'End' } }]);

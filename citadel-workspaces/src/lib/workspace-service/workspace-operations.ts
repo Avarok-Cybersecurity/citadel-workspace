@@ -12,7 +12,11 @@ import { awaitWriteResponse } from './await-write-response';
 
 /** Interface matching WorkspaceService's protocol-send method */
 export interface ProtocolSender {
-  sendProtocolRequest(request: WorkspaceProtocolRequest): Promise<void>;
+  /**
+   * `requestId` names the request so the server pairs its answer with it; only awaitWriteResponse
+   * names one, and only for a server that pairs (answers/answer-pairing.ts). `null` names none.
+   */
+  sendProtocolRequest(request: WorkspaceProtocolRequest, requestId: bigint | null): Promise<void>;
   readonly currentCid: bigint | null;
 }
 
@@ -25,7 +29,7 @@ export async function loadWorkspace(sender: ProtocolSender): Promise<void> {
   workspaceResponseHandler.emitLoadingEvent('workspace:loading');
   const requestPart: WorkspaceProtocolRequest = { GetWorkspace: { workspace_id: null } };
   debugLog('WorkspaceService', '[WorkspaceService] Sending GetWorkspace request');
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -35,7 +39,7 @@ export async function getWorkspace(sender: ProtocolSender, workspaceId?: string)
   const requestPart: WorkspaceProtocolRequest = {
     GetWorkspace: { workspace_id: workspaceId ?? null }
   };
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -43,7 +47,7 @@ export async function getWorkspace(sender: ProtocolSender, workspaceId?: string)
  */
 export async function listWorkspaces(sender: ProtocolSender): Promise<void> {
   const requestPart: WorkspaceProtocolRequest = 'ListWorkspaces';
-  return sender.sendProtocolRequest(requestPart);
+  return sender.sendProtocolRequest(requestPart, null);
 }
 
 /**
@@ -61,7 +65,7 @@ export async function createWorkspace(
       name,
       description,
       workspace_master_password: masterPassword,
-      metadata: metadata ? Array.from(metadata) : null
+      metadata: metadata ?? null
     }
   };
   // Same reasoning as updateWorkspace: a refusal arrives as a response and
@@ -70,7 +74,7 @@ export async function createWorkspace(
   // being created with -- the same compromise `newChildOf` makes for nodes.
   return awaitWriteResponse(
     'CreateWorkspace',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     workspaceChangedTo({ name }),
   );
 }
@@ -95,7 +99,7 @@ export async function updateWorkspaceTheme(
   const requestPart: WorkspaceProtocolRequest = {
     UpdateWorkspaceTheme: {
       workspace_id: workspaceId ?? null,
-      theme: Array.from(theme),
+      theme,
     },
   };
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
@@ -106,7 +110,7 @@ export async function updateWorkspaceTheme(
   // concurrent read or a colleague's save resolves this write.
   return awaitWriteResponse(
     'UpdateWorkspaceTheme',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     workspaceId === undefined ? undefined : workspaceWithId(workspaceId),
   );
 }
@@ -124,7 +128,7 @@ export async function updateWorkspace(
       name: name ?? null,
       description: description ?? null,
       workspace_master_password: masterPassword,
-      metadata: metadata ? Array.from(metadata) : null
+      metadata: metadata ?? null
     }
   };
   // A refusal (no permission, wrong master password) arrives as a response,
@@ -136,7 +140,7 @@ export async function updateWorkspace(
   // not. See `workspaceChangedTo`.
   return awaitWriteResponse(
     'UpdateWorkspace',
-    () => sender.sendProtocolRequest(requestPart),
+    sender, requestPart,
     workspaceChangedTo({ name, description }),
   );
 }

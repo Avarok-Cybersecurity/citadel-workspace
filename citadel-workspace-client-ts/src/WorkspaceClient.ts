@@ -3,7 +3,7 @@ import type { WasmClientConfig, InternalServiceRequest, InternalServiceResponse,
 import { isResponseType } from 'citadel-internal-service-wasm-client';
 import { isVariant } from 'citadel-internal-service-wasm-client';
 import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse } from './types/workspace-types.js';
-import { decodeWorkspacePayload, encodeWorkspacePayload } from './workspace-json.js';
+import { decodeWorkspacePayload, encodeWorkspaceRequest, loadWorkspaceCodec } from './workspace-codec.js';
 import { WorkspaceAuth } from './auth.js';
 import { WorkspaceSessionManager, type SessionConfig } from './session.js';
 
@@ -35,7 +35,7 @@ interface WorkspaceNotificationEnriched {
   WorkspaceNotification: {
     cid: bigint;
     peer_cid: bigint;
-    message: number[];
+    message: Uint8Array;
     payload: WorkspaceProtocolPayload;
   };
 }
@@ -61,8 +61,7 @@ export interface WorkspaceClientConfig extends WasmClientConfig {
  * the real parser, so a malformed workspace message still surfaces as a
  * warning rather than being silently reclassified as chat.
  */
-function looksLikeWorkspaceJson(payload: number[] | Uint8Array): boolean {
-  const bytes = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
+function looksLikeWorkspaceJson(bytes: Uint8Array): boolean {
   for (const byte of bytes) {
     // Skip leading ASCII whitespace: space, tab, LF, CR.
     if (byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d) continue;
@@ -143,10 +142,8 @@ export class WorkspaceClient extends InternalServiceWasmClient {
         }
 
         try {
-          // Decode via the shared codec: fields the generated types declare as
-          // `bigint` are revived from JSON numbers, so the runtime shape
-          // matches the signature (a bare JSON.parse left them as `number`,
-          // silently failing every strict comparison downstream).
+          // Decode through the protocol's own types (workspace-codec.ts): a
+          // payload that is not one is refused, and u64 fields arrive as bigint.
           const workspacePayload: WorkspaceProtocolPayload = decodeWorkspacePayload(notification.message);
 
           // Handle workspace responses in session manager
@@ -203,6 +200,15 @@ export class WorkspaceClient extends InternalServiceWasmClient {
 
     // Set self reference for use in message handler
     self = this;
+  }
+
+  /**
+   * Loads the workspace codec before the connection opens, so every workspace
+   * message that arrives can be decoded.
+   */
+  override async init(): Promise<void> {
+    await loadWorkspaceCodec();
+    await super.init();
   }
 
   /**
@@ -267,14 +273,12 @@ export class WorkspaceClient extends InternalServiceWasmClient {
    *
    * RESOLVE-ON-SEND: the returned promise resolves when the request has been
    * handed to the transport — NOT when the server has processed it or
-   * responded. The workspace protocol carries no request id (see the generated
-   * WorkspaceProtocolRequest — no variant has one), so this layer cannot
-   * correlate a response to this call; matching by response variant would
-   * mis-resolve on server-pushed broadcasts of the same variant. Responses
+   * responded. A request named by `requestId` is answered and then paired with
+   * `Answered`, which the UI's write gate waits for (await-write-response.ts);
+   * this layer resolves on the send either way. Responses
    * arrive asynchronously through the configured messageHandler as enriched
    * WorkspaceNotification messages, and workspace/session state changes are
-   * reflected via session.onWorkspaceSessionChange(). Real correlation needs a
-   * request id added to the Rust protocol.
+   * reflected via session.onWorkspaceSessionChange().
    *
    * Fields the generated types declare as `bigint` (e.g. `before_timestamp`)
    * are accepted as bigint and encoded as JSON numbers; a value that cannot
@@ -283,21 +287,18 @@ export class WorkspaceClient extends InternalServiceWasmClient {
    * @param cid The client ID
    * @param request The workspace protocol request
    * @param securityLevel The security level (default: 'Standard')
+   * @param requestId Names the request so the server pairs its answer with it (`Answered`); only
+   *   for a server whose ServerCapabilities say `request_ids` (workspace-codec.ts encodeWorkspaceRequest)
    */
   async sendWorkspaceRequest(
     cid: string | bigint,
     request: WorkspaceProtocolRequest,
-    securityLevel: SecurityLevel = 'Standard'
+    securityLevel: SecurityLevel = 'Standard',
+    requestId: bigint | null = null
   ): Promise<void> {
-    // Create the workspace protocol payload
-    const payload: WorkspaceProtocolPayload = {
-      Request: request
-    };
-
-    // Serialize via the shared codec: a bare JSON.stringify threw
-    // "Do not know how to serialize a BigInt" for exactly the values the
-    // generated signatures ask for (e.g. GetGroupMessages.before_timestamp).
-    const messageBytes = encodeWorkspacePayload(payload);
+    // Serialized through the protocol's own types (workspace-codec.ts): bigints are written as
+    // exact JSON numbers, byte fields as the arrays serde reads.
+    const messageBytes = encodeWorkspaceRequest(request, requestId);
 
     // Convert cid to BigInt if it's a string
     const cidBigInt = typeof cid === 'string' ? BigInt(cid) : cid;
@@ -307,7 +308,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
     const internalRequest: InternalServiceRequest = {
       Message: {
         request_id: crypto.randomUUID(),
-        message: Array.from(messageBytes),
+        message: messageBytes,
         cid: cidBigInt,
         peer_cid: null,
         security_level: securityLevel
@@ -327,7 +328,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
     name: string,
     description: string,
     workspaceMasterPassword: string,
-    metadata: number[] | null = null
+    metadata: Uint8Array | null = null
   ): Promise<void> {
     await this.sendWorkspaceRequest(cid, {
       CreateWorkspace: {
@@ -365,7 +366,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   async sendMessage(cid: string | bigint, contents: Uint8Array): Promise<void> {
     await this.sendWorkspaceRequest(cid, {
       Message: {
-        contents: Array.from(contents)
+        contents
       }
     });
   }
@@ -392,6 +393,8 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   private convertCidsRecursive(obj: unknown): unknown {
     if (obj === null || obj === undefined) return obj;
     if (typeof obj !== 'object') return obj;
+    // Bytes pass through whole: walking a Uint8Array's entries would rebuild it as a plain object.
+    if (ArrayBuffer.isView(obj)) return obj;
     if (Array.isArray(obj)) return obj.map(item => this.convertCidsRecursive(item));
 
     const source = obj as Record<string, unknown>;
@@ -470,7 +473,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
     const messageRequest: InternalServiceRequest = {
       Message: {
         request_id: crypto.randomUUID(),
-        message: Array.from(new TextEncoder().encode(message)),
+        message: new TextEncoder().encode(message),
         cid: BigInt(this.getCurrentCid() || '0'), // sender CID
         peer_cid: BigInt(peerCid), // recipient CID
         security_level: 'Standard'

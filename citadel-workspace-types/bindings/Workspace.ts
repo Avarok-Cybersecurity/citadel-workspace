@@ -3,7 +3,7 @@
 /**
  * A workspace is a container for offices
  */
-export type Workspace = { id: string, name: string, description: string, owner_id: string, members: Array<string>, offices: Array<string>, metadata: Array<number>, 
+export type Workspace = { id: string, name: string, description: string, owner_id: string, members: Array<string>, offices: Array<string>, metadata: Uint8Array, 
 /**
  * The server's domains, canonical first then its former ones: a member named
  * `handle@<one of these>` is shown as the bare handle. Filled from the server's `[identity]`

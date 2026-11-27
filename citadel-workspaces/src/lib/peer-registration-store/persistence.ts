@@ -113,7 +113,7 @@ export function loadOutgoingFromLocalDB(
 export function resolveKVResponse(
   kv: Map<string, KVPendingEntry>,
   requestId: string,
-  value: number[] | undefined
+  value: Uint8Array | undefined
 ): void {
   const pending: KVPendingEntry | undefined = kv.get(requestId);
   if (!pending) return;

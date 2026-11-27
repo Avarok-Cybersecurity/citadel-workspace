@@ -22,11 +22,14 @@ import { ZoneQuestion } from './ZoneQuestion';
 import { OpenedIcs } from './OpenedIcs';
 import { useOpenedFile, type OpenedFileState } from './use-opened-file';
 import { pageOpenedFiles } from '@/lib/citadel-apps/runtime/page-opened-files';
+import { UnreadablePanel } from './UnreadablePanel';
+import { RecoveryNotice } from '@/components/recovery-route/RecoveryNotice';
+import { recovery } from '@/lib/recovery-route/recovery';
 
 type EngineState = { kind: 'loading' } | { kind: 'ready'; engine: CalendarEngine } | { kind: 'failed' };
 
-function Status({ children, alert = false }: { children: React.ReactNode; alert?: boolean }): JSX.Element {
-  return <p role={alert ? 'alert' : 'status'} className={`m-[16px] text-sm ${alert ? 'text-destructive-emphasis' : 'text-muted-foreground'}`}>{children}</p>;
+function Status({ children }: { children: React.ReactNode }): JSX.Element {
+  return <p role="status" className="m-[16px] text-sm text-muted-foreground">{children}</p>;
 }
 
 export function CalendarMount({ glue, install, manifest, nodeId, me, mayEditNode }: GlueTabProps): JSX.Element {
@@ -44,8 +47,8 @@ export function CalendarMount({ glue, install, manifest, nodeId, me, mayEditNode
   const opened: OpenedFileState = useOpenedFile(pageOpenedFiles, install.app_id, manifest);
   const deviceZone: string = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  if (loaded.kind === 'failed') return <Status alert>The Calendar could not be loaded. Reload the page to try again.</Status>;
-  if (settings.kind === 'failed') return <Status alert>Your Calendar settings could not be read: {settings.reason}.</Status>;
+  if (loaded.kind === 'failed') return <RecoveryNotice className="m-[16px]" recovery={recovery('calendar.engine-failed', {})} message="The Calendar could not be loaded." />;
+  if (settings.kind === 'failed') return <div className="m-[16px]"><UnreadablePanel what="Your Calendar settings" reason={settings.reason} retry={settings.retry} /></div>;
   if (loaded.kind === 'loading' || settings.kind === 'loading') return <Status>Loading the Calendar…</Status>;
   if (settings.kind === 'absent') {
     return <ZoneQuestion deviceZone={deviceZone} saving={settings.saving} error={settings.error} onChoose={(choice: DisplayZoneChoice): void => settings.choose(choice)} />;

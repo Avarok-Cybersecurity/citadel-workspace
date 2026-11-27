@@ -6,6 +6,8 @@ import type { JoinRegistration } from './join-registration-shape';
 import { focusFirstInvalidField } from './join-first-error';
 import { DEFAULT_SECURITY_SETTINGS } from './security-settings-defaults';
 import { useToast } from "@/hooks/use-toast";
+import { recoveryToast } from "@/components/recovery-route/recovery-toast";
+import { recovery } from "@/lib/recovery-route/recovery";
 import type { SecuritySettingsValues } from "./SecuritySettings";
 import { websocketService } from "@/lib/websocket-service";
 import { eventEmitter } from "@/lib/event-emitter";
@@ -129,7 +131,11 @@ export function useJoinRegistration(
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
+    await submit();
+  };
 
+  // The form's submit, and the failure toast's Try again: the same attempt, checks and all.
+  const submit = async (): Promise<void> => {
     setSubmitAttempted(true);
 
     // Refused submits are reported by the FIELD (inline, announced, focused), not also by a toast.
@@ -199,7 +205,9 @@ export function useJoinRegistration(
       if (admission.settle(error)) return; // Shown on the human check itself.
       if (error instanceof UsernameHeldElsewhere) { toast({ title: 'Username already on this device', description: error.message, variant: 'destructive' }); return; }
       const wrongServerPassword: string | null = serverPasswordMismatchMessage(describeFailure(error, ''), Boolean(serverPassword));
-      toast({ title: wrongServerPassword ? 'Wrong server password' : getErrorTitle(error), description: wrongServerPassword ?? getUserFriendlyErrorMessage(error), variant: "destructive" });
+      // A wrong server password is fixed on the step before; trying again here would fail the same way.
+      if (wrongServerPassword) { toast({ title: 'Wrong server password', description: wrongServerPassword, variant: "destructive" }); return; }
+      recoveryToast(recovery('join.registration-failed', { retry: submit }), { title: getErrorTitle(error), description: getUserFriendlyErrorMessage(error) });
     } finally {
       setIsRegistering(false);
     }

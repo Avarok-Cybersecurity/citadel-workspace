@@ -8,7 +8,7 @@
  * source that imports a wasm-bindgen glue module is judged, so an unrelated `.default(x)` or a
  * service's own `init()` is not.
  */
-const GLUE = /(?:import\s*\(|from)\s*['"`][^'"`]*(?:_wasm_client|cdoc_wasm_|calendar_glue|_glue|citadel_tenant_server_wasm|\/pkg\/)[^'"`]*\.js['"`]/;
+const GLUE = /(?:import\s*\(|from)\s*['"`][^'"`]*(?:_wasm_client|cdoc_wasm_|calendar_glue|_glue|photo_decode|citadel_tenant_server_wasm|\/pkg\/)[^'"`]*\.js['"`]/;
 const DEFAULT_IMPORT = /import\s+([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\})?\s+from\s*['"][^'"]*\.js['"]/g;
 
 export function deprecatedInitCalls(source) {

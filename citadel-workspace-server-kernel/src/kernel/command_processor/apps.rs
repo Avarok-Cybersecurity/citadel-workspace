@@ -186,7 +186,11 @@ async fn respond<R: Ratchet + Send + Sync + 'static>(
             install_id,
             topic,
             claim,
-        } => topic_group(kernel, &caller, install_id, topic, claim.as_deref()).await,
+            replaces,
+        } => {
+            let (claim, replaces) = (claim.as_deref(), replaces.as_deref());
+            topic_group(kernel, &caller, install_id, topic, claim, replaces).await
+        }
         AppsRequest::FetchArtifact { sha256, index } => {
             fetch_artifact(kernel, &caller, sha256, *index).await
         }

@@ -5,7 +5,9 @@
  * connection layer (the Docs harness is held to none: docs-harness-never-reaches-the-agent).
  */
 import { createValueStore, type ValueStore } from '@/lib/value-store';
-import type { SettingsTab } from '@/components/SettingsModal';
+
+/** Settings' tabs. Here, not in SettingsModal, so asking for one reaches no Settings code. */
+export type SettingsTab = 'general' | 'connections' | 'appearance' | 'privacy' | 'notifications' | 'permissions' | 'security' | 'advanced';
 
 /** The tab asked for and not yet opened; null when nothing is pending. */
 export const settingsRequest: ValueStore<SettingsTab | null> = createValueStore<SettingsTab | null>('settings-request', null);

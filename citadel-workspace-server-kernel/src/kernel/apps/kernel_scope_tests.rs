@@ -5,6 +5,8 @@ use super::test_manifests::*;
 use super::test_support::{apps_keys, ask};
 use citadel_workspace_types::apps::{Capability, InstallScope};
 use citadel_workspace_types::apps_install::AppsRefusal;
+use citadel_workspace_types::apps_protocol::AppsRequest;
+use citadel_workspace_types::apps_responses::AppsResponse;
 use serde_json::json;
 
 const CANVAS_NODES: &[Capability] = &[Capability::Canvas, Capability::NodesRead];
@@ -122,5 +124,48 @@ async fn two_installs_of_one_app_at_one_scope_make_one_record() {
     assert!(
         installed(&ask(&kernel, "inst", other_scope).await),
         "another scope is another install"
+    );
+}
+
+/// The workspace home is the root, which is never a stored node: an app installed on the home
+/// page, or on it and every page below it, is installed, and reaches the members there. A node
+/// that does not exist is still `Unavailable`, as a hidden one is.
+#[tokio::test]
+async fn the_workspace_home_is_a_page_to_install_at() {
+    let (key, bytes, spec) = (publisher(1), wasm(1, 4096), Spec::new("1.0.0"));
+    let kernel = workspace_serving(bytes.clone()).await;
+    let request = |scope| {
+        install_request(
+            &spec,
+            &key,
+            signed(&spec, &key, &bytes),
+            scope,
+            CANVAS_NODES,
+            false,
+        )
+    };
+    let root = || crate::WORKSPACE_ROOT_ID.to_string();
+    let tree = match ask(&kernel, "boss", request(InstallScope::NodeTree(root()))).await {
+        AppsResponse::Installed { install } => install,
+        other => panic!("{other:?}"),
+    };
+    assert!(installed(
+        &ask(&kernel, "boss", request(InstallScope::Node(root()))).await
+    ));
+    let reached = match ask(&kernel, "alice", AppsRequest::ListInstalls).await {
+        AppsResponse::Installs { installs, .. } => installs,
+        other => panic!("{other:?}"),
+    };
+    assert!(reached.iter().any(|i| i.id == tree.id), "{reached:?}");
+    assert_eq!(
+        refused(
+            &ask(
+                &kernel,
+                "boss",
+                request(InstallScope::NodeTree("gone".into()))
+            )
+            .await
+        ),
+        Some(&AppsRefusal::Unavailable)
     );
 }

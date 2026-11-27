@@ -26,7 +26,7 @@ export function pauseKey(peerCid: bigint): string {
 }
 
 /** A stored value that is not the marker is not a pause anybody made. */
-export function statusFromStored(stored: { value: number[] } | null): PauseStatus {
+export function statusFromStored(stored: { value: Uint8Array } | null): PauseStatus {
   if (stored === null) return 'active';
   return bytesToString(stored.value) === PAUSED_MARKER ? 'paused' : 'unknown';
 }

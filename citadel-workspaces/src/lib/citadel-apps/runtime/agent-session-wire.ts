@@ -9,6 +9,7 @@ import type { Refused } from '../host/ports';
 import { SESSION_INVALID } from '../host/session-rules';
 import type { SessionStatus } from '../sdk/generated/SessionStatus';
 import { bytesOf, variantOf, type Json } from './agent-link';
+import { ownedBytes } from '@/lib/utils/encoding-utils';
 
 /** Whose sessions these are: the member's session, the install, and who is acting. */
 export interface SessionTarget {
@@ -36,7 +37,7 @@ export const openRequest = (t: SessionTarget, server: string) => (request_id: st
   ({ AppSessionOpen: { request_id, cid: t.cid, app_id: t.appId, install_id: t.installId, acting_username: t.actingUsername, server } });
 
 export const sendRequest = (t: SessionTarget, session: number, body: Uint8Array) => (request_id: string): Json =>
-  ({ AppSessionSend: { request_id, cid: t.cid, install_id: t.installId, session, body: Array.from(body) } });
+  ({ AppSessionSend: { request_id, cid: t.cid, install_id: t.installId, session, body: ownedBytes(body) } });
 
 export const closeRequest = (t: SessionTarget, session: number) => (request_id: string): Json =>
   ({ AppSessionClose: { request_id, cid: t.cid, install_id: t.installId, session } });

@@ -67,6 +67,9 @@ const SCOPED = new Map([
   // A member's ban standing: who is banned is the workspace's business only.
   ['MemberBanned', 'broadcast_to_workspace'],
   ['MemberUnbanned', 'broadcast_to_workspace'],
+  // An admin's "there is an ask to take" nudge: for that one admin's sessions only, never
+  // another member (an ask names who asked and what for). Answers go to the asker alone.
+  ['AdminRequests', 'broadcast_to_user'],
   // Every banned account: the answer to ListBanned, returned to its caller only. Never
   // fanned out; if it ever is, the workspace's sessions are the most it may reach.
   ['BannedMembers', 'broadcast_to_workspace'],
@@ -119,6 +122,7 @@ const UNSCOPED = new Map([
   ['GroupMessage', 'a response to a single-message query, already authorized'],
   ['Nodes', 'a response to a list query, filtered by the handler'],
   ['IceServers', 'only ever the answer to the requesting member (never fanned out); it carries a TURN credential'],
+  ['Answered', 'only ever sent to the connection whose request it pairs, right after that answer (never fanned out); it carries an id and a digest, no data'],
   ['IceServersUnavailable', 'the answer to the requesting member that it gets no relay, and why'],
   ['SignInSettings', 'only ever the answer to the requesting member (never fanned out); whether sign-in needs a human check is public anyway'],
   ['BillingPortal', 'only ever the answer to the requesting member, after the kernel admits them (never fanned out); its URL is a bearer link to the subscription'],

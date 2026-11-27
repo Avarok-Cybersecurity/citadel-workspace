@@ -10,14 +10,14 @@ import '@/lib/workspace-response-handler';
 
 const CID: bigint = 18_170_202_856_123_884_154n;
 // Distinctive values: 211, 223 and 227 appear nowhere else in these messages.
-const CONTENT: number[] = [211, 223, 227, 211, 223, 227];
+const CONTENT: Uint8Array = new Uint8Array([211, 223, 227, 211, 223, 227]);
 
 function logged(response: DocumentsResponse): string {
   const lines: string[] = [];
   const spy: ReturnType<typeof vi.spyOn> = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]): void => {
     lines.push(args.map((a: unknown): string => inspect(a, { depth: 10 })).join(' '));
   });
-  const message: number[] = Array.from(encodeWorkspacePayload({ Response: { Documents: response } }));
+  const message: Uint8Array = encodeWorkspacePayload({ Response: { Documents: response } });
   eventEmitter.emit('websocket-message', { MessageNotification: { message, cid: CID, peer_cid: 0n, request_id: null } });
   spy.mockRestore();
   return lines.join('\n');

@@ -8,17 +8,20 @@ import { DisconnectLoadingModal } from '@/components/LoadingModal';
 import { useSessionExit } from '@/components/layout/sidebar/use-session-exit';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { bootConsoleCapture } from '@/lib/telemetry/console-capture/boot';
+import { bootAdminRequestDelivery } from '@/lib/admin-requests/boot';
 
 /**
  * Blocks the workspace until the member accepts terms they have not accepted yet: the platform's
  * new version, or the workspace's own. Nothing else in the workspace is reachable behind it.
  *
  * It also runs console capture while the workspace is open, so capture is following consent
- * before the gate's own consent question is answered.
+ * before the gate's own consent question is answered, and moves an admin's pending asks into
+ * their Scratchpad (lib/admin-requests).
  */
 export function TermsGate(): JSX.Element | null {
   const gate: Gate = useTermsGate();
   useEffect((): (() => void) => bootConsoleCapture(), []);
+  useEffect((): (() => void) => bootAdminRequestDelivery(), []);
   const exit: ReturnType<typeof useSessionExit> = useSessionExit();
   const workspaceName: string = useWorkspace().state.workspace?.name ?? 'this workspace';
   if (gate.owed === null) return null;

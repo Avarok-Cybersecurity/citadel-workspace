@@ -2,16 +2,16 @@
  * Citadel Apps on the workspace protocol (`WorkspaceProtocolRequest::Apps`), over an injected
  * transport so the marketplace is tested against a contract fake of the kernel.
  *
- * Every request is answered with `WorkspaceProtocolResponse::Apps`; the protocol has no request
- * id, so an answer is taken for ours only when its kind fits the request and, where it names an
- * app or an install, names ours (the secure-links-operations pattern). Answers are read strictly
+ * Every request is answered with `WorkspaceProtocolResponse::Apps`, paired with its request where the
+ * server pairs (await-write-response.ts); an answer is taken for ours only when its kind fits the
+ * request and, where it names an app or an install, names ours (the secure-links-operations pattern). Answers are read strictly
  * (citadel-apps/wire/apps-answer.ts): one that is not exactly a known shape is a refusal.
  */
 import type { AppInstall, AppListing, AppsRefusal, AppsRequest, Capability, InstallScope, ListingOffer, PeerForMe } from 'citadel-workspace-client-ts';
 import { readAppsAnswer, type AppsAnswer } from '@/lib/citadel-apps/wire/apps-answer';
 import { readManifestBytes, type ManifestReading } from '@/lib/citadel-apps/manifest/manifest-rules';
 import { debugLog } from '@/lib/debug-config';
-import { awaitWriteResponse } from './await-write-response';
+import { awaitLateAnswer, awaitWriteResponse, WriteAnswerUnfit, WriteResponseTimeout } from './await-write-response';
 import type { ProtocolSender } from './workspace-operations';
 
 export interface AppsTransport {
@@ -26,17 +26,37 @@ export interface AppsTransport {
 export type AppsFailure = AppsRefusal | 'Malformed' | 'NoAnswer';
 export type AppsResult<T> = { ok: true; value: T } | { ok: false; refusal: AppsFailure };
 
+/**
+ * A request that gave up waiting while its answer may still come. `settled` resolves once that
+ * late answer has arrived, or once a further write timeout has passed without it.
+ */
+export class AppsAnswerOwed extends Error {
+  constructor(readonly settled: Promise<void>) {
+    super('Apps: the server did not answer in time');
+  }
+}
+
 /** The production transport: the tab's workspace session. */
 export function protocolAppsTransport(sender: ProtocolSender): AppsTransport {
   return {
     request: async (request: AppsRequest, isOurs: (answer: AppsAnswer) => boolean): Promise<AppsAnswer> => {
       let answered: AppsAnswer | null = null;
-      await awaitWriteResponse('Apps', () => sender.sendProtocolRequest({ Apps: request }), (payload: unknown): boolean => {
+      const take = (payload: unknown): boolean => {
         const answer: AppsAnswer = readAppsAnswer(payload);
         if (!isOurs(answer)) return false;
         answered = answer;
         return true;
-      });
+      };
+      try {
+        await awaitWriteResponse('Apps', sender, { Apps: request }, take);
+      } catch (error: unknown) {
+        // A paired answer that is not an apps answer for this request is unreadable as one.
+        if (error instanceof WriteAnswerUnfit) return { kind: 'malformed' };
+        // Paired, a late answer can be taken by nothing else; unpaired, the line is held for it.
+        if (!(error instanceof WriteResponseTimeout) || error.paired) throw error;
+        // Nothing is sent again: this only waits for the answer still owed, or for silence.
+        throw new AppsAnswerOwed(awaitLateAnswer('Apps', take).catch((): void => undefined));
+      }
       if (answered === null) throw new Error('Apps: the server\'s answer did not fit the request');
       return answered;
     },
@@ -47,6 +67,11 @@ export function protocolAppsTransport(sender: ProtocolSender): AppsTransport {
  * One request at a time over `inner`: the protocol has no request id and a refusal answers
  * whichever request is waiting, so two in flight together could swap refusals. Every user of a
  * tab's session (the marketplace, a page's zones, its running apps) shares the one wrapper.
+ *
+ * Against a server that does not pair answers with request ids, a request that timed out still
+ * holds the line until its late answer has come (`AppsAnswerOwed`): the kernel answers in order,
+ * so that answer would otherwise arrive while the next request waits and be taken for that one's.
+ * Residual there: an answer later than a second write timeout. A server that pairs needs no hold.
  */
 export function serialAppsTransport(inner: AppsTransport): AppsTransport {
   let queue: Promise<unknown> = Promise.resolve();
@@ -54,7 +79,7 @@ export function serialAppsTransport(inner: AppsTransport): AppsTransport {
     request: (request: AppsRequest, isOurs: (answer: AppsAnswer) => boolean): Promise<AppsAnswer> => {
       const run = (): Promise<AppsAnswer> => inner.request(request, isOurs);
       const next: Promise<AppsAnswer> = queue.then(run, run);
-      queue = next.catch((): void => undefined);
+      queue = next.catch((error: unknown): Promise<void> | undefined => (error instanceof AppsAnswerOwed ? error.settled : undefined));
       return next;
     },
   };
@@ -84,7 +109,7 @@ async function answerTo(t: AppsTransport, request: AppsRequest, ours: (a: AppsAn
 
 const always = (): boolean => true;
 const listingIsFor = (listing: AppListing, appId: string): boolean => {
-  const reading: ManifestReading = readManifestBytes(Uint8Array.from(listing.manifest_bytes));
+  const reading: ManifestReading = readManifestBytes(listing.manifest_bytes);
   return reading.ok && reading.manifest.id === appId;
 };
 

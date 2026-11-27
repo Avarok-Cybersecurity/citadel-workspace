@@ -15,7 +15,7 @@ function recordingSender(): { sender: ProtocolSender; sent: WorkspaceProtocolReq
   const sent: WorkspaceProtocolRequest[] = [];
   return { sent, sender: { currentCid: 1n, sendProtocolRequest: async (r: WorkspaceProtocolRequest): Promise<void> => { sent.push(r); } } };
 }
-const bytes = (doc: unknown): number[] => Array.from(new TextEncoder().encode(JSON.stringify(doc)));
+const bytes = (doc: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(doc));
 async function drain(): Promise<void> { for (let i: number = 0; i < 20; i += 1) await Promise.resolve(); }
 
 describe('writing tabs', () => {
@@ -24,8 +24,8 @@ describe('writing tabs', () => {
     let settled: boolean = false;
     const write: Promise<void> = writeNodeTabs(sender, 'n1', ['com.acme.kanban']).then((): void => { settled = true; });
     await Promise.resolve();
-    const patch: number[] | undefined = viewOf(sent[0]).UpdateNode?.metadata;
-    expect(JSON.parse(new TextDecoder().decode(new Uint8Array(patch ?? [])))).toEqual({ app_tabs: ['com.acme.kanban'] });
+    const patch: Uint8Array | undefined = viewOf(sent[0]).UpdateNode?.metadata;
+    expect(JSON.parse(new TextDecoder().decode(patch))).toEqual({ app_tabs: ['com.acme.kanban'] });
 
     // Another member's broadcast of the same node with the old list is not this write's answer.
     eventEmitter.emit('workspace:raw-response', { Node: { id: 'n1', metadata: bytes({ app_tabs: [] }) } });
@@ -52,5 +52,20 @@ describe('writing tabs', () => {
     expect(sent).toEqual([{ SetDefaultAppTabs: { app_tabs: ['net.avarok.calendar'] } }]);
     eventEmitter.emit('workspace:raw-response', { Error: 'Permission denied: EditWorkspaceConfig is required to set the default tabs' });
     await expect(write).rejects.toThrow('EditWorkspaceConfig');
+  });
+
+  it('on the workspace home, resolves on the workspace record carrying the list (control: a node answer or the old list does not)', async () => {
+    const { sender, sent } = recordingSender();
+    let settled: boolean = false;
+    const write: Promise<void> = writeNodeTabs(sender, 'workspace-root', ['work.synchronized.app']).then((): void => { settled = true; });
+    await Promise.resolve();
+    expect(viewOf(sent[0]).UpdateNode?.node_id).toBe('workspace-root');
+    eventEmitter.emit('workspace:raw-response', { Node: { id: 'workspace-root', metadata: bytes({ app_tabs: ['work.synchronized.app'] }) } });
+    eventEmitter.emit('workspace:raw-response', { Workspace: { id: 'workspace-root', metadata: bytes({ default_app_tabs: [] }) } });
+    await drain();
+    expect(settled).toBe(false);
+    eventEmitter.emit('workspace:raw-response', { Workspace: { id: 'workspace-root', metadata: bytes({ default_app_tabs: [], app_tabs: ['work.synchronized.app'] }) } });
+    await write;
+    expect(settled).toBe(true);
   });
 });

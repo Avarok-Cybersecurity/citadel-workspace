@@ -77,7 +77,7 @@ describe('listings', () => {
     const apps: ListedApp[] = listedApps([
       listingOf({ id: 'com.acme.kanban', version: '1.0.0' }), listingOf({ id: 'com.acme.kanban', version: '2.0.0' }),
       listingOf({ id: 'com.acme.kanban' }, 'workspace'),
-      { ...listingOf({ id: 'com.acme.broken' }), manifest_bytes: [123] },
+      { ...listingOf({ id: 'com.acme.broken' }), manifest_bytes: new Uint8Array([123]) },
     ]);
     expect(apps.map((a) => [a.origin, a.manifest.version])).toEqual([['global', '2.0.0'], ['workspace', '1.4.0']]);
     expect(findListedApp(apps, 'com.acme.kanban')?.origin).toBe('workspace');

@@ -74,7 +74,7 @@ async function start(): Promise<void> {
   const check: AppSignatureCheck = async (i) => hex(i.signature.slice().buffer) === await standIn(i.manifestSha256Hex, i.wasmSha256Hex);
   const server: HarnessServer = harnessServer({ installId: INSTALL_ID, manifestBytes, signatureHex: await standIn(mHash, wHash), wasm });
   const agent: ScriptedAgent = scriptedAgent(transcript);
-  const listing: AppListing = { source: { Global: { catalogue_version: 1n } }, manifest_bytes: Array.from(manifestBytes), signature: await standIn(mHash, wHash) };
+  const listing: AppListing = { source: { Global: { catalogue_version: 1n } }, manifest_bytes: manifestBytes, signature: await standIn(mHash, wHash) };
   const install: AppInstall = {
     id: INSTALL_ID, app_id: APP_ID, version: manifest.version, manifest_sha256: mHash, artifact_sha256: wHash, pinned_publisher_key: key,
     scope: { Node: NODE_ID }, granted: GRANTED,
@@ -96,7 +96,7 @@ async function start(): Promise<void> {
       log: { LogWrite: ({ level, message }) => { console.info(`[app ${level}] ${message}`); return { ok: null }; } },
       pushes: () => () => undefined, sha256Hex: verifier.sha256Hex, nowMs: () => Date.now(), every: () => () => undefined,
       // Nobody else is on this page's peer plane, and the install grants no P2P or topics.
-      peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined },
+      peerCid: () => null, presence: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined },
       report: (what: string, detail: unknown): void => console.warn(what, detail), notices: pageAppNotices,
       // A worker app hears no storage changes, so there is nobody to announce its own-store writes to.
       ownWrites: null,

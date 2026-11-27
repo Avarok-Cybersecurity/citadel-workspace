@@ -108,7 +108,7 @@ describe('executeSendFile — source discrimination', () => {
     });
   });
 
-  it('encodes a browser File source as { ByteContents: { file_name, data: number[] } } with the file bytes', async () => {
+  it('encodes a browser File source as { ByteContents: { file_name, data: Uint8Array } } with the file bytes', async () => {
     const expectedBytes: Uint8Array<ArrayBuffer> = new Uint8Array([0xCA, 0xFE, 0xBA, 0xBE]);
     const file: File = makeFakeFile('hello.bin', expectedBytes);
 
@@ -125,7 +125,7 @@ describe('executeSendFile — source discrimination', () => {
     expect(sent.source).toEqual({
       ByteContents: {
         file_name: 'hello.bin',
-        data: Array.from(expectedBytes),
+        data: expectedBytes,
       },
     });
     expect(sent.cid).toBe(7n);
