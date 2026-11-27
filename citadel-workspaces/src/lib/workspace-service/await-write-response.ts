@@ -27,9 +27,9 @@ import type { WorkspaceProtocolRequest } from 'citadel-workspace-client-ts';
 import { debugLog } from '@/lib/debug-config';
 import type { ProtocolSender } from './workspace-operations';
 import { answerPairing, newRequestId } from './answers/answer-pairing';
-import { waitForNextAnswer, waitForPairedAnswer, type AnswerWait } from './answers/answer-waits';
+import { waitForNextAnswer, waitForPairedAnswer, WriteRefused, type AnswerWait } from './answers/answer-waits';
 
-export { WRITE_RESPONSE_TIMEOUT_MS, WriteResponseTimeout, WriteAnswerUnfit } from './answers/answer-waits';
+export { WRITE_RESPONSE_TIMEOUT_MS, WriteResponseTimeout, WriteAnswerUnfit, WriteRefused } from './answers/answer-waits';
 
 /** The response variants that mean a given request succeeded. */
 export const SUCCESS_RESPONSES: Record<string, readonly string[]> = {
@@ -156,4 +156,27 @@ export async function awaitWriteResponse(
  */
 export function awaitLateAnswer(requestType: keyof typeof SUCCESS_RESPONSES, matches: (payload: unknown) => boolean): Promise<void> {
   return waitForNextAnswer(SUCCESS_RESPONSES[requestType], matches).settled;
+}
+
+/**
+ * Send `request` without waiting for its answer, and hear its refusal: against a server that pairs
+ * answers, `onRefused` is told the words of this request's own `Error` answer and of nobody else's.
+ * Against an older one an Error names no request, so nothing here can tell whose it is; the caller
+ * keeps its own reading of plain Errors for that server (documents-transport.ts).
+ */
+export async function sendHearingRefusal(sender: ProtocolSender, request: WorkspaceProtocolRequest, onRefused: (message: string) => void): Promise<void> {
+  if (!answerPairing.serverPairs()) {
+    await sender.sendProtocolRequest(request, null);
+    return;
+  }
+  const requestId: bigint = newRequestId();
+  const wait: AnswerWait = waitForPairedAnswer(requestId, null, undefined);
+  try {
+    await sender.sendProtocolRequest(request, requestId);
+  } catch (sendError) {
+    wait.standDown();
+    throw sendError;
+  }
+  // Silence or an unreadable answer is not a refusal: the caller's own request logic owns those.
+  void wait.settled.catch((error: unknown): void => { if (error instanceof WriteRefused) onRefused(error.message); });
 }

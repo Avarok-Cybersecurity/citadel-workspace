@@ -29,6 +29,9 @@ export class WriteResponseTimeout extends Error {
 /** The server's answer to this request, which was not one it can succeed with. */
 export class WriteAnswerUnfit extends Error {}
 
+/** The server refused this request: its answer was the protocol's plain `Error`, whose words this carries. */
+export class WriteRefused extends Error {}
+
 export interface AnswerWait { settled: Promise<void>; standDown: () => void }
 type Matches = ((payload: unknown) => boolean) | undefined;
 
@@ -54,8 +57,11 @@ function timed(paired: boolean, settle: (resolve: () => void, reject: (e: Error)
   return { settled, standDown };
 }
 
-/** The answer named for `requestId`, judged: an Error rejects, an accepted one that matches resolves. */
-export function waitForPairedAnswer(requestId: bigint, accepted: readonly string[], matches: Matches): AnswerWait {
+/**
+ * The answer named for `requestId`, judged: an Error rejects, an accepted one that matches resolves.
+ * `accepted` null: any answer but an Error is fine.
+ */
+export function waitForPairedAnswer(requestId: bigint, accepted: readonly string[] | null, matches: Matches): AnswerWait {
   return timed(true, (resolve, reject, clear): (() => void) => {
     const expected: ReturnType<typeof answerPairing.expect> = answerPairing.expect(requestId);
     void expected.answer.then((response: WorkspaceProtocolResponse | null): void => {
@@ -63,8 +69,8 @@ export function waitForPairedAnswer(requestId: bigint, accepted: readonly string
       if (response === null) { reject(new Error('The server answered, but its answer could not be read. The change may not have been saved.')); return; }
       const responseType: string = Object.keys(response)[0] ?? '';
       const payload: unknown = (response as Record<string, unknown>)[responseType];
-      if (responseType === 'Error') reject(new Error(describeFailure(response as Record<string, unknown>)));
-      else if (accepted.includes(responseType) && (!matches || matches(payload))) resolve();
+      if (responseType === 'Error') reject(new WriteRefused(describeFailure(response as Record<string, unknown>)));
+      else if ((accepted === null || accepted.includes(responseType)) && (!matches || matches(payload))) resolve();
       else reject(new WriteAnswerUnfit(`The server answered ${responseType}, which does not fit the request.`));
     });
     return expected.standDown;
@@ -78,7 +84,7 @@ export function waitForNextAnswer(accepted: readonly string[], matches: Matches)
       if (!response || typeof response !== 'object') return;
       const responseType: string | undefined = Object.keys(response)[0];
       if (responseType === undefined) return;
-      if (responseType === 'Error') { clear(); reject(new Error(describeFailure(response as Record<string, unknown>))); return; }
+      if (responseType === 'Error') { clear(); reject(new WriteRefused(describeFailure(response as Record<string, unknown>))); return; }
       if (!accepted.includes(responseType)) return;
       // A broadcast of the same variant from another member is not our answer.
       if (matches && !matches((response as Record<string, unknown>)[responseType])) return;
