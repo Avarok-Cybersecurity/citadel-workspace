@@ -29,6 +29,8 @@ import { createAppZoneRuntime } from './zone-runtime';
 import { peerForMe } from '../peer-for-me';
 import { markTopicGroup, markTopicRequest } from '@/lib/group-conversations/app-topic-groups';
 import { p2pRegistrationService } from '@/lib/p2p-registration-service';
+import { p2pAutoConnectService } from '@/lib/p2p-auto-connect-service';
+import { shownPresence } from '@/lib/presence';
 import { pageZoneWatchers } from './zone-watchers';
 import { pageOpenedFiles } from './page-opened-files';
 import { pageAppNotices } from '../app-notices';
@@ -134,6 +136,7 @@ export const pageAppZoneRuntime: AppZoneRuntime = createAppZoneRuntime({
     sha256Hex: verifier.sha256Hex,
     nowMs: (): number => Date.now(),
     peerCid: (username: string): bigint | null => p2pRegistrationService.getPeers().registeredPeers.find((p: { username: string }) => p.username === username)?.cid ?? null,
+    presence: (cid: bigint): boolean | null => shownPresence(undefined, cid, p2pAutoConnectService.peerOnlineStatus(cid)),
     peerForMe,
     topicRecord: { group: markTopicGroup, request: markTopicRequest },
     report: (what: string, detail: unknown): void => console.warn(what, detail),

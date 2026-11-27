@@ -2,7 +2,11 @@
  * App topics over Citadel GroupBroadcast (p2p-demo-design §7): one group per (install, topic),
  * never a chat group. The group's key is the kernel's to keep (`TopicGroup`, first writer wins):
  * the first member to open a topic creates the group and claims it; later members ask to join,
- * and the owner's host admits only whom `AuthorizePeer(Topic)` admits. Every key and every create
+ * and the owner's host admits only whom `AuthorizePeer(Topic)` admits. A group ends when its last
+ * member leaves (a lone member closing the app), and the kernel's record of it does not: an open
+ * told the recorded group is gone creates another and records it in the ended one's place, so
+ * whoever opens the topic next hosts it rather than waiting on a group nobody can admit them to.
+ * Every key and every create
  * request is recorded with the chat pipeline (group-conversations/app-topic-groups.ts) before the
  * agent can answer, so a topic never appears as a conversation. Message rules are topic-model.ts.
  *
@@ -24,7 +28,7 @@ import { groupIdToKey, groupKeyToId, parseGroupKey } from '@/lib/group-conversat
 import { agentAsk, bytesOf, variantOf, type AgentLink, type AgentOutcome, type Json } from './agent-link';
 import type { PlaneSeat } from './install-plane-registry';
 import type { PeerAuthority } from './peer-authority';
-import { joinAdmitted } from './topic-admission';
+import { askToJoin, joinAdmitted, type Joined, type JoinOut } from './topic-admission';
 import { LIMIT_TOPIC_BYTES, LIMIT_TOPIC_RATE } from '../sdk/generated/AbiConstants';
 import { mayOpen, readTopicMessage, topicEnvelope, type TopicLimits } from './topic-model';
 
@@ -34,8 +38,8 @@ export interface TopicDeps {
   /** The install's granted topic names (`details.topics`). */
   readonly topics: readonly string[];
   readonly limits: TopicLimits;
-  /** AppsRequest::TopicGroup: the group id the kernel holds for this topic (null: none), after claiming `claim` if none was; `refused` when it would not say. */
-  readonly topicGroup: (topic: string, claim: string | null) => Promise<string | null | 'refused'>;
+  /** AppsRequest::TopicGroup: the group id the kernel holds for this topic (null: none), after claiming `claim` if none was, or if `replaces` was; `refused` when it would not say. */
+  readonly topicGroup: (topic: string, claim: string | null, replaces: string | null) => Promise<string | null | 'refused'>;
   readonly authority: PeerAuthority;
   /** This instance's place among the install's instances on the page. */
   readonly seat: PlaneSeat;
@@ -68,12 +72,18 @@ const UNAVAILABLE: PortAnswer<never> = { refused: { unavailable: 'topic' } };
  * flight when the same session joins again (a restarted instance) would land after the join and
  * take the session out of the group it just joined.
  */
-export type OwnedTopicPort = TopicPort & { readonly closeAll: () => Promise<void> };
+export type OwnedTopicPort = TopicPort & {
+  readonly closeAll: () => Promise<void>;
+  /** Why the topic's last open here left this member out; null when it did not (topic-rejoin.ts reads it). */
+  readonly outReason: (name: string) => JoinOut | null;
+};
 
 export function topicPort(d: TopicDeps): OwnedTopicPort {
   const open: Map<string, Open> = new Map<string, Open>();
   /** Groups an open in flight has learnt (the topic's name by group id): a join request or a message for one is not dropped. */
   const opening: Map<string, string> = new Map<string, string>();
+  const outs: Map<string, JoinOut> = new Map<string, JoinOut>();
+  const out = (name: string, why: JoinOut): null => { outs.set(name, why); return null; };
   const listeners: Set<(a: TopicArrival) => void> = new Set<(a: TopicArrival) => void>();
   const emit = (a: TopicArrival): void => { for (const l of [...listeners]) l(a); };
   const topicOf = (groupId: string): string | undefined => [...open.entries()].find(([, o]: [string, Open]) => o.groupId === groupId)?.[0] ?? opening.get(groupId);
@@ -99,11 +109,7 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
     const groups: unknown = r.ok ? r.value?.groups : undefined;
     return Array.isArray(groups) ? groups.map((k: unknown): string => groupKeyToId(parseGroupKey(k))) : null;
   };
-  const join = (groupId: string): Promise<boolean> => joinAdmitted({ agent: d.agent, cid: d.cid, groupId, timeoutMs: d.timeoutMs }, joined, async (): Promise<boolean> => {
-    const r: AgentOutcome<Json | null> = await ask((request_id: string): Json =>
-      ({ GroupRequestJoin: { cid: d.cid, group_key: groupIdToKey(groupId), request_id } }), 'GroupRequestJoinSuccess', 'GroupRequestJoinFailure');
-    return r.ok && r.value !== null;
-  });
+  const join = (groupId: string): Promise<Joined> => joinAdmitted({ agent: d.agent, cid: d.cid, groupId, timeoutMs: d.timeoutMs }, joined, askToJoin);
   /** Leaves still unanswered: a join or create waits for them (see OwnedTopicPort). */
   const leaving: Set<Promise<unknown>> = new Set<Promise<unknown>>();
   const leave = (groupId: string, topic: string | null): Promise<unknown> => {
@@ -121,30 +127,39 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
     if (last !== null) void leave(last, name);
   };
 
-  /** The topic's group, created and claimed here when the kernel holds none. */
-  const groupFor = async (name: string): Promise<string | null> => {
-    await settled();
-    const held: string | null | 'refused' = await d.topicGroup(name, null);
-    if (held === 'refused') return null;
-    if (held !== null) {
-      d.record.group(held);
-      opening.set(held, name);
-      return (await join(held)) ? held : null;
-    }
+  /** In `groupId` for `name`: a join request or a message for it is not dropped meanwhile. */
+  const enter = (groupId: string, name: string): Promise<Joined> => {
+    d.record.group(groupId);
+    opening.set(groupId, name);
+    return join(groupId);
+  };
+  /** A group created here and claimed, in place of `ended` (the recorded group, gone) if given. */
+  const founded = async (name: string, ended: string | null): Promise<string | null> => {
     const mine: string | null = await create();
-    if (mine === null) return null;
+    if (mine === null) return out(name, 'timeout');
     d.record.group(mine);
     // Joiners can find the group as soon as the kernel holds the claim, before this open is done.
     opening.set(mine, name);
-    const kept: string | null | 'refused' = await d.topicGroup(name, mine);
+    const kept: string | null | 'refused' = await d.topicGroup(name, mine, ended);
     if (kept === mine) return mine;
     // Another member claimed first (or the claim was refused): theirs is the topic's, ours goes.
     opening.delete(mine);
     void leave(mine, null);
-    if (kept === null || kept === 'refused') return null;
-    d.record.group(kept);
-    opening.set(kept, name);
-    return (await join(kept)) ? kept : null;
+    if (kept === null || kept === 'refused' || kept === ended) return out(name, kept === 'refused' ? 'refused' : 'timeout');
+    const joinedKept: Joined = await enter(kept, name);
+    return joinedKept === 'in' ? kept : out(name, joinedKept === 'refused' ? 'refused' : 'timeout');
+  };
+  /** The topic's group: the recorded one joined, or one created here when none is recorded or it is gone. */
+  const groupFor = async (name: string): Promise<string | null> => {
+    await settled();
+    const held: string | null | 'refused' = await d.topicGroup(name, null, null);
+    if (held === 'refused') return out(name, 'refused');
+    if (held === null) return founded(name, null);
+    const joinedHeld: Joined = await enter(held, name);
+    if (joinedHeld === 'in') return held;
+    if (joinedHeld !== 'gone') return out(name, joinedHeld);
+    opening.delete(held);
+    return founded(name, held);
   };
 
   const sender = async (peerCid: bigint, name: string): Promise<PeerAuthorization | 'limited'> => d.authority.authorize(peerCid, { Topic: { topic: name } });
@@ -189,6 +204,7 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
     TopicOpen: async ({ name }: { name: string }): Promise<PortAnswer<TopicOpened>> => {
       if (!mayOpen(name, d.topics)) return { refused: { policy: 'unknown_topic' } };
       if (!open.has(name)) {
+        outs.delete(name);
         const groupId: string | null = await d.seat.holdTopic(name, () => groupFor(name));
         for (const [id, topic] of [...opening]) if (topic === name) opening.delete(id);
         if (groupId === null) return UNAVAILABLE;
@@ -217,6 +233,7 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
     closeAll: (): Promise<void> => {
       for (const name of [...open.keys()]) release(name);
       open.clear();
+      outs.clear();
       listeners.clear();
       for (const stop of unlisten.splice(0)) stop();
       return settled();
@@ -225,5 +242,6 @@ export function topicPort(d: TopicDeps): OwnedTopicPort {
       listeners.add(listener);
       return (): void => { listeners.delete(listener); };
     },
+    outReason: (name: string): JoinOut | null => outs.get(name) ?? null,
   };
 }

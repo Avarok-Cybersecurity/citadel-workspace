@@ -63,7 +63,7 @@ function world(session: boolean, mine: PeerForMe | null): World {
   const w: PeerWorld = {
     transport, agent, agentSession: session ? { cid: 100n } : null, sha256Hex: async () => 'd', nowMs: () => 0, policy: STANDARD_HOST_POLICY,
     pushes: (l) => { pushed.add(l); return () => pushed.delete(l); },
-    peerCid: (u: string) => (u === 'bob' ? 200n : null), peerForMe: () => mine,
+    peerCid: (u: string) => (u === 'bob' ? 200n : null), presence: () => null, peerForMe: () => mine,
     topicRecord: { group: () => undefined, request: () => undefined }, report: () => undefined,
   };
   return { w, asked, push: (a: unknown): void => pushed.forEach((l) => l(a)) };
@@ -110,6 +110,6 @@ describe('an instance’s peer planes', () => {
     const x: World = world(true, consent(false, false, true));
     const ports: PeerPorts = peerPorts(INSTALL, SCOPE_KEY, LIMITS, relay, new InstallPlaneRegistry().attach(INSTALL.id, INSTALL.app_id), x.w);
     expect(await ports.topic?.TopicOpen({ name: 'pool' })).toEqual({ ok: { name: 'pool', members: [] } });
-    expect(x.asked).toEqual([{ TopicGroup: { install_id: 'i-1', topic: 'pool', claim: null } }]);
+    expect(x.asked).toEqual([{ TopicGroup: { install_id: 'i-1', topic: 'pool', claim: null, replaces: null } }]);
   });
 });

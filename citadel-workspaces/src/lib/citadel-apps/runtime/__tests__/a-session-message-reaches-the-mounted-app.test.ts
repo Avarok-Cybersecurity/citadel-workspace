@@ -48,7 +48,7 @@ function mounted(agent: FakeAgent): { r: Rig; host: HTMLDivElement } {
       pushes: () => (): void => undefined, sha256Hex: async (b: Uint8Array): Promise<string> => sha256Hex(b),
       nowMs: (): number => Date.now(), every: () => (): void => undefined,
       // Nothing here asks the peer planes: the app neither serves, calls nor opens a topic.
-      peerCid: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (): void => undefined,
+      peerCid: () => null, presence: () => null, peerForMe: () => null, topicRecord: { group: () => undefined, request: () => undefined }, report: (): void => undefined,
       // The app raises no notification, and is not granted `notifications`.
       notices: (): void => undefined,
       // A worker app hears no storage changes, so there is nobody to announce its own-store writes to.

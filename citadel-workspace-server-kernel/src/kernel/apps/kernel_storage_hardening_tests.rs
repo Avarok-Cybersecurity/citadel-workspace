@@ -191,6 +191,7 @@ async fn the_host_s_own_keys_are_invisible_to_get_and_list() {
         install_id: id.clone(),
         topic: "pool".into(),
         claim: Some("group-1".into()),
+        replaces: None,
     };
     let claimed = ask_on(&kernel, "alice", None, claim).await;
     assert!(matches!(claimed, AppsResponse::TopicGroup { .. }));
