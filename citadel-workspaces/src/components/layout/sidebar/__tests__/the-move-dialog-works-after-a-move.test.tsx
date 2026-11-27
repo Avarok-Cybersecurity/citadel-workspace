@@ -54,10 +54,20 @@ function renderSidebar(): void {
   render(<HierarchySidebar />, { wrapper: wrap });
 }
 
-/** Click down to the room (its office, then the room itself) so its own row carries the ⋯ menu. */
+/**
+ * Click down to the room (its office, then the room itself) so its own row carries the ⋯ menu.
+ *
+ * Each click waits for its row to be shown selected before the next. The router
+ * commits a navigation as a transition, so until it lands the tree still shows
+ * the previous selection -- where, after the first move, Retro is already a row
+ * with its own ⋯. Clicking that stale ⋯ opened a menu on a row the commit then
+ * replaced, and `move-node-r2` never appeared.
+ */
 async function openMove(nodeId: string): Promise<HTMLElement> {
   for (const step of [NODES[nodeId].parent_id, nodeId]) {
-    if (step !== null) await userEvent.click(await screen.findByTestId(`tree-node-${step}`));
+    if (step === null) continue;
+    await userEvent.click(await screen.findByTestId(`tree-node-${step}`));
+    await waitFor((): void => { expect(screen.getByTestId(`tree-node-${step}`)).toHaveAttribute('aria-selected', 'true'); });
   }
   await userEvent.click(await screen.findByTestId(`tree-node-menu-${nodeId}`));
   await userEvent.click(await screen.findByTestId(`move-node-${nodeId}`));
