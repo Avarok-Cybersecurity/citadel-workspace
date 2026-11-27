@@ -38,7 +38,7 @@ export function useTransferPicture(transfer: FileTransfer | undefined): Transfer
     // The transfer object is re-read each render; its id and state are what change the answer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, state, attempt]);
-  const again = useCallback(async (): Promise<void> => { setAttempt((n: number): number => n + 1); }, []);
+  const again: () => Promise<void> = useCallback(async (): Promise<void> => { setAttempt((n: number): number => n + 1); }, []);
   const current: PictureLoad | null = answered !== null && answered.id === id && answered.attempt === attempt ? answered.load : null;
   return { load: current, again };
 }

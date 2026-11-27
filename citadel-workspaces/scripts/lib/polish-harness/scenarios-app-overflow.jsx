@@ -40,7 +40,7 @@ const LISTED = listedApps([{
   manifest_bytes: new TextEncoder().encode(JSON.stringify(calendarManifest)),
   signature: '0'.repeat(6618),
 }])[0];
-const STATE = workspaceState({ currentUser: { id: VIEWER, username: VIEWER, name: VIEWER }, nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: [] } });
+const STATE = workspaceState({ currentUser: { id: VIEWER, username: VIEWER, name: VIEWER }, nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: new Uint8Array() } });
 const REFUSE = () => { throw new Error('this scenario mounts the Calendar only'); };
 const NO_WRITES = { writeNodeTabs: async () => undefined, setDefaultAppTabs: async () => undefined };
 

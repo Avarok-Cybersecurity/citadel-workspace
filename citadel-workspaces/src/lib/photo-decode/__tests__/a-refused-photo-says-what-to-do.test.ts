@@ -6,8 +6,9 @@
 import { describe, it, expect } from 'vitest';
 import { avatarRefusalSentence, previewRefusalClause, type PhotoRefusal, type PhotoRefusalKind } from '../photo-refusal';
 import type { SurfaceId } from '@/lib/recovery-route/surfaces';
-import { planOf } from '@/lib/recovery-route/recovery';
+import { planOf } from '@/lib/recovery-route/plan-of';
 import { alternativesOf } from '@/lib/recovery-route/derive';
+import type { RecoveryPlan } from '@/lib/recovery-route/route';
 
 // Compiles only while every refusal kind has both surfaces registered.
 const preview = (kind: PhotoRefusalKind): SurfaceId => `photo.preview.${kind}` satisfies SurfaceId;
@@ -35,7 +36,7 @@ describe('a refused photo', () => {
       expect(planOf(preview(r.kind)).primary.kind).toBeTruthy();
       expect(planOf(avatar(r.kind)).primary.kind).not.toBe('acknowledge');
     }
-    const failed = planOf(preview('decoder-failed'));
+    const failed: RecoveryPlan = planOf(preview('decoder-failed'));
     expect(failed).toMatchObject({ cause: 'ours', primary: { kind: 'retry' } });
     expect(alternativesOf(failed).map((route) => route.kind)).toEqual(['report-bug']);
     expect(planOf(avatar('too-large')).primary).toEqual({ kind: 'fix-input' });

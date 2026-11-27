@@ -12,6 +12,7 @@ import heicUrl from '../../../../crates/photo-decode/tests/fixtures/checker-64.h
 import tiffUrl from '../../../../crates/photo-decode/tests/fixtures/quadrants-48-lzw.tif?url';
 import turnedUrl from '../../../../crates/photo-decode/tests/fixtures/turned-6.dng?url';
 
+/** @type {(id: string, fileName: string, at: number) => import('@/lib/file-transfer/types').FileTransfer} */
 const sent = (id, fileName, at) => ({
   id, fileName, fileSize: 1, fileType: '', state: 'complete', progress: 100,
   sender_cid: '7', recipient_cid: '42', createdAt: at, updatedAt: at, isIncoming: false,
@@ -33,7 +34,7 @@ async function keep({ transfer, url, cut }) {
 }
 
 function PhotoViewer() {
-  const [pictures, setPictures] = useState(null);
+  const [pictures, setPictures] = useState(/** @type {import('@/lib/file-transfer/types').FileTransfer[] | null} */ (null));
   useEffect(() => {
     void Promise.all(PHOTOS.map(keep)).then(() => setPictures(PHOTOS.map((p) => p.transfer)));
   }, []);

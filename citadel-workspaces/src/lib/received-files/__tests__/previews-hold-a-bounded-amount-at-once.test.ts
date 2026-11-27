@@ -5,9 +5,9 @@
  * the cache's I/O is handed in (SBIO); the reads here are promises the test resolves.
  */
 import { describe, it, expect } from 'vitest';
-import { createPreviewGate } from '../preview-gate';
+import { createPreviewGate, type PreviewGate } from '../preview-gate';
 import { MAX_IN_FLIGHT_PREVIEW_BYTES, MAX_PREVIEW_BYTES, MAX_RAW_PREVIEW_BYTES, previewReservation } from '../image-preview';
-import { PictureCache, type PictureIO } from '../picture-load';
+import { PictureCache, type PictureIO, type PictureLoad } from '../picture-load';
 import type { FileTransfer } from '@/lib/file-transfer/types';
 
 interface Pending<T> {
@@ -33,7 +33,7 @@ describe('the preview gate', () => {
   });
 
   it('reads one RAW file at a time', async () => {
-    const gate = createPreviewGate(MAX_IN_FLIGHT_PREVIEW_BYTES * 4n);
+    const gate: PreviewGate = createPreviewGate(MAX_IN_FLIGHT_PREVIEW_BYTES * 4n);
     const started: string[] = [];
     const first: Pending<void> = pending<void>();
     const a: Promise<void> = gate.run(previewReservation('a.dng'), async (): Promise<void> => { started.push('a'); await first.promise; });
@@ -46,7 +46,7 @@ describe('the preview gate', () => {
   });
 
   it('runs a RAW beside an ordinary picture, and holds the next one until the total fits', async () => {
-    const gate = createPreviewGate(MAX_IN_FLIGHT_PREVIEW_BYTES);
+    const gate: PreviewGate = createPreviewGate(MAX_IN_FLIGHT_PREVIEW_BYTES);
     const started: string[] = [];
     const raw: Pending<void> = pending<void>();
     const heic: Pending<void> = pending<void>();
@@ -65,7 +65,7 @@ describe('the preview gate', () => {
   });
 
   it('keeps arrival order: a small read never overtakes one waiting ahead of it', async () => {
-    const gate = createPreviewGate(MAX_IN_FLIGHT_PREVIEW_BYTES);
+    const gate: PreviewGate = createPreviewGate(MAX_IN_FLIGHT_PREVIEW_BYTES);
     const started: string[] = [];
     const first: Pending<void> = pending<void>();
     const runs: Promise<void>[] = [
@@ -81,7 +81,7 @@ describe('the preview gate', () => {
   });
 
   it('gives a failed read\'s share back', async () => {
-    const gate = createPreviewGate(MAX_IN_FLIGHT_PREVIEW_BYTES);
+    const gate: PreviewGate = createPreviewGate(MAX_IN_FLIGHT_PREVIEW_BYTES);
     await expect(gate.run(previewReservation('a.dng'), async (): Promise<void> => { throw new Error('agent went away'); })).rejects.toThrow('agent went away');
     let ran: boolean = false;
     await gate.run(previewReservation('b.dng'), async (): Promise<void> => { ran = true; });
@@ -89,7 +89,7 @@ describe('the preview gate', () => {
   });
 
   it('refuses a reservation that could never fit, rather than waiting forever', async () => {
-    const gate = createPreviewGate(MAX_PREVIEW_BYTES);
+    const gate: PreviewGate = createPreviewGate(MAX_PREVIEW_BYTES);
     await expect(gate.run(previewReservation('a.dng'), async (): Promise<void> => undefined)).rejects.toThrow('can never fit');
   });
 });
@@ -118,8 +118,8 @@ describe('the picture cache', () => {
       release: (): void => undefined,
     };
     const cache: PictureCache = new PictureCache(io, createPreviewGate(MAX_IN_FLIGHT_PREVIEW_BYTES));
-    const first = cache.get(sentTransfer('a', 'a.dng'));
-    const second = cache.get(sentTransfer('b', 'b.cr2'));
+    const first: Promise<PictureLoad> = cache.get(sentTransfer('a', 'a.dng'));
+    const second: Promise<PictureLoad> = cache.get(sentTransfer('b', 'b.cr2'));
     await settle();
     expect(asked).toEqual(['a']);
     reads.get('a')?.resolve(undefined);

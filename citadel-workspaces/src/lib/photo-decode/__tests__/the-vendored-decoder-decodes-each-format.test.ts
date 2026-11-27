@@ -37,19 +37,19 @@ describe('the vendored photo decoder', () => {
   });
 
   it('decodes a HEIC photo to RGBA', () => {
-    const answer = glue.decode_photo(fixture('checker-64.heic'), ...CAPS, true);
+    const answer: glue.Answer = glue.decode_photo(fixture('checker-64.heic'), ...CAPS, true);
     expect([answer.kind, answer.width, answer.height, answer.flag]).toEqual([AnswerKind.Rgba, 64, 64, true]);
     expect(answer.take_data()).toHaveLength(64 * 64 * 4);
   });
 
   it('probes a HEIC photo without decoding it', () => {
-    const answer = glue.decode_photo(fixture('checker-64.heic'), ...CAPS, false);
+    const answer: glue.Answer = glue.decode_photo(fixture('checker-64.heic'), ...CAPS, false);
     expect([answer.kind, answer.width, answer.height, answer.flag]).toEqual([AnswerKind.Fits, 64, 64, true]);
     expect(answer.take_data()).toHaveLength(0);
   });
 
   it('decodes an LZW TIFF exactly', () => {
-    const answer = glue.decode_photo(fixture('quadrants-48-lzw.tif'), ...CAPS, true);
+    const answer: glue.Answer = glue.decode_photo(fixture('quadrants-48-lzw.tif'), ...CAPS, true);
     expect(answer.kind).toBe(AnswerKind.Rgba);
     const data: Uint8Array = answer.take_data();
     expect(Array.from(data.subarray(0, 4))).toEqual([255, 0, 0, 255]);
@@ -57,7 +57,7 @@ describe('the vendored photo decoder', () => {
   });
 
   it('hands on a RAW preview turned by the RAW alone, its JPEG\'s own Exif cut out', () => {
-    const answer = glue.decode_photo(fixture('turned-6.dng'), ...CAPS, false);
+    const answer: glue.Answer = glue.decode_photo(fixture('turned-6.dng'), ...CAPS, false);
     expect([answer.kind, answer.width, answer.height, answer.orientation]).toEqual([AnswerKind.Jpeg, 48, 48, 6]);
     const jpeg: Uint8Array = answer.take_data();
     expect([jpeg[0], jpeg[1]]).toEqual([0xff, 0xd8]);
@@ -65,7 +65,7 @@ describe('the vendored photo decoder', () => {
   });
 
   it('refuses a photo over the caps it is given, before decoding', () => {
-    const answer = glue.decode_photo(fixture('checker-64.heic'), 64 * 64 - 1, 16_384, true);
+    const answer: glue.Answer = glue.decode_photo(fixture('checker-64.heic'), 64 * 64 - 1, 16_384, true);
     expect([answer.kind, answer.width, answer.height]).toEqual([AnswerKind.TooLarge, 64, 64]);
   });
 

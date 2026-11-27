@@ -53,8 +53,8 @@ function Calendar({ view, zone }) {
 
 /** The page's clocks, as the glue instance of a mounted tab is given them (glue-steps.ts): pinned, it stands for both the date and the time waited on. */
 const PAGE_CLOCK = pinnedClock();
-const NODE = domainNode({ id: 'n1', name: 'Platform', parent_id: 'company', children: [], metadata: [...new TextEncoder().encode(JSON.stringify({ time_zone: 'America/New_York' }))] });
-const COMPANY = domainNode({ id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: [] });
+const NODE = domainNode({ id: 'n1', name: 'Platform', parent_id: 'company', children: [], metadata: new TextEncoder().encode(JSON.stringify({ time_zone: 'America/New_York' })) });
+const COMPANY = domainNode({ id: 'company', name: 'Company', parent_id: null, children: ['n1'], metadata: new Uint8Array() });
 export const TREE = { company: COMPANY, n1: NODE };
 /** The Calendar's own shipped manifest, and an install of it on the node, as the registry hands CalendarMount both. */
 /** @type {import('citadel-workspace-client-ts').AppManifest} */
@@ -100,7 +100,7 @@ export function seededGlue(engine) {
 
 function MountedCalendar({ engine }) {
   const [glue] = useState(() => seededGlue(engine));
-  const state = workspaceState({ nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: [] } });
+  const state = workspaceState({ nodes: TREE, workspace: { id: 'w', name: 'Workspace', metadata: new Uint8Array() } });
   return (
     <WorkspaceContext.Provider value={{ state }}>
       <main className="mx-auto max-w-6xl">

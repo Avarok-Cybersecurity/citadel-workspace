@@ -15,7 +15,7 @@ const REFUSED = {
 // The ports a signed-in window registers; here asking answers as the server refuses a sole admin, its longest sentence.
 const PORTS = {
   reload: NOOP, applyUpdate: NOOP, openSettings: NOOP, navigate: NOOP, signIn: NOOP, installAgent: NOOP, requestPermission: NOOP, openChat: NOOP, reportBug: NOOP,
-  askAdmins: async () => ({ kind: 'refused', sentence: 'You are the only admin here, so there is nobody to ask. You can change this yourself in Settings.' }),
+  askAdmins: async () => /** @type {import('@/lib/recovery-route/ports').AskOutcome} */ ({ kind: 'refused', sentence: 'You are the only admin here, so there is nobody to ask. You can change this yourself in Settings.' }),
 };
 
 function Refused({ manages }) {
