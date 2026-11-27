@@ -25,8 +25,10 @@ export async function scenarioNames(page, url) {
  * sticky header or column there. Measured from wherever the previous button left the scroll, the
  * result hung on fonts: CI's wider ones left the role matrix scrolled far enough that its Member
  * checkboxes landed under the sticky permission column, and a dev Mac's did not. Skipped: a
- * disabled button (pointer-events none, so nothing reaches it by design) and a visually hidden one
- * (sr-only clips it to nothing, kept for the keyboard).
+ * disabled button (pointer-events none, so nothing reaches it by design), a visually hidden one
+ * (sr-only clips it to nothing, kept for the keyboard), and one inside a closed <details> outside its
+ * summary: not drawn until the person opens it, yet engines still report a box for it there (and an
+ * empty innerText), so it read as an unlabelled button off the dialog's edge.
  */
 function unreachableIn(scenario) {
   const failures = [];
@@ -35,6 +37,8 @@ function unreachableIn(scenario) {
       const style = getComputedStyle(button);
       const first = button.getBoundingClientRect();
       if (button.disabled || button.getAttribute('aria-disabled') === 'true') continue;
+      const folded = button.closest('details:not([open])');
+      if (folded !== null && !button.closest('summary')) continue;
       if (first.width < 2 || first.height < 2 || style.visibility === 'hidden' || style.clip === 'rect(0px, 0px, 0px, 0px)') continue;
       const label = `${scenario}: "${(button.innerText || button.getAttribute('aria-label') || '').trim().slice(0, 60)}"`;
       const scrollers = [];

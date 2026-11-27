@@ -5,12 +5,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
-import { PortRefused, refusalCopy, type CalendarPorts } from '@/lib/calendar/ports';
+import { reasonOf, type CalendarPorts } from '@/lib/calendar/ports';
 import { forgetConsent, readConsents, type AppConsent } from '@/lib/calendar/sdk-store';
+import { UnreadablePanel } from './UnreadablePanel';
 
 type Loaded = { kind: 'loading' } | { kind: 'failed'; reason: string } | { kind: 'ready'; apps: AppConsent[] };
-
-const reasonOf = (e: unknown): string => (e instanceof PortRefused ? refusalCopy(e.refused) : 'something went wrong');
 
 export function SdkAppsPanel({ ports, engine }: { ports: CalendarPorts; engine: CalendarEngine }): JSX.Element {
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
@@ -34,7 +33,7 @@ export function SdkAppsPanel({ ports, engine }: { ports: CalendarPorts; engine: 
   };
 
   if (loaded.kind === 'loading') return <p role="status" className="text-sm text-muted-foreground">Loading the apps using your calendar…</p>;
-  if (loaded.kind === 'failed') return <p role="alert" className="text-sm text-destructive-emphasis">The apps using your calendar could not be read: {loaded.reason}.</p>;
+  if (loaded.kind === 'failed') return <UnreadablePanel what="The apps using your calendar" reason={loaded.reason} retry={reload} />;
   return (
     <section aria-label="Apps using your calendar" className="flex min-w-0 flex-col gap-2" data-testid="calendar-sdk-apps">
       <h3 className="text-sm font-semibold text-foreground">Apps using your calendar</h3>

@@ -37,6 +37,9 @@ export class PortRefused extends Error {
 }
 
 /** What a member is told a refusal means, in words. */
+/** Why a read or write failed, as a panel says it: a refusal in its own words, anything else plainly. */
+export const reasonOf = (error: unknown): string => (error instanceof PortRefused ? refusalCopy(error.refused) : 'something went wrong');
+
 export function refusalCopy(refused: Refused): string {
   if (refused === 'ungranted') return 'the Calendar was not given access to it';
   if ('limit' in refused) return `a limit was reached (${refused.limit})`;

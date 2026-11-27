@@ -70,6 +70,8 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({ children }) =>
     toast({ title: 'Signed out', description: signIn.message, variant: 'destructive' });
     void navigate(signIn.path);
   }, [navigate, toast]);
+  // Where the agent on this computer is started or installed (app-routes.tsx).
+  const onAgentUnreachable: () => void = useCallback((): void => { void navigate('/agent'); }, [navigate]);
 
   // Check for dev mode
   const urlParams: URLSearchParams = new URLSearchParams(window.location.search);
@@ -89,6 +91,7 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({ children }) =>
     autoClaimAttempted,
     onHeldElsewhere: heldElsewhere.offer,
     onSessionEnded,
+    onAgentUnreachable,
   });
 
   useEffect(() => {

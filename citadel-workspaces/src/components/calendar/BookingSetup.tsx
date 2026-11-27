@@ -14,11 +14,12 @@ import type { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
 import { OWN_KINDS } from '@/lib/calendar/event-type-kind';
 import type { CivilDate } from '@/lib/calendar/generated/CivilDate';
 import type { EventType } from '@/lib/calendar/generated/EventType';
-import { PortRefused, refusalCopy, type CalendarPorts } from '@/lib/calendar/ports';
+import { reasonOf, type CalendarPorts } from '@/lib/calendar/ports';
 import { AvailabilityEditor } from './AvailabilityEditor';
 import { EventTypeEditor } from './EventTypeEditor';
 import { RoutingFormsSetup } from './RoutingFormsSetup';
 import { TeamTypesSetup } from './TeamTypesSetup';
+import { UnreadablePanel } from './UnreadablePanel';
 
 interface BookingSetupProps {
   ports: CalendarPorts;
@@ -36,8 +37,6 @@ interface BookingSetupProps {
 
 type Loaded = { kind: 'loading' } | { kind: 'failed'; reason: string } | { kind: 'ready'; page: BookingPageData };
 type Editing = { kind: 'none' } | { kind: 'type'; id: string; type: EventType | null };
-
-const reasonOf = (e: unknown): string => (e instanceof PortRefused ? refusalCopy(e.refused) : 'something went wrong');
 
 export function BookingSetup({ ports, engine, node, me, displayZone, deviceZone, today, origin, newId, mayEditNode }: BookingSetupProps): JSX.Element {
   const linkId: string = useId();
@@ -69,7 +68,7 @@ export function BookingSetup({ ports, engine, node, me, displayZone, deviceZone,
   };
 
   if (loaded.kind === 'loading') return <p role="status" className="text-sm text-muted-foreground">Loading your booking page…</p>;
-  if (loaded.kind === 'failed') return <p role="alert" className="text-sm text-destructive-emphasis">Your booking page could not be read: {loaded.reason}.</p>;
+  if (loaded.kind === 'failed') return <UnreadablePanel what="Your booking page" reason={loaded.reason} retry={reload} />;
   const { page } = loaded;
   const link: string = bookingLink(origin, { node: node.id, host: me, typeId: null });
   return (

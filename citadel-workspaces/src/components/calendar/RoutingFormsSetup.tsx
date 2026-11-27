@@ -15,12 +15,13 @@ import { isNodeKeyChange } from '@/lib/calendar/change-routing';
 import type { CalendarEngine } from '@/lib/calendar/engine/calendar-engine';
 import type { EventType } from '@/lib/calendar/generated/EventType';
 import type { RoutingForm } from '@/lib/calendar/generated/RoutingForm';
-import { PortRefused, refusalCopy, type CalendarPorts } from '@/lib/calendar/ports';
+import { reasonOf, type CalendarPorts } from '@/lib/calendar/ports';
 import { TYPE_PREFIX } from '@/lib/calendar/booking-pages';
 import { readRoutingForms, removeRoutingForm, ROUTING_PREFIX, saveRoutingForm } from '@/lib/calendar/routing-forms';
 import { readTeamTypes } from '@/lib/calendar/team-types';
 import type { Member } from '@/lib/citadel-apps/sdk/generated/Member';
 import { RoutingFormEditor } from './RoutingFormEditor';
+import { UnreadablePanel } from './UnreadablePanel';
 
 interface RoutingFormsSetupProps {
   ports: CalendarPorts;
@@ -32,7 +33,6 @@ interface RoutingFormsSetupProps {
 type Loaded = { kind: 'loading' } | { kind: 'failed'; reason: string } | { kind: 'ready'; forms: RoutingForm[]; teams: EventType[]; members: string[] };
 type Editing = { kind: 'none' } | { kind: 'form'; id: string; form: RoutingForm | null };
 
-const reasonOf = (e: unknown): string => (e instanceof PortRefused ? refusalCopy(e.refused) : 'something went wrong');
 const ruleCount = (f: RoutingForm): string => (f.rules.length === 1 ? '1 rule' : `${f.rules.length} rules`);
 
 export function RoutingFormsSetup({ ports, engine, node, newId }: RoutingFormsSetupProps): JSX.Element {
@@ -67,7 +67,7 @@ export function RoutingFormsSetup({ ports, engine, node, newId }: RoutingFormsSe
   };
 
   if (loaded.kind === 'loading') return <p role="status" className="text-sm text-muted-foreground">Loading {node.name}&apos;s routing forms…</p>;
-  if (loaded.kind === 'failed') return <p role="alert" className="text-sm text-destructive-emphasis">{node.name}&apos;s routing forms could not be read: {loaded.reason}.</p>;
+  if (loaded.kind === 'failed') return <UnreadablePanel what={<>{node.name}&apos;s routing forms</>} reason={loaded.reason} retry={reload} />;
   return (
     <section aria-label={`Routing forms on ${node.name}`} className="flex min-w-0 flex-col gap-2" data-testid="calendar-routing-forms">
       <h3 className="text-sm font-semibold text-foreground">Routing forms on {node.name}</h3>

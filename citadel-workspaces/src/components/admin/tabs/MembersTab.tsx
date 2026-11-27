@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ConfirmDeleteDialog } from '@/components/shared/ConfirmDeleteDialog';
-import { useToast } from '@/hooks/use-toast';
+import { RecoveryNotice } from '@/components/recovery-route/RecoveryNotice';
+import { recovery } from '@/lib/recovery-route/recovery';
 import type { AdminTabProps, MemberData } from '../types';
 import WorkspaceService from '@/lib/workspace-service';
 import { workspaceEvents, type MembersPayload } from '@/lib/workspace-events';
@@ -30,10 +31,12 @@ import { membersShown, type MembersFilterChoice } from './members-filter';
 import { WORKSPACE_ROOT_ID } from '@/lib/workspace-constants';
 
 export function MembersTab({ entityType, entityId, onClose: _onClose }: AdminTabProps): JSX.Element {
-  const { toast } = useToast();
   const deadlineKey: string = `admin-members:${entityId}`; // per entity: modals must not clash
   const [members, setMembers] = useState<MemberData[]>([]);
   const [loading, setLoading] = useState(true);
+  // Why the last load produced no list. Shown in place of the list: an empty roster after a failed
+  // load read as "No members found", which was untrue.
+  const [loadFailure, setLoadFailure] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MemberData | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<MemberData | null>(null);
@@ -66,6 +69,7 @@ export function MembersTab({ entityType, entityId, onClose: _onClose }: AdminTab
         }))
       );
       cancelLoadingDeadline(deadlineKey);
+      setLoadFailure(null);
       setLoading(false);
     };
     // Return the unsubscribe — see use-domain-members.ts for why the async
@@ -75,19 +79,19 @@ export function MembersTab({ entityType, entityId, onClose: _onClose }: AdminTab
 
   const loadMembers = async (): Promise<void> => {
     setLoading(true);
+    setLoadFailure(null);
     // listMembers resolves on SEND and loading was cleared only by the success
     // event, so a refusal left the panel spinning (useMemberEventSetup has had this).
-    armLoadingDeadline(deadlineKey, () => setLoading(false));
+    armLoadingDeadline(deadlineKey, () => {
+      setLoadFailure('The server did not send the member list.');
+      setLoading(false);
+    });
     try {
       await WorkspaceService.listMembers(entityId);
     } catch (error) {
       debugLog('MembersTab', 'Failed to request members:', error);
-      toast({
-        title: 'Error',
-        description: describeFailure(error, 'Failed to load members'),
-        variant: 'destructive',
-      });
       cancelLoadingDeadline(deadlineKey);
+      setLoadFailure(describeFailure(error, 'The member list could not be loaded.'));
       setLoading(false);
     }
   };
@@ -124,6 +128,10 @@ export function MembersTab({ entityType, entityId, onClose: _onClose }: AdminTab
         <Loader2 className="h-6 w-6 animate-spin text-primary-accent" />
       </div>
     );
+  }
+
+  if (loadFailure !== null) {
+    return <RecoveryNotice className="py-6" recovery={recovery('list.load-failed', { retry: loadMembers })} title="Members could not be loaded" message={loadFailure} />;
   }
 
   const shown: MemberData[] = membersShown(members, filter);
