@@ -36,6 +36,8 @@ export const WRITE_RESPONSE_TIMEOUT_MS: number = 15_000;
 export const SUCCESS_RESPONSES: Record<string, readonly string[]> = {
   CreateNode: ['Node'],
   UpdateNode: ['Node'],
+  // UpdateNode naming the workspace root: the home's own tabs, kept in and answered as the workspace record.
+  UpdateHomeTabs: ['Workspace'],
   SetMembersVisible: ['Node'],
   // A workspace's default tabs; answered and broadcast as the workspace record.
   SetDefaultAppTabs: ['Workspace'],

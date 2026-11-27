@@ -53,4 +53,19 @@ describe('writing tabs', () => {
     eventEmitter.emit('workspace:raw-response', { Error: 'Permission denied: EditWorkspaceConfig is required to set the default tabs' });
     await expect(write).rejects.toThrow('EditWorkspaceConfig');
   });
+
+  it('on the workspace home, resolves on the workspace record carrying the list (control: a node answer or the old list does not)', async () => {
+    const { sender, sent } = recordingSender();
+    let settled: boolean = false;
+    const write: Promise<void> = writeNodeTabs(sender, 'workspace-root', ['work.synchronized.app']).then((): void => { settled = true; });
+    await Promise.resolve();
+    expect(viewOf(sent[0]).UpdateNode?.node_id).toBe('workspace-root');
+    eventEmitter.emit('workspace:raw-response', { Node: { id: 'workspace-root', metadata: bytes({ app_tabs: ['work.synchronized.app'] }) } });
+    eventEmitter.emit('workspace:raw-response', { Workspace: { id: 'workspace-root', metadata: bytes({ default_app_tabs: [] }) } });
+    await drain();
+    expect(settled).toBe(false);
+    eventEmitter.emit('workspace:raw-response', { Workspace: { id: 'workspace-root', metadata: bytes({ default_app_tabs: [], app_tabs: ['work.synchronized.app'] }) } });
+    await write;
+    expect(settled).toBe(true);
+  });
 });

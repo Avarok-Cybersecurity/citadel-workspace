@@ -119,6 +119,22 @@ pub fn with_default_app_tabs(existing: &[u8], app_tabs: &[String]) -> Result<Vec
     merge_metadata_document(existing, &bytes)
 }
 
+/// The workspace metadata with the home's own `app_tabs` set to `value`, or removed when it is
+/// `null` (the home then follows `default_app_tabs`, as a node without a list does). The home is
+/// the workspace root, which has no node record: the workspace record is the root's, so its own
+/// tabs sit beside the default there, under the key a node uses.
+pub fn with_home_app_tabs(existing: &[u8], value: &Value) -> Result<Vec<u8>, String> {
+    let mut document = object_of(existing).unwrap_or_default();
+    if value.is_null() {
+        document.remove(APP_TABS_KEY);
+    } else {
+        check_app_tabs(value).map_err(|why| why.to_string())?;
+        document.insert(APP_TABS_KEY.to_string(), value.clone());
+    }
+    serde_json::to_vec(&Value::Object(document))
+        .map_err(|e| format!("Failed to encode metadata: {e}"))
+}
+
 /// The metadata a workspace without `default_app_tabs` is provisioned with, or `None` when it
 /// already has the key, whatever list it holds: an administrator's choice, `[]` included, is
 /// never overwritten.

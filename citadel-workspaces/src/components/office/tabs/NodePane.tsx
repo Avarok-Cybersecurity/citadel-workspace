@@ -8,7 +8,7 @@ import { useContext, type ReactNode } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import WorkspaceService from '@/lib/workspace-service';
 import { openAppsModal, type AppsModalRequest } from '@/lib/citadel-apps/apps-modal-store';
-import { appIdsOf } from '@/lib/node-tabs/tab-list';
+import { appIdsOf, ownTabsSource } from '@/lib/node-tabs/tab-list';
 import type { DomainNode } from '@/components/layout/sidebar/tree-node-types';
 import { AppZonePage } from '../app-zone/AppZonePage';
 import { AppZoneContext } from '../app-zone/app-zone-environment';
@@ -65,7 +65,7 @@ function NodePaneBody({ nodeId, node, chat, contentView, roomName, reader, reade
   const model: NodeTabsModel = useNodeTabs({
     nodeId,
     chatEnabled: channelId !== null,
-    nodeMetadata: node?.metadata,
+    nodeMetadata: ownTabsSource(nodeId, node?.metadata, state.workspace?.metadata),
     workspaceMetadata: state.workspace?.metadata,
     here,
     writer: WRITER,
