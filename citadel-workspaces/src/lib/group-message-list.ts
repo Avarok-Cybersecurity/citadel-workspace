@@ -4,6 +4,7 @@
  */
 import type { GroupMessage } from '@/types/workspace-entities';
 import { foldReaction, fromServerReaction, toServerReaction, type Reaction, type ReactionChange } from '@/lib/reactions/reaction-state';
+import type { GroupReaction } from 'citadel-workspace-client-ts';
 
 export function sortByTime(messages: GroupMessage[]): GroupMessage[] {
   // Number() because Array.sort needs a number and timestamps are bigint.
@@ -51,6 +52,6 @@ export function reactToGroupMessage(
   if (!target) return null;
   const folded: Reaction[] | null = foldReaction(target.reactions?.map(fromServerReaction), change);
   if (!folded) return null;
-  const reactions = folded.map(toServerReaction);
+  const reactions: GroupReaction[] = folded.map(toServerReaction);
   return messages.map((msg) => (msg === target ? { ...msg, reactions } : msg));
 }

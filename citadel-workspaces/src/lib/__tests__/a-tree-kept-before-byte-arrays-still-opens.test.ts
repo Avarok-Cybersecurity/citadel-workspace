@@ -5,7 +5,7 @@
  * refused rather than shown.
  */
 import { describe, expect, it } from 'vitest';
-import { readCachedTree } from '@/lib/offline-tree';
+import { readCachedTree, type CachedWorkspaceTree } from '@/lib/offline-tree';
 
 const METADATA: string = '{"citadel_app":{"v":1,"kind":"citadel-app","payload":{"app":"docs"}}}';
 const node = (metadata: unknown): Record<string, unknown> => ({ id: 'plan', name: 'Quarterly plan', metadata });
@@ -14,14 +14,14 @@ const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
 describe('a kept workspace tree', () => {
   it('reads a node kept as a list of numbers by an earlier page as bytes', () => {
-    const tree = readCachedTree(kept(Array.from(new TextEncoder().encode(METADATA))));
+    const tree: CachedWorkspaceTree | null = readCachedTree(kept(Array.from(new TextEncoder().encode(METADATA))));
     const metadata: Uint8Array | undefined = tree?.nodes.plan.metadata;
     expect(ArrayBuffer.isView(metadata)).toBe(true);
     expect(text(metadata as Uint8Array)).toBe(METADATA);
   });
 
   it('reads a node kept as bytes by this page unchanged', () => {
-    const tree = readCachedTree(kept(new TextEncoder().encode(METADATA)));
+    const tree: CachedWorkspaceTree | null = readCachedTree(kept(new TextEncoder().encode(METADATA)));
     expect(text(tree?.nodes.plan.metadata as Uint8Array)).toBe(METADATA);
   });
 
