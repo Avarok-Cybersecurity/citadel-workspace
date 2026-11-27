@@ -10,16 +10,18 @@ export type FlowState =
   | { step: 'detail' }
   | { step: 'scope'; choice: ScopeChoice | null; people: string[] }
   | { step: 'consent'; scope: InstallScope; turnedOff: Capability[] }
-  | { step: 'installing'; scope: InstallScope }
+  | { step: 'installing'; scope: InstallScope; granted: Capability[] }
   | { step: 'done'; install: AppInstall }
-  | { step: 'failed'; scope: InstallScope; refusal: AppsFailure };
+  | { step: 'failed'; scope: InstallScope; granted: Capability[]; refusal: AppsFailure };
 
 export type FlowEvent =
   | { kind: 'choose-scope' }
   | { kind: 'select'; choice: ScopeChoice | null; people: string[] }
   | { kind: 'consent'; scope: InstallScope }
   | { kind: 'toggle'; cap: Capability; on: boolean }
-  | { kind: 'install' }
+  | { kind: 'install'; granted: Capability[] }
+  /** The same request again, from a refusal. */
+  | { kind: 'retry' }
   | { kind: 'installed'; install: AppInstall }
   | { kind: 'refused'; refusal: AppsFailure }
   | { kind: 'back' };
@@ -36,9 +38,10 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
       const rest: Capability[] = state.turnedOff.filter((c: Capability) => c !== event.cap);
       return { ...state, turnedOff: event.on ? rest : [...rest, event.cap] };
     }
-    case 'install': return state.step === 'consent' ? { step: 'installing', scope: state.scope } : state;
+    case 'install': return state.step === 'consent' ? { step: 'installing', scope: state.scope, granted: event.granted } : state;
+    case 'retry': return state.step === 'failed' ? { step: 'installing', scope: state.scope, granted: state.granted } : state;
     case 'installed': return state.step === 'installing' ? { step: 'done', install: event.install } : state;
-    case 'refused': return state.step === 'installing' ? { step: 'failed', scope: state.scope, refusal: event.refusal } : state;
+    case 'refused': return state.step === 'installing' ? { step: 'failed', scope: state.scope, granted: state.granted, refusal: event.refusal } : state;
     case 'back':
       if (state.step === 'scope') return START;
       if (state.step === 'consent' || state.step === 'failed') return { step: 'scope', choice: null, people: [] };

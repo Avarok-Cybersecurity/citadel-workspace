@@ -80,8 +80,8 @@ describe('the install flow', () => {
     const h: Harness = harness({ visible: [NOTES], permissions: new Set(['AppInstall']) }, catalogueText([]));
     await toConsent(h);
     pressInstall(h);
-    expect((await screen.findByTestId('apps-install-failed')).textContent).toBe('Notes was not installed. You cannot allow an app to keep its own data for each person.Back');
-    fireEvent.click(screen.getByText('Back'));
+    expect((await screen.findByTestId('apps-install-failed')).textContent).toBe('Notes was not installed. You cannot allow an app to keep its own data for each person.Copy a request for an adminChange where or what');
+    fireEvent.click(screen.getByTestId('apps-next-change-choice'));
     await screen.findByTestId('apps-scope-picker');
   });
 

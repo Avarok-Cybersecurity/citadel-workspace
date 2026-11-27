@@ -6,7 +6,7 @@
  */
 import { useReducer, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { AppInstall, InstallScope } from 'citadel-workspace-client-ts';
+import type { AppInstall, Capability, InstallScope } from 'citadel-workspace-client-ts';
 import type { ListedApp } from '@/lib/citadel-apps/listing-model';
 import { flowReducer, START, type FlowState } from '@/lib/citadel-apps/install-flow';
 import { installScopeOf, scopeDomain, scopeOptions, type ScopeChoice, type ScopeContext, type ScopeOption } from '@/lib/citadel-apps/scope-options';
@@ -15,6 +15,8 @@ import { scopeSentence } from '@/lib/citadel-apps/scope-sentence';
 import { refusalCopy } from '@/lib/citadel-apps/refusal-copy';
 import { installApp, type AppsResult } from '@/lib/workspace-service/apps-operations';
 import { listingOffer } from '@/lib/citadel-apps/listing-offer';
+import { appLinkUrl } from '@/lib/citadel-apps/app-link';
+import { InstallRefused } from './InstallRefused';
 import { ListingDetail } from './ListingDetail';
 import { ScopePicker } from './ScopePicker';
 import { ConsentPanel } from './ConsentPanel';
@@ -27,6 +29,8 @@ interface AppFlowProps {
   viewer: MarketplaceViewer;
   onInstalled: (install: AppInstall) => void;
   onDone: () => void;
+  /** Show the marketplace's installed apps (a refusal that it is installed already). */
+  onShowInstalled: () => void;
   /** Adding a tab to `viewer.nodeId`: the install is then appended to its tabs; null otherwise. */
   forTab: { add: (appId: string) => Promise<boolean> } | null;
 }
@@ -36,17 +40,20 @@ export function preferredTabScope(options: readonly ScopeOption[]): ScopeChoice 
   return options.some((o: ScopeOption): boolean => o.choice === 'node_tree' && o.enabled) ? 'node_tree' : null;
 }
 
-export function AppFlow({ app, installs, deps, viewer, onInstalled, onDone, forTab }: AppFlowProps): JSX.Element {
+/** The page a node scope names, for the app link an admin is sent; null for any other scope. */
+const scopeNode = (scope: InstallScope): string | null =>
+  typeof scope === 'object' && 'Node' in scope ? scope.Node : typeof scope === 'object' && 'NodeTree' in scope ? scope.NodeTree : null;
+
+export function AppFlow({ app, installs, deps, viewer, onInstalled, onDone, onShowInstalled, forTab }: AppFlowProps): JSX.Element {
   const [state, dispatch] = useReducer(flowReducer, START);
   const [tabAdded, setTabAdded] = useState<boolean | null>(null);
   const m: ListedApp['manifest'] = app.manifest;
   const mine: AppInstall[] = installs.filter((i: AppInstall) => i.app_id === m.id);
   const sentence = (scope: InstallScope): string => scopeSentence(scope, viewer.reach(scope), viewer.nodeName);
 
-  const install = async (scope: InstallScope, rows: readonly ConsentRow[]): Promise<void> => {
-    dispatch({ kind: 'install' });
+  const install = async (scope: InstallScope, granted: Capability[]): Promise<void> => {
     const result: AppsResult<AppInstall> = await installApp(deps.transport, {
-      appId: m.id, version: m.version, listing: listingOffer(app.listing), scope, granted: grantOf(rows), pinnedPublisherKey: m.publisher.mldsa65_public_key, injectRequirement: false,
+      appId: m.id, version: m.version, listing: listingOffer(app.listing), scope, granted, pinnedPublisherKey: m.publisher.mldsa65_public_key, injectRequirement: false,
     });
     if (result.ok) {
       onInstalled(result.value);
@@ -95,7 +102,7 @@ export function AppFlow({ app, installs, deps, viewer, onInstalled, onDone, forT
         onToggle={(cap, on) => dispatch({ kind: 'toggle', cap, on })}
         trust={keyTrust(m.publisher.mldsa65_public_key, installs, m.id)}
         problem={grantProblem(rows)}
-        onInstall={() => { void install(s.scope, rows); }}
+        onInstall={() => { const granted: Capability[] = grantOf(rows); dispatch({ kind: 'install', granted }); void install(s.scope, granted); }}
         onBack={() => dispatch({ kind: 'back' })}
         clock={deps.clock}
       />
@@ -126,10 +133,13 @@ export function AppFlow({ app, installs, deps, viewer, onInstalled, onDone, forT
     );
   }
 
+  const retry = (): void => { dispatch({ kind: 'retry' }); void install(s.scope, s.granted); };
+  const link: string = appLinkUrl(viewer.origin, { appId: m.id, nodeId: scopeNode(s.scope), version: m.version, server: viewer.serverAddress });
   return (
-    <div className="flex flex-col gap-[12px] py-[12px]" data-testid="apps-install-failed">
-      <p role="alert" className="break-words text-foreground">{m.name} was not installed. {refusalCopy(s.refusal)}</p>
-      <Button variant="outline" className="min-h-[44px] self-start" onClick={() => dispatch({ kind: 'back' })}>Back</Button>
-    </div>
+    <InstallRefused
+      refused={{ appName: m.name, appId: m.id, version: m.version, where: sentence(s.scope), link, refusal: s.refusal, copy: refusalCopy(s.refusal) }}
+      manages={viewer.authority.holds('AppManage', viewer.rootId) === 'yes'}
+      actions={{ retry, changeChoice: () => dispatch({ kind: 'back' }), showInstalled: onShowInstalled, copyText: deps.copyText }}
+    />
   );
 }

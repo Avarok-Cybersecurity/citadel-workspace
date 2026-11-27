@@ -61,7 +61,8 @@ export function AppsModal({ open, onOpenChange, request, deps, viewer }: AppsMod
         <Button variant="ghost" className="min-h-[44px] self-start" onClick={back} data-testid="apps-back-to-list">← All apps</Button>
         <AppFlow
           key={showing.manifest.id} app={showing} installs={data.installs} deps={deps} viewer={flowViewer} onInstalled={data.recordInstall}
-          onDone={target === null ? back : (): void => onOpenChange(false)} forTab={target === null ? null : { add: target.add }}
+          onDone={target === null ? back : (): void => onOpenChange(false)} onShowInstalled={(): void => { back(); setTab('installed'); }}
+          forTab={target === null ? null : { add: target.add }}
         />
       </div>
     );
