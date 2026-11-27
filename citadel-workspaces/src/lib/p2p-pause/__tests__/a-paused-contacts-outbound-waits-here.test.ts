@@ -22,16 +22,16 @@ const MAX: bigint = 15630987608599047565n;
 const CAROL: bigint = 300n;
 
 class AgentLocalDB implements OutboxStorage {
-  readonly rows: Map<string, number[]> = new Map();
+  readonly rows: Map<string, Uint8Array> = new Map();
   failReads: boolean = false;
   private row(cid: bigint, key: string): string { return `${cid.toString()}/${key}`; }
-  async get(cid: bigint, key: string): Promise<{ value: number[] } | null> {
+  async get(cid: bigint, key: string): Promise<{ value: Uint8Array } | null> {
     if (this.failReads) throw new Error('LocalDB request timed out after 5000ms');
-    const value: number[] | undefined = this.rows.get(this.row(cid, key));
+    const value: Uint8Array | undefined = this.rows.get(this.row(cid, key));
     if (value === undefined) throw new Error(`Key not found: ${key}`);
     return { value };
   }
-  async set(cid: bigint, key: string, value: number[]): Promise<void> { this.rows.set(this.row(cid, key), value); }
+  async set(cid: bigint, key: string, value: Uint8Array): Promise<void> { this.rows.set(this.row(cid, key), value); }
   async remove(cid: bigint, key: string): Promise<void> { this.rows.delete(this.row(cid, key)); }
   async listKeys(cid: bigint, prefix: string): Promise<string[]> {
     const own: string = `${cid.toString()}/`;

@@ -89,7 +89,7 @@ export async function executeSendFile(
     source = {
       ByteContents: {
         file_name: params.source.name,
-        data: Array.from(new Uint8Array(buffer)),
+        data: new Uint8Array(buffer),
       },
     };
     debugLog('send-operations', 'Converted browser File to ByteContents', {
@@ -115,7 +115,7 @@ export async function executeSendFile(
   };
 
   // Never log `source` verbatim: for a browser `File` it carries the entire
-  // file as a `data: number[]`, which would dump (potentially secret) file
+  // file as `data` bytes, which would dump (potentially secret) file
   // contents into dev logs and allocate/format a huge array on every inline
   // transfer. Log a redacted summary instead.
   const sourceSummary: Exclude<FileSource, { ByteContents: unknown }> | { kind: "ByteContents"; fileName: string; byteLength: number; } =

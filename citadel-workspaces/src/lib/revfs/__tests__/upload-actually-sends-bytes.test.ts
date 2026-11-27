@@ -48,12 +48,12 @@ describe('a RE-VFS upload request', () => {
     void backendSendFile(deps, CID, null, 'notes.txt', CONTENT, '/docs/notes.txt', 'push-1');
     await Promise.resolve();
 
-    const source: { ByteContents?: { file_name: string; data: number[]; }; } = lastSendFile().source as { ByteContents?: { file_name: string; data: number[] } };
+    const source: { ByteContents?: { file_name: string; data: Uint8Array; }; } = lastSendFile().source as { ByteContents?: { file_name: string; data: Uint8Array } };
 
     // A bare string here is what the WASM deserializer rejected outright.
     expect(typeof source).toBe('object');
     expect(source.ByteContents?.file_name).toBe('notes.txt');
-    expect(source.ByteContents?.data).toEqual([0xde, 0xad, 0xbe, 0xef]);
+    expect(source.ByteContents?.data).toEqual(new Uint8Array([0xde, 0xad, 0xbe, 0xef]));
   });
 
   it('addresses the virtual filesystem, not a plain transfer', async () => {

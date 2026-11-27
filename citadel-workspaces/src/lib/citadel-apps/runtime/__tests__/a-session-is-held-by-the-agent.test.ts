@@ -91,14 +91,14 @@ describe('sending', () => {
     expect(await send(d, 7, 1)).toEqual({ ok: null });
     expect(await send(d, 7, 1)).toEqual({ refused: { limit: 'session_rate' } });
     const sends: Json[] = agent.sent.filter((r: Json) => variantName(r) === 'AppSessionSend');
-    expect(sends.map((r: Json) => (bodyOf(r).body as number[]).length)).toEqual([8, 1]);
+    expect(sends.map((r: Json) => (bodyOf(r).body as Uint8Array).length)).toEqual([8, 1]);
     expect(bodyOf(sends[0])).toMatchObject({ cid: 42n, install_id: 'inst-1', session: 7 });
   });
 });
 
 describe('what the agent reports', () => {
   const message = (cid: bigint, installId: string, session: number): Json =>
-    ({ AppSessionMessage: { cid, request_id: undefined, install_id: installId, session, body: [1, 2] } });
+    ({ AppSessionMessage: { cid, request_id: undefined, install_id: installId, session, body: new Uint8Array([1, 2]) } });
 
   it('reaches only the instance of its install and member session that opened it', async () => {
     const agent: FakeAgent = new FakeAgent(opening);

@@ -22,7 +22,7 @@ import {
 
 /**
  * A frame as the Rust transport expects it: the generated `MediaSend` body less its addressing,
- * with the payload still bytes (it becomes `number[]` only as the request is built).
+ * with the payload as bytes.
  * `timestamp` is microseconds since capture start, a u32 on the wire — see wrapTimestamp.
  */
 export type WireFrame = Omit<AgentRequestBody<'MediaSend'>, 'request_id' | 'cid' | 'peer_cid' | 'payload'> & { payload: Uint8Array };

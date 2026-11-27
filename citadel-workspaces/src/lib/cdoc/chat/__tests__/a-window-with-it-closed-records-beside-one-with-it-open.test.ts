@@ -76,8 +76,8 @@ function holdingFirstPendingWrite(port: LocalDbPort): HeldPort {
     reached,
     release: (): void => release(),
     port: {
-      get: (cid: bigint, key: string): Promise<{ readonly value: readonly number[] } | null> => port.get(cid, key),
-      set: async (cid: bigint, key: string, value: number[]): Promise<void> => {
+      get: (cid: bigint, key: string): Promise<{ readonly value: Uint8Array } | null> => port.get(cid, key),
+      set: async (cid: bigint, key: string, value: Uint8Array): Promise<void> => {
         if (!held && key.endsWith('#pending')) {
           held = true;
           reach();

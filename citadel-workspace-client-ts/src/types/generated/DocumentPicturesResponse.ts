@@ -2,4 +2,4 @@
 import type { DocumentPictureRefusal } from "./DocumentPictureRefusal";
 import type { PictureDocument } from "./PictureDocument";
 
-export type DocumentPicturesResponse = { "ChunkStored": { doc: PictureDocument, content_id: string, index: number, stored: boolean, } } | { "Chunk": { doc: PictureDocument, content_id: string, index: number, total_chunks: number, size_bytes: bigint, bytes: Array<number>, } } | { "Limits": { doc: PictureDocument, max_bytes: bigint, max_pictures: number, } } | { "Refused": { doc: PictureDocument, content_id: string | null, refusal: DocumentPictureRefusal, } };
+export type DocumentPicturesResponse = { "ChunkStored": { doc: PictureDocument, content_id: string, index: number, stored: boolean, } } | { "Chunk": { doc: PictureDocument, content_id: string, index: number, total_chunks: number, size_bytes: bigint, bytes: Uint8Array, } } | { "Limits": { doc: PictureDocument, max_bytes: bigint, max_pictures: number, } } | { "Refused": { doc: PictureDocument, content_id: string | null, refusal: DocumentPictureRefusal, } };

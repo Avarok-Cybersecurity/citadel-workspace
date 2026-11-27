@@ -18,6 +18,7 @@
  */
 import type { IhttpPort, InboundIhttpFrame, PortAnswer, Refused } from '../host/ports';
 import { decodeCbor, encodeCbor, type Decoded } from '../host/cbor';
+import { ownedBytes } from '@/lib/utils/encoding-utils';
 import { frame as makeFrame } from '../host/ihttp-common';
 import { fromWireFrame, toWireFrame } from '../host/ihttp-wire';
 import type { Address } from '../sdk/generated/Address';
@@ -107,7 +108,7 @@ export function p2pIhttpPort(d: P2pDeps): IhttpPort {
     return sent;
   };
   const sendNow = async (peerCid: bigint, f: IhttpFrame): Promise<PortAnswer<null>> => {
-    const bytes: number[] = Array.from(encodeCbor(toWireFrame(f)));
+    const bytes: Uint8Array = ownedBytes(encodeCbor(toWireFrame(f)));
     const out: AgentOutcome<PortAnswer<null>> = await agentAsk<PortAnswer<null>>(d.agent,
       (request_id: string): Json => ({ IhttpSend: { request_id, cid: d.cid, peer_cid: peerCid, frame: bytes } }),
       (message: unknown, id: string): PortAnswer<null> | undefined => {

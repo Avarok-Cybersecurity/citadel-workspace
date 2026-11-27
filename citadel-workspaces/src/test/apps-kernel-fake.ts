@@ -60,7 +60,7 @@ export class FakeAppsKernel implements AppsTransport {
   }
 
   private manifestOf(listing: AppListing): AppManifest {
-    const r: ReturnType<typeof readManifestBytes> = readManifestBytes(Uint8Array.from(listing.manifest_bytes));
+    const r: ReturnType<typeof readManifestBytes> = readManifestBytes(listing.manifest_bytes);
     if (!r.ok) throw new Error(`a fake listing does not read: ${r.field}`);
     return r.manifest;
   }

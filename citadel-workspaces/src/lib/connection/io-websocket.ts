@@ -92,11 +92,11 @@ export class ConnectionIOWebSocket {
   // LocalDB Operations
   // ============================================================================
 
-  async localDBSet(cid: bigint, key: string, value: number[]): Promise<void> {
+  async localDBSet(cid: bigint, key: string, value: Uint8Array): Promise<void> {
     await wsModule.websocketService.sendLocalDBSet(cid, key, value);
   }
 
-  async localDBGet(cid: bigint, key: string): Promise<{ value: number[] } | null> {
+  async localDBGet(cid: bigint, key: string): Promise<{ value: Uint8Array } | null> {
     return wsModule.websocketService.sendLocalDBGet(cid, key);
   }
 
@@ -130,7 +130,7 @@ export class ConnectionIOWebSocket {
     if (debugEnabled) {
       debugLog('ConnectionIO', 'Storing sessions, serialized:', formatForDebug(valueStr));
     }
-    const valueBytes: number[] = stringToBytes(valueStr);
+    const valueBytes: Uint8Array = stringToBytes(valueStr);
     await this.localDBSet(0n, SESSION_STORAGE_KEY, valueBytes);
   }
 
@@ -139,7 +139,7 @@ export class ConnectionIOWebSocket {
     // caller, which classifies it with isGenuinelyAbsent; swallowing it here
     // would put the decision in the one place that cannot tell the two cases
     // apart. `sessionsWereRead` is set only on the paths that reached the key.
-    const result: { value: number[]; } | null = await this.localDBGet(0n, SESSION_STORAGE_KEY);
+    const result: { value: Uint8Array; } | null = await this.localDBGet(0n, SESSION_STORAGE_KEY);
     markSessionsRead();
     if (result && result.value) {
       try {

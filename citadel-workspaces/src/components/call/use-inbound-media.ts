@@ -23,6 +23,7 @@ import { CALL_TRACK_AUDIO } from '@/types/p2p-commands';
 import { eventEmitter } from '@/lib/event-emitter';
 import { isForThisSession, notificationCid } from '@/lib/sessions/notification-ownership';
 import { getCurrentCid } from '@/lib/p2p/current-cid';
+import { isByteArray } from '@/lib/utils/encoding-utils';
 
 /**
  * Cached rather than awaited per frame: `getCurrentCid` is async (its fallback
@@ -100,8 +101,8 @@ export function useInboundMedia(sessionRef: RefObject<CallSession | null>): void
         return;
       }
 
-      const frame: { cid: bigint; peer_cid: bigint; track: number; kind: number; timestamp: number; flags: number; payload: number[]; } | undefined = message.MediaFrameNotification as
-        | { cid: bigint; peer_cid: bigint; track: number; kind: number; timestamp: number; flags: number; payload: number[] }
+      const frame: { cid: bigint; peer_cid: bigint; track: number; kind: number; timestamp: number; flags: number; payload: Uint8Array; } | undefined = message.MediaFrameNotification as
+        | { cid: bigint; peer_cid: bigint; track: number; kind: number; timestamp: number; flags: number; payload: Uint8Array }
         | undefined;
       if (frame) {
         const session: CallSession | null = sessionRef.current;
@@ -109,13 +110,13 @@ export function useInboundMedia(sessionRef: RefObject<CallSession | null>): void
         if (!isForThisSession(addressedTo, currentCid)) return;
         const peerCid: bigint | null = wireCid(frame.peer_cid);
         // Dropped, not decoded: an unknown peer must not become a participant.
-        if (peerCid === null || !admits(session, peerCid)) return;
+        if (peerCid === null || !admits(session, peerCid) || !isByteArray(frame.payload)) return;
         session.acceptFrame(peerCid, {
           track: frame.track,
           kind: frame.kind,
           timestamp: frame.timestamp,
           flags: frame.flags,
-          payload: new Uint8Array(frame.payload),
+          payload: frame.payload,
         });
         return;
       }

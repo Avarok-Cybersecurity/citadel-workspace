@@ -73,7 +73,7 @@ describe('a mounted zone', () => {
     await until(() => host.dataset.appState === 'running', 4000);
     expect(badge(slots.toolbar)).toBeNull();
     const head: IhttpFrame = { v: 1, stream: (1n << 63n) | 1n, kind: { RequestHead: { method: 'GET', path: '/a', query: '', headers: [], body_len: 0n, app_id: APP_ID, scope_key: 'ws' } } };
-    r.push({ IhttpFrame: { from: { username: 'bob', cid: 7n, app_id: APP_ID, install_id: 'inst-9' }, to_install_id: kernel.rel.install.id, frame: Array.from(encodeCbor(toWireFrame(head))) } });
+    r.push({ IhttpFrame: { from: { username: 'bob', cid: 7n, app_id: APP_ID, install_id: 'inst-9' }, to_install_id: kernel.rel.install.id, frame: encodeCbor(toWireFrame(head)) } });
     await until(() => badge(slots.toolbar) !== null, 4000);
     expect(badge(slots.toolbar)?.textContent).toBe('Through the server');
   });

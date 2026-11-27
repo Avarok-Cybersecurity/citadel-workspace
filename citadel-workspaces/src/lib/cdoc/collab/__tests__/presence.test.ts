@@ -15,7 +15,7 @@ import type { ScriptedKernel } from './doubles/scripted-kernel';
 const PAST_THE_INTERVAL_MS: number = 2 * Math.ceil(1000 / DOCUMENTS_RELAY_LIMITS.awarenessPerSecond);
 
 type RealTab = Tab<EditorSession>;
-type Aware = { readonly cid: bigint; readonly request: { Awareness: { payload: number[] } } };
+type Aware = { readonly cid: bigint; readonly request: { Awareness: { payload: Uint8Array } } };
 
 async function pair(): Promise<{ kernel: ScriptedKernel; clock: ManualClock; alice: RealTab; bob: RealTab }> {
   const { kernel, clock } = await newDocument({});
@@ -61,7 +61,7 @@ describe('awareness', () => {
     // 1 s of moves at the limit, and the two moves after it: never more than allowed.
     expect(sent.length - typed).toBeGreaterThan(DOCUMENTS_RELAY_LIMITS.awarenessPerSecond / 2);
     expect(sent.length - typed).toBeLessThanOrEqual(DOCUMENTS_RELAY_LIMITS.awarenessPerSecond + 3);
-    expect(sent[sent.length - 1].request.Awareness.payload).toEqual(Array.from(await alice.replica().awareness()));
+    expect(Array.from(sent[sent.length - 1].request.Awareness.payload)).toEqual(Array.from(await alice.replica().awareness()));
   });
 
   it('draws a peer with its member name and colour, and re-derives it when the page repaints', async () => {
@@ -81,8 +81,8 @@ describe('awareness', () => {
 
     // Alice's own keystroke exposes the gap (her Append lands past the seq she holds), with no
     // new record from Bob: the pulled update repaints her pages, and the SAME record now maps.
-    const payloadOf = (r: Aware): readonly number[] => r.request.Awareness.payload;
-    const before: readonly number[] = payloadOf(sentBy(kernel, BOB).at(-1) as Aware);
+    const payloadOf = (r: Aware): Uint8Array => r.request.Awareness.payload;
+    const before: Uint8Array = payloadOf(sentBy(kernel, BOB).at(-1) as Aware);
     const recordsBefore: number = sentBy(kernel, BOB).length;
     await typeInto(alice.replica(), 'e');
     await kernel.settle([alice.session, bob.session]);

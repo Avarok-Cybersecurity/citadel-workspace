@@ -49,7 +49,7 @@ function frameFor(cid: bigint, peerCid: bigint): Record<string, unknown> {
       sequence: 0,
       timestamp: 0,
       flags: 1,
-      payload: [1, 2, 3],
+      payload: new Uint8Array([1, 2, 3]),
       request_id: null,
     },
   };

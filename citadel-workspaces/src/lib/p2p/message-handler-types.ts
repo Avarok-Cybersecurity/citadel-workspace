@@ -14,13 +14,13 @@ import type { P2PMessage, P2PConversation, PeerPresence } from './p2p-types';
 
 export interface PeerMessagePayload {
   peer_cid: bigint | string | number;
-  message: Uint8Array | number[];
+  message: Uint8Array;
 }
 
 export interface MessageNotificationPayload {
   cid: bigint | string | number;
   peer_cid: bigint | string | number;
-  message: Uint8Array | number[];
+  message: Uint8Array;
 }
 
 // ============================================================================

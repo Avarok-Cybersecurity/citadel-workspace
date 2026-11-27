@@ -39,7 +39,7 @@ const keyOf = (doc: PictureDocument, id: string): string => `${doc.node_id}\n${d
 export function scriptedServer(script: Script = {}): ScriptedServer {
   const listeners: Set<(answer: Answer) => void> = new Set();
   const linkListeners: Set<(state: LinkState) => void> = new Set();
-  const kept: Map<string, number[][]> = new Map();
+  const kept: Map<string, Uint8Array[]> = new Map();
   const sent: DocumentPicturesRequest[] = [];
   let link: LinkState = 'up';
   let inFlight: number = 0;
@@ -78,15 +78,15 @@ export function scriptedServer(script: Script = {}): ScriptedServer {
     if ('UploadChunk' in request) {
       const { doc, content_id, index, total_chunks, bytes, size_bytes } = request.UploadChunk;
       if (size_bytes > BigInt(maxBytes)) return { Refused: { doc, content_id, refusal: { TooLarge: { max_bytes: BigInt(maxBytes) } } } };
-      const parts: number[][] = kept.get(key) ?? [];
+      const parts: Uint8Array[] = kept.get(key) ?? [];
       parts[index] = bytes;
       kept.set(key, parts);
       return { ChunkStored: { doc, content_id, index, stored: index + 1 === total_chunks } };
     }
     const { doc, content_id, index } = request.ReadChunk;
-    const parts: number[][] | undefined = kept.get(key);
+    const parts: Uint8Array[] | undefined = kept.get(key);
     if (parts === undefined) return { Refused: { doc, content_id, refusal: 'NotFound' } };
-    const bytes: number[] = script.tamper === true ? parts[index].map((b: number): number => b ^ 0xff) : parts[index];
+    const bytes: Uint8Array = script.tamper === true ? parts[index].map((b: number): number => b ^ 0xff) : parts[index];
     return { Chunk: { doc, content_id, index, total_chunks: parts.length, size_bytes: 0n, bytes } };
   }
   return server;

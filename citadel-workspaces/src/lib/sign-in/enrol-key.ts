@@ -32,9 +32,9 @@ export interface NewKey {
 /** What a Register ceremony names: the relying party, the account, and the keys it must not be made on. */
 export interface Registration {
   rpId: string;
-  userId: number[];
+  userId: Uint8Array;
   userName: string;
-  excludeCredentialIds: number[][];
+  excludeCredentialIds: Uint8Array[];
 }
 
 export const prfSupported = (created: CreatedCredential): boolean =>
@@ -49,11 +49,11 @@ export async function registerSecurityKey(
   const created: CreatedCredential = await deps.authenticator.create({
     rpId: registration.rpId,
     rpName: deps.rpName,
-    userHandle: copyBytes(Uint8Array.from(registration.userId)),
+    userHandle: copyBytes(registration.userId),
     userName: registration.userName,
     userDisplayName: registration.userName,
     challenge: randomBytes(32),
-    excludeCredentialIds: registration.excludeCredentialIds.map((id: number[]) => copyBytes(Uint8Array.from(id))),
+    excludeCredentialIds: registration.excludeCredentialIds.map((id: Uint8Array) => copyBytes(id)),
     // Asks the authenticator to enable PRF; the salt that matters is the server's, at get().
     prfSalt: randomBytes(32),
   });

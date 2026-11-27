@@ -31,8 +31,8 @@ export interface ChatPeer {
 }
 
 export const agentLocalDb: LocalDbPort = {
-  get: (cid: bigint, key: string): Promise<{ readonly value: readonly number[] } | null> => websocketService.sendLocalDBGet(cid, key),
-  set: (cid: bigint, key: string, value: number[]): Promise<void> => websocketService.sendLocalDBSet(cid, key, value),
+  get: (cid: bigint, key: string): Promise<{ readonly value: Uint8Array } | null> => websocketService.sendLocalDBGet(cid, key),
+  set: (cid: bigint, key: string, value: Uint8Array): Promise<void> => websocketService.sendLocalDBSet(cid, key, value),
 };
 
 /** This window among the browser's others: opened on first use, kept for the page's life. */

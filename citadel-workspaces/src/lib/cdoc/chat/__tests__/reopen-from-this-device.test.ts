@@ -108,8 +108,8 @@ describe('a chat document reopened from this device', () => {
     const port: LocalDbPort = db.connection([ALICE]);
     const base: string = `cdoc-chat:${ALICE.toString()}:${DOC}#base`;
     const index: string = `cdoc-chat:${ALICE.toString()}:#index`;
-    const earlierBase: number[] = Array.from(cborEncode({ doc_version: CHAT_SYNC.docVersion, snapshot: new Uint8Array([1]), migration_origin: null }));
-    const earlierIndex: number[] = Array.from(cborEncode({ entries: [{ doc_id: DOC, peer_cid: BOB, title: null, held_apart: true }] }));
+    const earlierBase: Uint8Array = (cborEncode({ doc_version: CHAT_SYNC.docVersion, snapshot: new Uint8Array([1]), migration_origin: null }));
+    const earlierIndex: Uint8Array = (cborEncode({ entries: [{ doc_id: DOC, peer_cid: BOB, title: null, held_apart: true }] }));
     await port.set(ALICE, base, earlierBase);
     await port.set(ALICE, index, earlierIndex);
     const store: ChatStoreBackend = localDbChatStore(ALICE, port, aloneInBrowser());

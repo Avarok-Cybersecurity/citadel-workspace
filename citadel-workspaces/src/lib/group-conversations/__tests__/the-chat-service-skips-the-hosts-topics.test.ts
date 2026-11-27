@@ -33,7 +33,7 @@ startGroupResponseService();
 function message(mgid: bigint): Record<string, unknown> {
   const groupId: string = `7:${mgid.toString()}`;
   const body: Uint8Array = encodeGroupMessage({ group_id: groupId, message_id: `m-${groupId}`, sender_cid: 7n, content: 'x', timestamp: 1 });
-  return { GroupMessageNotification: { cid: SELF, peer_cid: 7n, message: Array.from(body), group_key: { cid: 7n, mgid }, request_id: null } };
+  return { GroupMessageNotification: { cid: SELF, peer_cid: 7n, message: body, group_key: { cid: 7n, mgid }, request_id: null } };
 }
 
 describe('the chat service skips the host’s topics', () => {

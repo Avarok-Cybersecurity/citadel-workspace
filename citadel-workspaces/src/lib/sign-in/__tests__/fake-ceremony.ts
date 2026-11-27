@@ -11,11 +11,11 @@ export const FAKE_RP_ID: string = 'work.avarok.net';
 /** The ceremony a challenge names, in the agent's wire shape. */
 export type Ceremony = SecurityKeyCeremony;
 
-const idOf = (bytes: number[]): string => toBase64Url(Uint8Array.from(bytes));
+const idOf = (bytes: Uint8Array): string => toBase64Url(Uint8Array.from(bytes));
 
 /** The SDK's rule: an allowed key when authenticating, a new non-empty one when registering. */
-export function accepts(ceremony: Ceremony, credentialId: number[]): boolean {
+export function accepts(ceremony: Ceremony, credentialId: Uint8Array): boolean {
   const id: string = idOf(credentialId);
-  if ('Authenticate' in ceremony) return ceremony.Authenticate.credential_ids.some((a: number[]) => idOf(a) === id);
-  return credentialId.length > 0 && !ceremony.Register.exclude_credential_ids.some((e: number[]) => idOf(e) === id);
+  if ('Authenticate' in ceremony) return ceremony.Authenticate.credential_ids.some((a: Uint8Array) => idOf(a) === id);
+  return credentialId.length > 0 && !ceremony.Register.exclude_credential_ids.some((e: Uint8Array) => idOf(e) === id);
 }

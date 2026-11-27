@@ -1,5 +1,6 @@
 // Test setup file
 import '@testing-library/jest-dom';
+import './workspace-codec-setup';
 
 /**
  * jsdom does not implement matchMedia.

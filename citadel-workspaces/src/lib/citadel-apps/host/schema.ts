@@ -37,7 +37,7 @@ export const u64: Schema<bigint> = (v) => {
 };
 
 export const bytes: Schema<Uint8Array> = (v) => {
-  if (v instanceof Uint8Array) return { v: new Uint8Array(v) };
+  if (ArrayBuffer.isView(v)) return { v: new Uint8Array(v.buffer, v.byteOffset, v.byteLength).slice() };
   if (Array.isArray(v) && v.every((b: unknown) => typeof b === 'number' && Number.isInteger(b) && b >= 0 && b <= 255)) {
     return { v: Uint8Array.from(v as number[]) };
   }

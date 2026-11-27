@@ -4,6 +4,7 @@
  * the loopback agent this tab already talks to; nothing here opens, publishes or proxies a port.
  * Injected (SBIO): the page passes its websocket service, tests pass a fake agent.
  */
+import { isByteArray } from '@/lib/utils/encoding-utils';
 
 export interface AgentLink {
   /** Sends one request (a follower tab's goes through the leader, which routes the answer back by id). */
@@ -30,11 +31,9 @@ export function answering(message: unknown, name: string, requestId: string): Js
   return body !== undefined && body.request_id === requestId ? body : undefined;
 }
 
-/** Bytes as the agent sends them: a byte array, or a list of numbers 0..255. */
+/** Bytes as the agent's WASM client hands them over: a byte array, copied so the caller owns it. */
 export function bytesOf(value: unknown): Uint8Array | null {
-  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice();
-  if (Array.isArray(value) && value.every((b: unknown) => typeof b === 'number' && Number.isInteger(b) && b >= 0 && b <= 255)) return Uint8Array.from(value as number[]);
-  return null;
+  return isByteArray(value) ? value.slice() : null;
 }
 
 export type AgentOutcome<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly why: 'send_failed' | 'no_answer' };

@@ -14,14 +14,14 @@ const agent = async (): Promise<typeof import('@/lib/websocket-service').websock
 export const agentRootStore: AtRestRootStore = {
   read: async (account: bigint): Promise<Uint8Array | null> => {
     try {
-      const stored: { value: number[] } | null = await (await agent()).sendLocalDBGet(account, ROOT_KEY);
-      return stored === null ? null : Uint8Array.from(stored.value);
+      const stored: { value: Uint8Array } | null = await (await agent()).sendLocalDBGet(account, ROOT_KEY);
+      return stored === null ? null : stored.value.slice();
     } catch (error: unknown) {
       if (isGenuinelyAbsent(error)) return null;
       throw error;
     }
   },
-  write: async (account: bigint, root: Uint8Array): Promise<void> => (await agent()).sendLocalDBSet(account, ROOT_KEY, Array.from(root)),
+  write: async (account: bigint, root: Uint8Array): Promise<void> => (await agent()).sendLocalDBSet(account, ROOT_KEY, root),
   remove: async (account: bigint): Promise<void> => {
     try {
       await (await agent()).sendLocalDBDelete(account, ROOT_KEY);

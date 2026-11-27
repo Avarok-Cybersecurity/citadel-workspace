@@ -43,7 +43,7 @@ function joinedTopic(groupId: string): OwnedTopicPort {
 
 function messageTo(mgid: bigint): GroupEvent[] {
   const body: Uint8Array = encodeGroupMessage({ group_id: `7:${mgid}`, message_id: 'm-1', sender_cid: 7n, content: '{"t":1}', timestamp: 1 });
-  const m: Record<string, unknown> = { GroupMessageNotification: { cid: ME, peer_cid: 7n, message: Array.from(body), group_key: { cid: 7n, mgid }, request_id: 'r1' } };
+  const m: Record<string, unknown> = { GroupMessageNotification: { cid: ME, peer_cid: 7n, message: body, group_key: { cid: 7n, mgid }, request_id: 'r1' } };
   return withoutAppTopics(toGroupEvents(m, ME, 'bob', (cid: bigint): string => cid.toString()), appTopicGroups);
 }
 

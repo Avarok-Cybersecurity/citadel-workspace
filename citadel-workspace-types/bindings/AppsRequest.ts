@@ -5,16 +5,16 @@ import type { InstallScope } from "./InstallScope";
 import type { ListingOffer } from "./ListingOffer";
 import type { PeerDirection } from "./PeerDirection";
 
-export type AppsRequest = "ListCatalogue" | { "GetListing": { app_id: string, } } | "ListInstalls" | { "Publish": { manifest_bytes: Array<number>, 
+export type AppsRequest = "ListCatalogue" | { "GetListing": { app_id: string, } } | "ListInstalls" | { "Publish": { manifest_bytes: Uint8Array, 
 /**
  * The `app.mldsa.sig` text.
  */
-signature: string, } } | { "UploadArtifactChunk": { sha256: string, index: number, total_chunks: number, bytes: Array<number>, } } | { "Install": { app_id: string, version: string, listing: ListingOffer, scope: InstallScope, granted: Array<Capability>, pinned_publisher_key: string, 
+signature: string, } } | { "UploadArtifactChunk": { sha256: string, index: number, total_chunks: number, bytes: Uint8Array, } } | { "Install": { app_id: string, version: string, listing: ListingOffer, scope: InstallScope, granted: Array<Capability>, pinned_publisher_key: string, 
 /**
  * Write the app into the scope node's required-apps header (`AppManage` and `EditMdx`
  * on the node, `Node` or `NodeTree` scope only).
  */
-inject_requirement: boolean, } } | { "Uninstall": { install_id: string, purge_storage: boolean, } } | { "Update": { install_id: string, listing: ListingOffer, } } | { "Rollback": { install_id: string, } } | { "Consent": { install_id: string, version: string, granted: Array<Capability>, pinned_publisher_key: string, } } | { "SetDisabledForMe": { install_id: string, disabled: boolean, } } | { "SetPeerConsentForMe": { install_id: string, serve: boolean, call: boolean, topics: boolean, } } | { "SetPeerBlockedForMe": { install_id: string, username: string, blocked: boolean, } } | { "AuthorizePeer": { install_id: string, peer_cid: bigint, direction: PeerDirection, } } | { "TopicGroup": { install_id: string, topic: string, claim: string | null, } } | { "FetchArtifact": { sha256: string, index: number, } } | { "GetRelease": { install_id: string, } } | { "HostNetGrant": { install_id: string, tag: bigint, } } | { "ListAudit": { before_ms: bigint | null, } } | { "RequestInstall": { app_id: string, node_id: string, } } | { "Call": { install_id: string, call: Array<number>, } } | { "AdvertiseService": { install_id: string, 
+inject_requirement: boolean, } } | { "Uninstall": { install_id: string, purge_storage: boolean, } } | { "Update": { install_id: string, listing: ListingOffer, } } | { "Rollback": { install_id: string, } } | { "Consent": { install_id: string, version: string, granted: Array<Capability>, pinned_publisher_key: string, } } | { "SetDisabledForMe": { install_id: string, disabled: boolean, } } | { "SetPeerConsentForMe": { install_id: string, serve: boolean, call: boolean, topics: boolean, } } | { "SetPeerBlockedForMe": { install_id: string, username: string, blocked: boolean, } } | { "AuthorizePeer": { install_id: string, peer_cid: bigint, direction: PeerDirection, } } | { "TopicGroup": { install_id: string, topic: string, claim: string | null, } } | { "FetchArtifact": { sha256: string, index: number, } } | { "GetRelease": { install_id: string, } } | { "HostNetGrant": { install_id: string, tag: bigint, } } | { "ListAudit": { before_ms: bigint | null, } } | { "RequestInstall": { app_id: string, node_id: string, } } | { "Call": { install_id: string, call: Uint8Array, } } | { "AdvertiseService": { install_id: string, 
 /**
  * The running instance advertising (one session may run several of one install): the
  * session serves the install while any of its instances is advertised.
@@ -23,4 +23,4 @@ instance: string,
 /**
  * Hex sha256 of the route list served.
  */
-routes_digest: string, until_ms: bigint, } } | { "WithdrawService": { install_id: string, instance: string, } } | { "IhttpSend": { from_install_id: string, to: IhttpAddress, frame: Array<number>, } };
+routes_digest: string, until_ms: bigint, } } | { "WithdrawService": { install_id: string, instance: string, } } | { "IhttpSend": { from_install_id: string, to: IhttpAddress, frame: Uint8Array, } };

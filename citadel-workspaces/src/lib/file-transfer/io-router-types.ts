@@ -10,10 +10,10 @@
  * The SendFile source is the generated agent `FileSource`.
  *
  * IMPORTANT — `ByteContents` size cap:
- * The `data: number[]` payload materialises the entire file as a boxed-
- * number JavaScript array (~4-8 bytes per file byte in V8) and is then
- * CBOR-serialised onto the WebSocket frame. A 100 MB file therefore
- * needs roughly 500 MB of transient heap and reliably crashes the tab.
+ * The `data` payload holds the entire file, and the WASM client writes it
+ * onto the WebSocket frame as a JSON array of numbers (up to 4 characters
+ * per file byte), so a 100 MB file needs several hundred MB of transient
+ * memory and reliably crashes the tab.
  * `executeSendFile` in `send-operations.ts` enforces a hard 2 MiB cap
  * BEFORE allocating the buffer; larger uploads must go through `Path`
  * (native picker) which streams from disk.

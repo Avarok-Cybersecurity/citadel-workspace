@@ -74,7 +74,7 @@ async function start(): Promise<void> {
   const check: AppSignatureCheck = async (i) => hex(i.signature.slice().buffer) === await standIn(i.manifestSha256Hex, i.wasmSha256Hex);
   const server: HarnessServer = harnessServer({ installId: INSTALL_ID, manifestBytes, signatureHex: await standIn(mHash, wHash), wasm });
   const agent: ScriptedAgent = scriptedAgent(transcript);
-  const listing: AppListing = { source: { Global: { catalogue_version: 1n } }, manifest_bytes: Array.from(manifestBytes), signature: await standIn(mHash, wHash) };
+  const listing: AppListing = { source: { Global: { catalogue_version: 1n } }, manifest_bytes: manifestBytes, signature: await standIn(mHash, wHash) };
   const install: AppInstall = {
     id: INSTALL_ID, app_id: APP_ID, version: manifest.version, manifest_sha256: mHash, artifact_sha256: wHash, pinned_publisher_key: key,
     scope: { Node: NODE_ID }, granted: GRANTED,

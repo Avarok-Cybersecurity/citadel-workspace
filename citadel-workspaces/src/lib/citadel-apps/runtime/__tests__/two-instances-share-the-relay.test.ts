@@ -42,7 +42,7 @@ function page(instances: number): Page {
   const heard: InboundIhttpFrame[][] = ports.map(() => []);
   ports.forEach((p, i) => p.onFrame((f: InboundIhttpFrame) => heard[i].push(f)));
   const push = (f: IhttpFrame): void => {
-    const answer: Readonly<Record<string, unknown>> = { IhttpFrame: { from: FROM, to_install_id: 'inst-1', frame: Array.from(encodeCbor(toWireFrame(f))) } };
+    const answer: Readonly<Record<string, unknown>> = { IhttpFrame: { from: FROM, to_install_id: 'inst-1', frame: encodeCbor(toWireFrame(f)) } };
     for (const l of [...listeners]) l(answer);
   };
   return { ports, heard, sent, push, detach: (i: number) => seats[i].detach() };

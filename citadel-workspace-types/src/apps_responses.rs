@@ -19,6 +19,8 @@ use ts_rs::TS;
 pub struct AppListing {
     pub source: ListingSource,
     #[debug(with = plaintext_debug_fmt)]
+    #[ts(type = "Uint8Array")]
+    #[serde(with = "citadel_internal_service_types::wire_bytes")]
     pub manifest_bytes: Vec<u8>,
     pub signature: String,
 }
@@ -167,6 +169,8 @@ pub enum AppsResponse {
         index: u32,
         total_chunks: u32,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         bytes: Vec<u8>,
     },
     Audit {
@@ -191,6 +195,8 @@ pub enum AppsResponse {
     /// CBOR of the SDK's `HostReply`.
     CallReply {
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         reply: Vec<u8>,
     },
     Advertised {
@@ -208,6 +214,8 @@ pub enum AppsResponse {
         from: IhttpFrom,
         to_install_id: String,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         frame: Vec<u8>,
     },
     Refused(AppsRefusal),

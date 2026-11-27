@@ -61,7 +61,7 @@ export async function createWorkspace(
       name,
       description,
       workspace_master_password: masterPassword,
-      metadata: metadata ? Array.from(metadata) : null
+      metadata: metadata ?? null
     }
   };
   // Same reasoning as updateWorkspace: a refusal arrives as a response and
@@ -95,7 +95,7 @@ export async function updateWorkspaceTheme(
   const requestPart: WorkspaceProtocolRequest = {
     UpdateWorkspaceTheme: {
       workspace_id: workspaceId ?? null,
-      theme: Array.from(theme),
+      theme,
     },
   };
   // Resolves when the SERVER accepts it. A refusal arrives as a response,
@@ -124,7 +124,7 @@ export async function updateWorkspace(
       name: name ?? null,
       description: description ?? null,
       workspace_master_password: masterPassword,
-      metadata: metadata ? Array.from(metadata) : null
+      metadata: metadata ?? null
     }
   };
   // A refusal (no permission, wrong master password) arrives as a response,

@@ -74,7 +74,7 @@ function world(): World {
   });
   w.port.onFrame((i: InboundIhttpFrame) => w.delivered!.push(i));
   w.push = async (cid: bigint, from: bigint, f: IhttpFrame): Promise<void> => {
-    handlers.forEach((h) => h({ IhttpFrameNotification: { cid, peer_cid: from, frame: Array.from(encodeCbor(toWireFrame(f))), request_id: null } }));
+    handlers.forEach((h) => h({ IhttpFrameNotification: { cid, peer_cid: from, frame: encodeCbor(toWireFrame(f)), request_id: null } }));
     await new Promise<void>((r) => setTimeout(r, 0));
   };
   return w as World;

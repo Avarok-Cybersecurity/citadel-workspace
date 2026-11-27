@@ -13,6 +13,7 @@ import { isOwnGroupMessage } from '@/lib/group-conversations/own-message';
 import { senderUsernameOf } from '@/components/chat/shared/sender-username';
 import type { ChatAuthor, ChatMessage, ChatSelf } from './chat-transport';
 import { sharedFile } from '@/lib/chat/attachments/shared-file';
+import { fromServerReaction } from '@/lib/reactions/reaction-state';
 
 type WireKind = GroupMessage['message_type'];
 
@@ -52,7 +53,7 @@ export function groupChatMessage(message: GroupMessage, self: ChatSelf | null, s
     ...kindOf(message.message_type, message.content),
     ...(message.reply_to !== null ? { reply_to: message.reply_to } : {}),
     ...(message.edited_at !== null ? { edited_at: Number(message.edited_at) } : {}),
-    ...(message.reactions !== undefined ? { reactions: message.reactions } : {}),
+    ...(message.reactions !== undefined ? { reactions: message.reactions.map(fromServerReaction) } : {}),
     author: groupAuthor(message, self),
     share: message.file_share ?? null,
   };

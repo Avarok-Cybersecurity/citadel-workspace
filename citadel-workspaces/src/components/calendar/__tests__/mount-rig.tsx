@@ -24,7 +24,7 @@ import type { DomainNode } from 'citadel-workspace-client-ts';
  */
 const POLICY: { serverCallsPerSecond: number; memoryMaxPages: number; computeBudgetMs: number; hostNetTimeoutMs: number; serverNetTimeoutMs: number; portTimeoutMs: number; hostCallsPerSecond: number; maxLiveInstancesPerPage: number; maxRequestBytes: number; maxReplyBytes: number; maxLiveReplies: number; replyTtlMs: number; maxLogBytes: number; peerAuthorizationsPerSecond: number; ihttp: IhttpLimits; } = { ...STANDARD_HOST_POLICY, serverCallsPerSecond: 100_000 };
 const HELD: Capability[] = ['storage.user', 'storage.node', 'storage.node.authored'];
-const NODE: Pick<DomainNode, 'id' | 'name' | 'parent_id' | 'children' | 'metadata'> = { id: 'n1', name: 'Platform', parent_id: null, children: [], metadata: [...new TextEncoder().encode(JSON.stringify({ time_zone: 'America/New_York' }))] };
+const NODE: Pick<DomainNode, 'id' | 'name' | 'parent_id' | 'children' | 'metadata'> = { id: 'n1', name: 'Platform', parent_id: null, children: [], metadata: new TextEncoder().encode(JSON.stringify({ time_zone: 'America/New_York' })) };
 
 export interface MountRig {
   readonly store: MemoryStore;

@@ -11,6 +11,7 @@
 import { decodeGroupControl, type GroupControlBody, type PeerGroupControl } from './group-control-codec';
 import { groupKeyToId, parseGroupKey, type MessageGroupKey } from './group-key';
 import { toCid } from './group-wire-variants';
+import { isByteArray } from '@/lib/utils/encoding-utils';
 
 export interface GroupControlEvent {
   groupId: string;
@@ -24,8 +25,8 @@ export interface GroupControlEvent {
 /** The `group:control-received` payload, or null when this is not a control message. */
 export function peerGroupControlEvent(notification: Record<string, unknown>): GroupControlEvent | null {
   const raw: unknown = notification.message;
-  if (!Array.isArray(raw)) return null;
-  const decoded: PeerGroupControl | null = decodeGroupControl(new Uint8Array(raw as number[]));
+  if (!isByteArray(raw)) return null;
+  const decoded: PeerGroupControl | null = decodeGroupControl(raw);
   if (!decoded) return null;
   const sender_cid: bigint | null = toCid(notification.peer_cid);
   if (sender_cid === null) return null;

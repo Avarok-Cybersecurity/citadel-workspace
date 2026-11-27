@@ -23,7 +23,7 @@ let w: World;
 let alice: FakeAccount;
 const add = (): Promise<unknown> => addSecurityKey(w.deps, {
   account: { tenant: 'bench.work.avarok.net', cid: alice.cid, username: 'alice' }, label: 'Windows Hello',
-}, { password: Array.from(new TextEncoder().encode(alice.password)), security_key: true });
+}, { password: new TextEncoder().encode(alice.password), security_key: true });
 
 beforeEach(() => { w = world(true); alice = w.agent.account('alice'); });
 afterEach(() => w.stop());

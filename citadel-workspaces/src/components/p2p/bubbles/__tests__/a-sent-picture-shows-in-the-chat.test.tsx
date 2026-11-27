@@ -15,7 +15,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
-const PNG_1X1: number[] = Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), (c: string): number => c.charCodeAt(0));
+const PNG_1X1: Uint8Array = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), (c: string): number => c.charCodeAt(0));
 
 vi.mock('@/lib/websocket-service', async () => {
   const { eventEmitter } = await import('@/lib/event-emitter');

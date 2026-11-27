@@ -9,7 +9,7 @@
  */
 
 import { debugLog } from '../debug-config';
-import { stringToBytes } from '../utils/encoding-utils';
+import { ownedBytes, stringToBytes } from '../utils/encoding-utils';
 import type { P2PConfig } from './p2p-operations';
 import { markBackgroundSend, type SendDelivery } from '../p2p/send-failure';
 
@@ -17,11 +17,11 @@ import { markBackgroundSend, type SendDelivery } from '../p2p/send-failure';
  * Common send path for both string- and bytes-shaped P2P message APIs.
  * Validates the CID pair, builds the `InternalServiceRequest::Message`
  * envelope, and dispatches via `config.sendMessage`. The wire `message`
- * field is `Vec<u8>` on the Rust side — `number[]` is the JSON-friendly
- * representation both branches converge on.
+ * field is `Vec<u8>` on the Rust side: a Uint8Array holding exactly the
+ * message, since a follower tab's send is structured-cloned to the leader.
  */
 async function dispatchP2PMessage(
-  config: P2PConfig, cid: bigint, targetCid: bigint, messageBytes: number[], callerLabel: string, delivery: SendDelivery
+  config: P2PConfig, cid: bigint, targetCid: bigint, messageBytes: Uint8Array, callerLabel: string, delivery: SendDelivery
 ): Promise<void> {
   await config.init();
   if (cid === undefined || cid === null) {
@@ -31,10 +31,10 @@ async function dispatchP2PMessage(
     throw new Error('Target CID (peer_cid) is required to send P2P message');
   }
 
-  const messageRequest: { Message: { request_id: `${string}-${string}-${string}-${string}-${string}`; message: number[]; cid: bigint; peer_cid: bigint; security_level: string; }; } = {
+  const messageRequest: { Message: { request_id: `${string}-${string}-${string}-${string}-${string}`; message: Uint8Array; cid: bigint; peer_cid: bigint; security_level: string; }; } = {
     Message: {
       request_id: crypto.randomUUID(),
-      message: messageBytes,
+      message: ownedBytes(messageBytes),
       cid: cid,
       peer_cid: targetCid,
       security_level: 'Standard'
@@ -64,5 +64,5 @@ export async function sendP2PMessage(config: P2PConfig, cid: bigint, targetCid: 
  * data when `stringToBytes` round-trips them through `TextEncoder`.
  */
 export async function sendP2PMessageBytes(config: P2PConfig, cid: bigint, targetCid: bigint, message: Uint8Array, delivery: SendDelivery): Promise<void> {
-  return dispatchP2PMessage(config, cid, targetCid, Array.from(message), 'sendP2PMessageBytes', delivery);
+  return dispatchP2PMessage(config, cid, targetCid, message, 'sendP2PMessageBytes', delivery);
 }

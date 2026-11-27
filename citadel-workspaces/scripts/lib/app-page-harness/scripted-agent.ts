@@ -60,7 +60,7 @@ export interface ScriptedAgent {
 }
 
 const hex = (bytes: readonly number[]): string => bytes.map((b: number) => b.toString(16).padStart(2, '0')).join('');
-const bytesOf = (h: string): number[] => Array.from({ length: h.length / 2 }, (_: unknown, i: number) => parseInt(h.slice(i * 2, i * 2 + 2), 16));
+const bytesOf = (h: string): Uint8Array => Uint8Array.from({ length: h.length / 2 }, (_: unknown, i: number) => parseInt(h.slice(i * 2, i * 2 + 2), 16));
 const variant = (request: Json): string => Object.keys(request)[0] ?? '(empty)';
 
 export function scriptedAgent(t: Transcript): ScriptedAgent {

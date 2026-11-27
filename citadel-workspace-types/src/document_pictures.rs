@@ -47,6 +47,8 @@ pub enum DocumentPicturesRequest {
         index: u32,
         total_chunks: u32,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         bytes: Vec<u8>,
     },
     /// Chunk `index` of the picture `content_id` of `doc`.
@@ -78,6 +80,8 @@ pub enum DocumentPicturesResponse {
         #[ts(type = "bigint")]
         size_bytes: u64,
         #[debug(with = plaintext_debug_fmt)]
+        #[ts(type = "Uint8Array")]
+        #[serde(with = "citadel_internal_service_types::wire_bytes")]
         bytes: Vec<u8>,
     },
     /// The largest picture, and the most pictures, this server keeps for `doc`.

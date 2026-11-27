@@ -2,7 +2,7 @@ import { websocketService } from './websocket-service';
 import { failOnSocketLoss } from './websocket/request-response';
 import { eventEmitter } from './event-emitter';
 import { getRecentServers } from './recent-servers';
-import { stringToBytes, bytesToString } from './utils/encoding-utils';
+import { stringToBytes, bytesToString, isByteArray } from './utils/encoding-utils';
 import { debugLog } from '@/lib/debug-config';
 import { narrowWebSocketMessage, getVariant } from '@/lib/ws-message-boundary';
 import { TIMEOUT } from './timeout-constants';
@@ -75,7 +75,7 @@ export async function listKnownServers(options: { cid: string }): Promise<{ serv
               if (key.startsWith('server_') || key === 'known_servers') {
                 try {
                   const value: unknown = entry;
-                  if (Array.isArray(value)) {
+                  if (isByteArray(value)) {
                     // If it's a byte array, convert to string
                     const jsonStr: string = bytesToString(value);
                     const parsed: ReturnType<typeof JSON.parse> = JSON.parse(jsonStr);
@@ -186,10 +186,10 @@ export async function storeKnownServer(server: StoredServer, cid: string = "0"):
 
       // Convert servers array to JSON bytes
       const jsonStr: string = JSON.stringify({ servers });
-      const bytes: number[] = stringToBytes(jsonStr);
+      const bytes: Uint8Array = stringToBytes(jsonStr);
 
       // Send the request
-      const request: { LocalDBSetKV: { request_id: `${string}-${string}-${string}-${string}-${string}`; cid: bigint; peer_cid: null; key: string; value: number[]; }; } = {
+      const request: { LocalDBSetKV: { request_id: `${string}-${string}-${string}-${string}-${string}`; cid: bigint; peer_cid: null; key: string; value: Uint8Array; }; } = {
         LocalDBSetKV: {
           request_id: requestId,
           cid: BigInt(cid || '0'),

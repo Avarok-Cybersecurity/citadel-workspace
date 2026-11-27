@@ -1,0 +1,8 @@
+{
+  "source": "citadel-workspace-codec",
+  "wasm_bindgen_version": "0.2.129",
+  "wasm_sha256": "cec787dd53aa4eb46fc6d7019f32d1f313517f0ad414fcd314ab3a3b8b4bd8ba",
+  "wasm_bytes": 1587295,
+  "glue_sha256": "3de66524222cb818ab48e593c759a70f7239ed32e82722607b7d20556871e305",
+  "dts_sha256": "afc4bc3a4d1baf43c06f79d675d415ec8dfb39e36780c6185fae1333d88d8a20"
+}

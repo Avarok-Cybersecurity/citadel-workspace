@@ -13,19 +13,19 @@ import type { LocalDbPort } from '@/lib/cdoc/chat/chat-local-db';
 const ME: bigint = 31n;
 const OTHER: bigint = 32n;
 
-type AgentDb = LocalDbPort & { rows: Map<string, number[]> };
+type AgentDb = LocalDbPort & { rows: Map<string, Uint8Array> };
 
 function agentDb(): AgentDb {
-  const rows: Map<string, number[]> = new Map();
+  const rows: Map<string, Uint8Array> = new Map();
   const at = (cid: bigint, key: string): string => `${cid.toString()}|${key}`;
   return {
     rows,
-    get: async (cid: bigint, key: string): Promise<{ value: number[] }> => {
-      const value: number[] | undefined = rows.get(at(cid, key));
+    get: async (cid: bigint, key: string): Promise<{ value: Uint8Array }> => {
+      const value: Uint8Array | undefined = rows.get(at(cid, key));
       if (value === undefined) throw new Error(`Key not found: ${key}`);
       return { value };
     },
-    set: async (cid: bigint, key: string, value: number[]): Promise<void> => { rows.set(at(cid, key), value); },
+    set: async (cid: bigint, key: string, value: Uint8Array): Promise<void> => { rows.set(at(cid, key), value); },
   };
 }
 
@@ -45,7 +45,7 @@ describe('a file kept in the scratchpad', () => {
     const db: AgentDb = agentDb();
     const id: string = await scratchpadBlobs(ME, db, sha256Hex).keep(bytes);
     const key: string = `${ME.toString()}|scratchpad:${ME.toString()}:file:${id}#1`;
-    const chunk: number[] = [...(db.rows.get(key) ?? [])];
+    const chunk: Uint8Array = (db.rows.get(key) ?? new Uint8Array()).slice();
     chunk[0] = (chunk[0] + 1) % 256;
     db.rows.set(key, chunk);
     await expect(scratchpadBlobs(ME, db, sha256Hex).read(id)).rejects.toThrow('damaged');

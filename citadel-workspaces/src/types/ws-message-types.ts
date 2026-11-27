@@ -6,14 +6,14 @@ interface WorkspaceNotificationEnriched {
   WorkspaceNotification: {
     cid: bigint;
     peer_cid: bigint;
-    message: number[];
+    message: Uint8Array;
     payload: unknown;
   };
 }
 
 interface WorkspaceDeliveredEnriched {
   WorkspaceDelivered: {
-    contents: number[];
+    contents: Uint8Array;
     cid?: bigint;
     peer_cid?: bigint;
     payload: unknown;
@@ -24,7 +24,7 @@ interface WorkspaceDeliveredEnriched {
 // Other "gap" variants (CreateWorkspace, AddMember etc.) arrive embedded in MessageNotification.message
 // bytes and are parsed as WorkspaceProtocolResponse — they are NOT top-level WebSocket variants.
 interface MessageDeliveredVariant {
-  MessageDelivered: { contents: number[]; cid?: bigint; peer_cid?: bigint; request_id?: string };
+  MessageDelivered: { contents: Uint8Array; cid?: bigint; peer_cid?: bigint; request_id?: string };
 }
 
 // Union of all possible messages on the 'websocket-message' event channel.
@@ -44,7 +44,7 @@ export interface BroadcastStateSyncData {
 export interface P2PNotificationData {
   cid: bigint | string | number;
   peer_cid: bigint | string | number;
-  message: Uint8Array | number[];
+  message: Uint8Array;
 }
 
 export type { InternalServiceResponse };
